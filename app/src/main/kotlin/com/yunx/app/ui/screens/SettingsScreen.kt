@@ -76,7 +76,6 @@ import androidx.compose.ui.unit.dp
 import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.backup.AuthCrypto
 import com.yunx.app.data.download.DownloadSaver
-import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
@@ -122,10 +121,7 @@ fun SettingsScreen(
     // 下载保存目录（SAF）：本地状态驱动 UI 刷新，同时同步 SharedPreferences
     val settingsRepo = remember { SettingsRepository(context) }
     var downloadDirUri by remember { mutableStateOf(settingsRepo.downloadDirUri) }
-    // 隐藏开发调试：忽略 SSL 证书（抓包用，长按「关于云析」打开菜单）
-    var ignoreSsl by remember { mutableStateOf(settingsRepo.ignoreSslCert) }
     var showDevMenu by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { ignoreSsl = settingsRepo.ignoreSslCert }
     // 网络与下载策略（本地状态驱动 UI，同时同步 SharedPreferences）
     var maxConcurrent by remember { mutableStateOf(settingsRepo.maxConcurrentDownloads) }
     var speedLimitBps by remember { mutableStateOf(settingsRepo.downloadSpeedLimit) }
@@ -456,55 +452,13 @@ fun SettingsScreen(
         )
     }
 
-    // 隐藏开发调试菜单（长按「关于云析」打开）：忽略 SSL 证书（抓包调试用）
+    // 隐藏开发调试菜单（长按「关于云析」打开）
     if (showDevMenu) {
         AlertDialog(
             onDismissRequest = { showDevMenu = false },
             title = { Text("开发调试") },
             text = {
                 Column {
-                    val toggleIgnoreSsl = {
-                        ignoreSsl = !ignoreSsl
-                        settingsRepo.ignoreSslCert = ignoreSsl
-                        HttpClients.ignoreSsl = ignoreSsl
-                        SnackbarController.show(
-                            if (ignoreSsl) "已忽略 SSL 证书校验（抓包模式）" else "已恢复 SSL 证书校验"
-                        )
-                    }
-                    val rowShape = MaterialTheme.shapes.medium
-                    val rowInteraction = remember { MutableInteractionSource() }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(rowShape)
-                            .combinedClickable(
-                                interactionSource = rowInteraction,
-                                indication = ripple(bounded = true),
-                                onClick = toggleIgnoreSsl
-                            ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "忽略 SSL 证书",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = if (ignoreSsl) "已开启：所有网络请求不校验证书（抓包用）" else "已关闭：正常校验证书",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(checked = ignoreSsl, onCheckedChange = { toggleIgnoreSsl() })
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "开启后所有 API 与下载请求将忽略 SSL 证书校验，便于配合抓包调试。请勿在日常使用中开启，存在中间人攻击风险。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
                             showDevMenu = false

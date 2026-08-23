@@ -4,30 +4,15 @@ import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
 /**
  * 全局 HTTP 客户端管理：
  * - [apiClient]：平台 API（登录/解析/直链）、HLS 下载、更新检查共用，超时宽松；
  * - [downloadClient]：分片下载专用，大 Dispatcher 保障分片并发（默认实例 maxRequestsPerHost=5 会锁死并发）。
- *
- * 两套客户端均支持「忽略 SSL 证书校验」：开关切换后重建缓存实例即时生效，
- * 各调用方通过 Provider 动态获取，无需重启应用（用于抓包调试）。
+ * 所有构建都使用系统证书链和 OkHttp 主机名校验，不提供进程内绕过开关。
  */
 object HttpClients {
-
-    /** 忽略 SSL 证书校验（抓包调试用，仅设置页隐藏菜单可开） */
-    @Volatile
-    var ignoreSsl: Boolean = false
-        set(value) {
-            field = value
-            rebuildAll()
-        }
 
     private val lock = Any()
 
@@ -55,22 +40,13 @@ object HttpClients {
         }
     }
 
-    /** 开关变化：丢弃缓存，下次获取时按新配置重建 */
-    private fun rebuildAll() {
-        synchronized(lock) {
-            apiCache = null
-            downloadCache = null
-        }
-    }
-
     private fun buildApi(): OkHttpClient {
-        val builder = OkHttpClient.Builder()
+        return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
-        if (ignoreSsl) applyIgnoreSsl(builder)
-        return builder.build()
+            .build()
     }
 
     private fun buildDownload(): OkHttpClient {
@@ -78,7 +54,7 @@ object HttpClients {
             maxRequests = 512
             maxRequestsPerHost = 512 // 与设置页线程数上限（512）对齐，不锁死并发
         }
-        val builder = OkHttpClient.Builder()
+        return OkHttpClient.Builder()
             .dispatcher(dispatcher)
             .connectionPool(
                 ConnectionPool(
@@ -92,20 +68,6 @@ object HttpClients {
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
-        if (ignoreSsl) applyIgnoreSsl(builder)
-        return builder.build()
-    }
-
-    /** 注入「信任所有证书」的 TrustManager + 放行所有 Hostname（仅抓包调试） */
-    private fun applyIgnoreSsl(builder: OkHttpClient.Builder) {
-        val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-        })
-        val sslContext = SSLContext.getInstance("TLS")
-        sslContext.init(null, trustAll, SecureRandom())
-        builder.sslSocketFactory(sslContext.socketFactory, trustAll[0] as X509TrustManager)
-        builder.hostnameVerifier { _, _ -> true }
+            .build()
     }
 }

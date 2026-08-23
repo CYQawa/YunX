@@ -182,8 +182,6 @@ fun MainScreen() {
     val pan123Api = remember { Pan123Api() }
     val db = remember { AppDatabase.get(context) }
     val settings = remember { SettingsRepository(context) }
-    // 启动时同步「忽略 SSL 证书」开关（设置页隐藏菜单持久化，全局客户端即时生效）
-    LaunchedEffect(Unit) { HttpClients.ignoreSsl = settings.ignoreSslCert }
     val repository = remember {
         QuarkAccountRepository(db.quarkAccountDao(), api)
     }

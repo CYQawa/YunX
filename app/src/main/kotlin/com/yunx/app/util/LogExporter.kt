@@ -120,7 +120,7 @@ object LogExporter {
             if (lines.isEmpty()) {
                 writer.write("（无输出）\n")
             } else {
-                lines.forEach { writer.write(it); writer.write("\n") }
+                lines.forEach { writer.write(LogRedactor.line(it)); writer.write("\n") }
             }
         } catch (e: Exception) {
             writer.write("（读取日志失败：${e.message}）\n")

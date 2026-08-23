@@ -1,7 +1,6 @@
 package com.yunx.app.data.download
 
 import android.content.ContentResolver
-import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.os.Build
@@ -9,6 +8,7 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
+import androidx.annotation.RequiresApi
 import java.io.File
 
 /**
@@ -32,14 +32,15 @@ object DownloadSaver {
      * @return 保存成功后的标识（MediaStore uri 字符串 / SAF 文档 uri / 文件绝对路径）；失败返回 null
      */
     fun save(context: Context, fileName: String, source: File, targetDirUri: String? = null): String? {
-        // 拆分相对路径与文件名：目录段与文件名分别清洗
-        val clean = fileName.replace('\\', '/')
-        val slash = clean.lastIndexOf('/')
-        val dirRel = if (slash > 0) clean.substring(0, slash) else ""
-        val baseName = if (slash >= 0) clean.substring(slash + 1) else clean
-        val safeName = sanitizeFileName(baseName)
-        val safeDir = dirRel.split('/').filter { it.isNotBlank() }
-            .joinToString("/") { sanitizeFileName(it) }
+        val safePath = DownloadPathPolicy.sanitize(
+            fileName,
+            fallbackName = "download_${System.currentTimeMillis()}"
+        ) ?: run {
+            Log.e(TAG, "拒绝不安全的下载相对路径")
+            return null
+        }
+        val safeName = safePath.fileName
+        val safeDir = safePath.relativeDirectory
         // 自定义 SAF 目录：优先走系统文档树（适配 Android 10/11+ 分区存储与 Android 9-，无需额外存储权限）
         if (!targetDirUri.isNullOrBlank()) {
             return saveViaSaf(context, safeName, safeDir, source, targetDirUri)
@@ -153,25 +154,13 @@ object DownloadSaver {
         }.getOrDefault("自定义目录")
     }
 
-    /** 清洗文件名：非法字符替换为下划线，超长截断（保留扩展名），空名兜底 */
-    private fun sanitizeFileName(name: String): String {
-        var cleaned = name
-            .replace(Regex("[\\\\/:*?\"<>|\\x00-\\x1f]"), "_")
-            .trim()
-        if (cleaned.length > 120) {
-            val ext = cleaned.substringAfterLast('.', "").take(10)
-            val base = cleaned.substringBeforeLast('.').take(100)
-            cleaned = if (ext.isNotBlank() && ext != cleaned) "$base.$ext" else cleaned.take(120)
-        }
-        return cleaned.ifBlank { "download_${System.currentTimeMillis()}" }
-    }
-
     /**
      * MediaStore.Downloads 保存：
-     * 1. 保存前清理同路径同名残留记录（幽灵文件：文件已删但数据库仍在，部分 ROM 同名 insert 会返回 null）；
-     * 2. 原名 insert → 失败则在扩展名前加时间戳防重（最多 3 次，绕过幽灵/同名约束）；
+     * 1. 从原名开始尝试，已存在时跳过，绝不预删用户文件；
+     * 2. 冲突或 insert 失败则在扩展名前加时间戳防重（最多 3 次）；
      * 3. 均失败返回 null（上层报错，不再兜底私有目录）。
      */
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun saveViaMediaStore(context: Context, fileName: String, subDir: String, source: File): String? {
         val resolver = context.contentResolver
         val relativePath = if (subDir.isBlank()) {
@@ -179,8 +168,6 @@ object DownloadSaver {
         } else {
             "${Environment.DIRECTORY_DOWNLOADS}/$subDir"
         }
-        // 幽灵文件处理：保存前先清理同名残留记录
-        removeMediaStoreDuplicates(resolver, fileName, relativePath)
         // 候选：原名 → 时间戳防重名（base.apk → base_20260812165000.apk → base_..._2.apk）
         val candidates = buildList {
             add(fileName)
@@ -188,7 +175,7 @@ object DownloadSaver {
         }
         for (candidate in candidates) {
             try {
-                removeMediaStoreDuplicates(resolver, candidate, relativePath)
+                if (mediaStoreNameExists(resolver, candidate, relativePath)) continue
                 val values = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, candidate)
                     put(MediaStore.Downloads.MIME_TYPE, mimeOf(candidate))
@@ -224,16 +211,13 @@ object DownloadSaver {
         return if (attempt == 0) "${base}_$ts$ext" else "${base}_${ts}_${attempt + 1}$ext"
     }
 
-    /**
-     * 清理 MediaStore 中指定路径下的同名记录（幽灵文件：文件已删但数据库残留）。
-     * 只删数据库记录及对应文件（若仍存在）；随后可安全插入同名新记录。
-     */
-    private fun removeMediaStoreDuplicates(
+    /** 同路径同名对象存在时换一个候选名，绝不删除既有内容。 */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun mediaStoreNameExists(
         resolver: ContentResolver,
         fileName: String,
         relativePath: String
-    ) {
-        runCatching {
+    ): Boolean = runCatching {
             val selection = "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?"
             val projection = arrayOf(MediaStore.Downloads._ID)
             resolver.query(
@@ -243,23 +227,28 @@ object DownloadSaver {
                 arrayOf(fileName, relativePath),
                 null
             )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(0)
-                    val uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id)
-                    resolver.delete(uri, null, null)
-                }
-            }
-        }.onFailure {
-            Log.e(TAG, "清理 MediaStore 同名记录失败: ${it.message}")
-        }
-    }
+                cursor.moveToFirst()
+            } ?: false
+        }.onFailure { Log.e(TAG, "查询 MediaStore 同名记录失败: ${it.message}") }
+            .getOrDefault(true)
 
     private fun saveLegacy(context: Context, fileName: String, subDir: String, source: File): String? = runCatching {
-        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val destDir = if (subDir.isBlank()) dir else File(dir, subDir)
+        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).canonicalFile
+        val destDir = (if (subDir.isBlank()) dir else File(dir, subDir)).canonicalFile
+        if (destDir != dir && !DownloadPathPolicy.isContained(dir, destDir)) {
+            throw SecurityException("下载目录越界")
+        }
         if (!destDir.exists()) destDir.mkdirs()
-        val dest = File(destDir, fileName)
-        source.copyTo(dest, overwrite = true)
+        val candidates = buildList {
+            add(fileName)
+            repeat(3) { i -> add(timestampedName(fileName, i)) }
+        }
+        val dest = candidates.asSequence()
+            .map { File(destDir, it).canonicalFile }
+            .firstOrNull { candidate ->
+                DownloadPathPolicy.isContained(dir, candidate) && !candidate.exists()
+            } ?: return@runCatching null
+        source.copyTo(dest, overwrite = false)
         dest.absolutePath
     }.getOrNull()
 

@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
+import com.yunx.app.data.security.CredentialCipher
 
 @Database(
     entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class],
@@ -14,19 +16,28 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 )
 abstract class AppDatabase : RoomDatabase() {
 
-    abstract fun quarkAccountDao(): QuarkAccountDao
+    abstract fun rawQuarkAccountDao(): QuarkAccountDao
 
     abstract fun downloadTaskDao(): DownloadTaskDao
 
-    abstract fun ucAccountDao(): UCAccountDao
+    abstract fun rawUcAccountDao(): UCAccountDao
 
-    abstract fun xunleiAccountDao(): XunleiAccountDao
+    abstract fun rawXunleiAccountDao(): XunleiAccountDao
 
-    abstract fun baiduAccountDao(): BaiduAccountDao
+    abstract fun rawBaiduAccountDao(): BaiduAccountDao
 
-    abstract fun c139AccountDao(): C139AccountDao
+    abstract fun rawC139AccountDao(): C139AccountDao
 
-    abstract fun pan123AccountDao(): Pan123AccountDao
+    abstract fun rawPan123AccountDao(): Pan123AccountDao
+
+    private lateinit var credentialCipher: CredentialCipher
+
+    fun quarkAccountDao(): QuarkAccountDao = SecureAccountDaos.quark(rawQuarkAccountDao(), credentialCipher)
+    fun ucAccountDao(): UCAccountDao = SecureAccountDaos.uc(rawUcAccountDao(), credentialCipher)
+    fun xunleiAccountDao(): XunleiAccountDao = SecureAccountDaos.xunlei(rawXunleiAccountDao(), credentialCipher)
+    fun baiduAccountDao(): BaiduAccountDao = SecureAccountDaos.baidu(rawBaiduAccountDao(), credentialCipher)
+    fun c139AccountDao(): C139AccountDao = SecureAccountDaos.c139(rawC139AccountDao(), credentialCipher)
+    fun pan123AccountDao(): Pan123AccountDao = SecureAccountDaos.pan123(rawPan123AccountDao(), credentialCipher)
 
     companion object {
         @Volatile
@@ -43,7 +54,10 @@ abstract class AppDatabase : RoomDatabase() {
                     // 早期开发版（1-8）无可靠 schema；从 v9 起必须保留凭证和下载任务
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8)
                     .build()
-                    .also { instance = it }
+                    .also { database ->
+                        database.credentialCipher = AndroidKeystoreCredentialCipher()
+                        instance = database
+                    }
             }
 
         private val MIGRATION_9_10 = object : Migration(9, 10) {

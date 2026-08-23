@@ -1,6 +1,7 @@
 package com.yunx.app.data.download
 
 import android.util.Log
+import com.yunx.app.util.LogRedactor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,6 +14,7 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
 import kotlin.math.min
@@ -47,6 +49,8 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
 
     /** 任务 id → 该任务当前所有分片请求 */
     private val activeCalls = ConcurrentHashMap<Long, MutableSet<Call>>()
+    private fun newCallSet(): MutableSet<Call> =
+        Collections.newSetFromMap(ConcurrentHashMap<Call, Boolean>())
     fun cancelCalls(taskId: Long) {
         activeCalls.remove(taskId)?.forEach { call -> runCatching { call.cancel() } }
     }
@@ -73,15 +77,21 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
             try {
                 runCatching {
                     call.execute().use { response ->
-                        Log.d(TAG, "getTotalSize: range=$withRange code=${response.code} ct=${response.header("Content-Type")} url=${url.take(120)}")
+                        Log.d(TAG, "getTotalSize: range=$withRange code=${response.code} ct=${response.header("Content-Type")} origin=${LogRedactor.url(url)}")
                         // ★ 防盗链/过期/错误页（HTML）直接视为无法取大小，回退流式/单流
                         if (response.header("Content-Type").orEmpty().contains("text/html", ignoreCase = true)) {
                             return@use null
                         }
                         if (!response.isSuccessful) return@use null
-                        response.header("Content-Range")
-                            ?.substringAfter('/')?.toLongOrNull()
-                            ?: response.header("Content-Length")?.toLongOrNull()
+                        if (withRange) {
+                            if (response.code != 206) return@use null
+                            val range = HttpRangePolicy.parse(response.header("Content-Range"))
+                                ?: return@use null
+                            if (range.start != 0L || range.end != 0L) return@use null
+                            range.total
+                        } else {
+                            response.header("Content-Length")?.toLongOrNull()?.takeIf { it > 0 }
+                        }
                     }
                 }.getOrNull()
             } finally { cancelHandle?.dispose() }
@@ -160,7 +170,7 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
             .get().build()
 
         val call = client.newCall(request)
-        activeCalls.getOrPut(taskId) { ConcurrentHashMap.newKeySet() }.add(call)
+        activeCalls.getOrPut(taskId) { newCallSet() }.add(call)
         val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
         try {
             return call.execute().use { response ->
@@ -171,6 +181,11 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
                 }
                 when (val code = response.code) {
                     206 -> {
+                        val requestedEnd = if (unknownTotal) null else end
+                        if (!HttpRangePolicy.matches(response.header("Content-Range"), from, requestedEnd)) {
+                            Log.w(TAG, "downloadChunk: task=$taskId Content-Range 与请求不一致")
+                            return@use ChunkResult.FAILED
+                        }
                         val body = response.body ?: return@use ChunkResult.FAILED
                         val expected = if (unknownTotal) -1L else end - from + 1
                         // 写入分片，严格截断到预期区间
@@ -183,34 +198,8 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
                         ChunkResult.OK
                     }
                     200 -> {
-                        // unknownTotal（流式降级，end=MAX）：200 一律视为忽略 Range，由上层回退完整 GET
-                        if (unknownTotal) {
-                            Log.w(TAG, "downloadChunk: task=$taskId 流式下载服务器返回200 → 回退完整GET")
-                            ChunkResult.RANGE_IGNORED
-                        } else {
-                            // ★ 200 可能有两种：① 服务器不支持 Range（回整文件）；② CDN 偶发降级（返回 200，
-                            //   但 Content-Length 与整文件不符，常见于多连接被限流的中间态）。
-                            //   必须校验：Content-Length 缺失或 ≥ 原始区间总长度 → 视为真整文件（RANGE_IGNORED）；
-                            //   否则当 206 处理（writeSlice 按 expected 严格截断，只读本区间字节，不再误退避）。
-                            val cl = response.header("Content-Length")?.toLongOrNull()
-                            val segLen = end - from + 1 + existing  // 原始区间总长度（含已续传部分）= end - start + 1
-                            val isWholeFile = cl == null || cl >= segLen
-                            if (isWholeFile) {
-                                Log.w(TAG, "downloadChunk: task=$taskId range=$from-$end 服务器返回200整文件(CL=$cl) → 触发回退单流")
-                                ChunkResult.RANGE_IGNORED
-                            } else {
-                                // 当 206 处理：只读区间字节（writeSlice 严格截断，天然只写 [from, end]）
-                                val body = response.body ?: return@use ChunkResult.FAILED
-                                val expected = if (unknownTotal) -1L else end - from + 1
-                                val written = writeSlice(body.byteStream(), partFile, existing, expected, onBytes)
-                                if (!unknownTotal && written != expected) {
-                                    Log.w(TAG, "downloadChunk: task=$taskId 200转206写入不足 written=$written 预期=$expected")
-                                    ChunkResult.FAILED
-                                } else {
-                                    ChunkResult.OK
-                                }
-                            }
-                        }
+                        Log.w(TAG, "downloadChunk: task=$taskId Range 请求返回 200，拒绝按分片写入")
+                        ChunkResult.RANGE_IGNORED
                     }
                     else -> {
                         Log.w(TAG, "downloadChunk: task=$taskId 非预期状态码 $code")
@@ -262,14 +251,16 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
         total: Long = -1L,
         onBytes: suspend (Long) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
-        val existing = partFile.length()
-        Log.d(TAG, "downloadFull: task=$taskId 完整下载 url=${url.take(120)} 已有=$existing total=$total")
+        // 完整 GET 的响应从字节 0 开始，必须丢弃任何旧前缀，禁止“旧前缀 + 完整响应”拼接损坏。
+        val existing = 0L
+        if (partFile.exists()) RandomAccessFile(partFile, "rw").use { it.setLength(0) }
+        Log.d(TAG, "downloadFull: task=$taskId 完整下载 origin=${LogRedactor.url(url)} total=$total")
         val request = Request.Builder()
             .url(url)
             .apply { headers.forEach { (k, v) -> header(k, v) } }
             .get().build()
         val call = client.newCall(request)
-        activeCalls.getOrPut(taskId) { ConcurrentHashMap.newKeySet() }.add(call)
+        activeCalls.getOrPut(taskId) { newCallSet() }.add(call)
         val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
         try {
             call.execute().use { response ->

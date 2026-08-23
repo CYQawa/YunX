@@ -23,6 +23,9 @@ interface DownloadTaskDao {
     @Query("UPDATE download_task SET chunkCount = :chunkCount, plannedTotalSize = :totalSize WHERE id = :id")
     suspend fun updatePlan(id: Long, chunkCount: Int, totalSize: Long)
 
+    @Query("UPDATE download_task SET requestHeadersJson = :encryptedHeaders WHERE id = :id")
+    suspend fun updateRequestHeaders(id: Long, encryptedHeaders: String)
+
     @Query("UPDATE download_task SET status = 2 WHERE status = 1 OR status = 0")
     suspend fun markInterruptedAsPaused()
 

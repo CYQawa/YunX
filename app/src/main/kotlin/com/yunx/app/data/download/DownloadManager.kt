@@ -2,8 +2,11 @@ package com.yunx.app.data.download
 
 import android.content.Context
 import android.util.Log
+import com.yunx.app.util.LogRedactor
 import com.yunx.app.data.db.DownloadTaskDao
 import com.yunx.app.data.db.DownloadTaskEntity
+import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
+import com.yunx.app.data.security.CredentialCipher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import org.json.JSONObject
 import kotlin.coroutines.coroutineContext
 import kotlin.math.ceil
 import kotlin.math.min
@@ -117,6 +121,7 @@ class DownloadManager(
     /** 通知栏显示下载速度开关（false 时仅显示通知，隐藏速度） */
     private val showSpeedProvider: () -> Boolean = { true }
 ) {
+    private val credentialCipher: CredentialCipher = AndroidKeystoreCredentialCipher()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** 当前实际下载中的任务数（用于最大同时下载任务数限制） */
@@ -206,11 +211,12 @@ class DownloadManager(
             url.substringAfterLast('/').substringBefore('?')
                 .ifBlank { "download_${System.currentTimeMillis()}" }
         }
-        Log.d(TAG, "enqueue: url=$url fileName=$safeName headers=${headers.keys} size=$size")
+        Log.d(TAG, "enqueue: origin=${LogRedactor.url(url)} fileName=$safeName headers=${headers.keys} size=$size")
         val id = dao.insert(
             DownloadTaskEntity(
                 url = url,
-                fileName = safeName
+                fileName = safeName,
+                requestHeadersJson = encodeHeaders(headers)
             )
         )
         // 保存请求头（Cookie/UA），暂停后恢复仍需携带
@@ -245,7 +251,13 @@ class DownloadManager(
                     onTaskStarted(id)
                     // 任务级互斥：同一任务串行执行，暂停后立刻恢复不会并发写分片
                     taskLocks.getOrPut(id) { Mutex() }.withLock {
-                        runTaskWithRetry(id, effectiveHeaders)
+                        val restoredHeaders = if (effectiveHeaders.isNotEmpty()) {
+                            effectiveHeaders
+                        } else {
+                            loadPersistedHeaders(id)
+                        }
+                        if (restoredHeaders.isNotEmpty()) taskHeaders[id] = restoredHeaders
+                        runTaskWithRetry(id, restoredHeaders)
                     }
                 } catch (e: CancellationException) {
                     // 主动暂停/删除：part 文件保留（或由 remove 清理）；状态已由调用方设置
@@ -378,6 +390,30 @@ class DownloadManager(
 
     // ---------- 内部实现 ----------
 
+    private fun encodeHeaders(headers: Map<String, String>): String {
+        val json = JSONObject().apply { headers.forEach { (name, value) -> put(name, value) } }.toString()
+        return credentialCipher.encrypt(json, "download.requestHeaders")
+    }
+
+    private suspend fun loadPersistedHeaders(id: Long): Map<String, String> {
+        val stored = dao.get(id)?.requestHeadersJson.orEmpty()
+        if (stored.isBlank()) return emptyMap()
+        return runCatching {
+            val jsonText = credentialCipher.decrypt(stored, "download.requestHeaders")
+            val json = JSONObject(jsonText)
+            buildMap {
+                json.keys().forEach { name -> put(name, json.getString(name)) }
+            }.also {
+                if (!credentialCipher.isEncrypted(stored)) {
+                    dao.updateRequestHeaders(id, encodeHeaders(it))
+                }
+            }
+        }.getOrElse {
+            dao.updateRequestHeaders(id, encodeHeaders(emptyMap()))
+            emptyMap()
+        }
+    }
+
     /** 当前协程是否仍活跃（暂停/删除触发取消后为 false） */
     private suspend fun isTaskActive(): Boolean = coroutineContext[Job]?.isActive == true
 
@@ -432,7 +468,7 @@ class DownloadManager(
 
         // HLS（m3u8 转码流，如 UC play）：不走 Range 分片，直接拉分片合并
         if (task.url.contains(".m3u8", true) || task.url.contains(".m3u", true)) {
-            Log.d(TAG, "runTask: id=$id HLS 转码流下载 url=${task.url.take(120)}")
+            Log.d(TAG, "runTask: id=$id HLS 转码流下载 origin=${LogRedactor.url(task.url)}")
             hlsDownload(id, task, headers)
             return
         }
@@ -443,11 +479,11 @@ class DownloadManager(
             ?: taskSizes[id]?.takeIf { it > 0 }
         if (total == null) {
             // 服务器不返回文件大小（Range/Content-Length 均缺失）：降级为流式下载（开放区间 Range）
-            Log.w(TAG, "runTask: id=$id 无法获取总大小，降级流式下载 url=${task.url.take(120)}")
+            Log.w(TAG, "runTask: id=$id 无法获取总大小，降级流式下载 origin=${LogRedactor.url(task.url)}")
             streamDownload(id, task, headers)
             return
         }
-        Log.d(TAG, "getTotalSize: id=$id total=$total url=${task.url.take(120)}")
+        Log.d(TAG, "getTotalSize: id=$id total=$total origin=${LogRedactor.url(task.url)}")
         dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, task.downloadedSize, total)
         // 取到大小后再次检查取消（暂停可能发生在 getTotalSize 期间）
         if (!isTaskActive()) return
@@ -788,6 +824,8 @@ class DownloadManager(
         if (ok != ChunkResult.OK) {
             // Range 被 CDN 拒绝（416/403）或忽略（200 整文件）：回退为无 Range 完整 GET
             Log.w(TAG, "streamDownload: id=$id Range 失败，回退完整 GET 下载")
+            downloaded.set(0)
+            dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, 0, 0)
             val ok2 = downloader.downloadFull(
                 taskId = id,
                 url = task.url,

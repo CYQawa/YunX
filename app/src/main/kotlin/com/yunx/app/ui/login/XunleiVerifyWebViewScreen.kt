@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -28,6 +29,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +40,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.yunx.app.data.network.XunleiConstants
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
+import org.json.JSONObject
+
+private class XunleiJsBridge(
+    private val onSuccess: (String) -> Unit,
+    private val onClose: () -> Unit
+) {
+    @JavascriptInterface
+    fun onVerifyResult(resultJson: String) = onSuccess(resultJson)
+
+    @JavascriptInterface
+    fun close() = onClose()
+}
+
+private fun attachVerificationBridge(webView: WebView, bridge: XunleiJsBridge) {
+    webView.addJavascriptInterface(bridge, "XLJSWebViewBridge")
+}
 
 /**
  * 迅雷验证页应用内承载（V3 · 实测修复）。
@@ -59,19 +77,21 @@ fun XunleiVerifyWebViewScreen(
 ) {
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
+    val trustedInitialUrl = remember(verifyUrl) { XunleiVerificationPolicy.isTrustedPage(verifyUrl) }
 
-    val bridge = remember {
-        object {
-            @JavascriptInterface
-            fun onVerifyResult(resultJson: String) {
+    LaunchedEffect(verifyUrl, trustedInitialUrl) {
+        if (!trustedInitialUrl) onResult(false, "untrusted_verify_url")
+    }
+
+    val bridge: XunleiJsBridge = remember(onResult) {
+        XunleiJsBridge(
+            onSuccess = { resultJson ->
                 Handler(Looper.getMainLooper()).post { onResult(true, resultJson) }
-            }
-
-            @JavascriptInterface
-            fun close() {
+            },
+            onClose = {
                 Handler(Looper.getMainLooper()).post { onResult(false, "user_closed") }
             }
-        }
+        )
     }
 
     val webView = remember(verifyUrl) {
@@ -85,30 +105,50 @@ fun XunleiVerifyWebViewScreen(
             settings.loadWithOverviewMode = true
             settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
             settings.userAgentString = XunleiConstants.APP_UA
-            addJavascriptInterface(bridge, "XLJSWebViewBridge")
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            if (trustedInitialUrl) attachVerificationBridge(this, bridge)
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     isLoading = true
+                    if (!XunleiVerificationPolicy.isTrustedPage(url)) {
+                        view?.stopLoading()
+                        view?.removeJavascriptInterface("XLJSWebViewBridge")
+                        onResult(false, "untrusted_verify_navigation")
+                    }
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     isLoading = false
-                    // 核心修复：主动调用 window.XlCaptcha.init(config) 唤醒页面渲染
-                    view?.evaluateJavascript(buildInitScript(deviceId), null)
+                    if (XunleiVerificationPolicy.isTrustedPage(url)) {
+                        view?.evaluateJavascript(buildInitScript(deviceId), null)
+                    } else {
+                        view?.removeJavascriptInterface("XLJSWebViewBridge")
+                    }
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                    if (url != null && url.startsWith("xlaccsdk01://")) {
-                        onResult(true, url)
+                    if (XunleiVerificationPolicy.isTrustedCallback(url)) {
+                        onResult(true, url.orEmpty())
                         return true
                     }
-                    return false
+                    return !XunleiVerificationPolicy.isTrustedPage(url)
+                }
+
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val url = request?.url?.toString()
+                    if (XunleiVerificationPolicy.isTrustedCallback(url)) {
+                        onResult(true, url.orEmpty())
+                        return true
+                    }
+                    return !XunleiVerificationPolicy.isTrustedPage(url)
                 }
             }
             webChromeClient = WebChromeClient()
             // 【修复点 1】页面用 parseQueryString(location.href) 读 deviceid，
             // 必须把 deviceid 拼进 URL，否则发短信会报 "deviceid不能为空"。
-            loadUrl(withDeviceId(verifyUrl, deviceId))
+            loadUrl(if (trustedInitialUrl) withDeviceId(verifyUrl, deviceId) else "about:blank")
         }
     }
 
@@ -165,14 +205,17 @@ private fun withDeviceId(url: String, deviceId: String): String {
 private fun buildInitScript(deviceId: String): String {
     val pkg = "ANDROID-com.xunlei.downloadprovider"   // 必须与 reviewurl 里的 appName 一致
     val cv = XunleiConstants.APP_CLIENT_VERSION      // 8.31.0.9726
+    val pkgJs = JSONObject.quote(pkg)
+    val clientVersionJs = JSONObject.quote(cv)
+    val deviceIdJs = JSONObject.quote(deviceId)
     return """
         (function(){
           try {
             window.env = 'android';
             window.appid = '40';
-            window.appName = '$pkg';
-            window.clientVersion = '$cv';
-            window.deviceid = '$deviceId';
+            window.appName = $pkgJs;
+            window.clientVersion = $clientVersionJs;
+            window.deviceid = $deviceIdJs;
             window.platformVersion = '10';
             window.event = 'login3';
           } catch(e) {}
@@ -186,9 +229,9 @@ private fun buildInitScript(deviceId: String): String {
                 }
                 window.XlCaptcha.init({
                   appid: '40',
-                  appName: '$pkg',
-                  clientVersion: '$cv',
-                  deviceid: '$deviceId',
+                  appName: $pkgJs,
+                  clientVersion: $clientVersionJs,
+                  deviceid: $deviceIdJs,
                   event: 'login3',
                   platformVersion: '10',
                   IFRAME_BOX_ID: 'captch-wrap',
