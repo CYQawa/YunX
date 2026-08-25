@@ -1,5 +1,6 @@
 # Android 构建输出
 /build/
+/.kotlin/
 /app/build/
 /captures
 .externalNativeBuild/
