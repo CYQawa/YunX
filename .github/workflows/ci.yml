@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # CI访问阿里云镜像会 502：跳过国内镜像，直接走 Google/Maven Central 官方源
+    env:
+      YUNX_USE_MIRROR: "false"
 
     steps:
       - name: Checkout code
