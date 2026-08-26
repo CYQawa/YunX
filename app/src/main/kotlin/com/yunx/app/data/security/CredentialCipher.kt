@@ -15,8 +15,17 @@ internal interface CredentialCipher {
     fun isEncrypted(stored: String): Boolean
 }
 
-/** AES-GCM envelope encryption whose non-exportable key is held by Android Keystore. */
+/**
+ * AES-GCM envelope encryption whose non-exportable key is held by Android Keystore.
+ *
+ * 性能优化：密钥首次从 Keystore 加载后缓存复用（AndroidKeyStore 每次 KeyStore.load+getKey
+ * 都是 Binder IPC，缓存后避免每次解密/加密都重复走 IPC）。
+ */
 internal class AndroidKeystoreCredentialCipher : CredentialCipher {
+
+    @Volatile
+    private var cachedKey: SecretKey? = null
+
     override fun encrypt(plaintext: String, purpose: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -46,20 +55,29 @@ internal class AndroidKeystoreCredentialCipher : CredentialCipher {
     override fun isEncrypted(stored: String): Boolean = stored.startsWith("$PREFIX:")
 
     private fun key(): SecretKey {
-        val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
-        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
-        generator.init(
-            KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        cachedKey?.let { return it }
+        synchronized(this) {
+            cachedKey?.let { return it }
+            val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+            (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { key ->
+                cachedKey = key
+                return key
+            }
+            val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
+            generator.init(
+                KeyGenParameterSpec.Builder(
+                    KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                )
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setRandomizedEncryptionRequired(true)
+                    .build()
             )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setRandomizedEncryptionRequired(true)
-                .build()
-        )
-        return generator.generateKey()
+            val key = generator.generateKey()
+            cachedKey = key
+            return key
+        }
     }
 
     private companion object {
