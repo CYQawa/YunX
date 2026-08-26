@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -113,6 +115,9 @@ fun SettingsScreen(
     // 网盘认证导入：加密文件内容（非空时弹解密密码框）
     var pendingImportContent by remember { mutableStateOf<String?>(null) }
     var showImportAuthDialog by remember { mutableStateOf(false) }
+    // 导出/导入处理中（PBKDF2 21万次迭代派生密钥，偶发 1~3s，期间显示加载弹窗）
+    var isExporting by remember { mutableStateOf(false) }
+    var isImporting by remember { mutableStateOf(false) }
     // 本地状态：修改后立即刷新 UI，同时同步外部保存值
     var threads by remember { mutableStateOf(downloadThreads) }
     LaunchedEffect(downloadThreads) { threads = downloadThreads }
@@ -160,26 +165,31 @@ fun SettingsScreen(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val text = runCatching {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                }.getOrNull()
-                if (text == null) {
-                    SnackbarController.show("读取文件失败")
-                    return@launch
-                }
-                if (AuthCrypto.isEncrypted(text)) {
-                    // 加密备份：弹解密密码框
-                    pendingImportContent = text
-                    showImportAuthDialog = true
-                } else {
-                    // 明文备份：直接导入
-                    val count = runCatching {
-                        withContext(Dispatchers.IO) { backupManager.importJson(text) }
-                    }.getOrElse { e ->
-                        SnackbarController.show("导入失败：${e.message}")
+                isImporting = true
+                try {
+                    val text = runCatching {
+                        context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    }.getOrNull()
+                    if (text == null) {
+                        SnackbarController.show("读取文件失败")
                         return@launch
                     }
-                    SnackbarController.show("已恢复 $count 个平台的认证信息")
+                    if (AuthCrypto.isEncrypted(text)) {
+                        // 加密备份：关闭加载弹窗，弹解密密码框（解密在确认后执行）
+                        pendingImportContent = text
+                        showImportAuthDialog = true
+                    } else {
+                        // 明文备份：直接导入
+                        val count = runCatching {
+                            withContext(Dispatchers.IO) { backupManager.importJson(text) }
+                        }.getOrElse { e ->
+                            SnackbarController.show("导入失败：${e.message}")
+                            return@launch
+                        }
+                        SnackbarController.show("已恢复 $count 个平台的认证信息")
+                    }
+                } finally {
+                    isImporting = false
                 }
             }
         }
@@ -576,25 +586,30 @@ fun SettingsScreen(
             onDismiss = { showExportAuthDialog = false },
             onConfirm = { password, onlyLoggedIn ->
                 showExportAuthDialog = false
+                isExporting = true
                 scope.launch {
-                    val content = runCatching {
-                        withContext(Dispatchers.IO) { backupManager.export(password, onlyLoggedIn) }
-                    }.getOrNull()
-                    if (content == null) {
-                        SnackbarController.show("导出失败")
-                        return@launch
-                    }
-                    val encrypted = true
-                    val saved = withContext(Dispatchers.IO) {
-                        backupManager.saveToDownloads(context, content, encrypted)
-                    }
-                    SnackbarController.show(
-                        if (saved) {
-                            if (encrypted) "已加密导出到下载目录" else "已导出到下载目录"
-                        } else {
-                            "导出失败"
+                    try {
+                        val content = runCatching {
+                            withContext(Dispatchers.IO) { backupManager.export(password, onlyLoggedIn) }
+                        }.getOrNull()
+                        if (content == null) {
+                            SnackbarController.show("导出失败")
+                            return@launch
                         }
-                    )
+                        val encrypted = true
+                        val saved = withContext(Dispatchers.IO) {
+                            backupManager.saveToDownloads(context, content, encrypted)
+                        }
+                        SnackbarController.show(
+                            if (saved) {
+                                if (encrypted) "已加密导出到下载目录" else "已导出到下载目录"
+                            } else {
+                                "导出失败"
+                            }
+                        )
+                    } finally {
+                        isExporting = false
+                    }
                 }
             }
         )
@@ -612,22 +627,31 @@ fun SettingsScreen(
                 val content = pendingImportContent
                 pendingImportContent = null
                 if (content != null) {
+                    isImporting = true
                     scope.launch {
-                        val count = try {
-                            withContext(Dispatchers.IO) { backupManager.import(content, password) }
-                        } catch (e: javax.crypto.AEADBadTagException) {
-                            SnackbarController.show("密码错误，解密失败")
-                            return@launch
-                        } catch (e: Exception) {
-                            SnackbarController.show("导入失败：${e.message}")
-                            return@launch
+                        try {
+                            val count = try {
+                                withContext(Dispatchers.IO) { backupManager.import(content, password) }
+                            } catch (e: javax.crypto.AEADBadTagException) {
+                                SnackbarController.show("密码错误，解密失败")
+                                return@launch
+                            } catch (e: Exception) {
+                                SnackbarController.show("导入失败：${e.message}")
+                                return@launch
+                            }
+                            SnackbarController.show("已恢复 $count 个平台的认证信息")
+                        } finally {
+                            isImporting = false
                         }
-                        SnackbarController.show("已恢复 $count 个平台的认证信息")
                     }
                 }
             }
         )
     }
+
+    // 导出/导入处理中：转圈加载弹窗（PBKDF2 派生密钥耗时较长，避免用户以为界面卡死）
+    if (isExporting) OperationLoadingDialog("正在导出认证…")
+    if (isImporting) OperationLoadingDialog("正在导入认证…")
 
     // 最大同时下载任务数
     if (showConcurrencyDialog) {
@@ -933,6 +957,25 @@ private fun ImportAuthDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
         }
+    )
+}
+
+/** 操作处理中弹窗：转圈加载 + 提示文案，禁止关闭（防止中途取消导致导入/导出状态不一致） */
+@Composable
+private fun OperationLoadingDialog(message: String) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(message) },
+        text = {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        },
+        confirmButton = {},
+        dismissButton = {}
     )
 }
 
