@@ -175,6 +175,28 @@ class DownloadManager(
         return String.format("%.1f %s", value, units[i])
     }
 
+    /**
+     * 进度落盘节流：多 worker 并发回调下，每 progressPersistIntervalMs 最多写一次 DB。
+     * - force / (total>0 且 new>=total)：完成时强制写，确保最终进度准确；
+     * - total<=0（大小未知）时仅按时间节流；
+     * - 用 lastAt 的 CAS 保证并发下同一任务只有一个回调写库（避免多线程重复 UPDATE）。
+     */
+    private suspend fun persistProgressIfDue(
+        id: Long,
+        new: Long,
+        total: Long,
+        force: Boolean,
+        lastAt: AtomicLong
+    ) {
+        val now = System.currentTimeMillis()
+        val last = lastAt.get()
+        if (force || (total > 0 && new >= total) || now - last >= progressPersistIntervalMs) {
+            if (lastAt.compareAndSet(last, now)) {
+                dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, new, total)
+            }
+        }
+    }
+
     /** 每个任务一把互斥锁：暂停后立即恢复时避免新旧协程并发写分片 */
     private val taskLocks = ConcurrentHashMap<Long, Mutex>()
 
@@ -191,8 +213,10 @@ class DownloadManager(
     private val _stats = MutableStateFlow<Map<Long, DownloadStats>>(emptyMap())
     val stats: StateFlow<Map<Long, DownloadStats>> = _stats.asStateFlow()
 
-    /** 进度上报节流阈值（字节）：256KB，大文件时进度条更平滑 */
-    private val progressThrottle = 256 * 1024L
+    /** 进度落盘节流（毫秒）：updateProgress 写库会触发全表 Flow 重发 → 主线程全列表重组；
+     *  按字节（256KB）节流时高速下载每秒写库几十次，主线程重组洪峰 → ANR。
+     *  改为按时间节流落盘，UI 进度由内存 _stats 高频展示、DB 低频持久化（断点续传最多丢几百 ms 进度）。 */
+    private val progressPersistIntervalMs = 500L
 
     val tasks: Flow<List<DownloadTaskEntity>> = dao.observeAll()
 
@@ -536,7 +560,7 @@ class DownloadManager(
         if (init > task.downloadedSize) {
             dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, init, total)
         }
-        val lastUpdate = AtomicLong(init)
+        val lastPersistAt = AtomicLong(0L)
         val speedRecorder = SpeedRecorder()
 
         // ---------- 任务池（主池 70% 等分）+ 弹性区（30%，空闲线程中点劈分） ----------
@@ -604,12 +628,7 @@ class DownloadManager(
                                         _stats.update { it + (id to DownloadStats(speed, remain, effectiveWorkers)) }
                                     }
                                     notifyProgress(id, task.fileName, new, total)
-                                    val last = lastUpdate.get()
-                                    if (new - last >= progressThrottle || new >= total) {
-                                        if (lastUpdate.compareAndSet(last, new)) {
-                                            dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, new, total)
-                                        }
-                                    }
+                                    persistProgressIfDue(id, new, total, force = false, lastAt = lastPersistAt)
                                 }
                             } catch (e: CancellationException) {
                                 throw e
@@ -653,12 +672,7 @@ class DownloadManager(
                                         _stats.update { it + (id to DownloadStats(speed, remain, effectiveWorkers)) }
                                     }
                                     notifyProgress(id, task.fileName, new, total)
-                                    val last = lastUpdate.get()
-                                    if (new - last >= progressThrottle || new >= total) {
-                                        if (lastUpdate.compareAndSet(last, new)) {
-                                            dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, new, total)
-                                        }
-                                    }
+                                    persistProgressIfDue(id, new, total, force = false, lastAt = lastPersistAt)
                                 }
                             }
                         } catch (e: CancellationException) {
@@ -784,12 +798,13 @@ class DownloadManager(
     ) {
         val fullFile = File(chunkDir, "full_single.bin").apply { delete() } // 全新整文件，从 0 开始
         val fullDownloaded = AtomicLong(0)
+        val fullLastAt = AtomicLong(0L)
         val ok = downloader.downloadFull(id, task.url, fullFile, headers, total) { bytes ->
             speedLimiter.awaitAllow(bytes)
             // ★ 钳制到 total：任何竞态都不可能让显示超过总大小
             val new = minOf(fullDownloaded.addAndGet(bytes), total)
             if (!isTaskActive()) return@downloadFull
-            dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, new, total)
+            persistProgressIfDue(id, new, total, force = false, lastAt = fullLastAt)
             notifyProgress(id, task.fileName, new, total)
         }
         if (!ok) throw IllegalStateException(failReason.get() ?: "分片与单流下载均失败")
@@ -805,6 +820,7 @@ class DownloadManager(
         val chunkDir = chunkDirOf(id).apply { mkdirs() }
         val partFile = File(chunkDir, "part_0")
         val downloaded = AtomicLong(partFile.length())
+        val streamLastAt = AtomicLong(0L)
         val ok = downloader.downloadChunk(
             taskId = id,
             url = task.url,
@@ -817,7 +833,7 @@ class DownloadManager(
             val new = downloaded.addAndGet(bytes)
             if (!isTaskActive()) return@downloadChunk
             // 大小未知：只更新已下载量（total=0 表示未知）
-            dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, new, 0)
+            persistProgressIfDue(id, new, 0, force = false, lastAt = streamLastAt)
             // 前台通知进度（2 秒节流，total 未知时仅更新标题）
             notifyProgress(id, task.fileName, new, 0)
         }
@@ -835,7 +851,7 @@ class DownloadManager(
                 speedLimiter.awaitAllow(bytes)
                 val new = downloaded.addAndGet(bytes)
                 if (!isTaskActive()) return@downloadFull
-                dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, new, 0)
+                persistProgressIfDue(id, new, 0, force = false, lastAt = streamLastAt)
             }
             if (!ok2) throw IllegalStateException("下载失败（Range 与完整下载均失败）")
         }
@@ -850,10 +866,11 @@ class DownloadManager(
         val hlsFile = File(context.cacheDir, "hls_$id")
         hlsFile.delete()
         val downloaded = AtomicLong(0)
+        val hlsLastAt = AtomicLong(0L)
         val ok = HlsDownloader.download(task.url, headers, hlsFile) { bytes ->
             speedLimiter.awaitAllow(bytes)
             val new = downloaded.addAndGet(bytes)
-            dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, new, 0)
+            persistProgressIfDue(id, new, 0, force = false, lastAt = hlsLastAt)
             notifyProgress(id, task.fileName, new, 0)
         }
         if (!isTaskActive()) return
