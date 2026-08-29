@@ -593,19 +593,20 @@ class ResolveViewModel(
         uiState = ResolveUiState.Idle
     }
 
-    /** 将当前分享链接收藏到指定分类 */
-    fun addCurrentToBookmark(category: String) {
+    /** 将当前分享链接收藏到指定分类（标题可自定义，为空时回退分享标题） */
+    fun addCurrentToBookmark(title: String, category: String) {
         val link = currentLink?.takeIf { it.isNotBlank() }
         if (link == null) {
             SnackbarController.show("缺少分享链接")
             return
         }
         val cat = category.ifBlank { BookmarkEntity.DEFAULT_CATEGORY }
+        val resolvedTitle = title.ifBlank { session?.title.orEmpty() }
         viewModelScope.launch {
             bookmarkDao.insert(
                 BookmarkEntity(
                     link = link,
-                    title = session?.title.orEmpty(),
+                    title = resolvedTitle,
                     platform = currentPlatform.name,
                     pwd = currentPwd.orEmpty(),
                     category = cat

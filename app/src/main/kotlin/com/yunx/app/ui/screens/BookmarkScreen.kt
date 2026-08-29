@@ -4,6 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +75,9 @@ import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.BookmarkViewModel
 
+/** 「自定义分类」虚拟选项标识（不参与持久化，仅用于弹窗交互） */
+private const val CUSTOM_CATEGORY = "__custom__"
+
 /**
  * 收藏网盘链接页：分类筛选 + 收藏列表，支持新增 / 解析 / 复制 / 修改分类 / 删除。
  */
@@ -123,32 +132,33 @@ fun BookmarkScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            CategoryFilterBar(
-                categories = categories,
-                selected = selectedCategory,
-                onSelect = { selectedCategory = it }
-            )
+            // 分类筛选：作为列表头部，随列表一起上下滚动
+            item(key = "categories") {
+                CategoryFilterBar(
+                    categories = categories,
+                    selected = selectedCategory,
+                    onSelect = { selectedCategory = it }
+                )
+            }
 
             if (filtered.isEmpty()) {
-                EmptyBookmark(onAdd = { showAddDialog = true })
+                item(key = "empty") {
+                    EmptyBookmark(onAdd = { showAddDialog = true })
+                }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filtered, key = { it.id }) { bookmark ->
-                        BookmarkRow(
-                            bookmark = bookmark,
-                            onClick = { onResolve(bookmark.link, bookmark.pwd) },
-                            onLongClick = { menuBookmark = bookmark }
-                        )
-                    }
+                items(filtered, key = { it.id }) { bookmark ->
+                    BookmarkRow(
+                        bookmark = bookmark,
+                        onClick = { onResolve(bookmark.link, bookmark.pwd) },
+                        onLongClick = { menuBookmark = bookmark }
+                    )
                 }
             }
         }
@@ -221,9 +231,7 @@ private fun CategoryFilterBar(
     onSelect: (String?) -> Unit
 ) {
     FlowRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -315,10 +323,9 @@ private fun BookmarkRow(
 private fun EmptyBookmark(onAdd: () -> Unit) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = Icons.Outlined.BookmarkBorder,
@@ -445,29 +452,38 @@ private fun AddBookmarkDialog(
     )
 }
 
-/** 解析详情页「添加至收藏」弹窗：仅展示标题 + 分类选择 */
+/** 解析详情页「添加至收藏」弹窗：可自定义标题；分类选择含「自定义」选项，点击后展开输入框 */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun AddToBookmarkDialog(
     title: String,
     initialCategory: String,
     categories: List<String>,
-    onConfirm: (String) -> Unit,
+    onConfirm: (title: String, category: String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var titleInput by remember { mutableStateOf(title) }
     var selectedCategory by remember { mutableStateOf(initialCategory) }
     var customCategory by remember { mutableStateOf("") }
+    val isCustom = selectedCategory == CUSTOM_CATEGORY
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("添加至收藏") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = titleInput,
+                    onValueChange = { titleInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("标题（可选）") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.large
                 )
                 Text(
                     text = "分类",
@@ -485,21 +501,38 @@ internal fun AddToBookmarkDialog(
                             label = { Text(cat) }
                         )
                     }
+                    FilterChip(
+                        selected = isCustom,
+                        onClick = { selectedCategory = CUSTOM_CATEGORY },
+                        label = { Text("自定义") }
+                    )
                 }
-                OutlinedTextField(
-                    value = customCategory,
-                    onValueChange = { customCategory = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("自定义分类（可选）") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large
-                )
+                AnimatedVisibility(
+                    visible = isCustom,
+                    enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                    exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                ) {
+                    OutlinedTextField(
+                        value = customCategory,
+                        onValueChange = { customCategory = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("自定义分类") },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.large
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(customCategory.ifBlank { selectedCategory }) }) {
-                Text("收藏")
-            }
+            Button(
+                enabled = !(isCustom && customCategory.isBlank()),
+                onClick = {
+                    onConfirm(
+                        titleInput.trim(),
+                        if (isCustom) customCategory.trim() else selectedCategory
+                    )
+                }
+            ) { Text("收藏") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }

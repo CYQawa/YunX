@@ -368,15 +368,15 @@ fun ShareDetailScreen(
         )
     }
 
-    // 添加至收藏弹窗（当前分享链接）
+    // 添加至收藏弹窗（当前分享链接，支持自定义标题与分类）
     if (showAddBookmark) {
         AddToBookmarkDialog(
             title = session.title.ifBlank { "分享内容" },
             initialCategory = BookmarkEntity.DEFAULT_CATEGORY,
             categories = BookmarkEntity.PRESET_CATEGORIES,
-            onConfirm = { category ->
+            onConfirm = { title, category ->
                 showAddBookmark = false
-                viewModel.addCurrentToBookmark(category)
+                viewModel.addCurrentToBookmark(title, category)
             },
             onDismiss = { showAddBookmark = false }
         )
