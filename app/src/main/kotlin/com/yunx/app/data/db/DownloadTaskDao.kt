@@ -35,8 +35,8 @@ interface DownloadTaskDao {
     @Query("UPDATE download_task SET errorMsg = :errorMsg WHERE id = :id")
     suspend fun updateError(id: Long, errorMsg: String)
 
-    @Query("UPDATE download_task SET status = :status, savePath = :savePath WHERE id = :id")
-    suspend fun complete(id: Long, status: Int, savePath: String)
+    @Query("UPDATE download_task SET status = :status, savePath = :savePath, avgSpeed = :avgSpeed WHERE id = :id")
+    suspend fun complete(id: Long, status: Int, savePath: String, avgSpeed: Long = 0L)
 
     @Query("DELETE FROM download_task WHERE id = :id")
     suspend fun delete(id: Long)

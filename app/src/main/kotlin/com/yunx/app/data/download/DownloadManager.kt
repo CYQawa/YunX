@@ -197,6 +197,14 @@ class DownloadManager(
         }
     }
 
+    /** 完成任务并写入平均速度（字节/秒）：avg = total / 本次运行耗时 */
+    private suspend fun completeWithAvg(id: Long, savedPath: String, total: Long) {
+        val start = taskStartTimes.remove(id) ?: 0L
+        val elapsedSec = ((System.currentTimeMillis() - start) / 1000.0).coerceAtLeast(1.0)
+        val avg = if (total > 0 && elapsedSec > 0) (total / elapsedSec).toLong() else 0L
+        dao.complete(id, DownloadTaskEntity.STATUS_COMPLETED, savedPath, avg)
+    }
+
     /** 每个任务一把互斥锁：暂停后立即恢复时避免新旧协程并发写分片 */
     private val taskLocks = ConcurrentHashMap<Long, Mutex>()
 
@@ -205,6 +213,9 @@ class DownloadManager(
 
     /** 已知文件大小（API 返回，避免探测失败）；-1 表示未知 */
     private val taskSizes = ConcurrentHashMap<Long, Long>()
+
+    /** 任务开始时间（毫秒）：完成时计算平均速度用（暂停/恢复会重置，表示最近一次运行段均值） */
+    private val taskStartTimes = ConcurrentHashMap<Long, Long>()
 
     /** 任务下载完成后的清理回调（如删除网盘临时转存文件；下载成功后才触发） */
     private val taskCallbacks = ConcurrentHashMap<Long, suspend () -> Unit>()
@@ -504,6 +515,7 @@ class DownloadManager(
         if (!isTaskActive()) return
         val task = dao.get(id) ?: return
         dao.updateStatus(id, DownloadTaskEntity.STATUS_DOWNLOADING)
+        taskStartTimes[id] = System.currentTimeMillis()
         Log.d(TAG, "runTask: id=$id fileName=${task.fileName}")
 
         // HLS（m3u8 转码流，如 UC play）：不走 Range 分片，直接拉分片合并
@@ -903,7 +915,8 @@ class DownloadManager(
             DownloadSaver.save(context, task.fileName, hlsFile, saveDirProvider())
         }
             ?: throw IllegalStateException("保存到下载目录失败")
-        dao.complete(id, DownloadTaskEntity.STATUS_COMPLETED, savedPath)
+        val hlsTotal = dao.get(id)?.totalSize ?: 0L
+        completeWithAvg(id, savedPath, hlsTotal)
         Log.d(TAG, "hlsDownload: id=$id 下载完成 savedPath=$savedPath size=${hlsFile.length()}")
         taskCallbacks.remove(id)?.let { cb -> runCatching { cb() } }
         _stats.update { it - id }
@@ -954,7 +967,7 @@ class DownloadManager(
             DownloadSaver.save(context, fileName, merged, saveDirProvider())
         }
             ?: throw IllegalStateException("保存到下载目录失败")
-        dao.complete(id, DownloadTaskEntity.STATUS_COMPLETED, savedPath)
+        completeWithAvg(id, savedPath, total)
         Log.d(TAG, "finishDownload: id=$id 下载完成 savedPath=$savedPath size=${merged.length()}")
         taskCallbacks.remove(id)?.let { cb ->
             runCatching { cb() }

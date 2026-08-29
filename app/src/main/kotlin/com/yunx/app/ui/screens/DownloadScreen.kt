@@ -576,6 +576,7 @@ private fun DownloadSubTaskRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
             .combinedClickable(
                 onClick = {},
                 onLongClick = { showMenu = true }
@@ -610,10 +611,12 @@ private fun DownloadSubTaskRow(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isDownloading && stats != null && stats.speed > 0) {
-                            "${DownloadTaskEntity.statusText(task.status)} · ${formatSpeed(stats.speed)}"
-                        } else {
-                            taskStatusLine(task)
+                        text = when {
+                            isDownloading && stats != null && stats.speed > 0 ->
+                                "${DownloadTaskEntity.statusText(task.status)} · ${formatSpeed(stats.speed)}"
+                            task.status == DownloadTaskEntity.STATUS_COMPLETED && task.avgSpeed > 0 ->
+                                "${DownloadTaskEntity.statusText(task.status)} · 平均 ${formatSpeed(task.avgSpeed)}"
+                            else -> taskStatusLine(task)
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = if (task.status == DownloadTaskEntity.STATUS_FAILED) {
@@ -662,8 +665,12 @@ private fun DownloadSubTaskRow(
                     )
                 }
             }
-            // 细进度条（已完成时隐藏）
-            if (task.status != DownloadTaskEntity.STATUS_COMPLETED) {
+            // 细进度条（完成态折叠，带过渡动画）
+            AnimatedVisibility(
+                visible = task.status != DownloadTaskEntity.STATUS_COMPLETED,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
                 LinearProgressIndicator(
                     progress = { fraction },
                     modifier = Modifier
@@ -751,6 +758,7 @@ private fun DownloadTaskCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
             .combinedClickable(
                 onClick = {},
                 onLongClick = { showMenu = true }
@@ -838,37 +846,48 @@ private fun DownloadTaskCard(
                 Spacer(modifier = Modifier.height(6.dp))
             }
 
-            // 实时统计：速度 / 剩余时间 / 线程数
-            if (isDownloading && stats != null && stats.speed > 0) {
-                Text(
-                    text = "${formatSpeed(stats.speed)} · 剩余 ${formatRemain(stats.remainMillis)} · ${stats.chunkCount} 线程",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
+            // 实时统计 + 进度条：完成态整体折叠（带高度过渡动画，不残留空白）
+            AnimatedVisibility(
+                visible = task.status != DownloadTaskEntity.STATUS_COMPLETED,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                Column {
+                    if (isDownloading && stats != null && stats.speed > 0) {
+                        Text(
+                            text = "${formatSpeed(stats.speed)} · 剩余 ${formatRemain(stats.remainMillis)} · ${stats.chunkCount} 线程",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = when (task.status) {
+                            DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
-
-            // 进度条（已完成时隐藏，界面更简洁）
-            if (task.status != DownloadTaskEntity.STATUS_COMPLETED) {
-                LinearProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = when (task.status) {
-                        DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.primary
-                    },
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (task.status == DownloadTaskEntity.STATUS_COMPLETED) formatSize(task.totalSize) else progressText(task),
+                    text = if (task.status == DownloadTaskEntity.STATUS_COMPLETED) {
+                        if (task.avgSpeed > 0) {
+                            "平均 ${formatSpeed(task.avgSpeed)} · ${formatSize(task.totalSize)}"
+                        } else {
+                            formatSize(task.totalSize)
+                        }
+                    } else {
+                        progressText(task)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
