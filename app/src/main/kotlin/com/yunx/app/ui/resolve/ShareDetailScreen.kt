@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -61,12 +62,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.components.ScrollToTopButton
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
+import com.yunx.app.ui.screens.AddToBookmarkDialog
 import com.yunx.app.ui.screens.BaiduSaveSheet
 import com.yunx.app.ui.screens.C139SaveSheet
 import com.yunx.app.ui.screens.Pan123SaveSheet
@@ -119,6 +122,8 @@ fun ShareDetailScreen(
     var baiduLimitDismissed by remember { mutableStateOf(baiduSettings.baiduLimitHintDismissed) }
     var showBaiduLimitDialog by remember { mutableStateOf(false) }
     var pendingBaiduAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // 「添加至收藏」弹窗
+    var showAddBookmark by remember { mutableStateOf(false) }
 
     /** 百度分享下载前检查：>300MB 且未忽略时弹提示，确认后执行 */
     fun checkBaiduLimit(file: ShareFile, proceed: () -> Unit) {
@@ -185,6 +190,13 @@ fun ShareDetailScreen(
                                     text = "共 ${files.size} 项",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(onClick = { showAddBookmark = true }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.BookmarkAdd,
+                                    contentDescription = "添加至收藏",
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -353,6 +365,20 @@ fun ShareDetailScreen(
                     )
                 }
             }
+        )
+    }
+
+    // 添加至收藏弹窗（当前分享链接）
+    if (showAddBookmark) {
+        AddToBookmarkDialog(
+            title = session.title.ifBlank { "分享内容" },
+            initialCategory = BookmarkEntity.DEFAULT_CATEGORY,
+            categories = BookmarkEntity.PRESET_CATEGORIES,
+            onConfirm = { category ->
+                showAddBookmark = false
+                viewModel.addCurrentToBookmark(category)
+            },
+            onDismiss = { showAddBookmark = false }
         )
     }
 

@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.data.db.BookmarkDao
+import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.download.DownloadManager
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.BaiduConstants
@@ -34,6 +36,7 @@ import com.yunx.app.data.repository.UCAccountRepository
 import com.yunx.app.data.repository.UCResolveRepository
 import com.yunx.app.data.repository.XunleiAccountRepository
 import com.yunx.app.data.repository.XunleiResolveRepository
+import com.yunx.app.ui.SnackbarController
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -61,7 +64,8 @@ class ResolveViewModel(
     private val c139ResolveRepository: C139ResolveRepository,
     private val pan123AccountRepository: Pan123AccountRepository,
     private val pan123ResolveRepository: Pan123ResolveRepository,
-    private val downloadManager: DownloadManager
+    private val downloadManager: DownloadManager,
+    private val bookmarkDao: BookmarkDao
 ) : ViewModel() {
 
     var uiState by mutableStateOf<ResolveUiState>(ResolveUiState.Idle)
@@ -459,6 +463,10 @@ class ResolveViewModel(
     private var currentDirFid = QuarkConstants.DEFAULT_PDIR_FID
     private val dirStack = ArrayDeque<String>()
 
+    /** 当前解析的原始分享链接与提取码（收藏当前分享用） */
+    private var currentLink: String? = null
+    private var currentPwd: String? = null
+
     /** 当前目录路径名栈（用于面包屑显示），如 [辅助工具, 专用模组] */
     var pathNames by mutableStateOf<List<String>>(emptyList())
         private set
@@ -505,6 +513,8 @@ class ResolveViewModel(
 
     /** 开始解析：链接 → token →（密码）→ 根目录列表 */
     fun startResolve(link: String, pwd: String?) {
+        currentLink = link
+        currentPwd = pwd
         viewModelScope.launch {
             uiState = ResolveUiState.Loading
             val parsed = ShareLinkParser.parse(link)
@@ -577,8 +587,32 @@ class ResolveViewModel(
     fun backToInput() {
         session = null
         downloadLink = null
+        currentLink = null
+        currentPwd = null
         pathNames = emptyList()
         uiState = ResolveUiState.Idle
+    }
+
+    /** 将当前分享链接收藏到指定分类 */
+    fun addCurrentToBookmark(category: String) {
+        val link = currentLink?.takeIf { it.isNotBlank() }
+        if (link == null) {
+            SnackbarController.show("缺少分享链接")
+            return
+        }
+        val cat = category.ifBlank { BookmarkEntity.DEFAULT_CATEGORY }
+        viewModelScope.launch {
+            bookmarkDao.insert(
+                BookmarkEntity(
+                    link = link,
+                    title = session?.title.orEmpty(),
+                    platform = currentPlatform.name,
+                    pwd = currentPwd.orEmpty(),
+                    category = cat
+                )
+            )
+            SnackbarController.show("已收藏到「$cat」")
+        }
     }
 
     /**
@@ -771,7 +805,8 @@ class ResolveViewModel(
         private val c139ResolveRepository: C139ResolveRepository,
         private val pan123AccountRepository: Pan123AccountRepository,
         private val pan123ResolveRepository: Pan123ResolveRepository,
-        private val downloadManager: DownloadManager
+        private val downloadManager: DownloadManager,
+        private val bookmarkDao: BookmarkDao
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -783,7 +818,8 @@ class ResolveViewModel(
                 baiduAccountRepository, baiduResolveRepository,
                 c139AccountRepository, c139ResolveRepository,
                 pan123AccountRepository, pan123ResolveRepository,
-                downloadManager
+                downloadManager,
+                bookmarkDao
             ) as T
         }
     }

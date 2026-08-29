@@ -549,7 +549,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "按网盘分别设置分片并发数；线程越多下载越快（需服务器支持 Range）",
+                        text = "按网盘分别设置分片并发数；线程数不是越多越好，适当调整",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

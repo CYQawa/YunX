@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -94,6 +97,7 @@ import com.yunx.app.ui.login.XunleiLoginScreen
 import com.yunx.app.ui.login.XunleiVerifyWebViewScreen
 import com.yunx.app.ui.navigation.MainTab
 import com.yunx.app.ui.screens.AboutScreen
+import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
 import com.yunx.app.ui.screens.OnboardingScreen
@@ -104,6 +108,7 @@ import com.yunx.app.ui.screens.ThemeScreen
 import com.yunx.app.ui.screens.UpdateDialog
 import com.yunx.app.ui.viewmodel.BaiduAccountViewModel
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
+import com.yunx.app.ui.viewmodel.BookmarkViewModel
 import com.yunx.app.ui.viewmodel.C139AccountViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.DownloadViewModel
@@ -146,6 +151,7 @@ fun MainScreen() {
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
+    var showBookmarks by rememberSaveable { mutableStateOf(false) }
     val saveableStateHolder = rememberSaveableStateHolder()
 
     val context = LocalContext.current
@@ -388,11 +394,15 @@ fun MainScreen() {
             c139ResolveRepository,
             pan123Repository,
             pan123ResolveRepository,
-            downloadManager
+            downloadManager,
+            db.bookmarkDao()
         )
     )
     val downloadViewModel: DownloadViewModel = viewModel(
         factory = DownloadViewModel.Factory(downloadManager)
+    )
+    val bookmarkViewModel: BookmarkViewModel = viewModel(
+        factory = BookmarkViewModel.Factory(db.bookmarkDao())
     )
     val quarkAccount by viewModel.quarkAccount.collectAsState()
     val ucAccount by ucViewModel.ucAccount.collectAsState()
@@ -558,6 +568,14 @@ fun MainScreen() {
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.SemiBold
                 )
+            },
+            actions = {
+                // 解析页标题右上角：收藏网盘链接入口
+                if (currentTab == MainTab.Resolve) {
+                    IconButton(onClick = { showBookmarks = true }) {
+                        Icon(Icons.Outlined.Bookmarks, contentDescription = "收藏网盘链接")
+                    }
+                }
             },
             scrollBehavior = scrollBehavior,
             colors = TopAppBarDefaults.largeTopAppBarColors(
@@ -741,6 +759,24 @@ fun MainScreen() {
     ) {
         ThemeScreen(
             onBack = { showTheme = false }
+        )
+    }
+
+    // 收藏网盘链接：叠加覆盖层（淡入 + 轻微缩放过渡）
+    AnimatedVisibility(
+        visible = showBookmarks,
+        enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.96f),
+        exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.96f),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        BookmarkScreen(
+            viewModel = bookmarkViewModel,
+            onBack = { showBookmarks = false },
+            onResolve = { link, pwd ->
+                showBookmarks = false
+                currentTab = MainTab.Resolve
+                resolveViewModel.startResolve(link, pwd)
+            }
         )
     }
     }
