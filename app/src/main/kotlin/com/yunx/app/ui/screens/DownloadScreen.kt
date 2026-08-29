@@ -506,17 +506,19 @@ private fun FolderDownloadGroup(
                 exit = fadeOut(tween(150)) + shrinkVertically(tween(150), shrinkTowards = Alignment.Top)
             ) {
                 Column {
-                    // 总体进度条（细条，圆角）
-                    LinearProgressIndicator(
-                        progress = { fraction },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                    )
+                    // 总体进度条（已完成时隐藏）
+                    if (!done) {
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                    }
                     // 子任务列表（紧凑行，含子文件夹内文件）
                     Column(
                         modifier = Modifier.padding(10.dp),
@@ -643,21 +645,23 @@ private fun DownloadSubTaskRow(
                     )
                 }
             }
-            // 细进度条
-            LinearProgressIndicator(
-                progress = { if (task.status == DownloadTaskEntity.STATUS_COMPLETED) 1f else fraction },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(1.5f)),
-                color = if (task.status == DownloadTaskEntity.STATUS_FAILED) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
+            // 细进度条（已完成时隐藏）
+            if (task.status != DownloadTaskEntity.STATUS_COMPLETED) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(1.5f)),
+                    color = if (task.status == DownloadTaskEntity.STATUS_FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            }
         }
     }
 }
@@ -772,17 +776,18 @@ private fun DownloadTaskCard(
                 Spacer(modifier = Modifier.height(6.dp))
             }
 
-            // 进度条
-            LinearProgressIndicator(
-                progress = { if (isDownloading) fraction else if (task.status == DownloadTaskEntity.STATUS_COMPLETED) 1f else fraction },
-                modifier = Modifier.fillMaxWidth(),
-                color = when (task.status) {
-                    DownloadTaskEntity.STATUS_COMPLETED -> MaterialTheme.colorScheme.primary
-                    DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.primary
-                },
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
+            // 进度条（已完成时隐藏，界面更简洁）
+            if (task.status != DownloadTaskEntity.STATUS_COMPLETED) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = when (task.status) {
+                        DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.primary
+                    },
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -791,7 +796,7 @@ private fun DownloadTaskCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = progressText(task),
+                    text = if (task.status == DownloadTaskEntity.STATUS_COMPLETED) "" else progressText(task),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)

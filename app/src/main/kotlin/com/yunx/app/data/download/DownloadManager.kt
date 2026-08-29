@@ -106,8 +106,8 @@ class DownloadManager(
     private val context: Context,
     private val dao: DownloadTaskDao,
     private val downloader: ChunkDownloader,
-    /** 下载线程数提供者（可在设置中修改，动态生效），默认 16 */
-    private val threadProvider: () -> Int = { 16 },
+    /** 下载线程数提供者（按平台，可在设置中修改，动态生效），默认 32 */
+    private val threadProvider: (String) -> Int = { 32 },
     /** 自定义下载保存目录提供者（SAF tree Uri，可空）；null 时保存到系统默认 Download */
     private val saveDirProvider: () -> String? = { null },
     /** 最大同时下载任务数提供者（默认 3）：限制后台并发任务，避免占满带宽/耗尽路由器连接 */
@@ -227,6 +227,8 @@ class DownloadManager(
         headers: Map<String, String> = emptyMap(),
         /** 已知文件大小（字节）；-1 表示未知，需探测 */
         size: Long = -1L,
+        /** 下载来源平台标识（按平台应用下载线程数设置）；通用/手动添加传空串 */
+        platform: String = "",
         /** 下载成功完成后的清理回调（如删除网盘临时转存文件）；失败/取消不触发 */
         onComplete: suspend () -> Unit = {}
     ): Long {
@@ -240,7 +242,8 @@ class DownloadManager(
             DownloadTaskEntity(
                 url = url,
                 fileName = safeName,
-                requestHeadersJson = encodeHeaders(headers)
+                requestHeadersJson = encodeHeaders(headers),
+                platform = platform
             )
         )
         // 保存请求头（Cookie/UA），暂停后恢复仍需携带
@@ -512,7 +515,7 @@ class DownloadManager(
         // 取到大小后再次检查取消（暂停可能发生在 getTotalSize 期间）
         if (!isTaskActive()) return
 
-        val threadCount = threadProvider().coerceAtLeast(1)
+        val threadCount = threadProvider(task.platform).coerceAtLeast(1)
         val chunkCount = chunkCountFor(total, threadCount)
         val chunkSize = ceil(total.toDouble() / chunkCount).toLong()
         val chunkDir = chunkDirOf(id).apply { mkdirs() }
@@ -948,24 +951,38 @@ class DownloadManager(
         chunkDir.deleteRecursively()
     }
 
-    /** 速度采样器：每 250ms 计算一次平均速度（更贴近瞬时速率） */
+    /**
+     * 速度采样器：取近 [WINDOW_MS] 秒滑动窗口的平均速度，平滑多线程下载的速度波动。
+     * 多线程并发下瞬时速率波动大，短窗口估算剩余时长会剧烈跳动；
+     * 改用 5 秒窗口均值后，剩余时长更稳定可靠。
+     */
     private class SpeedRecorder {
-        private var lastBytes = 0L
-        private var lastTime = System.currentTimeMillis()
+        private data class Sample(val timeMs: Long, val bytes: Long)
+
+        private val samples = ArrayDeque<Sample>()
+        private var lastEmit = 0L
 
         @Synchronized
         fun onBytes(total: Long): Long? {
             val now = System.currentTimeMillis()
-            val elapsed = now - lastTime
-            if (elapsed >= 250) {
-                val speed = if (elapsed > 0) {
-                    ((total - lastBytes) * 1000 / elapsed).coerceAtLeast(0)
-                } else 0L
-                lastBytes = total
-                lastTime = now
-                return speed
+            samples.addLast(Sample(now, total))
+            // 剔除窗口外的旧样本，但始终保留至少 2 个（下载起步阶段窗口尚短）
+            while (samples.size > 2 && now - samples.first().timeMs > WINDOW_MS) {
+                samples.removeFirst()
             }
-            return null
+            // 250ms 发射一次，避免高频刷新 UI/通知
+            if (now - lastEmit < 250) return null
+            val first = samples.first()
+            val elapsed = now - first.timeMs
+            val speed = if (elapsed > 0) {
+                ((total - first.bytes) * 1000 / elapsed).coerceAtLeast(0)
+            } else 0L
+            lastEmit = now
+            return speed
+        }
+
+        private companion object {
+            const val WINDOW_MS = 5000L
         }
     }
 

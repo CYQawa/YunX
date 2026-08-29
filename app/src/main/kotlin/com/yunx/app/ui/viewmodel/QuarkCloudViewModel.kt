@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.QuarkApi
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
@@ -291,6 +292,7 @@ class QuarkCloudViewModel(
                             url = effectiveUrl,
                             fileName = relPath, // 相对路径：Download/文件夹A/子目录/文件.mp4
                             size = link.size,
+                            platform = DownloadPlatform.QUARK,
                             headers = downloadHeaders(cookie)
                         )
                         okCount++
@@ -332,6 +334,7 @@ class QuarkCloudViewModel(
                     url = effectiveUrl,
                     fileName = link.filename.ifBlank { file.fname },
                     size = link.size,
+                    platform = DownloadPlatform.QUARK,
                     headers = mapOf(
                         "Cookie" to cookie,
                         "User-Agent" to com.yunx.app.data.network.QuarkConstants.API_USER_AGENT,
@@ -500,6 +503,7 @@ class QuarkCloudViewModel(
                             url = effectiveUrl,
                             fileName = if (relPath.contains('/')) relPath else link.filename.ifBlank { relPath },
                             size = link.size,
+                            platform = DownloadPlatform.QUARK,
                             headers = downloadHeaders(cookie)
                         )
                         okCount++

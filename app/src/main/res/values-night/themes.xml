@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式冷启动窗口主题：windowBackground 用深色，避免深色模式下冷启动先闪白屏 -->
+    <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/background_dark</item>
+    </style>
+</resources>

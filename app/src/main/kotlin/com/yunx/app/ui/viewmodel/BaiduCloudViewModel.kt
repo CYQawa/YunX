@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.BaiduConstants
 import com.yunx.app.data.network.model.ShareFile
@@ -259,6 +260,7 @@ class BaiduCloudViewModel(
                             url = link,
                             fileName = relPath, // 相对路径：Download/文件夹A/子目录/文件.mp4
                             size = file.fsize,
+                            platform = DownloadPlatform.BAIDU,
                             headers = downloadHeaders(cookie)
                         )
                         okCount++
@@ -292,6 +294,7 @@ class BaiduCloudViewModel(
                     url = link,
                     fileName = file.fname,
                     size = file.fsize,
+                    platform = DownloadPlatform.BAIDU,
                     headers = mapOf(
                         "Cookie" to cookie(),
                         "User-Agent" to BaiduConstants.UA_NETDISK
@@ -427,6 +430,7 @@ class BaiduCloudViewModel(
                             url = link,
                             fileName = if (relPath.contains('/')) relPath else file.fname,
                             size = file.fsize,
+                            platform = DownloadPlatform.BAIDU,
                             headers = downloadHeaders(cookie)
                         )
                         okCount++

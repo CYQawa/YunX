@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.XunleiConstants
 import com.yunx.app.data.network.model.ShareFile
@@ -268,6 +269,7 @@ class XunleiCloudViewModel(
                             url = link.downloadUrl,
                             fileName = relPath, // 相对路径：Download/文件夹A/子目录/文件.mp4
                             size = link.size,
+                            platform = DownloadPlatform.XUNLEI,
                             headers = downloadHeaders()
                         )
                         okCount++
@@ -303,6 +305,7 @@ class XunleiCloudViewModel(
                     url = link.downloadUrl,
                     fileName = link.filename.ifBlank { file.fname },
                     size = link.size,
+                    platform = DownloadPlatform.XUNLEI,
                     headers = mapOf("User-Agent" to XunleiConstants.APP_UA)
                 )
                 cloudMessage = "已加入下载：${link.filename.ifBlank { file.fname }}"
@@ -442,6 +445,7 @@ class XunleiCloudViewModel(
                             url = link.downloadUrl,
                             fileName = if (relPath.contains('/')) relPath else link.filename.ifBlank { relPath },
                             size = link.size,
+                            platform = DownloadPlatform.XUNLEI,
                             headers = downloadHeaders()
                         )
                         okCount++

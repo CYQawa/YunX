@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.Pan123Api
 import com.yunx.app.data.network.Pan123Constants
 import com.yunx.app.data.network.model.ShareFile
@@ -259,6 +260,7 @@ class Pan123CloudViewModel(
                             url = link.downloadUrl,
                             fileName = relPath,
                             size = link.size,
+                            platform = DownloadPlatform.PAN123,
                             headers = downloadHeaders()
                         )
                         okCount++
@@ -293,6 +295,7 @@ class Pan123CloudViewModel(
                     url = link.downloadUrl,
                     fileName = file.fname.ifBlank { link.filename },
                     size = link.size,
+                    platform = DownloadPlatform.PAN123,
                     headers = downloadHeaders()
                 )
                 cloudMessage = "已加入下载：${file.fname}"
@@ -418,6 +421,7 @@ class Pan123CloudViewModel(
                             url = link.downloadUrl,
                             fileName = if (relPath.contains('/')) relPath else file.fname.ifBlank { link.filename },
                             size = link.size,
+                            platform = DownloadPlatform.PAN123,
                             headers = downloadHeaders()
                         )
                         okCount++

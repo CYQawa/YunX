@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.BaiduConstants
 import com.yunx.app.data.network.C139Constants
 import com.yunx.app.data.network.Pan123Constants
@@ -659,6 +660,15 @@ class ResolveViewModel(
         val isC139 = currentPlatform == SharePlatform.C139
         val isPan123 = currentPlatform == SharePlatform.PAN123
         val isQuark = currentPlatform == SharePlatform.QUARK
+        // 下载来源平台：按平台应用下载线程数设置
+        val platform = when {
+            isXunlei -> DownloadPlatform.XUNLEI
+            isUC -> DownloadPlatform.UC
+            isBaidu -> DownloadPlatform.BAIDU
+            isC139 -> DownloadPlatform.C139
+            isPan123 -> DownloadPlatform.PAN123
+            else -> DownloadPlatform.QUARK
+        }
         // 【关键修复】夸克/UC 共用 __puus：取链与下载必须用同一份已刷新 Cookie（AlistGo/alist#830 类缺陷）
         // getFreshCookie 有 90 分钟间隔保护，与取链处调用幂等，得到的是同一份。
         val effectiveCredential = when (currentPlatform) {
@@ -704,7 +714,8 @@ class ResolveViewModel(
             url = effectiveUrl,
             fileName = fileName,
             headers = headers,
-            size = link.size
+            size = link.size,
+            platform = platform
         ) {
             // 下载完成（master 版通过 onComplete 回调）：清理网盘临时转存目录；失败/取消不触发
             val dirFid = link.cleanupDirFid

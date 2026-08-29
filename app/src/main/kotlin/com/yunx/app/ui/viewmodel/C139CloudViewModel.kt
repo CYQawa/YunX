@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.C139Api
 import com.yunx.app.data.network.C139Constants
 import com.yunx.app.data.network.model.ShareFile
@@ -257,6 +258,7 @@ class C139CloudViewModel(
                             url = link.downloadUrl,
                             fileName = relPath, // 相对路径：Download/文件夹A/子目录/文件.mp4
                             size = link.size,
+                            platform = DownloadPlatform.C139,
                             headers = downloadHeaders()
                         )
                         okCount++
@@ -292,6 +294,7 @@ class C139CloudViewModel(
                     // 139 getDownloadUrl 响应不含 name → 用列表里的文件名（与分享链接下载一致，避免 fileId 乱码）
                     fileName = file.fname.ifBlank { link.filename },
                     size = link.size,
+                    platform = DownloadPlatform.C139,
                     headers = mapOf(
                         "User-Agent" to C139Constants.PC_UA,
                         "Referer" to "https://yun.139.com/"
@@ -425,6 +428,7 @@ class C139CloudViewModel(
                             // 文件夹内文件用相对路径；根目录文件用列表文件名（139 取链响应不含 name）
                             fileName = if (relPath.contains('/')) relPath else file.fname.ifBlank { link.filename },
                             size = link.size,
+                            platform = DownloadPlatform.C139,
                             headers = downloadHeaders()
                         )
                         okCount++

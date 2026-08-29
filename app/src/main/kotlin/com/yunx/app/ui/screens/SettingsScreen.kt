@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
@@ -77,6 +78,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.backup.AuthCrypto
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSaver
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
@@ -86,8 +88,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 可选的下载线程数（最高 512） */
-private val threadOptions = listOf(1, 2, 4, 8, 16, 32)
+/** 可选的下载线程数档位（最高 512） */
+private val threadOptions = listOf(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
+
+/** 按平台下载线程数设置项 */
+private data class ThreadPlatform(val platform: String, val label: String)
+
+private val threadPlatforms = listOf(
+    ThreadPlatform(DownloadPlatform.QUARK, "夸克网盘"),
+    ThreadPlatform(DownloadPlatform.UC, "UC 网盘"),
+    ThreadPlatform(DownloadPlatform.XUNLEI, "迅雷网盘"),
+    ThreadPlatform(DownloadPlatform.BAIDU, "百度网盘"),
+    ThreadPlatform(DownloadPlatform.C139, "139 网盘"),
+    ThreadPlatform(DownloadPlatform.PAN123, "123 云盘"),
+)
 
 /**
  * 设置页：下载线程数设置 + 主题外观 + 检查更新 + 日志与网盘认证。
@@ -96,8 +110,6 @@ private val threadOptions = listOf(1, 2, 4, 8, 16, 32)
 @Composable
 fun SettingsScreen(
     scrollBehavior: TopAppBarScrollBehavior,
-    downloadThreads: Int,
-    onThreadsChange: (Int) -> Unit,
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
@@ -118,9 +130,9 @@ fun SettingsScreen(
     // 导出/导入处理中（PBKDF2 21万次迭代派生密钥，偶发 1~3s，期间显示加载弹窗）
     var isExporting by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
-    // 本地状态：修改后立即刷新 UI，同时同步外部保存值
-    var threads by remember { mutableStateOf(downloadThreads) }
-    LaunchedEffect(downloadThreads) { threads = downloadThreads }
+    // 按平台线程数：二级弹窗当前选择的平台
+    var selectedThreadPlatform by remember { mutableStateOf(threadPlatforms.first()) }
+    var showPlatformThreadDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // 下载保存目录（SAF）：本地状态驱动 UI 刷新，同时同步 SharedPreferences
@@ -206,7 +218,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Outlined.Tune,
             title = "下载线程数",
-            description = "当前 $threads 线程（分片并发）",
+            description = "按网盘分别设置分片并发数（默认 32，最高 512）",
             onClick = { showThreadsDialog = true }
         )
 
@@ -529,7 +541,7 @@ fun SettingsScreen(
         )
     }
 
-    // 线程数选择弹窗
+    // 线程数选择弹窗（按平台）
     if (showThreadsDialog) {
         AlertDialog(
             onDismissRequest = { showThreadsDialog = false },
@@ -537,38 +549,45 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "线程数越多，分片并行下载越快（需服务器支持 Range）",
+                        text = "按网盘分别设置分片并发数；线程越多下载越快（需服务器支持 Range）",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    // 两列网格：10 个选项 5 行一屏可见，无需滑动就知道有哪些档位；
-                    // 仍保留限高 + 滚动，横屏/矮屏时兜底
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        threadOptions.chunked(2).forEach { rowValues ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                rowValues.forEach { value ->
-                                    RadioThreadRow(
-                                        value = value,
-                                        threads = threads,
-                                        onSelect = { v ->
-                                            threads = v
-                                            onThreadsChange(v)
-                                            showThreadsDialog = false
-                                        },
-                                        modifier = Modifier.weight(1f)
-                                    )
+                    threadPlatforms.forEach { item ->
+                        val current = settingsRepo.downloadThreadsFor(item.platform)
+                        val isXunlei = item.platform == DownloadPlatform.XUNLEI
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !isXunlei) {
+                                    selectedThreadPlatform = item
+                                    showPlatformThreadDialog = true
                                 }
-                                // 奇数个时补空占位，保持两列对齐
-                                if (rowValues.size == 1) Spacer(modifier = Modifier.weight(1f))
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = item.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = if (isXunlei) "固定 8 线程" else "$current 线程",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isXunlei) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                }
+                            )
+                            if (!isXunlei) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Outlined.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -576,6 +595,46 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showThreadsDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // 单个平台线程数选择（二级弹窗）
+    if (showPlatformThreadDialog) {
+        val current = settingsRepo.downloadThreadsFor(selectedThreadPlatform.platform)
+        AlertDialog(
+            onDismissRequest = { showPlatformThreadDialog = false },
+            title = { Text("${selectedThreadPlatform.label}线程数") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    threadOptions.chunked(2).forEach { rowValues ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            rowValues.forEach { value ->
+                                RadioThreadRow(
+                                    value = value,
+                                    threads = current,
+                                    onSelect = { v ->
+                                        settingsRepo.setDownloadThreads(selectedThreadPlatform.platform, v)
+                                        showPlatformThreadDialog = false
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            // 奇数个时补空占位，保持两列对齐
+                            if (rowValues.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPlatformThreadDialog = false }) { Text("取消") }
             }
         )
     }

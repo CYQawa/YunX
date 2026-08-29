@@ -219,7 +219,7 @@ fun MainScreen() {
             context = context,
             dao = db.downloadTaskDao(),
             downloader = ChunkDownloader({ HttpClients.downloadClient() }),
-            threadProvider = settings::downloadThreads,
+            threadProvider = { platform -> settings.downloadThreadsFor(platform) },
             // 自定义下载保存目录（SAF tree Uri），设置页可选，动态生效
             saveDirProvider = { settings.downloadDirUri },
             // 网络与下载策略（设置页可调，动态生效）：并发任务数 / 全局限速 / 失败重试
@@ -627,8 +627,6 @@ fun MainScreen() {
                     MainTab.Download -> DownloadScreen(scrollBehavior, downloadViewModel)
                     MainTab.Settings -> SettingsScreen(
                         scrollBehavior = scrollBehavior,
-                        downloadThreads = settings.downloadThreads,
-                        onThreadsChange = { settings.downloadThreads = it },
                         onThemeClick = { showTheme = true },
                         onAboutClick = { showAbout = true },
                         onSupportClick = { showSupport = true },

@@ -1,6 +1,7 @@
 package com.yunx.app.data.prefs
 
 import android.content.Context
+import com.yunx.app.data.download.DownloadPlatform
 
 /**
  * 应用设置（SharedPreferences 持久化）。
@@ -10,12 +11,27 @@ class SettingsRepository(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("yunx_settings", Context.MODE_PRIVATE)
 
-    /** 下载线程数（分片并发数），默认 16，上限 32 */
+    /** 下载线程数（通用/手动添加，分片并发数），默认 32，上限 512 */
     var downloadThreads: Int
-        get() = prefs.getInt("download_threads", DEFAULT_DOWNLOAD_THREADS).coerceIn(1, 32)
-        set(value) {
-            prefs.edit().putInt("download_threads", value.coerceIn(1, 32)).apply()
-        }
+        get() = downloadThreadsFor(DownloadPlatform.GENERIC)
+        set(value) = setDownloadThreads(DownloadPlatform.GENERIC, value)
+
+    /** 获取指定平台的下载线程数；迅雷固定 8，其余默认 32、上限 512 */
+    fun downloadThreadsFor(platform: String): Int {
+        if (platform == DownloadPlatform.XUNLEI) return XUNLEI_DOWNLOAD_THREADS
+        return prefs.getInt(prefsKey(platform), DEFAULT_DOWNLOAD_THREADS)
+            .coerceIn(1, MAX_DOWNLOAD_THREADS)
+    }
+
+    /** 设置指定平台的下载线程数；迅雷不可修改 */
+    fun setDownloadThreads(platform: String, value: Int) {
+        if (platform == DownloadPlatform.XUNLEI) return
+        prefs.edit().putInt(prefsKey(platform), value.coerceIn(1, MAX_DOWNLOAD_THREADS)).apply()
+    }
+
+    private fun prefsKey(platform: String): String =
+        if (platform.isBlank() || platform == DownloadPlatform.GENERIC) "download_threads"
+        else "download_threads_$platform"
 
     /** 自定义下载保存目录（SAF tree Uri，content://...）；null/空 = 系统默认 Download 目录 */
     var downloadDirUri: String?
@@ -102,7 +118,9 @@ class SettingsRepository(context: Context) {
         }
 
     companion object {
-        const val DEFAULT_DOWNLOAD_THREADS = 16
+        const val DEFAULT_DOWNLOAD_THREADS = 32
+        const val MAX_DOWNLOAD_THREADS = 512
+        const val XUNLEI_DOWNLOAD_THREADS = 8
         const val DEFAULT_MAX_CONCURRENT_DOWNLOADS = 1
         const val DEFAULT_DOWNLOAD_RETRY_COUNT = 3
 

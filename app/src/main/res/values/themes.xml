@@ -1,3 +1,5 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
 </resources>

@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.UCConstants
 import com.yunx.app.data.network.model.DownloadLink
@@ -349,6 +350,7 @@ class UCCoudViewModel(
                             url = link.downloadUrl,
                             fileName = relPath, // 相对路径：Download/文件夹A/子目录/文件.mp4
                             size = link.size,
+                            platform = DownloadPlatform.UC,
                             headers = downloadHeaders(cookie)
                         )
                         okCount++
@@ -388,6 +390,7 @@ class UCCoudViewModel(
                     url = link.downloadUrl,
                     fileName = link.filename.ifBlank { file.fname },
                     size = link.size,
+                    platform = DownloadPlatform.UC,
                     headers = mapOf(
                         "Cookie" to cookie,
                         // UC OSS 直链：必须带官方 Referer（否则被 Callback 限速 ~100KB/s）+ Origin，与解析页 UC 分支一致
@@ -532,6 +535,7 @@ class UCCoudViewModel(
                             // 文件夹内文件用相对路径（保持目录结构）；根目录文件用取链返回的文件名
                             fileName = if (relPath.contains('/')) relPath else link.filename.ifBlank { relPath },
                             size = link.size,
+                            platform = DownloadPlatform.UC,
                             headers = downloadHeaders(cookie)
                         )
                         okCount++
