@@ -254,6 +254,19 @@ class DownloadManager(
         return id
     }
 
+    /**
+     * 重新下载：用原直链新建任务（任务卡长按菜单「重新下载」）。
+     * 先做 Range 探测校验直链有效性：403/404/网络错误视为直链已过期，返回 false 由 UI 提示。
+     */
+    suspend fun redownload(id: Long): Boolean {
+        val task = dao.get(id) ?: return false
+        val headers = loadPersistedHeaders(id)
+        val valid = runCatching { downloader.getTotalSize(task.url, headers) != null }.getOrDefault(false)
+        if (!valid) return false
+        enqueue(task.url, task.fileName, headers, task.totalSize, task.platform)
+        return true
+    }
+
     /** 开始/恢复下载（断点续传） */
     fun start(id: Long, headers: Map<String, String> = emptyMap()) {
         // 恢复时未传 headers：沿用入队时保存的（Cookie/UA 对直链下载是必需的）

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.download.DownloadManager
 import com.yunx.app.data.download.DownloadStats
+import com.yunx.app.ui.SnackbarController
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -41,6 +42,14 @@ class DownloadViewModel(private val manager: DownloadManager) : ViewModel() {
     fun resume(id: Long) = manager.start(id)
 
     fun remove(id: Long, deleteLocal: Boolean = false) = manager.remove(id, deleteLocal)
+
+    /** 重新下载：校验直链有效性后新建任务（直链过期时提示） */
+    fun redownload(task: DownloadTaskEntity) {
+        viewModelScope.launch {
+            val ok = manager.redownload(task.id)
+            SnackbarController.show(if (ok) "已重新加入下载" else "直链已过期，请重新获取下载链接")
+        }
+    }
 
     /** 全部暂停：暂停所有正在下载（含等待中）的任务 */
     fun pauseAll() {

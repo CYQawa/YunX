@@ -74,6 +74,7 @@ import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.components.ScrollToTopButton
+import com.yunx.app.ui.resolve.DownloadLinkDialog
 import com.yunx.app.ui.resolve.BackToParentItem
 import com.yunx.app.ui.resolve.CrumbBar
 import com.yunx.app.ui.resolve.ShareFileRow
@@ -142,6 +143,15 @@ fun BaiduCloudScreen(
             viewModel.consumeDownloadTriggered()
             onDownloadStarted()
         }
+    }
+
+    // 单文件下载确认弹窗（对齐解析页：展示直链，长按可复制）
+    viewModel.downloadLink?.let { link ->
+        DownloadLinkDialog(
+            link = link,
+            onDownload = { viewModel.startDownload() },
+            onDismiss = { viewModel.dismissDownloadDialog() }
+        )
     }
 
     Surface(
