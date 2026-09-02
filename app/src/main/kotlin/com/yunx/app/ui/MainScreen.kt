@@ -538,7 +538,7 @@ fun MainScreen() {
         return
     }
 
-    // 123 登录页：全屏覆盖（账号+密码表单登录换 JWT）
+    // 123 登录页：全屏覆盖（WebView 打开官网登录，提取 localStorage 的 authorToken）
     if (showPan123Login) {
         Pan123LoginScreen(
             viewModel = pan123ViewModel,

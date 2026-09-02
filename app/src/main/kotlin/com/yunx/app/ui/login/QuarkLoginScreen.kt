@@ -56,6 +56,7 @@ import kotlinx.coroutines.launch
  * 夸克网盘登录页：
  * - 顶部标题栏：返回按钮 + 手动输入 Cookie 图标 + 保存按钮（登录完成后点击，提取 Cookie 并校验保存）
  * - 主体：WebView 加载夸克网盘官网，由用户手动登录
+ * - 自动登录检测：网页内登录完成后自动提取 Cookie 并登录（「保存」按钮保留作手动兜底）
  * - 进入页面时弹登录教程
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,6 +106,16 @@ fun QuarkLoginScreen(
             loadUrl(QuarkConstants.LOGIN_URL)
         }
     }
+
+    // 自动登录检测：网页内登录完成（Cookie 出现并通过接口校验）即自动保存登录；右上角「保存」保留作手动兜底
+    rememberWebLoginAutoDetect(
+        sampleCredential = { CookieManager.getInstance().getCookie(QuarkConstants.COOKIE_DOMAIN).orEmpty() },
+        isPlausible = { QuarkConstants.isValidCookie(it) },
+        validateAndSave = { viewModel.saveQuarkAccount(it) },
+        isPaused = { isSaving || isSavingManual || showCookieDialog },
+        onInFlightChange = { isSaving = it },
+        onAutoSaved = onSaved
+    )
 
     // 页面销毁时释放 WebView
     DisposableEffect(Unit) {
@@ -202,7 +213,7 @@ fun QuarkLoginScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "2. 登录完成后点右上角「保存」，自动提取 Cookie",
+                        text = "2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(

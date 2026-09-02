@@ -65,7 +65,8 @@ private const val TAG = "C139Login"
 /**
  * 139 网盘（和彩云）登录页：
  * - WebView 加载 yun.139.com，由用户手动登录（短信/验证码/风控由官网处理）；
- * - 右上角「保存」从 CookieManager 提取 mail.10086.cn / yun.139.com 的 Cookie（需含 Os_SSo_Sid + RMKEY）；
+ * - 自动登录检测：登录完成后自动从 CookieManager 提取 mail.10086.cn / yun.139.com 的 Cookie
+ *   （需含 Os_SSo_Sid + RMKEY，右上角「保存」保留作手动兜底）；
  * - 支持手动粘贴 Cookie（需含 Os_SSo_Sid= 与 RMKEY=）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -150,6 +151,16 @@ fun C139LoginScreen(
             loadUrl(C139Constants.LOGIN_URL)
         }
     }
+
+    // 自动登录检测：网页内登录完成（Cookie 出现）即自动保存登录；右上角「保存」保留作手动兜底
+    rememberWebLoginAutoDetect(
+        sampleCredential = { C139Constants.extractCookies { CookieManager.getInstance().getCookie(it) } },
+        isPlausible = { C139Constants.isValidCookie(it) },
+        validateAndSave = { viewModel.saveC139Account(it) },
+        isPaused = { isSaving || isSavingManual || showCookieDialog },
+        onInFlightChange = { isSaving = it },
+        onAutoSaved = onSaved
+    )
 
     // 页面销毁时释放 WebView
     DisposableEffect(Unit) {
@@ -246,7 +257,7 @@ fun C139LoginScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "2. 登录完成后点右上角「保存」，自动提取 Cookie",
+                        text = "2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(

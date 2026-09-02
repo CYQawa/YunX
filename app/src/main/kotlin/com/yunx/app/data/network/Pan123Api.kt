@@ -23,7 +23,7 @@ import java.util.zip.CRC32
  * 123 云盘 API 封装（OkHttp，依据《123网盘API文档_面向Agent.md》）。
  *
  * 鉴权体系（文档 §3.2 / §6）：
- * - 登录 `user.123pan.cn/api/user/sign_in`：无需签名，返回 JWT（data.token）；
+ * - 登录凭证：由登录页从网页（yun.123pan.cn）localStorage 提取 authorToken（Bearer JWT）；
  * - 分享列表 `yun.123pan.cn/b/api/share/get`：匿名、无需签名；
  * - 其余 yun.123pan.cn / www.123865.com 鉴权请求：必须带 `auth-key` / `auth-value` 签名头
  *   （CRC32 派生，算法已抓包实证 + 实时验证，见 [makeSign]）。
@@ -79,38 +79,6 @@ class Pan123Api(
         val data = "$ts|$random|$path|${Pan123Constants.SIGN_OS}|${Pan123Constants.SIGN_VER}|$authKey"
         val authValue = "$ts-$random-${crc32Hex(data)}"
         return authKey to authValue
-    }
-
-    // ---------- 登录（文档 §5.1，无签名） ----------
-
-    /**
-     * 账号密码登录 → data.token（JWT，Bearer）。
-     * 成功判定：`code == 200`（注意不是 0）。
-     */
-    suspend fun login(passport: String, password: String): String = withContext(Dispatchers.IO) {
-        val body = JSONObject()
-            .put("passport", passport)
-            .put("password", password)
-            .put("remember", false)
-        val request = Request.Builder()
-            .url(Pan123Constants.LOGIN_URL)
-            .header("Content-Type", "application/json;charset=UTF-8")
-            .header("platform", Pan123Constants.PLATFORM_WEB)
-            .header("app-version", Pan123Constants.APP_VERSION_LOGIN)
-            .header("loginuuid", loginuuid)
-            .header("Origin", Pan123Constants.LOGIN_BASE)
-            .header("Referer", "${Pan123Constants.LOGIN_BASE}/centerlogin?redirect_url=&source_page=website")
-            .header("User-Agent", Pan123Constants.WEB_UA)
-            .post(body.toString().toRequestBody(jsonMediaType))
-            .build()
-        val json = executeJson(request)
-        val code = json.optInt("code", -1)
-        if (code != 200) {
-            throw IllegalStateException(json.optString("message").ifBlank { "登录失败（code=$code）" })
-        }
-        val token = json.optJSONObject("data")?.optString("token").orEmpty()
-        if (token.isBlank()) throw IllegalStateException("登录失败：未返回 token")
-        token
     }
 
     // ---------- 用户信息（文档 §5.11） ----------

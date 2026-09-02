@@ -4,17 +4,18 @@ package com.yunx.app.data.network
  * 123 云盘（123pan / 123865）常量（依据《123网盘API文档_面向Agent.md》）。
  * 两类主域名：
  * - 分享解析域：mshare.123pan.cn（匿名分享读取）、www.123865.com（分享下载信息）、www.123pan.com / yun.123pan.cn（业务 API）；
- * - 登录 / 个人盘域：user.123pan.cn（登录）、yun.123pan.cn（个人盘 API）。
+ * - 个人盘域：yun.123pan.cn（个人盘 API / 网页登录页）。
  *
  * 鉴权：所有 yun.123pan.cn / www.123865.com 的鉴权请求带 `auth-key` / `auth-value` 签名头（第 6 节），
- * 登录接口与匿名分享列表无需签名。
+ * 匿名分享列表无需签名。
+ *
+ * 登录方式：WebView 打开官网个人盘主页（[WEB_LOGIN_URL]），登录成功后网页把 Bearer JWT 写入
+ * 当前域 localStorage（键 [LOCAL_STORAGE_TOKEN_KEY] = authorToken）；应用提取该值作为登录凭证，
+ * 与旧账号密码登录接口返回的 data.token 同源同形。
  */
 object Pan123Constants {
 
     // ---------- BaseURL（按用途，文档 §3.1） ----------
-
-    /** 登录 */
-    const val LOGIN_BASE = "https://user.123pan.cn"
 
     /** 个人盘业务 API / 分享列表（主域式） */
     const val API_BASE = "https://yun.123pan.cn"
@@ -24,8 +25,11 @@ object Pan123Constants {
 
     // ---------- API 路径（严格按文档 §5，不要自行加/去 /b） ----------
 
-    /** 登录（POST /api/user/sign_in，无签名） */
-    const val LOGIN_URL = "$LOGIN_BASE/api/user/sign_in"
+    /** 网页登录页：官网个人盘主页（未登录自动进入登录流程；登录后 localStorage 写入 authorToken） */
+    const val WEB_LOGIN_URL = "https://yun.123pan.cn/"
+
+    /** 网页登录态在 localStorage 中的键名：值即 Bearer JWT（与旧 sign_in 返回的 data.token 同源同形） */
+    const val LOCAL_STORAGE_TOKEN_KEY = "authorToken"
 
     /** 分享文件列表（GET /b/api/share/get，匿名、无签名） */
     const val SHARE_GET_URL = "$API_BASE/b/api/share/get"
@@ -77,9 +81,6 @@ object Pan123Constants {
 
     /** app-version：android 系（仅分享下载） */
     const val APP_VERSION_ANDROID = "39"
-
-    /** 登录接口 app-version（抓包「登陆/成功登录」） */
-    const val APP_VERSION_LOGIN = "132"
 
     /** 分享下载真实 CDN 直链下载时必须携带的 Referer（文档 §5.3.1） */
     const val DOWNLOAD_REFERER = "https://yun.123pan.cn/"

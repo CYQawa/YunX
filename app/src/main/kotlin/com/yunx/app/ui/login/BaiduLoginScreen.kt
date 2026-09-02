@@ -56,7 +56,7 @@ import kotlinx.coroutines.launch
 /**
  * 百度网盘登录页：
  * - WebView 加载百度网盘官网，由用户手动登录；
- * - 右上角「保存」提取 Cookie（关键字段 BDUSS/STOKEN）并校验落库；
+ * - 自动登录检测：网页内登录完成后自动提取 Cookie（关键字段 BDUSS/STOKEN）并校验落库（右上角「保存」保留作手动兜底）；
  * - 支持手动粘贴 Cookie（需含 BDUSS=）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,6 +112,16 @@ fun BaiduLoginScreen(
             loadUrl(BaiduConstants.LOGIN_URL)
         }
     }
+
+    // 自动登录检测：网页内登录完成（BDUSS 出现并通过接口校验）即自动保存登录；右上角「保存」保留作手动兜底
+    rememberWebLoginAutoDetect(
+        sampleCredential = { CookieManager.getInstance().getCookie(BaiduConstants.COOKIE_DOMAIN).orEmpty() },
+        isPlausible = { BaiduConstants.isValidCookie(it) },
+        validateAndSave = { viewModel.saveBaiduAccount(it) },
+        isPaused = { isSaving || isSavingManual || showCookieDialog },
+        onInFlightChange = { isSaving = it },
+        onAutoSaved = onSaved
+    )
 
     DisposableEffect(Unit) {
         onDispose { webView.destroy() }
@@ -234,7 +244,7 @@ fun BaiduLoginScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "2. 登录完成后点右上角「保存」，自动提取 Cookie",
+                        text = "2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
