@@ -124,6 +124,7 @@ import com.yunx.app.ui.viewmodel.XunleiAccountViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yunx.app.data.network.HttpClients
@@ -278,13 +279,22 @@ fun MainScreen() {
     val pan123ViewModel: Pan123AccountViewModel = viewModel(
         factory = Pan123AccountViewModel.Factory(pan123Repository)
     )
+    // 各平台「账号是否已登录」流：云盘浏览 VM 在启动期（未登录）init 加载会残留「请先登录…」错误态，
+    // 首次登录成功后由 VM 监听该流自动重载根目录（见各 XxxCloudViewModel init）
+    val quarkLoginState = remember { repository.observeAccount().map { it != null } }
+    val ucLoginState = remember { ucRepository.observeAccount().map { it != null } }
+    val xunleiLoginState = remember { xunleiRepository.observeAccount().map { it != null } }
+    val baiduLoginState = remember { baiduRepository.observeAccount().map { it != null } }
+    val c139LoginState = remember { c139Repository.observeAccount().map { it != null } }
+    val pan123LoginState = remember { pan123Repository.observeAccount().map { it != null } }
     // 夸克云盘浏览：作为网盘 Tab 内容展示（非全屏），cookie 从数据库读取（避免 StateFlow 初始值为空的竞态）；
     // 下载前经 getFreshCookie 惰性刷新 __puus（修复 AlistGo/alist#830 下载 412）
     val quarkCloudViewModel: QuarkCloudViewModel = viewModel(
         factory = QuarkCloudViewModel.Factory(
             api,
             { repository.getFreshCookie() },
-            downloadManager
+            downloadManager,
+            loginState = quarkLoginState
         )
     )
     // UC 网盘云盘浏览：点击已登录的 UC 卡片打开（cookie 从数据库读取）；
@@ -293,7 +303,8 @@ fun MainScreen() {
         factory = UCCoudViewModel.Factory(
             ucApi,
             { ucRepository.getFreshCookie() },
-            downloadManager
+            downloadManager,
+            loginState = ucLoginState
         )
     )
     // 迅雷 access_token 过期（401 unauthenticated）自动刷新：refresh_token 换新并持久化（对齐官方 /v1/auth/token 抓包）
@@ -311,7 +322,8 @@ fun MainScreen() {
             { xunleiRepository.getAccount()?.accessToken },
             { xunleiRepository.getAccount()?.deviceId },
             { xunleiRepository.getAccount()?.captchaToken },
-            downloadManager
+            downloadManager,
+            loginState = xunleiLoginState
         )
     )
     // 百度网盘云盘浏览：点击已登录的百度卡片打开（cookie 从数据库读取）
@@ -319,7 +331,8 @@ fun MainScreen() {
         factory = BaiduCloudViewModel.Factory(
             baiduApi,
             { baiduRepository.getAccount()?.cookie },
-            downloadManager
+            downloadManager,
+            loginState = baiduLoginState
         )
     )
     // 139 网盘云盘浏览：点击已登录的 139 卡片打开（cookie 从数据库读取）
@@ -327,7 +340,8 @@ fun MainScreen() {
         factory = C139CloudViewModel.Factory(
             c139Api,
             { c139Repository.getAccount()?.cookie },
-            downloadManager
+            downloadManager,
+            loginState = c139LoginState
         )
     )
     // 123 云盘浏览：点击已登录的 123 卡片打开（token 从数据库读取）
@@ -335,7 +349,8 @@ fun MainScreen() {
         factory = Pan123CloudViewModel.Factory(
             pan123Api,
             { pan123Repository.getAccount()?.accessToken },
-            downloadManager
+            downloadManager,
+            loginState = pan123LoginState
         )
     )
     // 网盘空间详情：网盘页顶部「空间总览」展示 6 平台容量使用

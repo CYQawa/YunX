@@ -16,7 +16,10 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /** 百度网盘云盘浏览 UI 状态 */
@@ -40,7 +43,8 @@ sealed interface BaiduCloudUiState {
 class BaiduCloudViewModel(
     private val api: BaiduApi,
     private val cookieProvider: suspend () -> String?,
-    private val downloadManager: DownloadManager
+    private val downloadManager: DownloadManager,
+    private val loginState: Flow<Boolean>
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<BaiduCloudUiState>(BaiduCloudUiState.Loading)
@@ -76,6 +80,15 @@ class BaiduCloudViewModel(
 
     init {
         loadRoot()
+        // 启动期未登录时上面的 loadRoot 会残留「请先登录…」错误态；登录态从无到有后自动重载根目录，
+        // 进网盘列表无需再手动点「重试」。drop(1) 跳过 VM 创建时的登录态快照（init 已加载，避免冷启动重复），
+        // distinctUntilChanged 过滤登录后 Cookie/Token 刷新等重复 upsert。
+        viewModelScope.launch {
+            loginState
+                .drop(1)
+                .distinctUntilChanged()
+                .collect { loggedIn -> if (loggedIn) loadRoot() }
+        }
     }
 
     private suspend fun cookie(): String =
@@ -621,10 +634,11 @@ class BaiduCloudViewModel(
     class Factory(
         private val api: BaiduApi,
         private val cookieProvider: suspend () -> String?,
-        private val downloadManager: DownloadManager
+        private val downloadManager: DownloadManager,
+        private val loginState: Flow<Boolean>
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            BaiduCloudViewModel(api, cookieProvider, downloadManager) as T
+            BaiduCloudViewModel(api, cookieProvider, downloadManager, loginState) as T
     }
 }

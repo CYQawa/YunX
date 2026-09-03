@@ -183,15 +183,8 @@ object DownloadPlatform {
 
 ---
 
-## 4. 构建与验证
+## 4. 验证
 
-### ⛔ 不要在终端执行构建
-
-**本环境没有 Android 构建环境（无 SDK / 无可用 Gradle 环境）。代理不得尝试执行 `./gradlew` 任何任务**，包括 `assembleDebug`、`build`、`testDebugUnitTest`、`clean` 等。执行只会浪费时间并产生误导性报错。
-
-**构建由用户手动完成**（在 AndroidIDE 或 Android Studio 中），代理不负责编译。
-
-### 代理应做的验证：静态自查
 
 写完代码后逐项自查，然后交付：
 
@@ -201,13 +194,7 @@ object DownloadPlatform {
 4. **Room 一致性**：改了表结构则 `version` 已 +1、Migration 已写且已注册。
 5. **命名与风格**：与同目录同类文件一致。
 
-### 交付时必须声明
 
-交付时**明确写出"未经编译验证"**，并列出用户构建时需重点关注的点（如某个实验性注解、Room 迁移、图标名）。用户手动构建后若有报错，会把报错贴回来，此时再针对性修复。
-
-### CI（仅供了解，不需代理执行）
-
-`.github/workflows/ci.yml`：push/PR 到 `master` 时在 GitHub Actions 上跑 JDK 17 + `setup-android`，执行 `assembleDebug` 与 `testDebugUnitTest`，产出 `app-debug.apk` 工件。环境变量 `YUNX_USE_MIRROR=false`（阿里云镜像在 CI 会 502，走官方源）。
 
 ### 常见编译坑
 
