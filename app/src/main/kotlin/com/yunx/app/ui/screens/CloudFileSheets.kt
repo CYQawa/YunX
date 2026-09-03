@@ -40,6 +40,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -631,7 +633,13 @@ internal fun ShareResultDialog(
         onDismissRequest = onDismiss,
         title = { Text("分享成功") },
         text = {
-            Column {
+            // 横屏/小屏时内容超高可滚动，避免按钮被挤出屏幕
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 // 等宽展示分享文案，便于整段复制
                 Text(
                     text = shareText,

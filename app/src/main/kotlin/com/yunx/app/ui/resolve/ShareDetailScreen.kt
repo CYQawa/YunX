@@ -36,12 +36,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.SaveAlt
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -61,6 +63,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,6 +73,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -127,6 +131,10 @@ fun ShareDetailScreen(
     /** 123 云盘浏览 ViewModel（123 分享转存目录选择用） */
     pan123CloudViewModel: Pan123CloudViewModel,
     scrollBehavior: TopAppBarScrollBehavior,
+    /** 文件列表滚动状态（由上层持有，跨目录切换保留） */
+    listState: LazyListState,
+    /** 各目录滚动位置记忆（key = 目录路径；由上层持有，跨目录切换保留） */
+    scrollPositions: MutableMap<String, Int>,
     /** 顶部左上角返回：退出文件页回到输入页（输入框内容保留） */
     onExit: () -> Unit,
     /** 列表「返回上一级」：子目录回上级，根目录回输入页 */
@@ -152,10 +160,23 @@ fun ShareDetailScreen(
             proceed()
         }
     }
-    // 系统返回键 → 返回上一级目录 / 根目录回输入页（而不是退出应用）
-    BackHandler { onBack() }
-    // 文件列表滚动状态（返回顶部按钮用）
-    val listState = rememberLazyListState()
+    // 系统返回键：多选模式下先退出多选，否则返回上一级目录 / 根目录回输入页
+    BackHandler {
+        if (viewModel.multiSelectMode) viewModel.exitMultiSelect() else onBack()
+    }
+    // 文件列表滚动状态（由上层 ResolveScreen 持有：进入文件夹/返回时列表重建也不会丢失）
+    // 搜索过滤（本地过滤当前目录文件）
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val displayFiles = remember(files, searchQuery) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) files else files.filter { it.fname.contains(q, ignoreCase = true) }
+    }
+    // 各目录滚动位置记忆：进入文件夹/返回时按目录路径恢复，避免返回后列表回到顶部
+    val currentDirKey = remember(pathNames) { pathNames.joinToString("/") }
+    LaunchedEffect(currentDirKey) {
+        // 恢复该目录上次滚动位置；无记录（如首次进入）则回到顶部
+        listState.scrollToItem(scrollPositions[currentDirKey] ?: 0)
+    }
     // 多选模式：底部批量操作栏 + 处理中弹窗
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -184,13 +205,13 @@ fun ShareDetailScreen(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = if (viewModel.selected.size == files.size) "已全选" else "点击选择更多文件",
+                                    text = if (viewModel.selected.size == displayFiles.size) "已全选" else "点击选择更多文件",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(onClick = { viewModel.toggleSelectAll(files) }) {
-                                Text(if (viewModel.selected.size == files.size) "取消全选" else "全选")
+                            TextButton(onClick = { viewModel.toggleSelectAll(displayFiles) }) {
+                                Text(if (viewModel.selected.size == displayFiles.size) "取消全选" else "全选")
                             }
                         } else {
                             IconButton(onClick = onExit) {
@@ -205,7 +226,8 @@ fun ShareDetailScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "共 ${files.size} 项",
+                                    text = if (searchQuery.isBlank()) "共 ${files.size} 项"
+                                    else "匹配 ${displayFiles.size} / ${files.size} 项",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -224,7 +246,29 @@ fun ShareDetailScreen(
                         CrumbBar(
                             rootTitle = session.title.ifBlank { "分享内容" },
                             pathNames = pathNames,
-                            onNavigate = { viewModel.navigateToLevel(it) }
+                            onNavigate = { level ->
+                                scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                                viewModel.navigateToLevel(level)
+                            }
+                        )
+                    }
+                    // 搜索框（仅非多选模式显示；本地过滤当前目录文件）
+                    if (!viewModel.multiSelectMode) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("搜索当前目录文件") },
+                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.large
                         )
                     }
                 }
@@ -233,14 +277,18 @@ fun ShareDetailScreen(
             // 返回上一级（单独列表项；根目录时不显示）
             if (pathNames.isNotEmpty()) {
                 item {
-                    BackToParentItem(onClick = onBack)
+                    BackToParentItem(onClick = {
+                        // 记录当前目录滚动位置，返回上级后恢复上级位置
+                        scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                        onBack()
+                    })
                 }
             }
 
-            if (files.isEmpty()) {
+            if (displayFiles.isEmpty()) {
                 item {
                     Text(
-                        text = "此目录为空",
+                        text = if (files.isEmpty()) "此目录为空" else "未找到匹配「${searchQuery.trim()}」的文件",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -251,7 +299,7 @@ fun ShareDetailScreen(
                 }
             }
 
-            items(files, key = { it.fid }) { file ->
+            items(displayFiles, key = { it.fid }) { file ->
                 ShareFileRow(
                     file = file,
                     modifier = Modifier.animateItem(),
@@ -259,6 +307,8 @@ fun ShareDetailScreen(
                         if (viewModel.multiSelectMode) {
                             viewModel.toggleSelect(file)
                         } else if (file.isdir) {
+                            // 记录当前目录滚动位置，进入子目录后恢复子目录位置
+                            scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
                             viewModel.openFolder(file)
                         } else {
                             checkBaiduLimit(file) { viewModel.fetchDownloadLink(file) }

@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -386,6 +387,7 @@ private fun AddBookmarkDialog(
     var pwd by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(BookmarkEntity.DEFAULT_CATEGORY) }
     var customCategory by remember { mutableStateOf("") }
+    val isCustom = selectedCategory == CUSTOM_CATEGORY
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -394,6 +396,7 @@ private fun AddBookmarkDialog(
             Column(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
+                    .heightIn(max = 420.dp)
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -440,25 +443,37 @@ private fun AddBookmarkDialog(
                             label = { Text(cat) }
                         )
                     }
+                    FilterChip(
+                        selected = isCustom,
+                        onClick = { selectedCategory = CUSTOM_CATEGORY },
+                        label = { Text("自定义") }
+                    )
                 }
-                OutlinedTextField(
-                    value = customCategory,
-                    onValueChange = { customCategory = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("自定义分类（可选）") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large
-                )
+                // 选择「自定义」时才展开输入框（与解析页「添加至收藏」交互一致，带动画）
+                AnimatedVisibility(
+                    visible = isCustom,
+                    enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                    exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                ) {
+                    OutlinedTextField(
+                        value = customCategory,
+                        onValueChange = { customCategory = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("自定义分类") },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.large
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
-                enabled = link.isNotBlank(),
+                enabled = link.isNotBlank() && !(isCustom && customCategory.isBlank()),
                 onClick = {
                     onConfirm(
                         link.trim(),
                         title.trim(),
-                        customCategory.ifBlank { selectedCategory },
+                        if (isCustom) customCategory.trim() else selectedCategory,
                         pwd.trim()
                     )
                 }
@@ -492,6 +507,7 @@ internal fun AddToBookmarkDialog(
             Column(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
+                    .heightIn(max = 420.dp)
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -574,7 +590,14 @@ private fun EditCategoryDialog(
         onDismissRequest = onDismiss,
         title = { Text("修改分类") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // 横屏/小屏时内容超高可滚动，避免按钮被挤出屏幕
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
