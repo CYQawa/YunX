@@ -18,19 +18,6 @@
 
 package com.yunx.app.data.network
 
-/**
- * 123 云盘（123pan / 123865）常量（依据《123网盘API文档_面向Agent.md》）。
- * 两类主域名：
- * - 分享解析域：mshare.123pan.cn（匿名分享读取）、www.123865.com（分享下载信息）、www.123pan.com / yun.123pan.cn（业务 API）；
- * - 个人盘域：yun.123pan.cn（个人盘 API / 网页登录页）。
- *
- * 鉴权：所有 yun.123pan.cn / www.123865.com 的鉴权请求带 `auth-key` / `auth-value` 签名头（第 6 节），
- * 匿名分享列表无需签名。
- *
- * 登录方式：WebView 打开官网个人盘主页（[WEB_LOGIN_URL]），登录成功后网页把 Bearer JWT 写入
- * 当前域 localStorage（键 [LOCAL_STORAGE_TOKEN_KEY] = authorToken）；应用提取该值作为登录凭证，
- * 与旧账号密码登录接口返回的 data.token 同源同形。
- */
 object Pan123Constants {
 
     // ---------- BaseURL（按用途，文档 §3.1） ----------

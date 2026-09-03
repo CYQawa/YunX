@@ -18,9 +18,6 @@
 
 package com.yunx.app.data.network
 
-/**
- * 夸克网盘登录与 API 相关常量（依据 kk.md）。
- */
 object QuarkConstants {
 
     /** 夸克 PC 客户端 User-Agent，所有请求必须携带 */

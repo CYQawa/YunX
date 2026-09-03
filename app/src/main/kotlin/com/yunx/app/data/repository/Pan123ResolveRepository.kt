@@ -24,14 +24,6 @@ import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
 
-/**
- * 123 云盘分享解析仓库（依据《123网盘API文档_面向Agent.md》§4.2）：
- * - createSession：GET /b/api/share/get（匿名，带 SharePwd）校验提取码 + 取标题；
- * - listFiles：GET /b/api/share/get 翻页（Next=="-1" 末页；空串表示还有下一页）；
- * - getShareDownloadLink：POST /b/api/share/download/info（需登录 token + 签名）→ 解码 DownloadURL；
- * - 123 分享下载**无需转存**（类似 UC）：transferFile / ensureTempDir / cleanupTempDir 空实现。
- * @param tokenProvider 当前登录 token（ResolveViewModel 传 accessToken）
- */
 class Pan123ResolveRepository(
     private val api: Pan123Api,
     private val tokenProvider: suspend () -> String?

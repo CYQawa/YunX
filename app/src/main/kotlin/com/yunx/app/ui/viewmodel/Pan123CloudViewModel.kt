@@ -232,7 +232,7 @@ class Pan123CloudViewModel(
         _moveUiState.value = Pan123CloudUiState.Loading
         viewModelScope.launch {
             try {
-                val files = api.listCloudFiles(dirId, token()).first.filter { it.isdir }
+                val files = api.listCloudFiles(dirId, token()).filter { it.isdir }
                 _moveUiState.value = Pan123CloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
                 _moveUiState.value = Pan123CloudUiState.Error(e.message ?: "加载失败")
@@ -257,7 +257,7 @@ class Pan123CloudViewModel(
         depth: Int
     ) {
         if (depth > 12) return
-        val list = runCatching { api.listCloudFiles(dirId, token).first }.getOrDefault(emptyList())
+        val list = runCatching { api.listCloudFiles(dirId, token) }.getOrDefault(emptyList())
         list.filter { !it.isdir }.forEach { result.add(it to "$prefix/${it.fname}") }
         list.filter { it.isdir }.forEach {
             collectFolderFiles(it.fid, "$prefix/${it.fname}", token, result, depth + 1)
@@ -588,7 +588,7 @@ class Pan123CloudViewModel(
         refreshing = true
         viewModelScope.launch {
             try {
-                val files = api.listCloudFiles(current.dirId, token()).first
+                val files = api.listCloudFiles(current.dirId, token())
                 _uiState.value = Pan123CloudUiState.Loaded(files, current.pathNames, current.dirId)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "刷新失败"
@@ -611,7 +611,7 @@ class Pan123CloudViewModel(
         _uiState.value = Pan123CloudUiState.Loading
         viewModelScope.launch {
             try {
-                val files = api.listCloudFiles(dirId, token()).first
+                val files = api.listCloudFiles(dirId, token())
                 _uiState.value = Pan123CloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
                 _uiState.value = Pan123CloudUiState.Error(e.message ?: "加载失败")

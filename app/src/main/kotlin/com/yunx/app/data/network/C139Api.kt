@@ -314,12 +314,12 @@ class C139Api(
         val mapping: Map<String, String>
     )
 
-    /** 列目录（含翻页游标）；返回 (文件列表, 下一页游标 or null) */
-    suspend fun listCloudFiles(
+    /** 单页列目录（含翻页游标）；返回 (文件列表, 下一页游标 or null=末页) */
+    private suspend fun fetchCloudPage(
         parentFileId: String,
         cookie: String,
-        pageCursor: String? = null
-    ): Pair<List<ShareFile>, String?> = withContext(Dispatchers.IO) {
+        pageCursor: String?
+    ): Pair<List<ShareFile>, String?>? = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
             ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
         val req = JSONObject()
@@ -330,7 +330,7 @@ class C139Api(
             .put("imageThumbnailStyleList", JSONArray().put("Small").put("Large"))
         val resp = cloudPost(C139Constants.FILE_LIST_URL, req.toString(), authorization)
         checkCloud(resp, "获取文件列表失败")
-        val data = resp.optJSONObject("data") ?: return@withContext Pair(emptyList(), null)
+        val data = resp.optJSONObject("data") ?: return@withContext null
         val files = buildList {
             data.optJSONArray("items")?.let { arr ->
                 for (i in 0 until arr.length()) {
@@ -351,6 +351,22 @@ class C139Api(
         }
         val next = data.optString("nextPageCursor").takeIf { it.isNotBlank() }
         Pair(files, next)
+    }
+
+    /** 列目录（自动翻页，返回该目录下全部文件）；pageCursor 为起始游标（一般传 null=从头） */
+    suspend fun listCloudFiles(
+        parentFileId: String,
+        cookie: String,
+        pageCursor: String? = null
+    ): List<ShareFile> {
+        val all = mutableListOf<ShareFile>()
+        var cursor = pageCursor
+        repeat(200) {            // 封顶 200 页，防异常死循环
+            val (files, next) = fetchCloudPage(parentFileId, cookie, cursor) ?: return all
+            all += files
+            cursor = next ?: return all   // nextPageCursor 为空 → 末页，结束
+        }
+        return all
     }
 
     /** 仅列文件夹（移动到…目标选择） */

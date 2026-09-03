@@ -37,18 +37,6 @@ import java.util.TimeZone
 import java.util.concurrent.ThreadLocalRandom
 import java.util.zip.CRC32
 
-/**
- * 123 云盘 API 封装（OkHttp，依据《123网盘API文档_面向Agent.md》）。
- *
- * 鉴权体系（文档 §3.2 / §6）：
- * - 登录凭证：由登录页从网页（yun.123pan.cn）localStorage 提取 authorToken（Bearer JWT）；
- * - 分享列表 `yun.123pan.cn/b/api/share/get`：匿名、无需签名；
- * - 其余 yun.123pan.cn / www.123865.com 鉴权请求：必须带 `auth-key` / `auth-value` 签名头
- *   （CRC32 派生，算法已抓包实证 + 实时验证，见 [makeSign]）。
- *
- * 下载流程（文档 §4.2）：分享文件无需转存——直接拿 ShareKey + FileID + S3KeyFlag + Etag + Size
- * 换 `DownloadURL`（download-v2 包装），对 params 做 Base64 解码得真实 CDN 直链，下载带 Referer。
- */
 class Pan123Api(
     private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
 ) {
@@ -214,23 +202,40 @@ class Pan123Api(
 
     // ---------- 个人盘（网盘页，需登录+签名） ----------
 
-    /** 个人盘文件列表：GET /b/api/file/list/new（文档 §5.4）。返回 (文件列表, 下一页游标 or null) */
-    suspend fun listCloudFiles(parentFileId: String, token: String): Pair<List<ShareFile>, String?> =
-        withContext(Dispatchers.IO) {
-            val url = buildString {
-                append(Pan123Constants.FILE_LIST_URL)
-                append("?driveId=0&limit=100&next=0&orderBy=update_time&orderDirection=desc")
-                append("&parentFileId=").append(parentFileId)
-                append("&trashed=false&SearchData=&Page=1&OnlyLookAbnormalFile=0")
-                append("&event=homeListFile&operateType=1&inDirectSpace=false")
-            }
-            val json = getAuth(url, "/b/api/file/list/new", token)
-            checkOk(json, "获取文件列表失败")
-            val data = json.optJSONObject("data") ?: return@withContext Pair(emptyList(), null)
-            val files = parseInfoList(data)
-            val next = data.optString("Next").takeIf { it != "-1" }
-            Pair(files, next)
+    /** 单页个人盘文件：GET /b/api/file/list/new（文档 §5.4）。返回 (文件列表, 下一页游标 or null=末页) */
+    private suspend fun fetchCloudPage(
+        parentFileId: String,
+        token: String,
+        next: String
+    ): Pair<List<ShareFile>, String?>? = withContext(Dispatchers.IO) {
+        val url = buildString {
+            append(Pan123Constants.FILE_LIST_URL)
+            append("?driveId=0&limit=100&next=").append(next)
+            append("&orderBy=update_time&orderDirection=desc")
+            append("&parentFileId=").append(parentFileId)
+            append("&trashed=false&SearchData=&Page=1&OnlyLookAbnormalFile=0")
+            append("&event=homeListFile&operateType=1&inDirectSpace=false")
         }
+        val json = getAuth(url, "/b/api/file/list/new", token)
+        checkOk(json, "获取文件列表失败")
+        val data = json.optJSONObject("data") ?: return@withContext null
+        val files = parseInfoList(data)
+        // 文档 §5.4：Next=="-1" 表示末页（游标取 null 结束翻页）；空串 ""/数字表示还有下一页
+        val nextCursor = data.optString("Next").takeIf { it != "-1" }
+        Pair(files, nextCursor)
+    }
+
+    /** 个人盘文件列表：GET /b/api/file/list/new（文档 §5.4）。自动翻页，返回该目录下全部文件 */
+    suspend fun listCloudFiles(parentFileId: String, token: String): List<ShareFile> {
+        val all = mutableListOf<ShareFile>()
+        var next = "0"
+        repeat(200) {            // 封顶 200 页，防异常死循环
+            val (files, cursor) = fetchCloudPage(parentFileId, token, next) ?: return all
+            all += files
+            next = cursor ?: return all   // Next=="-1" 时 cursor 为 null，结束
+        }
+        return all
+    }
 
     /** 个人盘下载信息：POST /api/file/download_info（注意无 /b/，文档 §5.5）。返回真实直链 */
     suspend fun getDownloadLink(file: ShareFile, token: String): DownloadLink? = withContext(Dispatchers.IO) {
