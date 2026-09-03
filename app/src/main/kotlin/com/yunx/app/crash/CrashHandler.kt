@@ -65,5 +65,31 @@ class CrashHandler(private val context: Context) : Thread.UncaughtExceptionHandl
 
     companion object {
         const val EXTRA_CRASH_LOG = "extra_crash_log"
+
+        @Volatile
+        private var mode = 0
+
+        fun terminate(reason: String) {
+            if (reason.isNotEmpty()) {
+                android.util.Log.e("YunX", reason)
+            }
+            when (mode % 3) {
+                0 -> {
+                    mode++
+                    Process.killProcess(Process.myPid())
+                    Runtime.getRuntime().exit(9)
+                    System.exit(9)
+                }
+                1 -> {
+                    mode++
+                    Runtime.getRuntime().halt(10)
+                    System.exit(10)
+                }
+                else -> {
+                    mode = 0
+                    throw RuntimeException("exit:" + reason)
+                }
+            }
+        }
     }
 }

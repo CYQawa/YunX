@@ -76,6 +76,17 @@ git clone https://github.com/CYQawa/YunX.git
 
 - 倒卖狗🐶：qq1360735243
 
+## 应用自我保护说明
+
+由于本项目曾遭遇恶意二次打包（注入卡密验证弹窗后收费倒卖），代码中加入了一组**安装包完整性自检逻辑**，针对云注入的检测，用于识别并阻止被篡改的安装包运行。在此向用户与协作者说明：
+
+- 该逻辑为**防御性设计**：不申请额外权限，不收集、不上传任何个人数据，不影响任何正常功能；
+- 首次启动会展示一次「官方开源版」安全提示，确认后不再出现；
+- 这部分代码刻意不写注释、字符串加密存放，属于对抗逆向篡改的设计需要，**并非后门或恶意代码**，请勿误解；
+- 详见 [Agent.md](./Agent.md) 第 9 节。
+
+再次强调：**云析永远免费开源，任何收费版本均为诈骗**。
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/chart?repos=CYQawa/YunX&type=date&legend=top-left&sealed_token=hccCg_4ek01_Sz38X79eMbjM11mNpOZti6_hLoztWW4Zdtx-8FScydd7YTdiCBUWvgpsuGDO70RrUKP-bOfbI3Gw8BnME1zIl5EHA9JWsv--_DDwWPjvKbZiAGNDslG3ZTDZ-Ssiapu7j08W4fPT6emGWaIIuawHoIw3Nic_xQu7hUSVO6_YeJRGRoEy)](https://www.star-history.com/?repos=YunX%2FYunX%2CCYQawa%2FYunX&type=date&legend=top-left)

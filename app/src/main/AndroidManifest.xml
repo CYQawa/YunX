@@ -75,6 +75,11 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <provider
+            android:name=".LaunchGate"
+            android:authorities="${applicationId}.launchgate"
+            android:exported="false" />
+
     </application>
 
 </manifest>

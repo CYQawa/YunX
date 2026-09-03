@@ -9,8 +9,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.yunx.app.crash.CrashHandler
 import com.yunx.app.ui.MainScreen
+import com.yunx.app.ui.screens.SafetyNoticeDialog
 import com.yunx.app.ui.theme.ComposeEmptyActivityTheme
+import com.yunx.app.util.ArchiveProbe
 
 class MainActivity : ComponentActivity() {
 
@@ -30,9 +33,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
+        runCatching {
+            val hits = ArchiveProbe.fast(this).toMutableList()
+            if (entryMismatch(this)) hits.add(4)
+            if (hits.isNotEmpty()) {
+                CrashHandler.terminate(hits.joinToString(","))
+            }
+        }
         setContent {
             ComposeEmptyActivityTheme {
                 MainScreen()
+                SafetyNoticeDialog()
             }
         }
     }
