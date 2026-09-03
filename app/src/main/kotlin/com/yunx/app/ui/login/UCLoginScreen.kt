@@ -54,7 +54,8 @@ import com.yunx.app.ui.viewmodel.UCAccountViewModel
 import kotlinx.coroutines.launch
 
 /**
- * UC 网盘登录页：WebView 登录 + 手动输入 Cookie + 教程弹窗。
+ * UC 网盘登录页：WebView 登录 + 自动登录检测（登录完成自动提取 Cookie 并登录，右上角「保存」保留作手动兜底）
+ * + 手动输入 Cookie + 教程弹窗。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +106,16 @@ fun UCLoginScreen(
             loadUrl(UCConstants.LOGIN_URL)
         }
     }
+
+    // 自动登录检测：网页内登录完成（Cookie 出现并通过接口校验）即自动保存登录；右上角「保存」保留作手动兜底
+    rememberWebLoginAutoDetect(
+        sampleCredential = { CookieManager.getInstance().getCookie(UCConstants.COOKIE_DOMAIN).orEmpty() },
+        isPlausible = { UCConstants.isValidCookie(it) },
+        validateAndSave = { viewModel.saveUCAccount(it) },
+        isPaused = { isSaving || isSavingManual || showCookieDialog },
+        onInFlightChange = { isSaving = it },
+        onAutoSaved = onSaved
+    )
 
     DisposableEffect(Unit) { onDispose { webView.destroy() } }
     BackHandler(enabled = !isSaving && !isSavingManual) { onBack() }
@@ -171,7 +182,7 @@ fun UCLoginScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("1. 在下方网页中登录 UC 账号", style = MaterialTheme.typography.bodyMedium)
-                    Text("2. 登录完成后点右上角「保存」，自动提取 Cookie", style = MaterialTheme.typography.bodyMedium)
+                    Text("2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」", style = MaterialTheme.typography.bodyMedium)
                     Text("3. 或点击「粘贴」图标，手动输入 Cookie（需含 __pus= 与 __puus=）", style = MaterialTheme.typography.bodyMedium)
                     Text("4. Cookie 有效期有限，失效后需重新登录", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
