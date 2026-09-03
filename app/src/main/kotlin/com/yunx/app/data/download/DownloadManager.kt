@@ -64,24 +64,53 @@ private const val RANGE_IGNORED_TOLERANCE = 3
 private data class RetryRange(val start: Long, val end: Long, val file: File)
 
 /**
- * 弹性区分配器：按字节顺序领取固定大小块（默认 4MB），保证线程拿到的区间**物理相邻**。
- * 替代"中点劈分"——劈分（先大后小）导致主池耗尽瞬间全部线程涌入弹性区、区间跨度翻倍、
- * 连接复用率崩塌（中后段掉速根因）；按序分配则线程逐个平滑转入弹性区，并发形态不突变。
+ * 弹性区动态分片分配器（IDM 式）。
+ * 核心矛盾：块太大会让尾部只剩少数几个大块 → 空闲线程空转（"最后一点特别慢"）；
+ * 块太小会产生海量 Range 请求 → 拖慢快连接。故不再用固定块，改为**实时速度自适应 + 尾部收缩**：
+ * - 按字节顺序发块（物理相邻），保持连接复用（不搞"中点劈分"，避免中后段掉速）；
+ * - 起步块 = 主池 chunkSize（快连接不会一上来被切成碎片）；
+ * - 稳定后块 ≈ 单 worker 下载 TARGET_SECONDS 秒的量：快则大块（省 Range 开销），慢则小块（充分并行摊平拖尾）；
+ * - 尾部收缩：剩余字节 <= workers*块 时，把块压到 remaining/workers，让全部连接并行冲完最后一段，
+ *   彻底消除"其他分片下完、只剩最后一个线程慢慢爬"的拖尾塌缩。
  */
 private class ElasticAllocator(
     private val total: Long,
-    private val elasticStart: Long
+    private val elasticStart: Long,
+    private val workers: Int,
+    private val chunkSize: Long
 ) {
     private val lock = Any()
     private var nextStart = elasticStart
 
-    /** 领取下一个弹性块（按字节顺序，块大小 DEFAULT_ELASTIC_BLOCK；不足 4MB 的尾部整块领取） */
+    /** 最近实测总速度（字节/秒），由外部实时注入；<=0 表示尚未探测到 */
+    @Volatile
+    var recentSpeedBps: Long = 0L
+
+    /** 领取下一个弹性块（按字节顺序；块大小随速度与剩余量动态收缩） */
     fun take(): LongRange? = synchronized(lock) {
         if (nextStart >= total) return null
+        val remaining = total - nextStart
+        val base = baseBlockSize()
+        // ★ 尾部收缩：剩余不足 workers 个整块时，均分到约 workers 份，让全部连接忙到最后；
+        //   下限 MIN_TAIL_BLOCK（不碎成海量请求），上限 base（块不会越滚越大）。
+        val w = workers.coerceAtLeast(1)
+        val block = if (remaining <= w * base) {
+            (remaining / w).coerceIn(MIN_TAIL_BLOCK, base)
+        } else {
+            base
+        }
         val s = nextStart
-        val e = minOf(s + DEFAULT_ELASTIC_BLOCK - 1, total - 1)
+        val e = minOf(s + block - 1, total - 1)
         nextStart = e + 1
         s..e
+    }
+
+    /** 速度自适应块大小：块 ≈ 单 worker 下载 TARGET_SECONDS 秒的量，夹在 [MIN, MAX]；未探测到速度时沿用主池 chunkSize */
+    private fun baseBlockSize(): Long {
+        val w = workers.coerceAtLeast(1)
+        val perWorker = (recentSpeedBps / w).coerceAtLeast(0L)
+        if (perWorker <= 0L) return chunkSize.coerceIn(MIN_ELASTIC_BLOCK, MAX_ELASTIC_BLOCK)
+        return (perWorker * TARGET_SECONDS).coerceIn(MIN_ELASTIC_BLOCK, MAX_ELASTIC_BLOCK)
     }
 
     /** 断点续传：跳过已下载前缀（nextStart 只前进） */
@@ -90,8 +119,14 @@ private class ElasticAllocator(
     }
 
     companion object {
-        /** 弹性块大小：4MB（可调；CDN 对同区间并发敏感可降 2MB，单连接限速严重可升 8MB） */
-        const val DEFAULT_ELASTIC_BLOCK = 4 * 1024 * 1024L
+        /** 常态块下限：慢连接稳定态每块至少 256KB（避免过多请求）；快连接起步也不低于此 */
+        const val MIN_ELASTIC_BLOCK = 256 * 1024L
+        /** 常态块上限：快连接单块封顶 4MB（过大块会降低动态性/连接复用友好度） */
+        const val MAX_ELASTIC_BLOCK = 4 * 1024 * 1024L
+        /** 尾部收缩下限：最后一段可细到 64KB，尽量榨干全部连接；再小则 Range 开销不划算 */
+        const val MIN_TAIL_BLOCK = 64 * 1024L
+        /** 自适应支点：每块 ≈ 单 worker 下载此秒数（快则大块、慢则小块） */
+        const val TARGET_SECONDS = 5L
     }
 }
 
@@ -598,9 +633,10 @@ class DownloadManager(
         val failReason = java.util.concurrent.atomic.AtomicReference<String?>(null)
         val rangeIgnoredCount = AtomicInteger(0)         // RANGE_IGNORED 累计次数（偶发 200 容忍）
 
-        // ★ 弹性区分配器：按字节顺序领取 4MB 块，区间物理相邻（替代中点劈分，根治中后段掉速）。
+        // ★ 弹性区分配器（IDM 式动态分片）：按字节顺序发块、区间物理相邻，替代中点劈分（根治中后段掉速）。
         //   续传：不完整 seg 删除重下；完整 seg 前缀推进 nextStart（弹性区按序分配，完成块天然是字节前缀）。
-        val elasticAllocator = ElasticAllocator(total, elasticStart)
+        //   块大小随实时速度自适应并尾部收缩，保证全部连接忙到最后一块，消除"末尾只剩少数大块 → 拖尾特别慢"。
+        val elasticAllocator = ElasticAllocator(total, elasticStart, effectiveWorkers, chunkSize)
         if (elasticStart < total) {
             // 不完整 seg 删除（重下）
             chunkDir.listFiles { f -> f.name.startsWith("seg_") && f.name.endsWith(".part") }?.forEach { f ->
@@ -652,6 +688,8 @@ class DownloadManager(
                                     val new = minOf(downloaded.addAndGet(bytes), total)
                                     if (!isTaskActive()) return@downloadChunk
                                     speedRecorder.onBytes(new)?.let { speed ->
+                                        // ★ 实时速度注入弹性分配器：块大小随真实吞吐自适应（IDM 式动态分片）
+                                        elasticAllocator.recentSpeedBps = speed
                                         val remain = if (speed > 0) (total - new) * 1000 / speed else -1L
                                         _stats.update { it + (id to DownloadStats(speed, remain, effectiveWorkers)) }
                                     }
@@ -696,6 +734,8 @@ class DownloadManager(
                                     val new = minOf(downloaded.addAndGet(bytes), total)
                                     if (!isTaskActive()) return@downloadChunk
                                     speedRecorder.onBytes(new)?.let { speed ->
+                                        // ★ 实时速度注入弹性分配器：块大小随真实吞吐自适应（IDM 式动态分片）
+                                        elasticAllocator.recentSpeedBps = speed
                                         val remain = if (speed > 0) (total - new) * 1000 / speed else -1L
                                         _stats.update { it + (id to DownloadStats(speed, remain, effectiveWorkers)) }
                                     }
@@ -1055,10 +1095,14 @@ class DownloadManager(
 
     /** 分片数规划（任务池模型）：分片数 = 线程数 × 8，远多于并发线程数。
      *  worker 循环领取盈余块，任一分片慢时其他线程继续领新片，根治"尾部并发塌缩"；
-     *  保留 1MB 单片下限（避免过多小片）与 512 封顶。 */
+     *  保留 256KB 单片下限（小文件也能切出数倍于线程数的盈余片，同时避免过多小片）与 512 封顶。 */
     private fun chunkCountFor(total: Long, threads: Int): Int {
         if (total <= 0) return 1
-        val minChunkBytes = 1 * 1024 * 1024L
+        // ★ 单片下限 1MB → 256KB：1MB 会把小文件（如 33.7MB）的分片数夹到 ≈ 线程数，失去盈余；
+        //   低单连接速率（如夸克 10KB/s）下每个 1MB 重片耗时约 100s，尾部极易空转。
+        //   降到 256KB 后同样文件能切出 4~8 倍于线程数的片，工作窃取把尾部空转压到最后一个 256KB。
+        //   大文件仍受 want / 512 封顶约束，单片自然变大，吞吐不受影响。
+        val minChunkBytes = 256 * 1024L
         val bySize = when {
             total < 5 * 1024 * 1024 -> 1          // < 5MB 不分片
             total < 50 * 1024 * 1024 -> 8         // < 50MB
