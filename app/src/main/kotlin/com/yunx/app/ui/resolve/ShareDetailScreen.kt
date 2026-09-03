@@ -84,6 +84,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
@@ -167,6 +173,7 @@ fun ShareDetailScreen(
     // 文件列表滚动状态（由上层 ResolveScreen 持有：进入文件夹/返回时列表重建也不会丢失）
     // 搜索过滤（本地过滤当前目录文件）
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
     val displayFiles = remember(files, searchQuery) {
         val q = searchQuery.trim()
         if (q.isEmpty()) files else files.filter { it.fname.contains(q, ignoreCase = true) }
@@ -239,6 +246,17 @@ fun ShareDetailScreen(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
+                            IconButton(onClick = { showSearch = !showSearch }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = if (showSearch) "关闭搜索" else "搜索文件",
+                                    tint = if (showSearch) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
                         }
                     }
                     // 可点击面包屑（多选模式下隐藏）
@@ -252,24 +270,31 @@ fun ShareDetailScreen(
                             }
                         )
                     }
-                    // 搜索框（仅非多选模式显示；本地过滤当前目录文件）
-                    if (!viewModel.multiSelectMode) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("搜索当前目录文件") },
-                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                    // 搜索框（点击放大镜展开；与面包屑保持间距 + 展开/收起动画）
+                    AnimatedVisibility(
+                        visible = showSearch && !viewModel.multiSelectMode,
+                        enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+                        exit = shrinkVertically(tween(140)) + fadeOut(tween(120))
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("搜索当前目录文件") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                        }
                                     }
-                                }
-                            },
-                            singleLine = true,
-                            shape = MaterialTheme.shapes.large
-                        )
+                                },
+                                singleLine = true,
+                                shape = MaterialTheme.shapes.large
+                            )
+                        }
                     }
                 }
             }
@@ -302,7 +327,6 @@ fun ShareDetailScreen(
             items(displayFiles, key = { it.fid }) { file ->
                 ShareFileRow(
                     file = file,
-                    modifier = Modifier.animateItem(),
                     onClick = {
                         if (viewModel.multiSelectMode) {
                             viewModel.toggleSelect(file)

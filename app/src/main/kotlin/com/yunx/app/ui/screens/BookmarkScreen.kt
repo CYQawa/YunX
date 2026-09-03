@@ -75,6 +75,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -388,6 +389,16 @@ private fun AddBookmarkDialog(
     var selectedCategory by remember { mutableStateOf(BookmarkEntity.DEFAULT_CATEGORY) }
     var customCategory by remember { mutableStateOf("") }
     val isCustom = selectedCategory == CUSTOM_CATEGORY
+    val scrollState = rememberScrollState()
+    // 选中「自定义」后自动滚到底部，确保输入框可见（收藏弹窗内容较长，输入框默认在视口外）
+    LaunchedEffect(isCustom) {
+        if (isCustom) {
+            kotlinx.coroutines.delay(300)
+            // 展开动画结束后滚动到底部（maxValue 稳定后）
+            kotlinx.coroutines.delay(120)
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -395,9 +406,9 @@ private fun AddBookmarkDialog(
         text = {
             Column(
                 modifier = Modifier
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
                     .heightIn(max = 420.dp)
-                    .fillMaxWidth(),
+                    .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
@@ -436,18 +447,19 @@ private fun AddBookmarkDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    categories.forEach { cat ->
+                    // 「自定义」置顶显示，方便直接新建分类（过滤分类里同名字项，避免出现两个"自定义"chip）
+                    FilterChip(
+                        selected = isCustom,
+                        onClick = { selectedCategory = CUSTOM_CATEGORY },
+                        label = { Text("自定义") }
+                    )
+                    categories.filter { it != CUSTOM_CATEGORY }.forEach { cat ->
                         FilterChip(
                             selected = selectedCategory == cat,
                             onClick = { selectedCategory = cat },
                             label = { Text(cat) }
                         )
                     }
-                    FilterChip(
-                        selected = isCustom,
-                        onClick = { selectedCategory = CUSTOM_CATEGORY },
-                        label = { Text("自定义") }
-                    )
                 }
                 // 选择「自定义」时才展开输入框（与解析页「添加至收藏」交互一致，带动画）
                 AnimatedVisibility(
@@ -506,9 +518,9 @@ internal fun AddToBookmarkDialog(
         text = {
             Column(
                 modifier = Modifier
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
                     .heightIn(max = 420.dp)
-                    .fillMaxWidth(),
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
@@ -528,18 +540,19 @@ internal fun AddToBookmarkDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    categories.forEach { cat ->
+                    // 「自定义」置顶显示，方便直接新建分类（过滤分类里同名字项，避免出现两个"自定义"chip）
+                    FilterChip(
+                        selected = isCustom,
+                        onClick = { selectedCategory = CUSTOM_CATEGORY },
+                        label = { Text("自定义") }
+                    )
+                    categories.filter { it != CUSTOM_CATEGORY }.forEach { cat ->
                         FilterChip(
                             selected = selectedCategory == cat,
                             onClick = { selectedCategory = cat },
                             label = { Text(cat) }
                         )
                     }
-                    FilterChip(
-                        selected = isCustom,
-                        onClick = { selectedCategory = CUSTOM_CATEGORY },
-                        label = { Text("自定义") }
-                    )
                 }
                 AnimatedVisibility(
                     visible = isCustom,
@@ -585,6 +598,15 @@ private fun EditCategoryDialog(
 ) {
     var selectedCategory by remember { mutableStateOf(currentCategory) }
     var customCategory by remember { mutableStateOf("") }
+    val isCustom = selectedCategory == CUSTOM_CATEGORY
+    val scrollState = rememberScrollState()
+    // 选中「自定义」后自动滚到底部，确保输入框可见
+    LaunchedEffect(isCustom) {
+        if (isCustom) {
+            kotlinx.coroutines.delay(250)
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -595,13 +617,19 @@ private fun EditCategoryDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // 「自定义」置顶显示，方便直接新建分类
+                    FilterChip(
+                        selected = isCustom,
+                        onClick = { selectedCategory = CUSTOM_CATEGORY },
+                        label = { Text("自定义") }
+                    )
                     categories.forEach { cat ->
                         FilterChip(
                             selected = selectedCategory == cat,
@@ -610,20 +638,30 @@ private fun EditCategoryDialog(
                         )
                     }
                 }
-                OutlinedTextField(
-                    value = customCategory,
-                    onValueChange = { customCategory = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("自定义分类（可选）") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large
-                )
+                // 选择「自定义」时才展开输入框（与添加收藏弹窗交互一致，带动画）
+                AnimatedVisibility(
+                    visible = isCustom,
+                    enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                    exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                ) {
+                    OutlinedTextField(
+                        value = customCategory,
+                        onValueChange = { customCategory = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("自定义分类") },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.large
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(customCategory.ifBlank { selectedCategory }) }) {
-                Text("确定")
-            }
+            Button(
+                enabled = !(isCustom && customCategory.isBlank()),
+                onClick = {
+                    onConfirm(if (isCustom) customCategory.trim() else selectedCategory)
+                }
+            ) { Text("确定") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }

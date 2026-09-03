@@ -23,8 +23,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -121,6 +123,7 @@ fun CloudDriveScreen(
     val listState = rememberLazyListState()
     // 搜索过滤（本地过滤当前目录文件）
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
     // 各目录滚动位置记忆：进入文件夹/返回时按目录路径恢复，避免返回后列表回到顶部
     val scrollPositions = remember { mutableStateMapOf<String, Int>() }
     val loadedState = state as? QuarkCloudUiState.Loaded
@@ -132,10 +135,8 @@ fun CloudDriveScreen(
     val currentDirKey = remember(loadedState?.pathNames) {
         loadedState?.pathNames?.joinToString("/") ?: ""
     }
-    LaunchedEffect(currentDirKey) {
-        // 恢复该目录上次滚动位置；无记录（如首次进入）则回到顶部
-        listState.scrollToItem(scrollPositions[currentDirKey] ?: 0)
-    }
+    // 各目录滚动位置保存/恢复：恢复动作放在 Loaded 分支内（列表挂载后执行），
+    // 避免 Loading 阶段（loadedState==null、key 变 ""）误触发导致返回后回顶
     // 批量操作弹窗（多选模式底部栏触发：分享/移动需要设置或选目录，下载/删除直接执行）
     var showBatchActions by remember { mutableStateOf(false) }
     var batchInitial by remember { mutableStateOf(com.yunx.app.ui.screens.BatchStep.MENU) }
@@ -209,6 +210,11 @@ fun CloudDriveScreen(
             }
 
             is QuarkCloudUiState.Loaded -> Box(modifier = Modifier.fillMaxSize()) {
+                // 目录加载完成、列表挂载后恢复该目录上次滚动位置（避免 Loading 阶段误触发）
+                val loadedKey = remember(s.pathNames) { s.pathNames.joinToString("/") }
+                LaunchedEffect(loadedKey) {
+                    listState.scrollToItem(scrollPositions[loadedKey] ?: 0)
+                }
                 PullToRefreshBox(
                     isRefreshing = viewModel.refreshing,
                     onRefresh = { viewModel.refresh() },
@@ -267,6 +273,18 @@ fun CloudDriveScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            // 放大镜：点击展开/收起搜索框
+                            IconButton(onClick = { showSearch = !showSearch }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = if (showSearch) "关闭搜索" else "搜索文件",
+                                    tint = if (showSearch) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
                         }
                     }
                     // 可点击面包屑（多选模式下隐藏）
@@ -280,24 +298,31 @@ fun CloudDriveScreen(
                             }
                         )
                     }
-                    // 搜索框（仅非多选模式显示；本地过滤当前目录文件）
-                    if (!viewModel.multiSelectMode) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("搜索当前目录文件") },
-                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                    // 搜索框（点击放大镜展开；与面包屑保持间距 + 展开/收起动画）
+                    AnimatedVisibility(
+                        visible = showSearch && !viewModel.multiSelectMode,
+                        enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+                        exit = shrinkVertically(tween(140)) + fadeOut(tween(120))
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("搜索当前目录文件") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                        }
                                     }
-                                }
-                            },
-                            singleLine = true,
-                            shape = MaterialTheme.shapes.large
-                        )
+                                },
+                                singleLine = true,
+                                shape = MaterialTheme.shapes.large
+                            )
+                        }
                     }
                 }
             }
@@ -330,7 +355,6 @@ fun CloudDriveScreen(
             items(displayFiles, key = { it.fid }) { file ->
                 ShareFileRow(
                     file = file,
-                    modifier = Modifier.animateItem(),
                     onClick = {
                         if (viewModel.multiSelectMode) {
                             viewModel.toggleSelect(file)

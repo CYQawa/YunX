@@ -565,7 +565,13 @@ fun SettingsScreen(
             onDismissRequest = { showThreadsDialog = false },
             title = { Text("下载线程数") },
             text = {
-                Column {
+                // 横屏/小屏时内容超高可滚动，避免按钮被挤出屏幕
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Text(
                         text = "按网盘分别设置分片并发数；线程数不是越多越好，适当调整",
                         style = MaterialTheme.typography.bodyMedium,
@@ -737,7 +743,13 @@ fun SettingsScreen(
             onDismissRequest = { showConcurrencyDialog = false },
             title = { Text("最大同时下载任务数") },
             text = {
-                Column {
+                // 横屏/小屏时内容超高可滚动，避免按钮被挤出屏幕
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     options.forEach { v ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -785,7 +797,14 @@ fun SettingsScreen(
             onDismissRequest = { showSpeedDialog = false },
             title = { Text("下载速度限制") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                // 横屏/小屏时内容超高可滚动，避免按钮被挤出屏幕
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     presets.forEach { v ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -867,7 +886,13 @@ fun SettingsScreen(
             onDismissRequest = { showRetryDialog = false },
             title = { Text("失败自动重试") },
             text = {
-                Column {
+                // 横屏/小屏时内容超高可滚动，避免按钮被挤出屏幕
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     options.forEach { v ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
