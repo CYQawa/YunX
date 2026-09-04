@@ -111,6 +111,11 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /** 百度非会员限速阈值：>300MB 提示 */
 private const val BAIDU_LIMIT_BYTES = 300L * 1024 * 1024
@@ -693,10 +698,20 @@ internal fun ShareFileRow(
                     modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
+                // 副标题行：文件夹/大小 + 修改时间（同一行展示）
                 Text(
-                    text = if (file.isdir) "文件夹" else formatSize(file.fsize),
+                    text = buildString {
+                        append(if (file.isdir) "文件夹" else formatSize(file.fsize))
+                        val time = formatModifyTime(file.modifyTime)
+                        if (time.isNotBlank()) {
+                            append("  ·  ")
+                            append(time)
+                        }
+                    },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (onSave != null) {
@@ -738,4 +753,82 @@ internal fun formatSize(bytes: Long): String {
         i++
     }
     return String.format("%.1f %s", value, units[i])
+}
+
+/**
+ * 各网盘返回的时间字段格式不统一，统一解析为毫秒时间戳；无法识别返回 null。
+ * 已覆盖：
+ * - 夸克 / UC：`updated_at` / `modify_time` —— 13 位毫秒时间戳
+ * - 百度：`server_mtime` —— 10 位秒级时间戳
+ * - 迅雷：`modified_time` —— ISO 8601（带时区偏移或 Z）
+ * - 139：云盘 `updatedAt` ISO 8601；分享 `udTime`/`ctTime` 可能为 yyyyMMddHHmmss
+ * - 123：`UpdateAt` —— ISO 8601 或 "yyyy-MM-dd HH:mm:ss"
+ */
+private fun parseModifyTimeMillis(raw: String): Long? {
+    val s = raw.trim()
+    if (s.isEmpty()) return null
+
+    // 1) 纯数字：时间戳（13 位毫秒 / 10 位秒）或紧凑日期串 yyyyMMddHHmmss
+    if (s.all(Char::isDigit)) {
+        return when (s.length) {
+            13 -> s.toLongOrNull()
+            10 -> s.toLongOrNull()?.times(1000L)
+            14 -> runCatching {
+                SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).apply {
+                    isLenient = false
+                }.parse(s)?.time
+            }.getOrNull()
+            // 其余长度按数值大小推断秒/毫秒（阈值≈1973 年的毫秒值）
+            else -> s.toLongOrNull()?.let { if (it > 100_000_000_000L) it else it * 1000L }
+        }
+    }
+
+    // 2) 文本时间：先剥离时区后缀，再按「长 → 短」模式尝试解析
+    //    （不用 SimpleDateFormat 的 XXX 模式，它要求 API 24+）
+    var work = s.replace('T', ' ')
+    var tz: TimeZone? = null
+    if (work.endsWith("Z", ignoreCase = true)) {
+        tz = TimeZone.getTimeZone("UTC")
+        work = work.dropLast(1)
+    } else {
+        val m = Regex("([+-]\\d{2}:?\\d{2})$").find(work)
+        if (m != null) {
+            tz = TimeZone.getTimeZone("GMT${m.groupValues[1]}")
+            work = work.removeRange(m.range)
+        }
+    }
+    // 去掉毫秒小数部分
+    val body = work.trim().substringBefore('.')
+    val zone: TimeZone? = tz
+
+    val patterns = listOf(
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy/MM/dd HH:mm:ss",
+        "yyyy-MM-dd",
+        "yyyy/MM/dd"
+    )
+    for (p in patterns) {
+        val fmt = SimpleDateFormat(p, Locale.getDefault())
+        fmt.isLenient = false
+        if (zone != null) fmt.timeZone = zone
+        runCatching { fmt.parse(body) }.getOrNull()?.let { return it.time }
+    }
+    return null
+}
+
+/**
+ * 文件修改时间展示（列表副标题用，尽量紧凑）：
+ * 今年内 → "MM-dd HH:mm"；跨年 → "yyyy-MM-dd"；无法解析 → 空串（调用方据此隐藏）。
+ */
+internal fun formatModifyTime(raw: String): String {
+    val millis = parseModifyTimeMillis(raw) ?: return ""
+    if (millis <= 0) return ""
+    val cal = Calendar.getInstance()
+    val currentYear = cal.get(Calendar.YEAR)
+    cal.timeInMillis = millis
+    val pattern = if (cal.get(Calendar.YEAR) == currentYear) "MM-dd HH:mm" else "yyyy-MM-dd"
+    return runCatching {
+        SimpleDateFormat(pattern, Locale.getDefault()).format(Date(millis))
+    }.getOrDefault("")
 }

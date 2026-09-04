@@ -322,8 +322,12 @@ class C139Api(
     ): Pair<List<ShareFile>, String?>? = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
             ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+        // ⚠️ pageCursor 必须是真正的 JSON null；若误传字符串 "null"，服务端会当作无效游标忽略
+        //    并回吐第一页，导致翻页原地打转（抓包表现为重复发同一个请求直到封顶）
+        val cursorValue: Any =
+            pageCursor?.takeIf { it.isNotBlank() && it != "null" } ?: JSONObject.NULL
         val req = JSONObject()
-            .put("pageInfo", JSONObject().put("pageSize", 100).put("pageCursor", pageCursor ?: JSONObject.NULL))
+            .put("pageInfo", JSONObject().put("pageSize", 100).put("pageCursor", cursorValue))
             .put("orderBy", "updated_at")
             .put("orderDirection", "DESC")
             .put("parentFileId", parentFileId)
@@ -349,7 +353,15 @@ class C139Api(
                 }
             }
         }
-        val next = data.optString("nextPageCursor").takeIf { it.isNotBlank() }
+        // ⚠️ Android org.json 陷阱：响应中 "nextPageCursor": null 时，optString 返回的是
+        //    字符串 "null"（JSONObject.NULL.toString()）而非空串，isNotBlank 判定为「还有下一页」，
+        //    于是带着 "null" 游标反复请求首页 → 200 次重复请求、列表加载极慢。
+        //    必须先用 isNull() 判断真 JSON null，并额外过滤字符串 "null"。
+        val next = if (data.isNull("nextPageCursor")) {
+            null
+        } else {
+            data.optString("nextPageCursor").takeIf { it.isNotBlank() && it != "null" }
+        }
         Pair(files, next)
     }
 
@@ -364,14 +376,16 @@ class C139Api(
         var cursor = pageCursor
         repeat(200) {            // 封顶 200 页，防异常死循环
             val (files, next) = fetchCloudPage(parentFileId, cookie, cursor) ?: return all
-            // 139 按 updated_at 排序翻页，大量文件时间相同时游标会重复返回同一批/边界项，
+            // 139 按 updated_at 排序翻页，大量文件时间相同时游标可能重复返回边界项，
             // 按 fid 去重，避免同一 fid 重复导致 LazyColumn key 冲突崩溃
             for (f in files) {
                 if (f.fid.isNotBlank() && seen.add(f.fid)) all.add(f)
             }
-            cursor = next ?: return all   // nextPageCursor 为空 → 末页，结束
-            // 游标未推进（服务端异常重复返回同一游标）→ 终止，防死循环重复累加
-            if (cursor == pageCursor) return all
+            // 末页：nextPageCursor 为 JSON null
+            if (next == null) return all
+            // 游标未推进（服务端异常回吐同一游标）→ 立即终止，避免重复请求同一页
+            if (next == cursor) return all
+            cursor = next
         }
         return all
     }
