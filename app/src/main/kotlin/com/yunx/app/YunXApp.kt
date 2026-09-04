@@ -45,6 +45,7 @@ internal fun earlyProbe(): Boolean {
 internal fun entryMismatch(ctx: Context): Boolean {
     val app = TextCipher.pYunxApp
     val main = TextCipher.pMainAct
+    val main2 = TextCipher.pMainAct2
     return try {
         val pm = ctx.packageManager
         val info = pm.getPackageInfo(ctx.packageName, PackageManager.GET_ACTIVITIES)
@@ -52,7 +53,7 @@ internal fun entryMismatch(ctx: Context): Boolean {
         if (appName.isNotEmpty() && !appName.endsWith(app)) return true
         val launch = pm.getLaunchIntentForPackage(ctx.packageName)
         val comp = launch?.resolveActivity(pm)?.className.orEmpty()
-        if (comp.isNotEmpty() && !comp.endsWith(main)) return true
+        if (comp.isNotEmpty() && !comp.endsWith(main) && !comp.endsWith(main2)) return true
         false
     } catch (t: Throwable) {
         false
