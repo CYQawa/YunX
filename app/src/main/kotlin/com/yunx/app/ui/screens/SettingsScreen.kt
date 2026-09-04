@@ -79,6 +79,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,6 +96,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.backup.AuthCrypto
 import com.yunx.app.data.download.DownloadPlatform
@@ -186,10 +190,27 @@ fun SettingsScreen(
     var keepLocked by remember { mutableStateOf(settingsRepo.keepDownloadWhenLocked) }
     var showSpeed by remember { mutableStateOf(settingsRepo.notificationShowSpeed) }
     var showBatteryDialog by remember { mutableStateOf(false) }
+    // 通知是否可用（areNotificationsEnabled 不是 Compose 状态源，手动提升为状态，
+    // 权限回调/从系统设置返回时刷新，保证副标题文案即时同步）
+    var notificationsEnabled by remember {
+        mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // 通知权限（Android 13+）：未授权时点击「通知栏下载进度」先申请，授权后生效
     val notifyPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
+        // 回调后立即刷新通知可用状态（副标题同步）
+        notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
         if (granted) {
             showSpeed = true
             settingsRepo.notificationShowSpeed = true
@@ -345,7 +366,7 @@ fun SettingsScreen(
             title = "通知栏下载进度",
             description = when {
                 // 任意版本：系统通知被禁用（Android 13+ 未授权/低版本被系统或用户关闭）时提示去开启
-                !NotificationManagerCompat.from(context).areNotificationsEnabled() ->
+                !notificationsEnabled ->
                     "通知未开启，下载通知将不可见（点击去开启）"
                 showSpeed -> "完整通知：进度条 + 下载速度"
                 else -> "仅显示通知（隐藏下载速度）"
@@ -357,7 +378,7 @@ fun SettingsScreen(
                     PackageManager.PERMISSION_GRANTED
                 ) {
                     notifyPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                } else if (!notificationsEnabled) {
                     // 任意版本：系统通知被禁用时引导去系统设置开启
                     openNotificationSettings(context)
                 } else {

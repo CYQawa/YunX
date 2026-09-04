@@ -360,11 +360,18 @@ class C139Api(
         pageCursor: String? = null
     ): List<ShareFile> {
         val all = mutableListOf<ShareFile>()
+        val seen = HashSet<String>()
         var cursor = pageCursor
         repeat(200) {            // 封顶 200 页，防异常死循环
             val (files, next) = fetchCloudPage(parentFileId, cookie, cursor) ?: return all
-            all += files
+            // 139 按 updated_at 排序翻页，大量文件时间相同时游标会重复返回同一批/边界项，
+            // 按 fid 去重，避免同一 fid 重复导致 LazyColumn key 冲突崩溃
+            for (f in files) {
+                if (f.fid.isNotBlank() && seen.add(f.fid)) all.add(f)
+            }
             cursor = next ?: return all   // nextPageCursor 为空 → 末页，结束
+            // 游标未推进（服务端异常重复返回同一游标）→ 终止，防死循环重复累加
+            if (cursor == pageCursor) return all
         }
         return all
     }
