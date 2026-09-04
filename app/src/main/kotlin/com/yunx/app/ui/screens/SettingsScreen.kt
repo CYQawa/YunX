@@ -21,6 +21,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import android.content.Intent
 import android.net.Uri
@@ -120,6 +121,23 @@ private val threadPlatforms = listOf(
     ThreadPlatform(DownloadPlatform.C139, "139 网盘"),
     ThreadPlatform(DownloadPlatform.PAN123, "123 云盘"),
 )
+
+/** 跳转系统「应用通知」设置页（Android 8+ 通用入口；失败时退回应用详情页） */
+private fun openNotificationSettings(context: Context) {
+    runCatching {
+        context.startActivity(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        )
+    }.onFailure {
+        runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.parse("package:${context.packageName}"))
+            )
+        }
+    }
+}
 
 /**
  * 设置页：下载线程数设置 + 主题外观 + 检查更新 + 日志与网盘认证。
@@ -326,20 +344,22 @@ fun SettingsScreen(
             icon = Icons.Outlined.Notifications,
             title = "通知栏下载进度",
             description = when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                    PackageManager.PERMISSION_GRANTED ->
-                    "未授予通知权限，下载通知将不可见（点击申请）"
+                // 任意版本：系统通知被禁用（Android 13+ 未授权/低版本被系统或用户关闭）时提示去开启
+                !NotificationManagerCompat.from(context).areNotificationsEnabled() ->
+                    "通知未开启，下载通知将不可见（点击去开启）"
                 showSpeed -> "完整通知：进度条 + 下载速度"
                 else -> "仅显示通知（隐藏下载速度）"
             },
             onClick = {
-                // Android 13+ 未授权：先申请通知权限，授权后自动开启完整通知
+                // Android 13+ 未授权：先申请运行时权限
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
                     PackageManager.PERMISSION_GRANTED
                 ) {
                     notifyPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                    // 任意版本：系统通知被禁用时引导去系统设置开启
+                    openNotificationSettings(context)
                 } else {
                     showSpeed = !showSpeed
                     settingsRepo.notificationShowSpeed = showSpeed
