@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.ui.screens
 
 import android.content.ClipboardManager
@@ -24,6 +42,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -47,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -99,6 +119,12 @@ fun ResolveScreen(
     val downloadLink = viewModel.downloadLink
     val downloadError = viewModel.downloadError
     val context = LocalContext.current
+
+    // 详情页文件列表滚动状态（提升到 AnimatedContent 外层：进入文件夹/返回时列表重建，
+    // 若放在 ShareDetailScreen 内会随目录切换丢失，导致返回后列表回到顶部）
+    val detailListState = rememberLazyListState()
+    // 各目录滚动位置记忆（key = 目录路径；进入文件夹/返回时恢复对应位置）
+    val detailScrollPositions = remember { mutableStateMapOf<String, Int>() }
 
     // 输入框状态提升到页面层：进入详情/文件夹再返回时不清空
     var link by rememberSaveable { mutableStateOf("") }
@@ -176,12 +202,11 @@ fun ResolveScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // 状态切换过渡：输入态/加载/详情/错误之间平滑淡入淡出 + 轻微位移
+        // 状态切换过渡：输入态/加载/详情/错误之间平滑淡入淡出（对齐网盘页：不上下移动）
         AnimatedContent(
             targetState = state,
             transitionSpec = {
-                (fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 20 })
-                    .togetherWith(fadeOut(tween(140)))
+                fadeIn(tween(200)) togetherWith fadeOut(tween(140))
             },
             label = "resolveState"
         ) { s ->
@@ -197,6 +222,8 @@ fun ResolveScreen(
             ucCloudViewModel = ucCloudViewModel,
             pan123CloudViewModel = pan123CloudViewModel,
             scrollBehavior = scrollBehavior,
+            listState = detailListState,
+            scrollPositions = detailScrollPositions,
                     // 顶部左上角返回：退出文件页回到输入页（输入框内容保留）
                     onExit = { viewModel.backToInput() },
                     // 列表「返回上一级」：子目录回上级，根目录回输入页

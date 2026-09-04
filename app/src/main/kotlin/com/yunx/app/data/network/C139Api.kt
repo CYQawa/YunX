@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.data.network
 
 import android.util.Base64
@@ -296,23 +314,27 @@ class C139Api(
         val mapping: Map<String, String>
     )
 
-    /** 列目录（含翻页游标）；返回 (文件列表, 下一页游标 or null) */
-    suspend fun listCloudFiles(
+    /** 单页列目录（含翻页游标）；返回 (文件列表, 下一页游标 or null=末页) */
+    private suspend fun fetchCloudPage(
         parentFileId: String,
         cookie: String,
-        pageCursor: String? = null
-    ): Pair<List<ShareFile>, String?> = withContext(Dispatchers.IO) {
+        pageCursor: String?
+    ): Pair<List<ShareFile>, String?>? = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
             ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+        // ⚠️ pageCursor 必须是真正的 JSON null；若误传字符串 "null"，服务端会当作无效游标忽略
+        //    并回吐第一页，导致翻页原地打转（抓包表现为重复发同一个请求直到封顶）
+        val cursorValue: Any =
+            pageCursor?.takeIf { it.isNotBlank() && it != "null" } ?: JSONObject.NULL
         val req = JSONObject()
-            .put("pageInfo", JSONObject().put("pageSize", 100).put("pageCursor", pageCursor ?: JSONObject.NULL))
+            .put("pageInfo", JSONObject().put("pageSize", 100).put("pageCursor", cursorValue))
             .put("orderBy", "updated_at")
             .put("orderDirection", "DESC")
             .put("parentFileId", parentFileId)
             .put("imageThumbnailStyleList", JSONArray().put("Small").put("Large"))
         val resp = cloudPost(C139Constants.FILE_LIST_URL, req.toString(), authorization)
         checkCloud(resp, "获取文件列表失败")
-        val data = resp.optJSONObject("data") ?: return@withContext Pair(emptyList(), null)
+        val data = resp.optJSONObject("data") ?: return@withContext null
         val files = buildList {
             data.optJSONArray("items")?.let { arr ->
                 for (i in 0 until arr.length()) {
@@ -331,8 +353,41 @@ class C139Api(
                 }
             }
         }
-        val next = data.optString("nextPageCursor").takeIf { it.isNotBlank() }
+        // ⚠️ Android org.json 陷阱：响应中 "nextPageCursor": null 时，optString 返回的是
+        //    字符串 "null"（JSONObject.NULL.toString()）而非空串，isNotBlank 判定为「还有下一页」，
+        //    于是带着 "null" 游标反复请求首页 → 200 次重复请求、列表加载极慢。
+        //    必须先用 isNull() 判断真 JSON null，并额外过滤字符串 "null"。
+        val next = if (data.isNull("nextPageCursor")) {
+            null
+        } else {
+            data.optString("nextPageCursor").takeIf { it.isNotBlank() && it != "null" }
+        }
         Pair(files, next)
+    }
+
+    /** 列目录（自动翻页，返回该目录下全部文件）；pageCursor 为起始游标（一般传 null=从头） */
+    suspend fun listCloudFiles(
+        parentFileId: String,
+        cookie: String,
+        pageCursor: String? = null
+    ): List<ShareFile> {
+        val all = mutableListOf<ShareFile>()
+        val seen = HashSet<String>()
+        var cursor = pageCursor
+        repeat(200) {            // 封顶 200 页，防异常死循环
+            val (files, next) = fetchCloudPage(parentFileId, cookie, cursor) ?: return all
+            // 139 按 updated_at 排序翻页，大量文件时间相同时游标可能重复返回边界项，
+            // 按 fid 去重，避免同一 fid 重复导致 LazyColumn key 冲突崩溃
+            for (f in files) {
+                if (f.fid.isNotBlank() && seen.add(f.fid)) all.add(f)
+            }
+            // 末页：nextPageCursor 为 JSON null
+            if (next == null) return all
+            // 游标未推进（服务端异常回吐同一游标）→ 立即终止，避免重复请求同一页
+            if (next == cursor) return all
+            cursor = next
+        }
+        return all
     }
 
     /** 仅列文件夹（移动到…目标选择） */

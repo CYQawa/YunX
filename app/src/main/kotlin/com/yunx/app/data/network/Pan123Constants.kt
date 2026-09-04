@@ -1,18 +1,23 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.data.network
 
-/**
- * 123 云盘（123pan / 123865）常量（依据《123网盘API文档_面向Agent.md》）。
- * 两类主域名：
- * - 分享解析域：mshare.123pan.cn（匿名分享读取）、www.123865.com（分享下载信息）、www.123pan.com / yun.123pan.cn（业务 API）；
- * - 个人盘域：yun.123pan.cn（个人盘 API / 网页登录页）。
- *
- * 鉴权：所有 yun.123pan.cn / www.123865.com 的鉴权请求带 `auth-key` / `auth-value` 签名头（第 6 节），
- * 匿名分享列表无需签名。
- *
- * 登录方式：WebView 打开官网个人盘主页（[WEB_LOGIN_URL]），登录成功后网页把 Bearer JWT 写入
- * 当前域 localStorage（键 [LOCAL_STORAGE_TOKEN_KEY] = authorToken）；应用提取该值作为登录凭证，
- * 与旧账号密码登录接口返回的 data.token 同源同形。
- */
 object Pan123Constants {
 
     // ---------- BaseURL（按用途，文档 §3.1） ----------

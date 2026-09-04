@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
@@ -340,24 +358,47 @@ class XunleiApi(
 
     // ---------- Pan ----------
 
-    /** 文件列表（个人网盘，parent_id 为空=根目录） */
+    /** 单页文件列表（个人网盘，parent_id 为空=根目录），返回 (文件, 下一页游标 or 空串=末页) */
+    private suspend fun getFilesPage(
+        parentId: String,
+        accessToken: String,
+        deviceId: String,
+        captchaToken: String,
+        pageToken: String
+    ): Pair<List<ShareFile>, String> = withContext(Dispatchers.IO) {
+        val filters = java.net.URLEncoder.encode("""{"trashed":{"eq":false}}""", "UTF-8")
+        val url = buildString {
+            append(XunleiConstants.FILES_URL)
+            append("?parent_id=").append(parentId)
+            append("&page_token=").append(java.net.URLEncoder.encode(pageToken, "UTF-8"))
+            append("&limit=100&with_audit=true&filters=").append(filters)
+        }
+        panCall(captchaToken, deviceId, "GET:/drive/v1/files", { t ->
+            panRequest(url, accessToken, deviceId, t)
+        }) { data ->
+            val files = data.optJSONArray("files")?.let(::parseFileArray) ?: emptyList()
+            // 解析 next_page_token 作为下一页游标；空串表示已到末页
+            val next = data.optString("next_page_token").takeIf { it.isNotBlank() } ?: ""
+            files to next
+        }
+    }
+
+    /** 文件列表（个人网盘，parent_id 为空=根目录；自动翻页，返回该目录下全部文件） */
     suspend fun getFiles(
         parentId: String,
         accessToken: String,
         deviceId: String,
         captchaToken: String
-    ): List<ShareFile>? = withContext(Dispatchers.IO) {
-        val filters = java.net.URLEncoder.encode("""{"trashed":{"eq":false}}""", "UTF-8")
-        val url = buildString {
-            append(XunleiConstants.FILES_URL)
-            append("?parent_id=").append(parentId)
-            append("&page_token=&limit=50&with_audit=true&filters=").append(filters)
+    ): List<ShareFile>? {
+        val all = mutableListOf<ShareFile>()
+        var token = ""
+        repeat(100) {            // 封顶 100 页，防异常死循环
+            val (files, next) = getFilesPage(parentId, accessToken, deviceId, captchaToken, token)
+            all += files
+            if (next.isBlank()) return all.ifEmpty { null }
+            token = next
         }
-        panCall(captchaToken, deviceId, "GET:/drive/v1/files", { t ->
-            panRequest(url, accessToken, deviceId, t)
-        }) { data ->
-            data.optJSONArray("files")?.let(::parseFileArray) ?: emptyList()
-        }
+        return all.ifEmpty { null }
     }
 
     /** 创建文件夹（个人网盘），返回新文件夹 id */

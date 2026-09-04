@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.QuotaInfo
@@ -359,39 +377,54 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
 
     // ---------- 云盘文件管理（百度网盘功能） ----------
 
-    /** 列出个人网盘目录，返回 ShareFile（fid=fs_id，fidToken=绝对路径 path） */
+    /**
+     * 列出个人网盘目录（自动翻页，返回该目录下全部文件）。
+     * 单页 num=100（官方 page_size 上限）；本页未满 100 视为末页，封顶 100 页防异常死循环。
+     * 返回 ShareFile（fid=fs_id，fidToken=绝对路径 path）
+     */
     suspend fun listCloudFiles(dir: String, cookie: String): List<ShareFile> = withContext(Dispatchers.IO) {
-        val url = "https://yun.baidu.com/api/list?clienttype=0&app_id=${BaiduConstants.APP_ID}" +
-            "&web=1&order=time&desc=1&dir=" + URLEncoder.encode(dir, "UTF-8") + "&num=100&page=1"
-        val request = Request.Builder()
-            .url(url)
-            .header("Cookie", cookie)
-            .header("User-Agent", BaiduConstants.UA_NETDISK)
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("Referer", "https://yun.baidu.com/disk/main")
-            .get()
-            .build()
-        runCatching {
-            val json = executeJson(request)
-            if (json.optInt("errno") != 0) return@runCatching emptyList()
-            val array = json.optJSONArray("list") ?: return@runCatching emptyList()
-            buildList {
-                for (i in 0 until array.length()) {
-                    val item = array.optJSONObject(i) ?: continue
-                    add(
-                        ShareFile(
-                            fid = item.optString("fs_id"),
-                            fname = item.optString("server_filename"),
-                            fsize = item.optLong("size"),
-                            isdir = item.optInt("isdir") == 1,
-                            pdirFid = dir,
-                            fidToken = item.optString("path"),
-                            modifyTime = item.optString("server_mtime")
+        val all = mutableListOf<ShareFile>()
+        var page = 1
+        while (true) {
+            val url = "https://yun.baidu.com/api/list?clienttype=0&app_id=${BaiduConstants.APP_ID}" +
+                "&web=1&order=time&desc=1&dir=" + URLEncoder.encode(dir, "UTF-8") + "&num=100&page=$page"
+            val request = Request.Builder()
+                .url(url)
+                .header("Cookie", cookie)
+                .header("User-Agent", BaiduConstants.UA_NETDISK)
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Referer", "https://yun.baidu.com/disk/main")
+                .get()
+                .build()
+            val pageFiles = runCatching {
+                val json = executeJson(request)
+                if (json.optInt("errno") != 0) return@runCatching emptyList()
+                val array = json.optJSONArray("list") ?: return@runCatching emptyList()
+                buildList {
+                    for (i in 0 until array.length()) {
+                        val item = array.optJSONObject(i) ?: continue
+                        add(
+                            ShareFile(
+                                fid = item.optString("fs_id"),
+                                fname = item.optString("server_filename"),
+                                fsize = item.optLong("size"),
+                                isdir = item.optInt("isdir") == 1,
+                                pdirFid = dir,
+                                fidToken = item.optString("path"),
+                                modifyTime = item.optString("server_mtime")
+                            )
                         )
-                    )
+                    }
                 }
-            }
-        }.getOrDefault(emptyList())
+            }.getOrDefault(emptyList())
+            // 空页（含单页请求失败）视为已到末页，停止翻页
+            if (pageFiles.isEmpty()) break
+            all += pageFiles
+            // 本页未满 100 → 已是最后一页；封顶 100 页防止异常死循环
+            if (pageFiles.size < 100 || page >= 100) break
+            page++
+        }
+        all
     }
 
     /** 重命名（filemanager opera=rename，按完整路径） */

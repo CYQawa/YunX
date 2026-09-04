@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.ui.resolve
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -18,12 +36,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -33,6 +52,7 @@ import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.SaveAlt
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,6 +63,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +73,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +84,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
@@ -83,6 +111,11 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /** 百度非会员限速阈值：>300MB 提示 */
 private const val BAIDU_LIMIT_BYTES = 300L * 1024 * 1024
@@ -109,6 +142,10 @@ fun ShareDetailScreen(
     /** 123 云盘浏览 ViewModel（123 分享转存目录选择用） */
     pan123CloudViewModel: Pan123CloudViewModel,
     scrollBehavior: TopAppBarScrollBehavior,
+    /** 文件列表滚动状态（由上层持有，跨目录切换保留） */
+    listState: LazyListState,
+    /** 各目录滚动位置记忆（key = 目录路径；由上层持有，跨目录切换保留） */
+    scrollPositions: MutableMap<String, Int>,
     /** 顶部左上角返回：退出文件页回到输入页（输入框内容保留） */
     onExit: () -> Unit,
     /** 列表「返回上一级」：子目录回上级，根目录回输入页 */
@@ -134,10 +171,24 @@ fun ShareDetailScreen(
             proceed()
         }
     }
-    // 系统返回键 → 返回上一级目录 / 根目录回输入页（而不是退出应用）
-    BackHandler { onBack() }
-    // 文件列表滚动状态（返回顶部按钮用）
-    val listState = rememberLazyListState()
+    // 系统返回键：多选模式下先退出多选，否则返回上一级目录 / 根目录回输入页
+    BackHandler {
+        if (viewModel.multiSelectMode) viewModel.exitMultiSelect() else onBack()
+    }
+    // 文件列表滚动状态（由上层 ResolveScreen 持有：进入文件夹/返回时列表重建也不会丢失）
+    // 搜索过滤（本地过滤当前目录文件）
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    val displayFiles = remember(files, searchQuery) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) files else files.filter { it.fname.contains(q, ignoreCase = true) }
+    }
+    // 各目录滚动位置记忆：进入文件夹/返回时按目录路径恢复，避免返回后列表回到顶部
+    val currentDirKey = remember(pathNames) { pathNames.joinToString("/") }
+    LaunchedEffect(currentDirKey) {
+        // 恢复该目录上次滚动位置；无记录（如首次进入）则回到顶部
+        listState.scrollToItem(scrollPositions[currentDirKey] ?: 0)
+    }
     // 多选模式：底部批量操作栏 + 处理中弹窗
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -166,13 +217,13 @@ fun ShareDetailScreen(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = if (viewModel.selected.size == files.size) "已全选" else "点击选择更多文件",
+                                    text = if (viewModel.selected.size == displayFiles.size) "已全选" else "点击选择更多文件",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(onClick = { viewModel.toggleSelectAll(files) }) {
-                                Text(if (viewModel.selected.size == files.size) "取消全选" else "全选")
+                            TextButton(onClick = { viewModel.toggleSelectAll(displayFiles) }) {
+                                Text(if (viewModel.selected.size == displayFiles.size) "取消全选" else "全选")
                             }
                         } else {
                             IconButton(onClick = onExit) {
@@ -187,7 +238,8 @@ fun ShareDetailScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "共 ${files.size} 项",
+                                    text = if (searchQuery.isBlank()) "共 ${files.size} 项"
+                                    else "匹配 ${displayFiles.size} / ${files.size} 项",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -199,6 +251,17 @@ fun ShareDetailScreen(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
+                            IconButton(onClick = { showSearch = !showSearch }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = if (showSearch) "关闭搜索" else "搜索文件",
+                                    tint = if (showSearch) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
                         }
                     }
                     // 可点击面包屑（多选模式下隐藏）
@@ -206,8 +269,37 @@ fun ShareDetailScreen(
                         CrumbBar(
                             rootTitle = session.title.ifBlank { "分享内容" },
                             pathNames = pathNames,
-                            onNavigate = { viewModel.navigateToLevel(it) }
+                            onNavigate = { level ->
+                                scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                                viewModel.navigateToLevel(level)
+                            }
                         )
+                    }
+                    // 搜索框（点击放大镜展开；与面包屑保持间距 + 展开/收起动画）
+                    AnimatedVisibility(
+                        visible = showSearch && !viewModel.multiSelectMode,
+                        enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+                        exit = shrinkVertically(tween(140)) + fadeOut(tween(120))
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("搜索当前目录文件") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                shape = MaterialTheme.shapes.large
+                            )
+                        }
                     }
                 }
             }
@@ -215,14 +307,18 @@ fun ShareDetailScreen(
             // 返回上一级（单独列表项；根目录时不显示）
             if (pathNames.isNotEmpty()) {
                 item {
-                    BackToParentItem(onClick = onBack)
+                    BackToParentItem(onClick = {
+                        // 记录当前目录滚动位置，返回上级后恢复上级位置
+                        scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                        onBack()
+                    })
                 }
             }
 
-            if (files.isEmpty()) {
+            if (displayFiles.isEmpty()) {
                 item {
                     Text(
-                        text = "此目录为空",
+                        text = if (files.isEmpty()) "此目录为空" else "未找到匹配「${searchQuery.trim()}」的文件",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -233,14 +329,15 @@ fun ShareDetailScreen(
                 }
             }
 
-            items(files, key = { it.fid }) { file ->
+            items(displayFiles, key = { it.fid }) { file ->
                 ShareFileRow(
                     file = file,
-                    modifier = Modifier.animateItem(),
                     onClick = {
                         if (viewModel.multiSelectMode) {
                             viewModel.toggleSelect(file)
                         } else if (file.isdir) {
+                            // 记录当前目录滚动位置，进入子目录后恢复子目录位置
+                            scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
                             viewModel.openFolder(file)
                         } else {
                             checkBaiduLimit(file) { viewModel.fetchDownloadLink(file) }
@@ -601,10 +698,20 @@ internal fun ShareFileRow(
                     modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
                 )
                 Spacer(modifier = Modifier.height(2.dp))
+                // 副标题行：文件夹/大小 + 修改时间（同一行展示）
                 Text(
-                    text = if (file.isdir) "文件夹" else formatSize(file.fsize),
+                    text = buildString {
+                        append(if (file.isdir) "文件夹" else formatSize(file.fsize))
+                        val time = formatModifyTime(file.modifyTime)
+                        if (time.isNotBlank()) {
+                            append("  ·  ")
+                            append(time)
+                        }
+                    },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (onSave != null) {
@@ -646,4 +753,82 @@ internal fun formatSize(bytes: Long): String {
         i++
     }
     return String.format("%.1f %s", value, units[i])
+}
+
+/**
+ * 各网盘返回的时间字段格式不统一，统一解析为毫秒时间戳；无法识别返回 null。
+ * 已覆盖：
+ * - 夸克 / UC：`updated_at` / `modify_time` —— 13 位毫秒时间戳
+ * - 百度：`server_mtime` —— 10 位秒级时间戳
+ * - 迅雷：`modified_time` —— ISO 8601（带时区偏移或 Z）
+ * - 139：云盘 `updatedAt` ISO 8601；分享 `udTime`/`ctTime` 可能为 yyyyMMddHHmmss
+ * - 123：`UpdateAt` —— ISO 8601 或 "yyyy-MM-dd HH:mm:ss"
+ */
+private fun parseModifyTimeMillis(raw: String): Long? {
+    val s = raw.trim()
+    if (s.isEmpty()) return null
+
+    // 1) 纯数字：时间戳（13 位毫秒 / 10 位秒）或紧凑日期串 yyyyMMddHHmmss
+    if (s.all(Char::isDigit)) {
+        return when (s.length) {
+            13 -> s.toLongOrNull()
+            10 -> s.toLongOrNull()?.times(1000L)
+            14 -> runCatching {
+                SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).apply {
+                    isLenient = false
+                }.parse(s)?.time
+            }.getOrNull()
+            // 其余长度按数值大小推断秒/毫秒（阈值≈1973 年的毫秒值）
+            else -> s.toLongOrNull()?.let { if (it > 100_000_000_000L) it else it * 1000L }
+        }
+    }
+
+    // 2) 文本时间：先剥离时区后缀，再按「长 → 短」模式尝试解析
+    //    （不用 SimpleDateFormat 的 XXX 模式，它要求 API 24+）
+    var work = s.replace('T', ' ')
+    var tz: TimeZone? = null
+    if (work.endsWith("Z", ignoreCase = true)) {
+        tz = TimeZone.getTimeZone("UTC")
+        work = work.dropLast(1)
+    } else {
+        val m = Regex("([+-]\\d{2}:?\\d{2})$").find(work)
+        if (m != null) {
+            tz = TimeZone.getTimeZone("GMT${m.groupValues[1]}")
+            work = work.removeRange(m.range)
+        }
+    }
+    // 去掉毫秒小数部分
+    val body = work.trim().substringBefore('.')
+    val zone: TimeZone? = tz
+
+    val patterns = listOf(
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy/MM/dd HH:mm:ss",
+        "yyyy-MM-dd",
+        "yyyy/MM/dd"
+    )
+    for (p in patterns) {
+        val fmt = SimpleDateFormat(p, Locale.getDefault())
+        fmt.isLenient = false
+        if (zone != null) fmt.timeZone = zone
+        runCatching { fmt.parse(body) }.getOrNull()?.let { return it.time }
+    }
+    return null
+}
+
+/**
+ * 文件修改时间展示（列表副标题用，尽量紧凑）：
+ * 今年内 → "MM-dd HH:mm"；跨年 → "yyyy-MM-dd"；无法解析 → 空串（调用方据此隐藏）。
+ */
+internal fun formatModifyTime(raw: String): String {
+    val millis = parseModifyTimeMillis(raw) ?: return ""
+    if (millis <= 0) return ""
+    val cal = Calendar.getInstance()
+    val currentYear = cal.get(Calendar.YEAR)
+    cal.timeInMillis = millis
+    val pattern = if (cal.get(Calendar.YEAR) == currentYear) "MM-dd HH:mm" else "yyyy-MM-dd"
+    return runCatching {
+        SimpleDateFormat(pattern, Locale.getDefault()).format(Date(millis))
+    }.getOrDefault("")
 }

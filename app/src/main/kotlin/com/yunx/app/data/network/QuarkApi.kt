@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
@@ -222,52 +240,62 @@ class QuarkApi(
 
     /** 云盘文件列表（网盘页浏览；抓包 /1/clouddrive/file/sort，pdir_fid=0 根目录）
      *  响应 data.list[]，字段：fid / file_name / size / dir(boolean) / pdir_fid / updated_at。
+     *  自动翻页：单页满 size 继续，封顶 100 页防异常死循环；默认单页 100（接口支持）。
      */
     suspend fun listCloudFiles(
         pdirFid: String,
         cookie: String,
         page: Int = 1,
-        size: Int = 50
+        size: Int = 100
     ): List<ShareFile>? = withContext(Dispatchers.IO) {
-        val url = buildString {
-            append(QuarkConstants.CLOUD_FILE_SORT_URL)
-            append("&uc_param_str=")
-            append("&pdir_fid=").append(pdirFid)
-            append("&_page=").append(page)
-            append("&_size=").append(size)
-            append("&_fetch_total=1")
-            append("&_fetch_sub_dirs=0")
-            append("&_sort=file_type:asc,updated_at:desc")
-            append("&fetch_all_file=1")
-            append("&fetch_risk_file_name=1")
-        }
-        val request = Request.Builder()
-            .url(url)
-            .header("Cookie", cookie)
-            .header("User-Agent", QuarkConstants.API_USER_AGENT)
-            .header("Origin", "https://pan.quark.cn")
-            .header("Referer", "https://pan.quark.cn/")
-            .get()
-            .build()
-        parseData(request) { data ->
-            val array = data.optJSONArray("list") ?: JSONArray()
-            buildList {
-                for (i in 0 until array.length()) {
-                    val item = array.optJSONObject(i) ?: continue
-                    add(
-                        ShareFile(
-                            fid = item.optString("fid"),
-                            fname = item.optString("file_name").ifEmpty { item.optString("fname") },
-                            fsize = item.optLong("size"),
-                            isdir = item.optBoolean("dir", false),
-                            pdirFid = item.optString("pdir_fid"),
-                            fidToken = "",
-                            modifyTime = item.optString("updated_at")
+        val all = mutableListOf<ShareFile>()
+        var p = page
+        while (true) {
+            val url = buildString {
+                append(QuarkConstants.CLOUD_FILE_SORT_URL)
+                append("&uc_param_str=")
+                append("&pdir_fid=").append(pdirFid)
+                append("&_page=").append(p)
+                append("&_size=").append(size)
+                append("&_fetch_total=1")
+                append("&_fetch_sub_dirs=0")
+                append("&_sort=file_type:asc,updated_at:desc")
+                append("&fetch_all_file=1")
+                append("&fetch_risk_file_name=1")
+            }
+            val request = Request.Builder()
+                .url(url)
+                .header("Cookie", cookie)
+                .header("User-Agent", QuarkConstants.API_USER_AGENT)
+                .header("Origin", "https://pan.quark.cn")
+                .header("Referer", "https://pan.quark.cn/")
+                .get()
+                .build()
+            val files = parseData(request) { data ->
+                val array = data.optJSONArray("list") ?: JSONArray()
+                buildList {
+                    for (i in 0 until array.length()) {
+                        val item = array.optJSONObject(i) ?: continue
+                        add(
+                            ShareFile(
+                                fid = item.optString("fid"),
+                                fname = item.optString("file_name").ifEmpty { item.optString("fname") },
+                                fsize = item.optLong("size"),
+                                isdir = item.optBoolean("dir", false),
+                                pdirFid = item.optString("pdir_fid"),
+                                fidToken = "",
+                                modifyTime = item.optString("updated_at")
+                            )
                         )
-                    )
+                    }
                 }
             }
+            all += files
+            // 本页未满 size → 已是最后一页；封顶 100 页防止异常死循环
+            if (files.size < size || p >= 100) break
+            p++
         }
+        all.ifEmpty { null }
     }
 
     /** 创建目录（个人网盘），返回新目录 fid */

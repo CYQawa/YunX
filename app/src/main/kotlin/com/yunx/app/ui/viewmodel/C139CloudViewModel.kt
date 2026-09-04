@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.ui.viewmodel
 
 import androidx.compose.runtime.getValue
@@ -237,7 +255,7 @@ class C139CloudViewModel(
         depth: Int
     ) {
         if (depth > 12) return
-        val list = runCatching { api.listCloudFiles(dirId, cookie).first }.getOrDefault(emptyList())
+        val list = runCatching { api.listCloudFiles(dirId, cookie) }.getOrDefault(emptyList())
         list.filter { !it.isdir }.forEach { result.add(it to "$prefix/${it.fname}") }
         list.filter { it.isdir }.forEach {
             collectFolderFiles(it.fid, "$prefix/${it.fname}", cookie, result, depth + 1)
@@ -583,7 +601,7 @@ class C139CloudViewModel(
         refreshing = true
         viewModelScope.launch {
             try {
-                val files = api.listCloudFiles(current.dirId, cookie()).first
+                val files = api.listCloudFiles(current.dirId, cookie())
                 _uiState.value = C139CloudUiState.Loaded(files, current.pathNames, current.dirId)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "刷新失败"
@@ -606,7 +624,7 @@ class C139CloudViewModel(
         _uiState.value = C139CloudUiState.Loading
         viewModelScope.launch {
             try {
-                val files = api.listCloudFiles(dirId, cookie()).first
+                val files = api.listCloudFiles(dirId, cookie())
                 _uiState.value = C139CloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
                 _uiState.value = C139CloudUiState.Error(e.message ?: "加载失败")

@@ -1,3 +1,21 @@
+/*
+ * YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+ * Copyright (C) 2026 CYQawa
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.yunx.app.ui.screens
 
 import com.yunx.app.ui.SnackbarController
@@ -5,8 +23,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -28,16 +48,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
@@ -48,8 +71,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,13 +110,33 @@ fun CloudDriveScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
-    // 系统返回键 → 子目录返回上一级，根目录返回账号列表（对齐解析页返回行为）
+    // 系统返回键：多选模式下先退出多选；否则子目录返回上一级，根目录返回账号列表
     BackHandler {
-        val s = state
-        if (s is QuarkCloudUiState.Loaded && s.pathNames.isNotEmpty()) viewModel.back() else onExit()
+        if (viewModel.multiSelectMode) {
+            viewModel.exitMultiSelect()
+        } else {
+            val s = state
+            if (s is QuarkCloudUiState.Loaded && s.pathNames.isNotEmpty()) viewModel.back() else onExit()
+        }
     }
     // 文件列表滚动状态（返回顶部按钮用）
     val listState = rememberLazyListState()
+    // 搜索过滤（本地过滤当前目录文件）
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    // 各目录滚动位置记忆：进入文件夹/返回时按目录路径恢复，避免返回后列表回到顶部
+    val scrollPositions = remember { mutableStateMapOf<String, Int>() }
+    val loadedState = state as? QuarkCloudUiState.Loaded
+    val displayFiles = remember(loadedState?.files, searchQuery) {
+        val files = loadedState?.files ?: emptyList()
+        val q = searchQuery.trim()
+        if (q.isEmpty()) files else files.filter { it.fname.contains(q, ignoreCase = true) }
+    }
+    val currentDirKey = remember(loadedState?.pathNames) {
+        loadedState?.pathNames?.joinToString("/") ?: ""
+    }
+    // 各目录滚动位置保存/恢复：恢复动作放在 Loaded 分支内（列表挂载后执行），
+    // 避免 Loading 阶段（loadedState==null、key 变 ""）误触发导致返回后回顶
     // 批量操作弹窗（多选模式底部栏触发：分享/移动需要设置或选目录，下载/删除直接执行）
     var showBatchActions by remember { mutableStateOf(false) }
     var batchInitial by remember { mutableStateOf(com.yunx.app.ui.screens.BatchStep.MENU) }
@@ -165,6 +210,11 @@ fun CloudDriveScreen(
             }
 
             is QuarkCloudUiState.Loaded -> Box(modifier = Modifier.fillMaxSize()) {
+                // 目录加载完成、列表挂载后恢复该目录上次滚动位置（避免 Loading 阶段误触发）
+                val loadedKey = remember(s.pathNames) { s.pathNames.joinToString("/") }
+                LaunchedEffect(loadedKey) {
+                    listState.scrollToItem(scrollPositions[loadedKey] ?: 0)
+                }
                 PullToRefreshBox(
                     isRefreshing = viewModel.refreshing,
                     onRefresh = { viewModel.refresh() },
@@ -196,13 +246,13 @@ fun CloudDriveScreen(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = if (viewModel.selected.size == s.files.size) "已全选" else "点击选择更多文件",
+                                    text = if (viewModel.selected.size == displayFiles.size) "已全选" else "点击选择更多文件",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(onClick = { viewModel.toggleSelectAll(s.files) }) {
-                                Text(if (viewModel.selected.size == s.files.size) "取消全选" else "全选")
+                            TextButton(onClick = { viewModel.toggleSelectAll(displayFiles) }) {
+                                Text(if (viewModel.selected.size == displayFiles.size) "取消全选" else "全选")
                             }
                         } else {
                             IconButton(onClick = onExit) {
@@ -217,9 +267,22 @@ fun CloudDriveScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "共 ${s.files.size} 项",
+                                    text = if (searchQuery.isBlank()) "共 ${s.files.size} 项"
+                                    else "匹配 ${displayFiles.size} / ${s.files.size} 项",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            // 放大镜：点击展开/收起搜索框
+                            IconButton(onClick = { showSearch = !showSearch }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = if (showSearch) "关闭搜索" else "搜索文件",
+                                    tint = if (showSearch) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
                                 )
                             }
                         }
@@ -229,8 +292,37 @@ fun CloudDriveScreen(
                         CrumbBar(
                             rootTitle = "夸克网盘",
                             pathNames = s.pathNames,
-                            onNavigate = { viewModel.navigateToLevel(it) }
+                            onNavigate = { level ->
+                                scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                                viewModel.navigateToLevel(level)
+                            }
                         )
+                    }
+                    // 搜索框（点击放大镜展开；与面包屑保持间距 + 展开/收起动画）
+                    AnimatedVisibility(
+                        visible = showSearch && !viewModel.multiSelectMode,
+                        enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+                        exit = shrinkVertically(tween(140)) + fadeOut(tween(120))
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("搜索当前目录文件") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                shape = MaterialTheme.shapes.large
+                            )
+                        }
                     }
                 }
             }
@@ -238,14 +330,18 @@ fun CloudDriveScreen(
             // 返回上一级（根目录时不显示）
             if (s.pathNames.isNotEmpty()) {
                 item {
-                    BackToParentItem(onClick = { viewModel.back() })
+                    BackToParentItem(onClick = {
+                        // 记录当前目录滚动位置，返回上级后恢复上级位置
+                        scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                        viewModel.back()
+                    })
                 }
             }
 
-            if (s.files.isEmpty()) {
+            if (displayFiles.isEmpty()) {
                 item {
                     Text(
-                        text = "此目录为空",
+                        text = if (s.files.isEmpty()) "此目录为空" else "未找到匹配「${searchQuery.trim()}」的文件",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -256,14 +352,15 @@ fun CloudDriveScreen(
                 }
             }
 
-            items(s.files, key = { it.fid }) { file ->
+            items(displayFiles, key = { it.fid }) { file ->
                 ShareFileRow(
                     file = file,
-                    modifier = Modifier.animateItem(),
                     onClick = {
                         if (viewModel.multiSelectMode) {
                             viewModel.toggleSelect(file)
                         } else if (file.isdir) {
+                            // 记录当前目录滚动位置，进入子目录后恢复子目录位置
+                            scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
                             viewModel.openFolder(file)
                         } else {
                             viewModel.openActions(file)
