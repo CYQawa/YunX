@@ -34,20 +34,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarDefaults
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -67,8 +70,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.res.Configuration
 import android.Manifest
@@ -150,12 +153,12 @@ import com.yunx.app.data.network.HttpClients
 
 /**
  * 主页框架：
- * - 顶部可折叠大标题（LargeTopAppBar），切换 Tab 时标题文字随 Tab 变化，折叠状态不受影响；
- * - 导航 Tab（解析 / 网盘 / 下载 / 设置）：竖屏为底部导航栏（NavigationBar），横屏切换为侧边导航栏（NavigationRail）；
+ * - 顶部可折叠标题（MediumFlexibleTopAppBar，Expressive 柔性顶栏），切换 Tab 时标题文字随 Tab 变化，折叠状态不受影响；
+ * - 导航 Tab（解析 / 网盘 / 下载 / 设置）：竖屏为底部导航条（ShortNavigationBar），横屏切换为侧边导航栏（NavigationRail）；
  * - 通过 SaveableStateHolder 保存各页面状态，切换 Tab 再切回来不会重置；
  * - 夸克登录页全屏覆盖展示。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainScreen() {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Resolve) }
@@ -176,7 +179,7 @@ fun MainScreen() {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 横屏时使用侧边导航栏（NavigationRail），竖屏保持底部导航栏（NavigationBar）
+    // 横屏时使用侧边导航栏（NavigationRail），竖屏保持底部导航条（ShortNavigationBar）
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // 首次启动引导页（context 声明后检测）
     var showOnboarding by remember { mutableStateOf(false) }
@@ -593,15 +596,15 @@ fun MainScreen() {
 
     // 主框架与全屏覆盖层（关于页）放在同一 Box：覆盖层带过渡动画
     Box(modifier = Modifier.fillMaxSize()) {
-    // 顶部可折叠大标题（竖屏 / 横屏共用）
+    // 顶部可折叠标题（竖屏 / 横屏共用）：Expressive 的「中号柔性顶栏」
     val topBarContent: @Composable () -> Unit = {
-        LargeTopAppBar(
+        // ★ 标题不要写死 style/fontWeight：柔性顶栏内部用 ProvideContentColorTextStyle 注入样式，
+        //   展开时取 headlineMedium、收起时取 titleLarge，并在这两档之间做字号形变；
+        //   这两个 token 都解析到 MaterialTheme.typography（即本项目 Type.kt 的 22sp / 18sp SemiBold），
+        //   自己再传 style 会覆盖注入值，柔性形变直接失效。
+        MediumFlexibleTopAppBar(
             title = {
-                Text(
-                    text = currentTab.title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text(text = currentTab.title)
             },
             actions = {
                 // 解析页标题右上角：收藏网盘链接入口
@@ -612,7 +615,8 @@ fun MainScreen() {
                 }
             },
             scrollBehavior = scrollBehavior,
-            colors = TopAppBarDefaults.largeTopAppBarColors(
+            // 柔性顶栏没有专用的 largeTopAppBarColors，用通用 topAppBarColors（同为 TopAppBarColors 类型）
+            colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 scrolledContainerColor = MaterialTheme.colorScheme.surface
             )
@@ -902,26 +906,42 @@ fun MainScreen() {
 }
 
 /**
- * 底部导航栏（竖屏）：4 个主 Tab（解析 / 网盘 / 下载 / 设置）。
+ * 底部导航条（竖屏）：4 个主 Tab（解析 / 网盘 / 下载 / 设置）。
+ * 用 Expressive 的 ShortNavigationBar（选中项带形状指示器 + 弹簧动效，item 由组件内部按 EqualWeight 均分，
+ * 不需要自己加 weight）。
+ * ★ 高度：Expressive 规范高度是 64dp（NavigationBarTokens.ContainerHeight），比经典 NavigationBar 的
+ *   TallContainerHeight（80dp）矮 16dp，产品上要求保持原高度。注意不能直接给 ShortNavigationBar 传
+ *   Modifier.heightIn —— 它内部布局按 TopStart 对齐，撑高外层只会让 64dp 的内容贴顶。
+ *   故外面套一层同色 Box 并居中：视觉上等价于原来的 80dp 导航栏，item 布局仍是 Expressive。
+ *   三键导航机型上系统栏内边距会再叠加（经典版同样如此），因此会比 80dp 更高一点，属正常。
  */
 @Composable
 private fun MainBottomBar(
     currentTab: MainTab,
     onTabSelected: (MainTab) -> Unit
 ) {
-    NavigationBar {
-        MainTab.values().forEach { tab ->
-            NavigationBarItem(
-                selected = currentTab == tab,
-                onClick = { onTabSelected(tab) },
-                icon = {
-                    Icon(
-                        imageVector = if (currentTab == tab) tab.selectedIcon else tab.unselectedIcon,
-                        contentDescription = tab.title
-                    )
-                },
-                label = { Text(tab.title) }
-            )
+    val barColor = ShortNavigationBarDefaults.containerColor
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 80.dp)
+            .background(barColor),
+        contentAlignment = Alignment.Center
+    ) {
+        ShortNavigationBar(containerColor = barColor) {
+            MainTab.values().forEach { tab ->
+                ShortNavigationBarItem(
+                    selected = currentTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    icon = {
+                        Icon(
+                            imageVector = if (currentTab == tab) tab.selectedIcon else tab.unselectedIcon,
+                            contentDescription = tab.title
+                        )
+                    },
+                    label = { Text(tab.title) }
+                )
+            }
         }
     }
 }
