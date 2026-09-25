@@ -23,7 +23,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -94,6 +93,10 @@ import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.BookmarkViewModel
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /** 「自定义分类」虚拟选项标识（不参与持久化，仅用于弹窗交互） */
 private const val CUSTOM_CATEGORY = "__custom__"
@@ -464,8 +467,8 @@ private fun AddBookmarkDialog(
                 // 选择「自定义」时才展开输入框（与解析页「添加至收藏」交互一致，带动画）
                 AnimatedVisibility(
                     visible = isCustom,
-                    enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-                    exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                    enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                    exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
                 ) {
                     OutlinedTextField(
                         value = customCategory,
@@ -556,8 +559,8 @@ internal fun AddToBookmarkDialog(
                 }
                 AnimatedVisibility(
                     visible = isCustom,
-                    enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-                    exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                    enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                    exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
                 ) {
                     OutlinedTextField(
                         value = customCategory,
@@ -641,8 +644,8 @@ private fun EditCategoryDialog(
                 // 选择「自定义」时才展开输入框（与添加收藏弹窗交互一致，带动画）
                 AnimatedVisibility(
                     visible = isCustom,
-                    enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-                    exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                    enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                    exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
                 ) {
                     OutlinedTextField(
                         value = customCategory,

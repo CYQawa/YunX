@@ -22,7 +22,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -94,6 +93,8 @@ import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.QuarkCloudUiState
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.components.YunXLoading
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
 
 /** 文件操作菜单类型（FileActionSheet 内切换） */
 private enum class ActionStep { MENU, MOVE, SHARE, RENAME, DELETE }
@@ -363,7 +364,7 @@ private fun MoveStep(
         // 移动目录切换：淡入过渡
         AnimatedContent(
             targetState = moveState,
-            transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
+            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
             label = "moveState"
         ) { s ->
             when (s) {
@@ -1071,7 +1072,7 @@ private fun BatchMoveStep(
         // 移动目录切换：淡入过渡
         AnimatedContent(
             targetState = moveState,
-            transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
+            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
             label = "batchMoveState"
         ) { s ->
             when (s) {

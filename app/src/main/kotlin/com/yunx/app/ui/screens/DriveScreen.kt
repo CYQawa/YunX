@@ -20,7 +20,6 @@ package com.yunx.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -84,6 +83,10 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
 import com.yunx.app.ui.components.YunXWavyProgress
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /**
  * 网盘账号展示模型。
@@ -227,8 +230,8 @@ fun DriveScreen(
             else -> 0
         },
         transitionSpec = {
-            (fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.98f))
-                .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.98f))
+            (fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.98f))
+                .togetherWith(fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.98f))
         },
         label = "driveContent"
     ) { target ->
@@ -556,11 +559,11 @@ private fun DriveAccountCardContent(
             // 已登录且有空间数据：卡片内展示剩余空间进度条（出现时淡入 + 纵向展开，避免突兀）
             AnimatedVisibility(
                 visible = account.isLoggedIn && quota != null,
-                enter = fadeIn(tween(300)) + expandVertically(
+                enter = fadeIn(effectsDefault()) + expandVertically(
                     expandFrom = Alignment.Top,
-                    animationSpec = tween(300)
+                    animationSpec = spatialDefault()
                 ),
-                exit = fadeOut(tween(200)) + shrinkVertically(animationSpec = tween(200))
+                exit = fadeOut(effectsFast()) + shrinkVertically(animationSpec = spatialFast())
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(8.dp))

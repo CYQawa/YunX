@@ -19,7 +19,6 @@
 package com.yunx.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -41,6 +40,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /**
  * 返回顶部按钮（Material3 规范）：
@@ -63,8 +66,8 @@ internal fun ScrollToTopButton(
     }
     AnimatedVisibility(
         visible = showButton,
-        enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.8f),
-        exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.8f),
+        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.8f),
+        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.8f),
         modifier = modifier
     ) {
         SmallFloatingActionButton(

@@ -150,6 +150,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /**
  * 主页框架：
@@ -774,8 +778,8 @@ fun MainScreen() {
     // 关于云析：叠加覆盖层（淡入 + 轻微缩放过渡）
     AnimatedVisibility(
         visible = showAbout,
-        enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.96f),
-        exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.96f),
+        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
+        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
         modifier = Modifier.fillMaxSize()
     ) {
         AboutScreen(
@@ -794,8 +798,8 @@ fun MainScreen() {
     // 支持开发：叠加覆盖层（淡入 + 轻微缩放过渡）
     AnimatedVisibility(
         visible = showSupport,
-        enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.96f),
-        exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.96f),
+        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
+        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
         modifier = Modifier.fillMaxSize()
     ) {
         SupportScreen(
@@ -806,8 +810,8 @@ fun MainScreen() {
     // 主题与外观：叠加覆盖层（淡入 + 轻微缩放过渡）
     AnimatedVisibility(
         visible = showTheme,
-        enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.96f),
-        exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.96f),
+        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
+        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
         modifier = Modifier.fillMaxSize()
     ) {
         ThemeScreen(
@@ -818,8 +822,8 @@ fun MainScreen() {
     // 收藏网盘链接：叠加覆盖层（淡入 + 轻微缩放过渡）
     AnimatedVisibility(
         visible = showBookmarks,
-        enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.96f),
-        exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.96f),
+        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
+        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
         modifier = Modifier.fillMaxSize()
     ) {
         BookmarkScreen(
@@ -953,6 +957,7 @@ private fun MainBottomBar(
         }
     }
 }
+
 
 /**
  * 侧边导航栏（横屏）：同 4 个主 Tab，未选中项只显示图标，节省横向空间。

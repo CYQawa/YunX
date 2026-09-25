@@ -20,7 +20,6 @@ package com.yunx.app.ui.items
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -56,6 +55,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /**
  * 浮动操作菜单项：标签 + 图标 + 可选选中态。
@@ -85,7 +88,7 @@ fun BoxScope.CustomFabMenu(
     // FAB 图标旋转：展开时 ＋ 旋转 90° 变为 ✕
     val fabRotation by animateFloatAsState(
         targetValue = if (expanded) 90f else 0f,
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = spatialDefault(),
         label = "fabRotation"
     )
 
@@ -111,8 +114,8 @@ fun BoxScope.CustomFabMenu(
         // ---------- 菜单项 ----------
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(160)) + slideInVertically(tween(220)) { it / 2 },
-            exit = fadeOut(tween(120)) + slideOutVertically(tween(180)) { it / 2 }
+            enter = fadeIn(effectsDefault()) + slideInVertically(spatialDefault()) { it / 2 },
+            exit = fadeOut(effectsFast()) + slideOutVertically(spatialFast()) { it / 2 }
         ) {
             Column(
                 horizontalAlignment = Alignment.End,

@@ -77,6 +77,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -84,7 +85,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -111,6 +111,10 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -278,8 +282,8 @@ fun ShareDetailScreen(
                     // 搜索框（点击放大镜展开；与面包屑保持间距 + 展开/收起动画）
                     AnimatedVisibility(
                         visible = showSearch && !viewModel.multiSelectMode,
-                        enter = expandVertically(tween(180)) + fadeIn(tween(180)),
-                        exit = shrinkVertically(tween(140)) + fadeOut(tween(120))
+                        enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                        exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
                     ) {
                         Column {
                             Spacer(modifier = Modifier.height(10.dp))
@@ -635,6 +639,9 @@ internal fun ShareFileRow(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            // ★ 必须先裁到卡片圆角再挂点击/长按：combinedClickable 位于 Card 的 Surface 之外，
+            //   不裁剪的话点击与长按涟漪会画到圆角之外（四角溢出）。
+            .clip(MaterialTheme.shapes.large)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick

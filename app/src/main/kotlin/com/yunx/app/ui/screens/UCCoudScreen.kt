@@ -22,7 +22,6 @@ import com.yunx.app.ui.SnackbarController
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -106,6 +105,10 @@ import com.yunx.app.ui.resolve.CrumbBar
 import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.UCCloudUiState
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /**
  * UC 网盘云盘浏览页（参考夸克 CloudDriveScreen）：
@@ -189,7 +192,7 @@ fun UCCoudScreen(
         AnimatedContent(
             targetState = state,
             transitionSpec = {
-                fadeIn(tween(200)) togetherWith fadeOut(tween(140))
+                fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast())
             },
             label = "ucCloudState"
         ) { s ->
@@ -309,8 +312,8 @@ fun UCCoudScreen(
                                 // 搜索框（点击放大镜展开；与面包屑保持间距 + 展开/收起动画）
                                 AnimatedVisibility(
                                     visible = showSearch && !viewModel.multiSelectMode,
-                                    enter = expandVertically(tween(180)) + fadeIn(tween(180)),
-                                    exit = shrinkVertically(tween(140)) + fadeOut(tween(120))
+                                    enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                                    exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
                                 ) {
                                     Column {
                                         Spacer(modifier = Modifier.height(10.dp))
@@ -408,8 +411,8 @@ fun UCCoudScreen(
                 // 多选模式：底部批量操作栏（底部滑入淡入，退出反向）
                 AnimatedVisibility(
                     visible = viewModel.multiSelectMode,
-                    enter = slideInVertically(tween(220)) { it } + fadeIn(tween(220)),
-                    exit = slideOutVertically(tween(180)) { it } + fadeOut(tween(180)),
+                    enter = slideInVertically(spatialDefault()) { it } + fadeIn(effectsDefault()),
+                    exit = slideOutVertically(spatialFast()) { it } + fadeOut(effectsFast()),
                     modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
                     MultiSelectBar(
@@ -688,7 +691,7 @@ private fun UCMoveSheet(
             // 移动目录切换：淡入过渡
             AnimatedContent(
                 targetState = moveState,
-                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
+                transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
                 label = "ucMoveState"
             ) { s ->
                 when (s) {

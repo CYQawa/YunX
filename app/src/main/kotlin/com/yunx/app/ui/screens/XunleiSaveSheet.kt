@@ -19,7 +19,6 @@
 package com.yunx.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -69,6 +68,8 @@ import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudUiState
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
 import com.yunx.app.ui.components.YunXLoading
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
 
 /**
  * 转存到迅雷网盘弹窗：浏览迅雷个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -165,7 +166,7 @@ fun XunleiSaveSheet(
             // 目录切换：淡入过渡（与网盘移动弹窗一致）
             AnimatedContent(
                 targetState = cloudState,
-                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
+                transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
                 label = "xunleiSaveState"
             ) { s ->
                 when (s) {

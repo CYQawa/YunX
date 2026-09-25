@@ -286,10 +286,14 @@ private val ExpressiveShapes = Shapes(
 )
 
 /**
- * Expressive 动效方案（弹簧物理：位移/尺寸用 spatial，透明度/颜色用 effects）。
+ * 全局动效方案（弹簧物理：位移/尺寸用 spatial，透明度/颜色用 effects）。
  * 低端机掉帧或想更克制时，换成 MotionScheme.standard() 即可，这是全局唯一开关。
+ *
+ * ★ 刻意声明为 internal 顶层属性（而非私有）：`ui/theme/Motion.kt` 里的
+ *   spatialDefault/effectsDefault 等顶层函数也用它，从而保证「组件内部动效」与
+ *   「页面自定义动效」用的是同一个 scheme；只有一处可改。
  */
-private val ExpressiveMotion = MotionScheme.expressive()
+internal val AppMotionScheme = MotionScheme.expressive()
 
 @Composable
 fun ComposeEmptyActivityTheme(
@@ -324,7 +328,7 @@ fun ComposeEmptyActivityTheme(
     // 颜色部分完全沿用原有逻辑（动态取色 / 种子色 / 深浅色 / 对比度方案），Expressive 不改变颜色角色。
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
-        motionScheme = ExpressiveMotion,
+        motionScheme = AppMotionScheme,
         shapes = ExpressiveShapes,
         typography = Typography,
         content = content
