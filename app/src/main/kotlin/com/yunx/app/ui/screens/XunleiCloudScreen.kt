@@ -466,10 +466,11 @@ fun XunleiCloudScreen(
     }
 
     if (showRename && viewModel.actionFile != null) {
-        XunleiRenameDialog(
-            file = viewModel.actionFile!!,
-            viewModel = viewModel,
-            onDismiss = { showRename = false }
+        RenameFileSheet(
+            fileName = viewModel.actionFile!!.fname,
+            operating = viewModel.isOperating,
+            onDismiss = { showRename = false },
+            onConfirm = { viewModel.renameFile(it) }
         )
     }
 
@@ -636,42 +637,6 @@ private fun XunleiActionItem(
             Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-}
-
-/** 重命名弹窗 */
-@Composable
-private fun XunleiRenameDialog(
-    file: ShareFile,
-    viewModel: XunleiCloudViewModel,
-    onDismiss: () -> Unit
-) {
-    var name by remember { mutableStateOf(file.fname) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("重命名") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("新文件名") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.large
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onDismiss()
-                    if (name.isNotBlank() && name != file.fname) viewModel.renameFile(name.trim())
-                },
-                enabled = name.isNotBlank()
-            ) { Text("确定") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
 }
 
 /** 移动目录选择弹窗（独立浏览，不影响主列表） */

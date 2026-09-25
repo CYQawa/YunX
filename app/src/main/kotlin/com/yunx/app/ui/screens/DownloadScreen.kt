@@ -549,7 +549,7 @@ private fun FolderDownloadGroup(
                 exit = fadeOut(tween(150)) + shrinkVertically(tween(150), shrinkTowards = Alignment.Top)
             ) {
                 Column {
-                    // 总体进度条（已完成时隐藏）；Expressive 波浪进度条
+                    // 总体进度条（已完成时隐藏）；Expressive 波浪进度条（仅在有子任务下载中时起伏）
                     if (!done) {
                         YunXWavyProgress(
                             progress = { fraction },
@@ -559,7 +559,8 @@ private fun FolderDownloadGroup(
                                 .height(4.dp)
                                 .clip(RoundedCornerShape(2.dp)),
                             color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            waving = tasks.any { it.status == DownloadTaskEntity.STATUS_DOWNLOADING }
                         )
                     }
                     // 子任务列表（紧凑行，含子文件夹内文件）
@@ -718,7 +719,8 @@ private fun DownloadSubTaskRow(
                     } else {
                         MaterialTheme.colorScheme.primary
                     },
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    waving = task.status == DownloadTaskEntity.STATUS_DOWNLOADING
                 )
             }
         }
@@ -903,7 +905,8 @@ private fun DownloadTaskCard(
                             DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
                             else -> MaterialTheme.colorScheme.primary
                         },
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        waving = task.status == DownloadTaskEntity.STATUS_DOWNLOADING
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }

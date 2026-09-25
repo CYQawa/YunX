@@ -81,6 +81,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -571,6 +572,71 @@ private fun RenameStep(
                 .height(50.dp)
         ) {
             Text("确认重命名")
+        }
+    }
+}
+
+/**
+ * 重命名底部弹窗（六大网盘页共用）。
+ *
+ * 统一形态：与夸克「文件操作弹窗」里的重命名步骤一致（标题 + 原文件名 + 输入框 + 整宽确认按钮）。
+ * 其余五个平台原先各自维护一个 AlertDialog（代码逐字相同、只有 ViewModel 类型不同），
+ * 现统一为底部弹窗 —— ModalBottomSheet 自带滑入/淡出过渡，不必再手写动画。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun RenameFileSheet(
+    fileName: String,
+    operating: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var name by remember { mutableStateOf(fileName) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        // 操作进行中禁止下滑关闭：避免请求已发出、弹窗却先消失造成的状态错乱
+        onDismissRequest = { if (!operating) onDismiss() },
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
+        ) {
+            Text("重命名", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = fileName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("新文件名") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = {
+                    val trimmed = name.trim()
+                    if (trimmed.isNotBlank() && trimmed != fileName) onConfirm(trimmed)
+                    onDismiss()
+                },
+                enabled = !operating && name.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Text("确认重命名")
+            }
         }
     }
 }

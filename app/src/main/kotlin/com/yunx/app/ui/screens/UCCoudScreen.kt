@@ -58,7 +58,10 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -71,6 +74,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -471,10 +475,11 @@ fun UCCoudScreen(
 
     // 重命名弹窗
     if (showRename && viewModel.actionFile != null) {
-        RenameCloudDialog(
-            file = viewModel.actionFile!!,
-            viewModel = viewModel,
-            onDismiss = { showRename = false }
+        RenameFileSheet(
+            fileName = viewModel.actionFile!!.fname,
+            operating = viewModel.isOperating,
+            onDismiss = { showRename = false },
+            onConfirm = { viewModel.renameFile(it) }
         )
     }
 
@@ -647,42 +652,6 @@ private fun UCActionItem(
     }
 }
 
-/** 重命名弹窗 */
-@Composable
-private fun RenameCloudDialog(
-    file: ShareFile,
-    viewModel: UCCoudViewModel,
-    onDismiss: () -> Unit
-) {
-    var name by remember { mutableStateOf(file.fname) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("重命名") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("新文件名") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.large
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onDismiss()
-                    if (name.isNotBlank() && name != file.fname) viewModel.renameFile(name.trim())
-                },
-                enabled = name.isNotBlank()
-            ) { Text("确定") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
-}
-
 /** 移动目录选择弹窗（独立浏览，不影响主列表） */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -780,7 +749,7 @@ private fun UCMoveSheet(
 }
 
 /** 分享设置弹窗（提取码/有效期） */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun UCShareSheet(
     viewModel: UCCoudViewModel,
@@ -805,22 +774,32 @@ private fun UCShareSheet(
             Spacer(modifier = Modifier.height(16.dp))
             Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = !withPassword,
-                    onClick = { withPassword = false },
-                    label = { Text("无提取码") },
-                    colors = FilterChipDefaults.filterChipColors()
-                )
-                FilterChip(
-                    selected = withPassword,
-                    onClick = {
+            // Expressive 连接按钮组（ToggleButton）：二选一，取代原来的两个 FilterChip。
+            // · 间距显式置 0：默认排列会在两段之间留出可见缝隙
+            // · checkedShape 指回未选中态的连接形状：默认选中形状的内圆角是 50%（自己变成胶囊），
+            //   两段之间会出现明显豁口；选中态改由填充色表达，视觉上保持连体
+            ButtonGroup(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                ToggleButton(
+                    checked = !withPassword,
+                    onCheckedChange = { withPassword = false },
+                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(
+                        checkedShape = ButtonGroupDefaults.connectedLeadingButtonShape
+                    )
+                ) {
+                    Text("无提取码")
+                }
+                ToggleButton(
+                    checked = withPassword,
+                    onCheckedChange = {
                         withPassword = true
                         if (passcode.isBlank()) passcode = randomPasscode()
                     },
-                    label = { Text("设置提取码") },
-                    colors = FilterChipDefaults.filterChipColors()
-                )
+                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(
+                        checkedShape = ButtonGroupDefaults.connectedTrailingButtonShape
+                    )
+                ) {
+                    Text("设置提取码")
+                }
             }
             if (withPassword) {
                 Spacer(modifier = Modifier.height(8.dp))

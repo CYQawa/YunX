@@ -589,7 +589,15 @@ fun MainScreen() {
     // 用 exitUntilCollapsed（默认实现，含松手吸附）：滚动时标题先收起再滚内容；
     // 向上滚动回顶部过程中标题保持收起，只有列表到达最顶部后继续下拉（overscroll）才重新展开
     val topAppBarState = rememberTopAppBarState()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState)
+    // ★ flingAnimationSpec = null 是「切页后首次快速滑动，列表恰好卡在标题收起完毕处」的修复：
+    //   material3 AppBar.kt 的 ExitUntilCollapsedScrollBehavior.onPostFling → settleAppBar 里，
+    //   惯性开始时若顶栏尚未完全收起，顶栏会先用 flingAnimationSpec 做衰减动画、把惯性速度消耗在自己收起上，
+    //   只把「剩余速度」还给列表；一次快速滑动的速度往往不够既收起标题又带动列表，于是列表停住不动。
+    //   传 null 后：顶栏仍随滚动增量收起/展开、松手时吸附到位，但不再吞掉列表的惯性速度。
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+        topAppBarState,
+        flingAnimationSpec = null
+    )
 
     // 全局 Snackbar 宿主（Material3，替换原 Toast 提示）
     val snackbarHostState = rememberGlobalSnackbarHostState()

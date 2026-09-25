@@ -47,19 +47,27 @@ fun YunXLoading(modifier: Modifier = Modifier) {
 /**
  * 波浪进度条（确定进度 0f..1f）：波峰会随进度推进。
  * 颜色必须显式传入——各调用点原本就各自指定了主色/错误色与轨道色。
+ *
+ * @param waving 是否显示波浪：true = 波浪滚动（下载进行中）；false = 平直进度条。
+ *   暂停 / 失败 / 已完成时传 false —— 波浪的滚动速度由组件按 amplitude > 0 驱动，
+ *   不置 0 的话任务暂停后波浪仍会一直滚动，看起来像"还在下载"。
+ *   注意：刚开始下载、进度只有百分之几时，已填充的长度还不足一个波长（约 40dp），
+ *   所以前几秒看不到起伏，属于组件本身的绘制逻辑，不是参数问题。
  */
 @Composable
 fun YunXWavyProgress(
     progress: () -> Float,
     modifier: Modifier = Modifier,
     color: Color,
-    trackColor: Color
+    trackColor: Color,
+    waving: Boolean = true
 ) {
     LinearWavyProgressIndicator(
         progress = progress,
         modifier = modifier,
         color = color,
-        trackColor = trackColor
+        trackColor = trackColor,
+        amplitude = { if (waving) 1f else 0f }
     )
 }
 

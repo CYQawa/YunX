@@ -610,6 +610,8 @@ private fun QuotaInlineBar(quota: QuotaInfo) {
                 .height(4.dp),
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            // 容量占比是静态数据，不滚动波浪（滚动的波浪会让人误以为有任务在进行）
+            waving = false
         )
     }
 }
