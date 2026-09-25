@@ -33,7 +33,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -47,6 +46,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -77,6 +77,9 @@ private const val STAGGER_MS = 25L
 
 /** RANGE_IGNORED 容忍次数：CDN 偶发 200（限流中间态）前 N 次不触发整任务回退，继续领新片；超过才回退单流 */
 private const val RANGE_IGNORED_TOLERANCE = 3
+
+/** 暂停/删除时等待任务协程退出的上限（毫秒）：阻塞式 IO 不响应取消，不能无限等，否则按钮「点不动」 */
+private const val JOB_EXIT_WAIT_MS = 10_000L
 
 /** 重试区间（主池 part_i 或弹性区间 seg_{start}_{end}） */
 private data class RetryRange(val start: Long, val end: Long, val file: File)
@@ -442,7 +445,7 @@ class DownloadManager(
         scope.launch {
             // 等协程真正退出（确保没有半截写入）后，以磁盘 part/seg 真实大小为准回写进度：
             // 暂停瞬间最后一次 onBytes 可能被取消丢弃，DB 落后于磁盘 → 恢复时进度回跳
-            deferred?.let { runCatching { it.await().cancelAndJoin() } }
+            cancelAndAwaitExit(id, deferred)
             val real = chunkDirOf(id).listFiles()
                 ?.filter {
                     it.name.startsWith("part_") ||
@@ -474,11 +477,11 @@ class DownloadManager(
         taskLocks.remove(id)
         val deferred = synchronized(jobsLock) { activeJobs.remove(id) }
         scope.launch {
-            // 若任务正在下载：取消并等待协程真正退出，
-            // 确保没有后台残留下载、part 文件无 fd 占用（否则删了仍占空间）
-            if (deferred != null) {
-                deferred.await().cancelAndJoin()
-            }
+            // 若任务正在下载：取消并**有界**等待协程退出，
+            // 确保没有后台残留下载、part 文件无 fd 占用（否则删了仍占空间）。
+            // 超时也继续清理：写满磁盘时 MediaProvider/FUSE 操作可能长时间不返回，
+            // 旧实现的无界等待会让「删除」看起来完全没反应（幽灵任务）。
+            cancelAndAwaitExit(id, deferred)
             if (deleteLocal) {
                 dao.get(id)?.savePath?.let {
                     val deleted = DownloadSaver.delete(context, it)
@@ -487,8 +490,23 @@ class DownloadManager(
             }
             dao.delete(id)
             chunkDirOf(id).deleteRecursively()
+            // 旧版本遗留的私有合并副本（本版本已不再产生，见 finishDownload）；失败不阻断
+            File(context.cacheDir, "merged_$id").delete()
             // 删除任务后清理云盘转存（与下载成功完成同语义）；失败不阻断
             cleanup?.let { runCatching { it() } }
+        }
+    }
+
+    /**
+     * 取消任务协程并等待其退出。
+     * 阻塞式 IO（大文件写盘、MediaProvider 调用）不响应取消，无界等待会让暂停/删除按钮「点不动」，
+     * 故等待设上限：超时后照常执行后续清理，残留协程会因分片目录被删而自行失败。
+     */
+    private suspend fun cancelAndAwaitExit(id: Long, deferred: CompletableDeferred<Job>?) {
+        val job = deferred?.await() ?: return
+        job.cancel()
+        if (withTimeoutOrNull(JOB_EXIT_WAIT_MS) { job.join() } == null) {
+            Log.w(TAG, "等待任务协程退出超时 id=$id（阻塞式 IO 未响应取消），继续清理")
         }
     }
 
@@ -982,8 +1000,13 @@ class DownloadManager(
     }
 
     /**
-     * 合并分片 → 保存到公共 Download 目录 → 触发完成回调 → 清理。
-     * ★ 增加完整性校验：分片非空 + 合并后总大小 == total，任一不符直接抛错，绝不保存损坏文件。
+     * 分片流式合并 → **直接写入最终保存位置** → 完成后清空分片目录。
+     *
+     * ★ 旧实现先合并到私有缓存 `merged_$id` 再复制到公共目录，峰值占用 3 份
+     *   （分片 + 合并副本 + 公共副本），6GB 级文件即便预留 2.4 倍空间也会 ENOSPC；
+     *   现改为边合并边删分片（见 [ChunkDownloader.mergeChunksToStream]），峰值 ≈ 1 份。
+     * ★ 完整性校验：分片非空 + 写入字节 == total，任一不符即 abort 半成品并抛错，绝不保存损坏文件。
+     * ★ 失败/取消一律 abort：MediaStore 的 IS_PENDING 半成品在「下载」里看不见，却真实占空间。
      */
     private suspend fun finishDownload(
         id: Long,
@@ -1000,38 +1023,36 @@ class DownloadManager(
                 throw IllegalStateException("分片文件缺失或为空，拒绝合并（防止文件损坏）")
             }
         }
-        // 2) 合并
-        // ★ 合并产物放内部缓存（data 分区，非 FUSE 挂载）：大文件 IO 快得多；保存完成即删
-        val merged = File(context.cacheDir, "merged_$id")
-        if (!downloader.mergeChunks(chunkFiles, merged)) {
-            Log.e(TAG, "finishDownload: id=$id 合并分片失败")
-            throw IllegalStateException("合并分片失败")
-        }
-        // 3) 整体大小校验（total>0 时）
-        if (total > 0 && merged.length() != total) {
-            Log.e(TAG, "finishDownload: id=$id 文件大小校验失败 期望=$total 实际=${merged.length()}")
-            merged.delete()
-            throw IllegalStateException("文件大小校验失败：期望 $total 字节，实际 ${merged.length()} 字节（已拒绝保存损坏文件）")
-        }
-        // 4) Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
+        // 2) Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
         if (!storagePermissionProvider()) {
-            merged.delete()
             throw IllegalStateException("未授予存储权限，无法保存到下载目录")
         }
-        // 5) 保存（自定义目录经 SAF 写入；默认目录走 MediaStore/传统路径）
-        // ★ 同步阻塞拷贝必须切 IO 线程：任务跑在 Dispatchers.Default（CPU 池），
-        //   大文件保存若占满 Default 线程会让整个下载器协程饿死（"100% 卡死保存不了"）
+        // 3) 流式写入最终位置（自定义目录经 SAF；默认目录走 MediaStore/传统路径）
+        // ★ 同步阻塞写入必须切 IO 线程：任务跑在 Dispatchers.Default（CPU 池），
+        //   大文件写盘若占满 Default 线程会让整个下载器协程饿死（"100% 卡死保存不了"）
         val savedPath = withContext(Dispatchers.IO) {
-            DownloadSaver.save(context, fileName, merged, saveDirProvider())
+            val dest = DownloadSaver.openDestination(context, fileName, saveDirProvider())
+                ?: throw IllegalStateException("无法创建下载目标（下载目录不可用）")
+            try {
+                val out = dest.open() ?: throw IllegalStateException("无法打开下载目标输出流")
+                val written = out.use { downloader.mergeChunksToStream(chunkFiles, it) }
+                if (total > 0 && written != total) {
+                    throw IllegalStateException("文件大小校验失败：期望 $total 字节，实际 $written 字节（已拒绝保存损坏文件）")
+                }
+                dest.commit()
+                dest.path
+            } catch (e: Exception) {
+                // 失败（含 ENOSPC）/取消：删掉半成品，否则残留数据会一直占空间，重试时空间只减不增
+                dest.abort()
+                throw e
+            }
         }
-            ?: throw IllegalStateException("保存到下载目录失败")
         completeWithAvg(id, savedPath, total)
-        Log.d(TAG, "finishDownload: id=$id 下载完成 savedPath=$savedPath size=${merged.length()}")
+        Log.d(TAG, "finishDownload: id=$id 下载完成 savedPath=$savedPath size=$total")
         taskCallbacks.remove(id)?.let { cb ->
             runCatching { cb() }
         }
         _stats.update { it - id }
-        merged.delete()
         chunkDir.deleteRecursively()
     }
 

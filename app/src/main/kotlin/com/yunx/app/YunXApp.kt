@@ -83,7 +83,16 @@ class YunXApp : Application() {
         }
         scheduleDeepScan(this)
         com.yunx.app.data.network.XunleiDeviceFingerprint.init(this)
+        purgeDownloadLeftovers(this)
     }
+}
+
+/** 清理历史版本保存失败遗留的不可见下载半成品（详见 DownloadSaver.purgeOwnPendingFiles）。
+ *  必须早于任何下载启动，故放在 Application.onCreate 的后台线程里做一次。 */
+private fun purgeDownloadLeftovers(ctx: Context) {
+    Thread {
+        runCatching { com.yunx.app.data.download.DownloadSaver.purgeOwnPendingFiles(ctx) }
+    }.start()
 }
 
 private fun scheduleDeepScan(ctx: Context) {

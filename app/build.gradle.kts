@@ -58,6 +58,11 @@ android {
         compose = true
     }
 
+    testOptions {
+        // 单元测试中 android.util.Log 等桩方法返回默认值（否则一调用就抛 "Stub!"）
+        unitTests.isReturnDefaultValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
