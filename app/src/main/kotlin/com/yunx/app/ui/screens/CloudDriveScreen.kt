@@ -430,13 +430,35 @@ fun CloudDriveScreen(
     }
     }
 
-    // 文件操作弹窗（更多按钮/点击文件 → 下载/分享/移动/重命名/删除）
-    viewModel.actionFile?.let { file ->
-        FileActionSheet(
-            file = file,
-            viewModel = viewModel,
-            onDismiss = { viewModel.dismissActions() }
+    // 文件操作弹窗（更多按钮 → 下载/分享/移动/重命名/删除）
+    // ★ 删除确认与操作弹窗互斥展示：确认期间不关掉操作弹窗，否则 dismissActions() 会清空 actionFile，
+    //   确认弹窗再点删除就找不到目标文件了（原来的 AlertDialog 叠在弹窗之上，现统一为独立的底部弹窗）
+    val pendingDeleteTarget = when {
+        !showDeleteConfirm -> null
+        viewModel.multiSelectMode -> "选中的 ${viewModel.selected.size} 项"
+        else -> viewModel.actionFile?.let { "「${it.fname}」" }
+    }
+    if (pendingDeleteTarget != null) {
+        ConfirmDeleteSheet(
+            target = pendingDeleteTarget,
+            operating = viewModel.isOperating,
+            onDismiss = {
+                showDeleteConfirm = false
+                viewModel.dismissActions()
+            },
+            onConfirm = {
+                if (viewModel.multiSelectMode) viewModel.deleteSelected() else viewModel.deleteFile()
+            }
         )
+    } else {
+        viewModel.actionFile?.let { file ->
+            FileActionSheet(
+                file = file,
+                viewModel = viewModel,
+                onDelete = { showDeleteConfirm = true },
+                onDismiss = { viewModel.dismissActions() }
+            )
+        }
     }
 
     // 批量操作弹窗（长按多选 → 底部栏分享/移动）
@@ -444,29 +466,11 @@ fun CloudDriveScreen(
         BatchActionSheet(
             viewModel = viewModel,
             initialStep = batchInitial,
-            onDismiss = { showBatchActions = false }
-        )
-    }
-
-    // 批量删除二次确认（底部栏点删除直接弹确认）
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("删除文件") },
-            text = { Text("确定要删除选中的 ${viewModel.selected.size} 项吗？删除后将移入回收站。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        viewModel.deleteSelected()
-                    }
-                ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
+            onDelete = {
+                showBatchActions = false
+                showDeleteConfirm = true
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
-            }
+            onDismiss = { showBatchActions = false }
         )
     }
 

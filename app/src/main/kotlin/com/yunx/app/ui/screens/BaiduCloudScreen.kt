@@ -524,23 +524,12 @@ fun BaiduCloudScreen(
 
     if (showDeleteConfirm) {
         val deleting = if (viewModel.multiSelectMode) "选中的 ${viewModel.selected.size} 项" else "「${viewModel.actionFile?.fname ?: ""}」"
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("删除文件") },
-            text = { Text("确定要删除$deleting 吗？删除后进入回收站。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        if (viewModel.multiSelectMode) viewModel.deleteSelected() else viewModel.deleteFile()
-                    }
-                ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
-            }
+        // 删除确认：与另外五个平台共用同一个底部弹窗实现（原为 AlertDialog，夸克那边还会"弹窗套弹窗"）
+        ConfirmDeleteSheet(
+            target = deleting,
+            operating = viewModel.isOperating,
+            onDismiss = { showDeleteConfirm = false },
+            onConfirm = { if (viewModel.multiSelectMode) viewModel.deleteSelected() else viewModel.deleteFile() }
         )
     }
 

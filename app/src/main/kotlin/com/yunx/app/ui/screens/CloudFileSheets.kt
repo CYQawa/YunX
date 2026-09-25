@@ -53,6 +53,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -97,7 +98,7 @@ import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 
 /** 文件操作菜单类型（FileActionSheet 内切换） */
-private enum class ActionStep { MENU, MOVE, SHARE, RENAME, DELETE }
+private enum class ActionStep { MENU, MOVE, SHARE, RENAME }
 
 /** 有效期选项：名称 + expired_type 值 */
 private val expireOptions = listOf(
@@ -109,13 +110,16 @@ private val expireOptions = listOf(
 
 /**
  * 夸克云盘文件操作弹窗：更多按钮 → 操作菜单（下载/分享/移动/重命名/删除），
- * 内部按步骤切换：移动选目录 / 分享设置 / 重命名输入 / 删除确认。
+ * 内部按步骤切换：移动选目录 / 分享设置 / 重命名输入；删除则回调给页面弹出共享的确认弹窗
+ * （全项目删除确认只有一个实现：[ConfirmDeleteSheet]）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileActionSheet(
     file: ShareFile,
     viewModel: QuarkCloudViewModel,
+    /** 点击「删除」：由页面弹出共享的删除确认弹窗（本弹窗不自行确认，避免"弹窗套弹窗"） */
+    onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var step by remember { mutableStateOf(ActionStep.MENU) }
@@ -132,7 +136,13 @@ fun FileActionSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        when (step) {
+        // 步骤切换带过渡：与其余五个平台的操作弹窗保持一致（原来夸克是直接 when 切换，无动画）
+        AnimatedContent(
+            targetState = step,
+            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
+            label = "quarkActionStep"
+        ) { current ->
+        when (current) {
             ActionStep.MENU -> ActionMenu(
                 file = file,
                 onDownload = {
@@ -149,7 +159,7 @@ fun FileActionSheet(
                     step = ActionStep.MOVE
                 },
                 onRename = { step = ActionStep.RENAME },
-                onDelete = { step = ActionStep.DELETE }
+                onDelete = onDelete
             )
 
             ActionStep.MOVE -> MoveStep(
@@ -175,14 +185,7 @@ fun FileActionSheet(
                 onBack = { step = ActionStep.MENU },
                 onDone = onDismiss
             )
-
-            ActionStep.DELETE -> DeleteStep(
-                file = file,
-                viewModel = viewModel,
-                operating = operating,
-                onBack = { step = ActionStep.MENU },
-                onDone = onDismiss
-            )
+        }
         }
     }
 
@@ -641,35 +644,72 @@ internal fun RenameFileSheet(
         }
     }
 }
-
-/** 删除确认 */
+/**
+ * 删除确认底部弹窗（**全项目唯一的删除确认实现**）。
+ *
+ * 六大网盘页的每一条删除路径都走这里：单文件删除、多选批量删除、操作菜单里的删除。
+ * 原先是 6 份 AlertDialog（其中夸克的两份还"弹在底部弹窗之上"），形态与层叠都不一致；
+ * 现统一为底部弹窗 —— 自带滑入/淡出过渡，且不会出现"弹窗套弹窗"。
+ *
+ * @param target 删除对象描述，如「文件名.mp4」或 "选中的 3 项"
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DeleteStep(
-    file: ShareFile,
-    viewModel: QuarkCloudViewModel,
+internal fun ConfirmDeleteSheet(
+    target: String,
     operating: Boolean,
-    onBack: () -> Unit,
-    onDone: () -> Unit
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = { if (!operating) onBack() },
-        title = { Text("删除文件") },
-        text = { Text("确定要删除「${file.fname}」吗？删除后将移入回收站。") },
-        confirmButton = {
-            TextButton(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        // 操作进行中禁止下滑关闭：避免请求已发出、弹窗却先消失造成的状态错乱
+        onDismissRequest = { if (!operating) onDismiss() },
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
+        ) {
+            Text("删除文件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "确定要删除$target 吗？删除后将移入回收站。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
                 onClick = {
-                    viewModel.deleteFile()
-                    onDone()
+                    onConfirm()
+                    onDismiss()
                 },
-                enabled = !operating
+                enabled = !operating,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
             ) {
-                Text("删除", color = MaterialTheme.colorScheme.error)
+                Text("删除")
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onBack) { Text("取消") }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = onDismiss,
+                enabled = !operating,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Text("取消")
+            }
         }
-    )
+    }
 }
 
 /** 分享结果：链接 + 提取码 + 复制 */
@@ -785,7 +825,7 @@ private fun expireLabel(type: Int): String = when (type) {
 }
 
 /** 批量操作步骤类型 */
-internal enum class BatchStep { MENU, SHARE, MOVE, DELETE }
+internal enum class BatchStep { MENU, SHARE, MOVE }
 
 /**
  * 批量操作弹窗（长按多选后）：下载 / 分享 / 移动 / 删除。
@@ -796,6 +836,8 @@ internal enum class BatchStep { MENU, SHARE, MOVE, DELETE }
 @Composable
 internal fun BatchActionSheet(
     viewModel: QuarkCloudViewModel,
+    /** 点击「删除」：由页面弹出共享的删除确认弹窗（[ConfirmDeleteSheet]） */
+    onDelete: () -> Unit,
     onDismiss: () -> Unit,
     initialStep: BatchStep = BatchStep.MENU
 ) {
@@ -813,7 +855,13 @@ internal fun BatchActionSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        when (step) {
+        // 步骤切换带过渡：与其余五个平台的弹窗一致
+        AnimatedContent(
+            targetState = step,
+            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
+            label = "quarkBatchStep"
+        ) { current ->
+        when (current) {
             BatchStep.MENU -> BatchMenu(
                 count = count,
                 onDownload = {
@@ -825,7 +873,7 @@ internal fun BatchActionSheet(
                     viewModel.openMoveRoot()
                     step = BatchStep.MOVE
                 },
-                onDelete = { step = BatchStep.DELETE }
+                onDelete = onDelete
             )
 
             BatchStep.SHARE -> BatchShareStep(
@@ -843,14 +891,7 @@ internal fun BatchActionSheet(
                 onBack = { step = BatchStep.MENU },
                 onDone = onDismiss
             )
-
-            BatchStep.DELETE -> BatchDeleteStep(
-                count = count,
-                viewModel = viewModel,
-                operating = operating,
-                onBack = { step = BatchStep.MENU },
-                onDone = onDismiss
-            )
+        }
         }
     }
 
@@ -1144,34 +1185,4 @@ private fun BatchMoveStep(
             }
         }
     }
-}
-
-/** 批量删除确认 */
-@Composable
-private fun BatchDeleteStep(
-    count: Int,
-    viewModel: QuarkCloudViewModel,
-    operating: Boolean,
-    onBack: () -> Unit,
-    onDone: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = { if (!operating) onBack() },
-        title = { Text("删除文件") },
-        text = { Text("确定要删除选中的 $count 项吗？删除后将移入回收站。") },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    viewModel.deleteSelected()
-                    onDone()
-                },
-                enabled = !operating
-            ) {
-                Text("删除", color = MaterialTheme.colorScheme.error)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onBack) { Text("取消") }
-        }
-    )
 }

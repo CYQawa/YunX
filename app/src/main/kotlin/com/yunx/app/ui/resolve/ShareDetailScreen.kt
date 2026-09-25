@@ -58,9 +58,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -618,7 +622,7 @@ internal fun CrumbBar(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ShareFileRow(
     file: ShareFile,
@@ -655,53 +659,19 @@ internal fun ShareFileRow(
             }
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 多选模式：行首复选框（仅多选列表显示）
-            if (showCheckbox) {
-                Checkbox(
-                    checked = selected,
-                    onCheckedChange = { onClick() },
-                    modifier = Modifier.size(36.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = if (file.isdir) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = if (file.isdir) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+        // ★ 行内容交给 Material 3 的 ListItem（不再手写 Row + Column）：
+        //   行高、内边距、标题/副标题字号层级由组件按 M3 规范给出，六个网盘页与本页共用同一形态。
+        //   外层保留 Card 负责圆角、选中底色与涟漪裁剪，故 ListItem 容器设为透明。
+        ListItem(
+            headlineContent = {
                 // 文件名过长时滚动播放显示
                 Text(
                     text = file.fname,
-                    style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
                     modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+            },
+            supportingContent = {
                 // 副标题行：文件夹/大小 + 修改时间（同一行展示）
                 Text(
                     text = buildString {
@@ -712,38 +682,77 @@ internal fun ShareFileRow(
                             append(time)
                         }
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-            if (onSave != null) {
-                IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
+            },
+            leadingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 多选模式：行首复选框（仅多选列表显示）
+                    if (showCheckbox) {
+                        Checkbox(
+                            checked = selected,
+                            onCheckedChange = { onClick() },
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        color = if (file.isdir) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (file.isdir) {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onSave != null) {
+                        IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Outlined.SaveAlt,
+                                contentDescription = "转存",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    if (onMore != null) {
+                        IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Outlined.MoreVert,
+                                contentDescription = "更多",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     Icon(
-                        imageVector = Icons.Outlined.SaveAlt,
-                        contentDescription = "转存",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline
                     )
                 }
-            }
-            if (onMore != null) {
-                IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.MoreVert,
-                        contentDescription = "更多",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Icon(
-                imageVector = Icons.Outlined.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline
-            )
-        }
+            },
+            // 底色/选中底色由外层 Card 决定，这里必须透明，否则会盖住卡片颜色
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        )
     }
 }
 
