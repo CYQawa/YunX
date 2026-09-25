@@ -4,7 +4,8 @@ kotlin = "2.1.0"
 coreKtx = "1.17.0"
 lifecycleRuntimeKtx = "2.9.2"
 activityCompose = "1.11.0"
-composeBom = "2025.10.01"
+composeBom = "2026.06.01"  
+material3Expressive = "1.5.0-alpha18"
 
 room = "2.6.1"
 ksp = "2.1.0-1.0.29"
@@ -28,7 +29,7 @@ androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", versi
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3Expressive" }   # 版本说明见上方 material3Expressive
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
