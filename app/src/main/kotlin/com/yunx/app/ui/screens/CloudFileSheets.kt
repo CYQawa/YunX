@@ -41,7 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -103,6 +103,7 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
 
@@ -417,10 +418,15 @@ internal fun QuarkMoveStep(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 260.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        // 目录列表同样拼成一组
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
                     ) {
-                        items(dirs, key = { it.fid }) { dir ->
-                            ShareFileRow(file = dir, onClick = { viewModel.openMoveFolder(dir) })
+                        itemsIndexed(dirs, key = { _, d -> d.fid }) { index, dir ->
+                            ShareFileRow(
+                                file = dir,
+                                onClick = { viewModel.openMoveFolder(dir) },
+                                shape = listGroupShape(index, dirs.size)
+                            )
                         }
                     }
                 }

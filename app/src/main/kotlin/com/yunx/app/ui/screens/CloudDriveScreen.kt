@@ -43,7 +43,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -94,6 +94,7 @@ import com.yunx.app.ui.viewmodel.QuarkCloudUiState
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
 
@@ -232,10 +233,11 @@ fun CloudDriveScreen(
                                 start = 16.dp, end = 16.dp, top = 16.dp,
                                 bottom = if (viewModel.multiSelectMode) 96.dp else 16.dp
                             ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    // 列表组：各项首尾相接（只留 1dp 发丝缝区分行），行圆角按首/中/末分段给
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
             item {
-                Column {
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (viewModel.multiSelectMode) {
                             // 多选模式：取消选择
@@ -330,14 +332,16 @@ fun CloudDriveScreen(
                 }
             }
 
-            // 返回上一级（根目录时不显示）
+            // 返回上一级（根目录时不显示；独立于文件列表组，故自带下间距）
             if (s.pathNames.isNotEmpty()) {
                 item {
-                    BackToParentItem(onClick = {
-                        // 记录当前目录滚动位置，返回上级后恢复上级位置
-                        scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
-                        viewModel.back()
-                    })
+                    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                        BackToParentItem(onClick = {
+                            // 记录当前目录滚动位置，返回上级后恢复上级位置
+                            scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                            viewModel.back()
+                        })
+                    }
                 }
             }
 
@@ -355,9 +359,10 @@ fun CloudDriveScreen(
                 }
             }
 
-            items(displayFiles, key = { it.fid }) { file ->
+            itemsIndexed(displayFiles, key = { _, f -> f.fid }) { index, file ->
                 ShareFileRow(
                     file = file,
+                    shape = listGroupShape(index, displayFiles.size),
                     onClick = {
                         if (viewModel.multiSelectMode) {
                             viewModel.toggleSelect(file)

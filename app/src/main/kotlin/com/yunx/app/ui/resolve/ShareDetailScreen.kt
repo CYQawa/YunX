@@ -40,6 +40,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -637,6 +638,8 @@ internal fun ShareFileRow(
     selected: Boolean = false,
     /** 是否显示行首复选框（仅多选模式列表传 true；移动/转存等选择器不显示） */
     showCheckbox: Boolean = false,
+    /** 行形状：网盘页列表组传 listGroupShape(index, count)（首/末项大圆角、中间项小圆角）；默认整行圆角 */
+    shape: Shape = MaterialTheme.shapes.large,
     /** 列表项动画等（调用方传入 Modifier.animateItem()） */
     modifier: Modifier = Modifier
 ) {
@@ -645,12 +648,12 @@ internal fun ShareFileRow(
             .fillMaxWidth()
             // ★ 必须先裁到卡片圆角再挂点击/长按：combinedClickable 位于 Card 的 Surface 之外，
             //   不裁剪的话点击与长按涟漪会画到圆角之外（四角溢出）。
-            .clip(MaterialTheme.shapes.large)
+            .clip(shape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = MaterialTheme.shapes.large,
+        shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.primaryContainer

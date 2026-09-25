@@ -269,6 +269,11 @@ private val highContrastDarkColorScheme = darkColorScheme(
 )
 
 /**
+ * 列表组外圈圆角：与下面 Shapes.large 共用同一个值，避免两处各写一份走样。
+ */
+private val CornerLarge = 16.dp
+
+/**
  * M3 Expressive 圆角刻度。
  * 比经典 M3 多出 largeIncreased / extraLargeIncreased / extraExtraLarge 三档（20 / 32 / 48dp）：
  * Expressive 组件（工具栏、FAB 菜单、底部面板、按钮组…）默认取这三档，容器越大圆角越明显。
@@ -278,11 +283,40 @@ private val ExpressiveShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
     small = RoundedCornerShape(8.dp),
     medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(CornerLarge),
     largeIncreased = RoundedCornerShape(20.dp),
     extraLarge = RoundedCornerShape(28.dp),
     extraLargeIncreased = RoundedCornerShape(32.dp),
     extraExtraLarge = RoundedCornerShape(48.dp)
+)
+
+/** 列表组内的位置：决定这一项该用分段圆角里的哪一档 */
+internal enum class ListGroupPos { FIRST, MIDDLE, LAST, SINGLE }
+
+/** 组内衔接处的内圆角：刻意很小，相邻两项拼在一起时不会出现明显缺口 */
+private val ListGroupInnerCorner = 2.dp
+
+/**
+ * 列表组分段圆角：让一组首尾相接的列表项看起来是「一整块」。
+ *
+ * 规则：首项只圆上两角、末项只圆下两角（都用 16dp 外圈圆角），中间项只留 2dp 内圆角。
+ * 调用方需保证组内各项之间几乎没有间距（约定留 1dp 发丝缝）——留大间距的话
+ * 中间项的小圆角会各自露出来，看着像一堆没对齐的卡片而不是一个列表组。
+ */
+internal fun listGroupShape(pos: ListGroupPos): RoundedCornerShape {
+    val top = if (pos == ListGroupPos.FIRST || pos == ListGroupPos.SINGLE) CornerLarge else ListGroupInnerCorner
+    val bottom = if (pos == ListGroupPos.LAST || pos == ListGroupPos.SINGLE) CornerLarge else ListGroupInnerCorner
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
+}
+
+/** 按下标取列表组圆角：LazyColumn（itemsIndexed）等能拿到 index/count 的列表直接调用 */
+internal fun listGroupShape(index: Int, count: Int): RoundedCornerShape = listGroupShape(
+    when {
+        count <= 1 -> ListGroupPos.SINGLE
+        index <= 0 -> ListGroupPos.FIRST
+        index >= count - 1 -> ListGroupPos.LAST
+        else -> ListGroupPos.MIDDLE
+    }
 )
 
 /**

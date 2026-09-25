@@ -44,7 +44,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -103,6 +103,7 @@ import com.yunx.app.ui.viewmodel.C139CloudUiState
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
 
@@ -235,10 +236,11 @@ fun C139CloudScreen(
                                 start = 16.dp, end = 16.dp, top = 16.dp,
                                 bottom = if (viewModel.multiSelectMode) 96.dp else 16.dp
                             ),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            // 列表组：各项首尾相接（只留 1dp 发丝缝区分行），行圆角按首/中/末分段给
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
                         ) {
                             item {
-                                Column {
+                                Column(modifier = Modifier.padding(bottom = 8.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         if (viewModel.multiSelectMode) {
                                             IconButton(onClick = { viewModel.exitMultiSelect() }) {
@@ -331,13 +333,16 @@ fun C139CloudScreen(
                                 }
                             }
 
+                            // 返回上一级（独立于文件列表组，故自带下间距）
                             if (s.pathNames.isNotEmpty()) {
                                 item {
-                                    BackToParentItem(onClick = {
-                                        // 记录当前目录滚动位置，返回上级后恢复上级位置
-                                        scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
-                                        viewModel.back()
-                                    })
+                                    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                                        BackToParentItem(onClick = {
+                                            // 记录当前目录滚动位置，返回上级后恢复上级位置
+                                            scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                                            viewModel.back()
+                                        })
+                                    }
                                 }
                             }
 
@@ -355,9 +360,10 @@ fun C139CloudScreen(
                                 }
                             }
 
-                            items(displayFiles, key = { it.fid }) { file ->
+                            itemsIndexed(displayFiles, key = { _, f -> f.fid }) { index, file ->
                                 ShareFileRow(
                                     file = file,
+                                    shape = listGroupShape(index, displayFiles.size),
                                     onClick = {
                                         if (viewModel.multiSelectMode) {
                                             viewModel.toggleSelect(file)
@@ -597,10 +603,15 @@ Column(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            // 目录列表同样拼成一组
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
                         ) {
-                            items(dirs, key = { it.fid }) { dir ->
-                                ShareFileRow(file = dir, onClick = { viewModel.openMoveFolder(dir) })
+                            itemsIndexed(dirs, key = { _, d -> d.fid }) { index, dir ->
+                                ShareFileRow(
+                                    file = dir,
+                                    onClick = { viewModel.openMoveFolder(dir) },
+                                    shape = listGroupShape(index, dirs.size)
+                                )
                             }
                         }
                     }
