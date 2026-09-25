@@ -58,7 +58,6 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -96,6 +95,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.components.ScrollToTopButton
+import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.resolve.DownloadLinkDialog
 import com.yunx.app.ui.resolve.BackToParentItem
 import com.yunx.app.ui.resolve.CrumbBar
@@ -190,7 +190,7 @@ fun C139CloudScreen(
                 is C139CloudUiState.Loading -> Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
+                ) { YunXLoading() }
 
                 is C139CloudUiState.Error -> Box(
                     modifier = Modifier.fillMaxSize(),
@@ -529,7 +529,7 @@ fun C139CloudScreen(
             title = { Text("处理中") },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    YunXLoading(modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = viewModel.folderProgress ?: "正在处理，请稍候…",
@@ -716,7 +716,7 @@ private fun C139MoveSheet(
                     is C139CloudUiState.Loading -> Box(
                         modifier = Modifier.fillMaxWidth().height(180.dp),
                         contentAlignment = Alignment.Center
-                    ) { CircularProgressIndicator() }
+                    ) { YunXLoading() }
 
                     is C139CloudUiState.Error -> Box(
                         modifier = Modifier.fillMaxWidth().height(140.dp),

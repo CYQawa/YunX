@@ -47,7 +47,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -69,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.yunx.app.data.network.UCConstants
 import com.yunx.app.ui.viewmodel.UCAccountViewModel
+import com.yunx.app.ui.components.YunXWavyLoading
 import kotlinx.coroutines.launch
 
 /**
@@ -188,7 +188,7 @@ fun UCLoginScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
-            if (isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            if (isLoading) YunXWavyLoading(modifier = Modifier.fillMaxWidth())
         }
     }
 

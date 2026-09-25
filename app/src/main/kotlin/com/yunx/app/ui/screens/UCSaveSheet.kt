@@ -68,6 +68,7 @@ import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCloudUiState
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
+import com.yunx.app.ui.components.YunXLoading
 
 /**
  * 转存到 UC 网盘弹窗：浏览 UC 个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -170,7 +171,7 @@ fun UCSaveSheet(
                         .height(200.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    YunXLoading()
                 }
 
                 is UCCloudUiState.Error -> Box(

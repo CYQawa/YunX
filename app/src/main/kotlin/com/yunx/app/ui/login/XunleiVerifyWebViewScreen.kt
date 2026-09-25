@@ -38,7 +38,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -58,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.yunx.app.data.network.XunleiConstants
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
+import com.yunx.app.ui.components.YunXWavyLoading
 import org.json.JSONObject
 
 private class XunleiJsBridge(
@@ -191,7 +191,7 @@ fun XunleiVerifyWebViewScreen(
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
             if (isLoading) {
-                LinearProgressIndicator(
+                YunXWavyLoading(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)

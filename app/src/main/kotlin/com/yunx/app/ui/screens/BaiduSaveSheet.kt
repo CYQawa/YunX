@@ -68,6 +68,7 @@ import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.BaiduCloudUiState
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
+import com.yunx.app.ui.components.YunXLoading
 
 /**
  * 转存到百度网盘弹窗：浏览百度个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -170,7 +171,7 @@ fun BaiduSaveSheet(
                         .height(200.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    YunXLoading()
                 }
 
                 is BaiduCloudUiState.Error -> Box(

@@ -92,6 +92,7 @@ import com.yunx.app.ui.resolve.CrumbBar
 import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.QuarkCloudUiState
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
+import com.yunx.app.ui.components.YunXLoading
 
 /** 文件操作菜单类型（FileActionSheet 内切换） */
 private enum class ActionStep { MENU, MOVE, SHARE, RENAME, DELETE }
@@ -370,7 +371,7 @@ private fun MoveStep(
                         .fillMaxWidth()
                         .height(200.dp),
                     contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
+                ) { YunXLoading() }
 
                 is QuarkCloudUiState.Error -> Box(
                     modifier = Modifier
@@ -1013,7 +1014,7 @@ private fun BatchMoveStep(
                         .fillMaxWidth()
                         .height(200.dp),
                     contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
+                ) { YunXLoading() }
 
                 is QuarkCloudUiState.Error -> Box(
                     modifier = Modifier

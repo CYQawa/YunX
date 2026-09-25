@@ -68,6 +68,7 @@ import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudUiState
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import com.yunx.app.ui.components.YunXLoading
 
 /**
  * 转存到迅雷网盘弹窗：浏览迅雷个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -174,7 +175,7 @@ fun XunleiSaveSheet(
                         .height(200.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    YunXLoading()
                 }
 
                 is XunleiCloudUiState.Error -> Box(

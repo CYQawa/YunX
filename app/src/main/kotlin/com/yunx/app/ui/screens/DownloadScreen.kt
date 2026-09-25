@@ -81,7 +81,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -109,6 +108,7 @@ import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.download.DownloadStats
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.viewmodel.DownloadViewModel
+import com.yunx.app.ui.components.YunXWavyProgress
 import java.io.File
 
 /**
@@ -549,9 +549,9 @@ private fun FolderDownloadGroup(
                 exit = fadeOut(tween(150)) + shrinkVertically(tween(150), shrinkTowards = Alignment.Top)
             ) {
                 Column {
-                    // 总体进度条（已完成时隐藏）
+                    // 总体进度条（已完成时隐藏）；Expressive 波浪进度条
                     if (!done) {
-                        LinearProgressIndicator(
+                        YunXWavyProgress(
                             progress = { fraction },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -706,7 +706,7 @@ private fun DownloadSubTaskRow(
                 enter = expandVertically(tween(200)) + fadeIn(tween(200)),
                 exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
             ) {
-                LinearProgressIndicator(
+                YunXWavyProgress(
                     progress = { fraction },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -896,7 +896,7 @@ private fun DownloadTaskCard(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                     }
-                    LinearProgressIndicator(
+                    YunXWavyProgress(
                         progress = { fraction },
                         modifier = Modifier.fillMaxWidth(),
                         color = when (task.status) {

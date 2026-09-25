@@ -68,6 +68,7 @@ import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.Pan123CloudUiState
 import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
+import com.yunx.app.ui.components.YunXLoading
 
 /**
  * 转存到 123 云盘弹窗：浏览 123 个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -170,7 +171,7 @@ fun Pan123SaveSheet(
                             .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        YunXLoading()
                     }
 
                     is Pan123CloudUiState.Error -> Box(

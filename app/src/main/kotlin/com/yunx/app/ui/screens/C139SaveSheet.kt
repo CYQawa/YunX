@@ -68,6 +68,7 @@ import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.C139CloudUiState
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
+import com.yunx.app.ui.components.YunXLoading
 
 /**
  * 转存到 139 网盘弹窗：浏览 139 个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -170,7 +171,7 @@ fun C139SaveSheet(
                         .height(200.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    YunXLoading()
                 }
 
                 is C139CloudUiState.Error -> Box(
