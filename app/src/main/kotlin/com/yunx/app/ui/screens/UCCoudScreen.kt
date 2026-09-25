@@ -152,11 +152,11 @@ fun UCCoudScreen(
     val currentDirKey = remember(loadedState?.pathNames) {
         loadedState?.pathNames?.joinToString("/") ?: ""
     }
-    // 文件操作弹窗步骤
+    // 文件操作弹窗（单弹窗多步骤，步骤状态在共享弹窗内部）
     var showActionSheet by remember { mutableStateOf(false) }
-    var showRename by remember { mutableStateOf(false) }
-    var showMove by remember { mutableStateOf(false) }
-    var showShare by remember { mutableStateOf(false) }
+    // 批量操作弹窗：从多选底部栏直接进入某个步骤（分享/移动）
+    var showBatchActions by remember { mutableStateOf(false) }
+    var batchInitial by remember { mutableStateOf(BatchStep.MENU) }
     // 删除确认（单文件/批量共用）
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -422,11 +422,12 @@ fun UCCoudScreen(
                                 viewModel.downloadSelected()
                             },
                             MultiSelectAction("分享", Icons.Outlined.Share, MaterialTheme.colorScheme.primary) {
-                                showShare = true
+                                batchInitial = BatchStep.SHARE
+                                showBatchActions = true
                             },
                             MultiSelectAction("移动", Icons.Outlined.DriveFileMove, MaterialTheme.colorScheme.primary) {
-                                viewModel.openMoveRoot()
-                                showMove = true
+                                batchInitial = BatchStep.MOVE
+                                showBatchActions = true
                             },
                             MultiSelectAction("删除", Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
                                 showDeleteConfirm = true
@@ -439,66 +440,80 @@ fun UCCoudScreen(
     }
     }
 
-    // 文件操作菜单（下载/重命名/移动/分享）
-    if (showActionSheet && viewModel.actionFile != null) {
-        UCActionSheet(
+    // 文件操作弹窗（单弹窗多步骤：菜单 → 移动/分享/重命名；六大网盘页同一实现）
+    // ★ 删除确认与操作弹窗互斥展示：确认期间不关掉操作弹窗，否则 dismissActions() 会清空 actionFile
+    val pendingDeleteTarget = when {
+        !showDeleteConfirm -> null
+        viewModel.multiSelectMode -> "选中的 ${viewModel.selected.size} 项"
+        else -> viewModel.actionFile?.let { "「${it.fname}」" }
+    }
+    if (pendingDeleteTarget != null) {
+        ConfirmDeleteSheet(
+            target = pendingDeleteTarget,
+            operating = viewModel.isOperating,
+            onDismiss = {
+                showDeleteConfirm = false
+                viewModel.dismissActions()
+            },
+            onConfirm = { if (viewModel.multiSelectMode) viewModel.deleteSelected() else viewModel.deleteFile() }
+        )
+    } else if (showActionSheet && viewModel.actionFile != null) {
+        FileActionSheet(
             file = viewModel.actionFile!!,
-            viewModel = viewModel,
-            onDownload = {
-                showActionSheet = false
-                viewModel.downloadFile()
+            operating = viewModel.isOperating,
+            onDownload = { viewModel.downloadFile() },
+            onDownloadFolder = { viewModel.downloadFolder() },
+            onShare = { withPassword, passcode, expiredType ->
+                viewModel.shareFile(
+                    urlType = if (withPassword) 2 else 1,
+                    passcode = passcode,
+                    expiredType = expiredType
+                )
             },
-            onDownloadFolder = {
-                showActionSheet = false
-                viewModel.downloadFolder()
-            },
-            onRename = {
-                showActionSheet = false
-                showRename = true
-            },
-            onMove = {
-                showActionSheet = false
-                viewModel.openMoveRoot()
-                showMove = true
-            },
-            onShare = {
-                showActionSheet = false
-                showShare = true
-            },
-            onDelete = {
-                showActionSheet = false
-                showDeleteConfirm = true
-            },
+            onRename = { viewModel.renameFile(it) },
+            onDelete = { showDeleteConfirm = true },
             onDismiss = {
                 showActionSheet = false
                 viewModel.dismissActions()
+            },
+            moveStep = { onBack, onDone ->
+                UCMoveStep(
+                    subtitle = viewModel.actionFile?.fname ?: "",
+                    viewModel = viewModel,
+                    onBack = onBack,
+                    onDone = onDone
+                )
             }
         )
     }
 
-    // 重命名弹窗
-    if (showRename && viewModel.actionFile != null) {
-        RenameFileSheet(
-            fileName = viewModel.actionFile!!.fname,
+    // 批量操作弹窗（多选底部栏的分享/移动/删除）
+    if (showBatchActions) {
+        BatchActionSheet(
+            count = viewModel.selected.size,
             operating = viewModel.isOperating,
-            onDismiss = { showRename = false },
-            onConfirm = { viewModel.renameFile(it) }
-        )
-    }
-
-    // 移动目录选择弹窗（单文件/多选共用；多选时 actionFile 为 null，不能依赖它判断）
-    if (showMove) {
-        UCMoveSheet(
-            viewModel = viewModel,
-            onDismiss = { showMove = false }
-        )
-    }
-
-    // 分享设置弹窗
-    if (showShare) {
-        UCShareSheet(
-            viewModel = viewModel,
-            onDismiss = { showShare = false }
+            onDownload = { viewModel.downloadSelected() },
+            onShare = { withPassword, passcode, expiredType ->
+                viewModel.shareSelected(
+                    urlType = if (withPassword) 2 else 1,
+                    passcode = passcode,
+                    expiredType = expiredType
+                )
+            },
+            onDelete = {
+                showBatchActions = false
+                showDeleteConfirm = true
+            },
+            onDismiss = { showBatchActions = false },
+            initialStep = batchInitial,
+            moveStep = { onBack, onDone ->
+                UCMoveStep(
+                    subtitle = "已选 ${viewModel.selected.size} 项",
+                    viewModel = viewModel,
+                    onBack = onBack,
+                    onDone = onDone
+                )
+            }
         )
     }
 
@@ -507,18 +522,6 @@ fun UCCoudScreen(
         ShareResultDialog(
             info = info,
             onDismiss = { viewModel.dismissShareResult() }
-        )
-    }
-
-    // 删除确认（单文件/批量共用）
-    if (showDeleteConfirm) {
-        val deleting = if (viewModel.multiSelectMode) "选中的 ${viewModel.selected.size} 项" else "「${viewModel.actionFile?.fname ?: ""}」"
-        // 删除确认：与另外五个平台共用同一个底部弹窗实现（原为 AlertDialog，夸克那边还会"弹窗套弹窗"）
-        ConfirmDeleteSheet(
-            target = deleting,
-            operating = viewModel.isOperating,
-            onDismiss = { showDeleteConfirm = false },
-            onConfirm = { if (viewModel.multiSelectMode) viewModel.deleteSelected() else viewModel.deleteFile() }
         )
     }
 
@@ -547,155 +550,54 @@ fun UCCoudScreen(
     }
 }
 
-/** UC 文件操作菜单：下载/重命名/移动/分享 */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun UCActionSheet(
-    file: ShareFile,
-    viewModel: UCCoudViewModel,
-    onDownload: () -> Unit,
-    onDownloadFolder: (() -> Unit)? = null,
-    onRename: () -> Unit,
-    onMove: () -> Unit,
-    onShare: () -> Unit,
-    onDelete: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (file.isdir) Icons.Outlined.DriveFileMove else Icons.Outlined.Download,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(file.fname, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                    Text(
-                        text = if (file.isdir) "文件夹" else "文件",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-            if (!file.isdir) {
-                UCActionItem(Icons.Outlined.Download, "下载", "使用内置下载功能保存到本机", MaterialTheme.colorScheme.primary, onDownload)
-            } else if (onDownloadFolder != null) {
-                UCActionItem(Icons.Outlined.Download, "下载文件夹", "递归下载整个文件夹，保持目录结构", MaterialTheme.colorScheme.primary, onDownloadFolder)
-            }
-            UCActionItem(Icons.Outlined.Share, "分享", "生成分享链接（可设提取码/有效期）", MaterialTheme.colorScheme.primary, onShare)
-            UCActionItem(Icons.Outlined.DriveFileMove, "移动到", "移动到网盘的其他目录", MaterialTheme.colorScheme.primary, onMove)
-            UCActionItem(Icons.Outlined.Edit, "重命名", "修改文件名", MaterialTheme.colorScheme.primary, onRename)
-            UCActionItem(Icons.Outlined.Delete, "删除", "移入回收站", MaterialTheme.colorScheme.error, onDelete)
-        }
-    }
-}
 
+/** 移动目录选择（作为共享操作弹窗的一个步骤：菜单 → 移动到；自带返回键） */
 @Composable
-private fun UCActionItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    desc: String,
-    tint: androidx.compose.ui.graphics.Color,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(38.dp),
-            shape = MaterialTheme.shapes.large,
-            color = tint.copy(alpha = 0.12f)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-            }
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-/** 移动目录选择弹窗（独立浏览，不影响主列表） */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun UCMoveSheet(
+private fun UCMoveStep(
+    subtitle: String,
     viewModel: UCCoudViewModel,
-    onDismiss: () -> Unit
+    onBack: () -> Unit,
+    onDone: () -> Unit
 ) {
     val moveState by viewModel.moveUiState.collectAsState()
     LaunchedEffect(Unit) { viewModel.openMoveRoot() }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
-        ) {
-            Text("移动到", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(8.dp))
-            CrumbBar(
-                rootTitle = "根目录",
-                pathNames = (moveState as? UCCloudUiState.Loaded)?.pathNames ?: emptyList(),
-                onNavigate = { viewModel.moveNavigateToLevel(it) }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-// 返回上一级：固定在目录区上方（不参与 AnimatedContent 过渡，避免与目录内容交叉叠加）
-            if ((moveState as? UCCloudUiState.Loaded)?.pathNames?.isNotEmpty() == true) {
-                BackToParentItem(onClick = { viewModel.moveBack() })
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            // 移动目录切换：淡入过渡
-            AnimatedContent(
-                targetState = moveState,
-                transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
-                label = "ucMoveState"
-            ) { s ->
-                when (s) {
-                    is UCCloudUiState.Loading -> Box(
-                        modifier = Modifier.fillMaxWidth().height(180.dp),
-                        contentAlignment = Alignment.Center
-                    ) { YunXLoading() }
+        StepHeader(title = "移动到", subtitle = subtitle, onBack = onBack)
+        Spacer(modifier = Modifier.height(8.dp))
+        CrumbBar(
+            rootTitle = "根目录",
+            pathNames = (moveState as? UCCloudUiState.Loaded)?.pathNames ?: emptyList(),
+            onNavigate = { viewModel.moveNavigateToLevel(it) }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        // 返回上一级：固定在目录区上方（不参与 AnimatedContent 过渡，避免与目录内容交叉叠加）
+        if ((moveState as? UCCloudUiState.Loaded)?.pathNames?.isNotEmpty() == true) {
+            BackToParentItem(onClick = { viewModel.moveBack() })
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        // 移动目录切换：淡入过渡
+        AnimatedContent(
+            targetState = moveState,
+            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
+            label = "ucMoveState"
+        ) { s ->
+            when (s) {
+                is UCCloudUiState.Loading -> Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) { YunXLoading() }
 
-                    is UCCloudUiState.Error -> Box(
-                        modifier = Modifier.fillMaxWidth().height(140.dp),
-                        contentAlignment = Alignment.Center
-                    ) { Text(s.message, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                is UCCloudUiState.Error -> Box(
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text(s.message, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 
-                    is UCCloudUiState.Loaded -> {
-                        val dirs = s.files.filter { it.isdir }
+                is UCCloudUiState.Loaded -> {
+                    val dirs = s.files.filter { it.isdir }
                     if (dirs.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxWidth().height(90.dp),
@@ -720,133 +622,21 @@ private fun UCMoveSheet(
                     }
                 }
             }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            val dirName = (moveState as? UCCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
-            Button(
-                onClick = {
-                    val to = (moveState as? UCCloudUiState.Loaded)?.dirFid ?: "0"
-                    // 多选模式走批量移动，单文件走单文件移动
-                    if (viewModel.multiSelectMode) viewModel.moveSelected(to) else viewModel.moveFile(to)
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("移动到此处（$dirName）")
-            }
         }
-    }
-}
-
-/** 分享设置弹窗（提取码/有效期） */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun UCShareSheet(
-    viewModel: UCCoudViewModel,
-    onDismiss: () -> Unit
-) {
-    var withPassword by remember { mutableStateOf(false) }
-    var passcode by remember { mutableStateOf("") }
-    var expiredType by remember { mutableStateOf(1) }
-    val expireOptions = listOf("永久有效" to 1, "1 天" to 2, "7 天" to 3, "30 天" to 4)
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
+        Spacer(modifier = Modifier.height(16.dp))
+        val dirName = (moveState as? UCCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+        Button(
+            onClick = {
+                val to = (moveState as? UCCloudUiState.Loaded)?.dirFid ?: "0"
+                // 多选模式走批量移动，单文件走单文件移动
+                if (viewModel.multiSelectMode) viewModel.moveSelected(to) else viewModel.moveFile(to)
+                onDone()
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
-            Text("分享文件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(6.dp))
-            // Expressive 连接按钮组（ToggleButton）：二选一，取代原来的两个 FilterChip。
-            // · 间距显式置 0：默认排列会在两段之间留出可见缝隙
-            // · checkedShape 指回未选中态的连接形状：默认选中形状的内圆角是 50%（自己变成胶囊），
-            //   两段之间会出现明显豁口；选中态改由填充色表达，视觉上保持连体
-            ButtonGroup(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                ToggleButton(
-                    checked = !withPassword,
-                    onCheckedChange = { withPassword = false },
-                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(
-                        checkedShape = ButtonGroupDefaults.connectedLeadingButtonShape
-                    )
-                ) {
-                    Text("无提取码")
-                }
-                ToggleButton(
-                    checked = withPassword,
-                    onCheckedChange = {
-                        withPassword = true
-                        if (passcode.isBlank()) passcode = randomPasscode()
-                    },
-                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(
-                        checkedShape = ButtonGroupDefaults.connectedTrailingButtonShape
-                    )
-                ) {
-                    Text("设置提取码")
-                }
-            }
-            if (withPassword) {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = passcode,
-                    onValueChange = { passcode = it.take(4).filter { c -> c.isLetterOrDigit() } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("4 位提取码") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("有效期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                expireOptions.forEach { (name, value) ->
-                    FilterChip(
-                        selected = expiredType == value,
-                        onClick = { expiredType = value },
-                        label = { Text(name) },
-                        colors = FilterChipDefaults.filterChipColors()
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = {
-                    if (viewModel.multiSelectMode) {
-                        viewModel.shareSelected(
-                            urlType = if (withPassword) 2 else 1,
-                            passcode = passcode,
-                            expiredType = expiredType
-                        )
-                    } else {
-                        viewModel.shareFile(
-                            urlType = if (withPassword) 2 else 1,
-                            passcode = passcode,
-                            expiredType = expiredType
-                        )
-                    }
-                    onDismiss()
-                },
-                enabled = !withPassword || passcode.length == 4,
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("创建分享")
-            }
+            Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("移动到此处（$dirName）")
         }
     }
-}
-
-private fun randomPasscode(): String {
-    val chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
-    return (1..4).map { chars.random() }.joinToString("")
 }

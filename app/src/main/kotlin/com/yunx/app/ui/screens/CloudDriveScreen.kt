@@ -454,23 +454,68 @@ fun CloudDriveScreen(
         viewModel.actionFile?.let { file ->
             FileActionSheet(
                 file = file,
-                viewModel = viewModel,
+                operating = viewModel.isOperating,
+                onDownload = { viewModel.downloadFile() },
+                onDownloadFolder = { viewModel.downloadFolder() },
+                onShare = { withPassword, passcode, expiredType ->
+                    viewModel.shareFile(
+                        urlType = if (withPassword) 2 else 1,
+                        passcode = passcode,
+                        expiredType = expiredType
+                    )
+                },
+                onRename = { viewModel.renameFile(it) },
                 onDelete = { showDeleteConfirm = true },
-                onDismiss = { viewModel.dismissActions() }
+                onDismiss = { viewModel.dismissActions() },
+                moveStep = { onBack, onDone ->
+                    QuarkMoveStep(
+                        subtitle = file.fname,
+                        viewModel = viewModel,
+                        operating = viewModel.isOperating,
+                        onBack = onBack,
+                        onDone = onDone
+                    )
+                }
             )
         }
     }
 
-    // 批量操作弹窗（长按多选 → 底部栏分享/移动）
+    // 批量操作弹窗（长按多选 → 底部栏分享/移动/删除）
     if (showBatchActions) {
         BatchActionSheet(
-            viewModel = viewModel,
-            initialStep = batchInitial,
+            count = viewModel.selected.size,
+            operating = viewModel.isOperating,
+            onDownload = { viewModel.downloadSelected() },
+            onShare = { withPassword, passcode, expiredType ->
+                viewModel.shareSelected(
+                    urlType = if (withPassword) 2 else 1,
+                    passcode = passcode,
+                    expiredType = expiredType
+                )
+            },
             onDelete = {
                 showBatchActions = false
                 showDeleteConfirm = true
             },
-            onDismiss = { showBatchActions = false }
+            onDismiss = { showBatchActions = false },
+            initialStep = batchInitial,
+            moveStep = { onBack, onDone ->
+                QuarkMoveStep(
+                    subtitle = "已选 ${viewModel.selected.size} 项",
+                    viewModel = viewModel,
+                    operating = viewModel.isOperating,
+                    onBack = onBack,
+                    onDone = onDone
+                )
+            }
+        )
+    }
+
+    // 分享创建成功：展示链接与提取码（单文件/批量共用）
+    viewModel.shareResult?.let { info ->
+        ShareResultDialog(
+            info = info,
+            onDismiss = { viewModel.dismissShareResult() }
         )
     }
 

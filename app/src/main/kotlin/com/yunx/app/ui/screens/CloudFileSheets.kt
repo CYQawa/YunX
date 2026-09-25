@@ -22,6 +22,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -54,8 +57,11 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -68,6 +74,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -96,6 +103,8 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /** 文件操作菜单类型（FileActionSheet 内切换） */
 private enum class ActionStep { MENU, MOVE, SHARE, RENAME }
@@ -109,23 +118,31 @@ private val expireOptions = listOf(
 )
 
 /**
- * 夸克云盘文件操作弹窗：更多按钮 → 操作菜单（下载/分享/移动/重命名/删除），
- * 内部按步骤切换：移动选目录 / 分享设置 / 重命名输入；删除则回调给页面弹出共享的确认弹窗
- * （全项目删除确认只有一个实现：[ConfirmDeleteSheet]）。
+ * 文件操作底部弹窗（**六大网盘页共用**）：单弹窗多步骤 —— 菜单 → 移动 / 分享 / 重命名，
+ * 每一步都有返回键（[StepHeader]）与步骤切换过渡，与原夸克弹窗的形态一致。
+ *
+ * 平台差异通过参数注入，不需要各平台再各写一个弹窗：
+ * - 分享表单的提交走 [onShare]（各平台 shareFile 参数不同，由调用方适配；139 不支持自定义提取码，
+ *   按平台传 [PasscodeMode]）
+ * - 移动步骤走 [moveStep] 插槽（各平台的目录浏览状态类型不同，无法共享）
+ * - 删除只回调 [onDelete]，由页面弹共享的 [ConfirmDeleteSheet]（全项目唯一的删除确认实现）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FileActionSheet(
+internal fun FileActionSheet(
     file: ShareFile,
-    viewModel: QuarkCloudViewModel,
-    /** 点击「删除」：由页面弹出共享的删除确认弹窗（本弹窗不自行确认，避免"弹窗套弹窗"） */
+    operating: Boolean,
+    onDownload: () -> Unit,
+    onDownloadFolder: () -> Unit,
+    onShare: (withPassword: Boolean, passcode: String, expiredType: Int) -> Unit,
+    onRename: (String) -> Unit,
     onDelete: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** 提取码规则（各平台不同，见 [PasscodeMode]） */
+    passcodeMode: PasscodeMode = PasscodeMode.OPTIONAL,
+    moveStep: @Composable (onBack: () -> Unit, onDone: () -> Unit) -> Unit
 ) {
     var step by remember { mutableStateOf(ActionStep.MENU) }
-    // 移动目标浏览用独立状态（moveUiState），不影响主列表
-    val moveState by viewModel.moveUiState.collectAsState()
-    val operating = viewModel.isOperating
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -136,65 +153,56 @@ fun FileActionSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        // 步骤切换带过渡：与其余五个平台的操作弹窗保持一致（原来夸克是直接 when 切换，无动画）
+        // 步骤切换统一带过渡（六平台一致）
         AnimatedContent(
             targetState = step,
             transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
-            label = "quarkActionStep"
+            label = "fileActionStep"
         ) { current ->
-        when (current) {
-            ActionStep.MENU -> ActionMenu(
-                file = file,
-                onDownload = {
-                    viewModel.downloadFile()
-                    onDismiss()
-                },
-                onDownloadFolder = {
-                    viewModel.downloadFolder()
-                    onDismiss()
-                },
-                onShare = { step = ActionStep.SHARE },
-                onMove = {
-                    viewModel.openMoveRoot()
-                    step = ActionStep.MOVE
-                },
-                onRename = { step = ActionStep.RENAME },
-                onDelete = onDelete
-            )
+            when (current) {
+                ActionStep.MENU -> ActionMenu(
+                    file = file,
+                    onDownload = {
+                        onDownload()
+                        onDismiss()
+                    },
+                    onDownloadFolder = if (file.isdir) {
+                        {
+                            onDownloadFolder()
+                            onDismiss()
+                        }
+                    } else {
+                        null
+                    },
+                    onShare = { step = ActionStep.SHARE },
+                    onMove = { step = ActionStep.MOVE },
+                    onRename = { step = ActionStep.RENAME },
+                    onDelete = {
+                        onDelete()
+                        onDismiss()
+                    }
+                )
 
-            ActionStep.MOVE -> MoveStep(
-                file = file,
-                viewModel = viewModel,
-                moveState = moveState,
-                operating = operating,
-                onBack = { step = ActionStep.MENU },
-                onDone = onDismiss
-            )
+                ActionStep.MOVE -> moveStep({ step = ActionStep.MENU }, onDismiss)
 
-            ActionStep.SHARE -> ShareStep(
-                file = file,
-                viewModel = viewModel,
-                operating = operating,
-                onBack = { step = ActionStep.MENU }
-            )
+                ActionStep.SHARE -> ShareStep(
+                    title = "分享文件",
+                    subtitle = file.fname,
+                    operating = operating,
+                    passcodeMode = passcodeMode,
+                    onBack = { step = ActionStep.MENU },
+                    onCreateShare = onShare
+                )
 
-            ActionStep.RENAME -> RenameStep(
-                file = file,
-                viewModel = viewModel,
-                operating = operating,
-                onBack = { step = ActionStep.MENU },
-                onDone = onDismiss
-            )
+                ActionStep.RENAME -> RenameStep(
+                    file = file,
+                    operating = operating,
+                    onBack = { step = ActionStep.MENU },
+                    onDone = onDismiss,
+                    onRename = onRename
+                )
+            }
         }
-        }
-    }
-
-    // 分享创建成功：展示链接与提取码（可复制）
-    viewModel.shareResult?.let { info ->
-        ShareResultDialog(
-            info = info,
-            onDismiss = { viewModel.dismissShareResult() }
-        )
     }
 }
 
@@ -337,20 +345,23 @@ private fun ActionItem(
 
 /** 移动：浏览目标目录并确认（独立浏览状态 moveUiState，不影响主列表） */
 @Composable
-private fun MoveStep(
-    file: ShareFile,
+internal fun QuarkMoveStep(
+    /** 副标题：单文件传文件名，批量传"已选 N 项" */
+    subtitle: String,
     viewModel: QuarkCloudViewModel,
-    moveState: QuarkCloudUiState,
     operating: Boolean,
     onBack: () -> Unit,
     onDone: () -> Unit
 ) {
+    // 进入「移动到」步骤即加载根目录（与其余五个平台的移动步骤一致，调用方不必先触发）
+    val moveState by viewModel.moveUiState.collectAsState()
+    LaunchedEffect(Unit) { viewModel.openMoveRoot() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        StepHeader(title = "移动到", subtitle = file.fname, onBack = onBack)
+        StepHeader(title = "移动到", subtitle = subtitle, onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
         CrumbBar(
@@ -441,13 +452,25 @@ private fun MoveStep(
     }
 }
 
-/** 分享：提取码 + 有效期设置 */
+/**
+ * 提取码规则：**各平台不同，必须区分**（不能一律给"无提取码 / 设置提取码"二选一）：
+ * - [OPTIONAL] 可选：夸克 / UC / 123
+ * - [REQUIRED] 必填 4 位：百度
+ * - [REQUIRED_OR_AUTO] 必填但可留空由服务端生成：迅雷
+ * - [SERVER_GENERATED] 服务端自动生成、不可设置：139
+ */
+internal enum class PasscodeMode { OPTIONAL, REQUIRED, REQUIRED_OR_AUTO, SERVER_GENERATED }
+
+/** 分享：提取码 + 有效期设置（六大网盘页共用，提交走 [onCreateShare]） */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ShareStep(
-    file: ShareFile,
-    viewModel: QuarkCloudViewModel,
+    title: String,
+    subtitle: String,
     operating: Boolean,
-    onBack: () -> Unit
+    passcodeMode: PasscodeMode,
+    onBack: () -> Unit,
+    onCreateShare: (withPassword: Boolean, passcode: String, expiredType: Int) -> Unit
 ) {
     var withPassword by remember { mutableStateOf(false) }
     var passcode by remember { mutableStateOf("") }
@@ -458,39 +481,84 @@ private fun ShareStep(
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        StepHeader(title = "分享文件", subtitle = file.fname, onBack = onBack)
+        StepHeader(title = title, subtitle = subtitle, onBack = onBack)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = !withPassword,
-                onClick = { withPassword = false },
-                label = { Text("无提取码") },
-                colors = FilterChipDefaults.filterChipColors()
-            )
-            FilterChip(
-                selected = withPassword,
-                onClick = {
-                    withPassword = true
-                    if (passcode.isBlank()) passcode = randomPasscode()
-                },
-                label = { Text("设置提取码") },
-                colors = FilterChipDefaults.filterChipColors()
-            )
-        }
-        if (withPassword) {
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = passcode,
-                onValueChange = { passcode = it.take(4).filter { c -> c.isLetterOrDigit() } },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("4 位提取码") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.large
-            )
+        // 提取码：按平台规则渲染（四种规则见 PasscodeMode）
+        when (passcodeMode) {
+            PasscodeMode.OPTIONAL -> {
+                Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(6.dp))
+                // 间距置 0 + checkedShape 指回未选中形状：避免两段之间出现缝/豁口（选中态由填充色表达）
+                ButtonGroup(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                    ToggleButton(
+                        checked = !withPassword,
+                        onCheckedChange = { withPassword = false },
+                        shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(
+                            checkedShape = ButtonGroupDefaults.connectedLeadingButtonShape
+                        )
+                    ) {
+                        Text("无提取码")
+                    }
+                    ToggleButton(
+                        checked = withPassword,
+                        onCheckedChange = {
+                            withPassword = true
+                            if (passcode.isBlank()) passcode = randomPasscode()
+                        },
+                        shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(
+                            checkedShape = ButtonGroupDefaults.connectedTrailingButtonShape
+                        )
+                    ) {
+                        Text("设置提取码")
+                    }
+                }
+                // 切到「设置提取码」时输入框淡入 + 展开（收起时反向），不再突然出现/消失
+                AnimatedVisibility(
+                    visible = withPassword,
+                    enter = fadeIn(effectsDefault()) + expandVertically(spatialDefault()),
+                    exit = fadeOut(effectsFast()) + shrinkVertically(spatialFast())
+                ) {
+                    Column {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        PasscodeField(
+                            passcode = passcode,
+                            onPasscodeChange = { passcode = it },
+                            label = "4 位提取码"
+                        )
+                    }
+                }
+            }
+
+            PasscodeMode.REQUIRED, PasscodeMode.REQUIRED_OR_AUTO -> {
+                val allowBlank = passcodeMode == PasscodeMode.REQUIRED_OR_AUTO
+                Text(
+                    text = if (allowBlank) {
+                        "分享必须带提取码，可自定义 4 位（留空由服务端生成）"
+                    } else {
+                        "分享必须带 4 位提取码"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                PasscodeField(
+                    passcode = passcode,
+                    onPasscodeChange = { passcode = it },
+                    label = if (allowBlank) "提取码（4 位字母数字，可留空）" else "提取码（4 位字母数字）"
+                )
+            }
+
+            PasscodeMode.SERVER_GENERATED -> {
+                Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "提取码由服务端自动生成，分享创建后可在结果里查看",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -512,14 +580,24 @@ private fun ShareStep(
 
         Button(
             onClick = {
-                viewModel.shareFile(
-                    urlType = if (withPassword) 2 else 1,
-                    passcode = passcode,
-                    expiredType = expiredType
-                )
+                // 提取码规则决定提交内容：
+                // - OPTIONAL：按用户选择决定是否带提取码
+                // - REQUIRED / REQUIRED_OR_AUTO：一定带（迅雷可留空，由服务端生成）
+                // - SERVER_GENERATED：不传提取码
+                val withPwd = when (passcodeMode) {
+                    PasscodeMode.OPTIONAL -> withPassword
+                    PasscodeMode.SERVER_GENERATED -> false
+                    else -> true
+                }
+                onCreateShare(withPwd, passcode, expiredType)
                 // 不在此关闭：保留弹窗，等 shareResult 弹出分享结果
             },
-            enabled = !operating && (!withPassword || passcode.length == 4),
+            enabled = !operating && when (passcodeMode) {
+                PasscodeMode.OPTIONAL -> !withPassword || passcode.length == 4
+                PasscodeMode.REQUIRED -> passcode.length == 4
+                PasscodeMode.REQUIRED_OR_AUTO -> passcode.isEmpty() || passcode.length == 4
+                PasscodeMode.SERVER_GENERATED -> true
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
@@ -535,14 +613,31 @@ private fun ShareStep(
     }
 }
 
-/** 重命名输入 */
+/** 提取码输入框（分享步骤内共用）：限 4 位字母数字 */
+@Composable
+private fun PasscodeField(
+    passcode: String,
+    onPasscodeChange: (String) -> Unit,
+    label: String
+) {
+    OutlinedTextField(
+        value = passcode,
+        onValueChange = { onPasscodeChange(it.take(4).filter { c -> c.isLetterOrDigit() }) },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(label) },
+        singleLine = true,
+        shape = MaterialTheme.shapes.large
+    )
+}
+
+/** 重命名输入（六大网盘页共用，提交走 [onRename]） */
 @Composable
 private fun RenameStep(
     file: ShareFile,
-    viewModel: QuarkCloudViewModel,
     operating: Boolean,
     onBack: () -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    onRename: (String) -> Unit
 ) {
     var name by remember { mutableStateOf(file.fname) }
     Column(
@@ -564,7 +659,7 @@ private fun RenameStep(
         Button(
             onClick = {
                 if (name.isNotBlank() && name != file.fname) {
-                    viewModel.renameFile(name.trim())
+                    onRename(name.trim())
                     onDone()
                 } else {
                     onBack()
@@ -580,70 +675,6 @@ private fun RenameStep(
     }
 }
 
-/**
- * 重命名底部弹窗（六大网盘页共用）。
- *
- * 统一形态：与夸克「文件操作弹窗」里的重命名步骤一致（标题 + 原文件名 + 输入框 + 整宽确认按钮）。
- * 其余五个平台原先各自维护一个 AlertDialog（代码逐字相同、只有 ViewModel 类型不同），
- * 现统一为底部弹窗 —— ModalBottomSheet 自带滑入/淡出过渡，不必再手写动画。
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun RenameFileSheet(
-    fileName: String,
-    operating: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var name by remember { mutableStateOf(fileName) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        // 操作进行中禁止下滑关闭：避免请求已发出、弹窗却先消失造成的状态错乱
-        onDismissRequest = { if (!operating) onDismiss() },
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
-        ) {
-            Text("重命名", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = fileName,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("新文件名") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.large
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = {
-                    val trimmed = name.trim()
-                    if (trimmed.isNotBlank() && trimmed != fileName) onConfirm(trimmed)
-                    onDismiss()
-                },
-                enabled = !operating && name.isNotBlank(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
-                Text("确认重命名")
-            }
-        }
-    }
-}
 /**
  * 删除确认底部弹窗（**全项目唯一的删除确认实现**）。
  *
@@ -785,9 +816,9 @@ internal fun ShareResultDialog(
     )
 }
 
-/** 步骤头部：返回按钮 + 标题 */
+/** 步骤头部：返回按钮 + 标题（六大网盘页的移动步骤也用它，故为 internal） */
 @Composable
-private fun StepHeader(title: String, subtitle: String, onBack: () -> Unit) {
+internal fun StepHeader(title: String, subtitle: String, onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) {
             Icon(
@@ -835,16 +866,18 @@ internal enum class BatchStep { MENU, SHARE, MOVE }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BatchActionSheet(
-    viewModel: QuarkCloudViewModel,
-    /** 点击「删除」：由页面弹出共享的删除确认弹窗（[ConfirmDeleteSheet]） */
+    count: Int,
+    operating: Boolean,
+    onDownload: () -> Unit,
+    onShare: (withPassword: Boolean, passcode: String, expiredType: Int) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
-    initialStep: BatchStep = BatchStep.MENU
+    /** 提取码规则（各平台不同，见 [PasscodeMode]） */
+    passcodeMode: PasscodeMode = PasscodeMode.OPTIONAL,
+    initialStep: BatchStep = BatchStep.MENU,
+    moveStep: @Composable (onBack: () -> Unit, onDone: () -> Unit) -> Unit
 ) {
     var step by remember { mutableStateOf(initialStep) }
-    val moveState by viewModel.moveUiState.collectAsState()
-    val operating = viewModel.isOperating
-    val count = viewModel.selected.size
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -855,52 +888,39 @@ internal fun BatchActionSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        // 步骤切换带过渡：与其余五个平台的弹窗一致
+        // 步骤切换带过渡：与单文件弹窗一致
         AnimatedContent(
             targetState = step,
             transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
-            label = "quarkBatchStep"
+            label = "batchActionStep"
         ) { current ->
-        when (current) {
-            BatchStep.MENU -> BatchMenu(
-                count = count,
-                onDownload = {
-                    viewModel.downloadSelected()
-                    onDismiss()
-                },
-                onShare = { step = BatchStep.SHARE },
-                onMove = {
-                    viewModel.openMoveRoot()
-                    step = BatchStep.MOVE
-                },
-                onDelete = onDelete
-            )
+            when (current) {
+                BatchStep.MENU -> BatchMenu(
+                    count = count,
+                    onDownload = {
+                        onDownload()
+                        onDismiss()
+                    },
+                    onShare = { step = BatchStep.SHARE },
+                    onMove = { step = BatchStep.MOVE },
+                    onDelete = {
+                        onDelete()
+                        onDismiss()
+                    }
+                )
 
-            BatchStep.SHARE -> BatchShareStep(
-                count = count,
-                viewModel = viewModel,
-                operating = operating,
-                onBack = { step = BatchStep.MENU }
-            )
+                BatchStep.SHARE -> ShareStep(
+                    title = "分享文件",
+                    subtitle = "已选 $count 项",
+                    operating = operating,
+                    passcodeMode = passcodeMode,
+                    onBack = { step = BatchStep.MENU },
+                    onCreateShare = onShare
+                )
 
-            BatchStep.MOVE -> BatchMoveStep(
-                count = count,
-                viewModel = viewModel,
-                moveState = moveState,
-                operating = operating,
-                onBack = { step = BatchStep.MENU },
-                onDone = onDismiss
-            )
+                BatchStep.MOVE -> moveStep({ step = BatchStep.MENU }, onDismiss)
+            }
         }
-        }
-    }
-
-    // 分享创建成功：展示链接与提取码（保留弹窗以正常显示）
-    viewModel.shareResult?.let { info ->
-        ShareResultDialog(
-            info = info,
-            onDismiss = { viewModel.dismissShareResult() }
-        )
     }
 }
 
@@ -980,209 +1000,5 @@ private fun BatchMenu(
             tint = MaterialTheme.colorScheme.error,
             onClick = onDelete
         )
-    }
-}
-
-/** 批量分享：提取码 + 有效期 */
-@Composable
-private fun BatchShareStep(
-    count: Int,
-    viewModel: QuarkCloudViewModel,
-    operating: Boolean,
-    onBack: () -> Unit
-) {
-    var withPassword by remember { mutableStateOf(false) }
-    var passcode by remember { mutableStateOf("") }
-    var expiredType by remember { mutableStateOf(1) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
-    ) {
-        StepHeader(title = "分享文件", subtitle = "已选 $count 项", onBack = onBack)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = !withPassword,
-                onClick = { withPassword = false },
-                label = { Text("无提取码") },
-                colors = FilterChipDefaults.filterChipColors()
-            )
-            FilterChip(
-                selected = withPassword,
-                onClick = {
-                    withPassword = true
-                    if (passcode.isBlank()) passcode = randomPasscode()
-                },
-                label = { Text("设置提取码") },
-                colors = FilterChipDefaults.filterChipColors()
-            )
-        }
-        if (withPassword) {
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = passcode,
-                onValueChange = { passcode = it.take(4).filter { c -> c.isLetterOrDigit() } },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("4 位提取码") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.large
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text("有效期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            expireOptions.forEach { (name, value) ->
-                FilterChip(
-                    selected = expiredType == value,
-                    onClick = { expiredType = value },
-                    label = { Text(name) },
-                    colors = FilterChipDefaults.filterChipColors()
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Button(
-            onClick = {
-                viewModel.shareSelected(
-                    urlType = if (withPassword) 2 else 1,
-                    passcode = passcode,
-                    expiredType = expiredType
-                )
-                // 不关闭：等 shareResult 弹出分享结果
-            },
-            enabled = !operating && (!withPassword || passcode.length == 4),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-        ) {
-            if (operating) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("创建分享")
-            }
-        }
-    }
-}
-
-/** 批量移动：浏览目标目录并确认 */
-@Composable
-private fun BatchMoveStep(
-    count: Int,
-    viewModel: QuarkCloudViewModel,
-    moveState: QuarkCloudUiState,
-    operating: Boolean,
-    onBack: () -> Unit,
-    onDone: () -> Unit
-) {
-    // 首次进入该步骤：加载移动目标根目录（否则 moveUiState 停留在 Loading 一直转圈）
-    LaunchedEffect(Unit) {
-        viewModel.openMoveRoot()
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
-    ) {
-        StepHeader(title = "移动到", subtitle = "已选 $count 项", onBack = onBack)
-
-        Spacer(modifier = Modifier.height(8.dp))
-        CrumbBar(
-            rootTitle = "根目录",
-            pathNames = (moveState as? QuarkCloudUiState.Loaded)?.pathNames ?: emptyList(),
-            onNavigate = { viewModel.moveNavigateToLevel(it) }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        // 返回上一级：固定在目录区上方（不参与 AnimatedContent 过渡，避免与目录内容交叉叠加）
-        if ((moveState as? QuarkCloudUiState.Loaded)?.pathNames?.isNotEmpty() == true) {
-            BackToParentItem(onClick = { viewModel.moveBack() })
-            Spacer(modifier = Modifier.height(4.dp))
-        }
-        // 移动目录切换：淡入过渡
-        AnimatedContent(
-            targetState = moveState,
-            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
-            label = "batchMoveState"
-        ) { s ->
-            when (s) {
-                is QuarkCloudUiState.Loading -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center
-                ) { YunXLoading() }
-
-                is QuarkCloudUiState.Error -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp),
-                    contentAlignment = Alignment.Center
-                ) { Text(s.message, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-
-                is QuarkCloudUiState.Loaded -> {
-                    val dirs = s.files.filter { it.isdir }
-                if (dirs.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "当前目录没有子文件夹，可直接移动到此处",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 260.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(dirs, key = { it.fid }) { dir ->
-                            ShareFileRow(file = dir, onClick = { viewModel.openMoveFolder(dir) })
-                        }
-                    }
-                }
-            }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        val dirName = (moveState as? QuarkCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
-        Button(
-            onClick = {
-                val to = (moveState as? QuarkCloudUiState.Loaded)?.dirFid ?: "0"
-                viewModel.moveSelected(to)
-                onDone()
-            },
-            enabled = !operating,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-        ) {
-            if (operating) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("移动到此处（$dirName）")
-            }
-        }
     }
 }

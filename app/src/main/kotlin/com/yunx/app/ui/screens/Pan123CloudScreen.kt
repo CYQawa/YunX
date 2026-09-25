@@ -150,9 +150,9 @@ fun Pan123CloudScreen(
         loadedState?.pathNames?.joinToString("/") ?: ""
     }
     var showActionSheet by remember { mutableStateOf(false) }
-    var showRename by remember { mutableStateOf(false) }
-    var showMove by remember { mutableStateOf(false) }
-    var showShare by remember { mutableStateOf(false) }
+    // 批量操作弹窗：从多选底部栏直接进入某个步骤（分享/移动）
+    var showBatchActions by remember { mutableStateOf(false) }
+    var batchInitial by remember { mutableStateOf(BatchStep.MENU) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel.cloudMessage) {
@@ -414,11 +414,12 @@ fun Pan123CloudScreen(
                                     viewModel.downloadSelected()
                                 },
                                 MultiSelectAction("分享", Icons.Outlined.Share, MaterialTheme.colorScheme.primary) {
-                                    showShare = true
+                                    batchInitial = BatchStep.SHARE
+                                    showBatchActions = true
                                 },
                                 MultiSelectAction("移动", Icons.Outlined.DriveFileMove, MaterialTheme.colorScheme.primary) {
-                                    viewModel.openMoveRoot()
-                                    showMove = true
+                                    batchInitial = BatchStep.MOVE
+                                    showBatchActions = true
                                 },
                                 MultiSelectAction("删除", Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
                                     showDeleteConfirm = true
@@ -431,63 +432,68 @@ fun Pan123CloudScreen(
         }
     }
 
-    // 文件操作菜单
-    if (showActionSheet && viewModel.actionFile != null) {
-        Pan123ActionSheet(
+    // 文件操作弹窗（单弹窗多步骤：菜单 → 移动/分享/重命名；六大网盘页同一实现）
+    // ★ 删除确认与操作弹窗互斥展示：确认期间不关掉操作弹窗，否则 dismissActions() 会清空 actionFile
+    val pendingDeleteTarget = when {
+        !showDeleteConfirm -> null
+        viewModel.multiSelectMode -> "选中的 ${viewModel.selected.size} 项"
+        else -> viewModel.actionFile?.let { "「${it.fname}」" }
+    }
+    if (pendingDeleteTarget != null) {
+        ConfirmDeleteSheet(
+            target = pendingDeleteTarget,
+            operating = viewModel.isOperating,
+            onDismiss = {
+                showDeleteConfirm = false
+                viewModel.dismissActions()
+            },
+            onConfirm = { if (viewModel.multiSelectMode) viewModel.deleteSelected() else viewModel.deleteFile() }
+        )
+    } else if (showActionSheet && viewModel.actionFile != null) {
+        FileActionSheet(
             file = viewModel.actionFile!!,
-            viewModel = viewModel,
-            onDownload = {
-                showActionSheet = false
-                viewModel.downloadFile()
-            },
-            onDownloadFolder = {
-                showActionSheet = false
-                viewModel.downloadFolder()
-            },
-            onRename = {
-                showActionSheet = false
-                showRename = true
-            },
-            onMove = {
-                showActionSheet = false
-                viewModel.openMoveRoot()
-                showMove = true
-            },
-            onShare = {
-                showActionSheet = false
-                showShare = true
-            },
-            onDelete = {
-                showActionSheet = false
-                showDeleteConfirm = true
-            },
+            operating = viewModel.isOperating,
+            onDownload = { viewModel.downloadFile() },
+            onDownloadFolder = { viewModel.downloadFolder() },
+            onShare = { _, pwd, period -> viewModel.shareFile(period, pwd) },
+            onRename = { viewModel.renameFile(it) },
+            onDelete = { showDeleteConfirm = true },
             onDismiss = {
                 showActionSheet = false
                 viewModel.dismissActions()
+            },
+            moveStep = { onBack, onDone ->
+                Pan123MoveStep(
+                    subtitle = viewModel.actionFile?.fname ?: "",
+                    viewModel = viewModel,
+                    onBack = onBack,
+                    onDone = onDone
+                )
             }
         )
     }
 
-    if (showRename && viewModel.actionFile != null) {
-        RenameFileSheet(
-            fileName = viewModel.actionFile!!.fname,
+    // 批量操作弹窗（多选底部栏的分享/移动/删除）
+    if (showBatchActions) {
+        BatchActionSheet(
+            count = viewModel.selected.size,
             operating = viewModel.isOperating,
-            onDismiss = { showRename = false },
-            onConfirm = { viewModel.renameFile(it) }
-        )
-    }
-
-    if (showMove) {
-        Pan123MoveSheet(
-            viewModel = viewModel,
-            onDismiss = { showMove = false }
-        )
-    }
-
-    if (showShare) {
-        Pan123ShareSheet(
-            viewModel = viewModel,
-            onDismiss = { showShare = false }
+            onDownload = { viewModel.downloadSelected() },
+            onShare = { _, pwd, period -> viewModel.shareSelected(period, pwd) },
+            onDelete = {
+                showBatchActions = false
+                showDeleteConfirm = true
+            },
+            onDismiss = { showBatchActions = false },
+            initialStep = batchInitial,
+            moveStep = { onBack, onDone ->
+                Pan123MoveStep(
+                    subtitle = "已选 ${viewModel.selected.size} 项",
+                    viewModel = viewModel,
+                    onBack = onBack,
+                    onDone = onDone
+                )
+            }
         )
     }
 
@@ -495,17 +501,6 @@ fun Pan123CloudScreen(
         ShareResultDialog(
             info = info,
             onDismiss = { viewModel.dismissShareResult() }
-        )
-    }
-
-    if (showDeleteConfirm) {
-        val deleting = if (viewModel.multiSelectMode) "选中的 ${viewModel.selected.size} 项" else "「${viewModel.actionFile?.fname ?: ""}」"
-        // 删除确认：与另外五个平台共用同一个底部弹窗实现（原为 AlertDialog，夸克那边还会"弹窗套弹窗"）
-        ConfirmDeleteSheet(
-            target = deleting,
-            operating = viewModel.isOperating,
-            onDismiss = { showDeleteConfirm = false },
-            onConfirm = { if (viewModel.multiSelectMode) viewModel.deleteSelected() else viewModel.deleteFile() }
         )
     }
 
@@ -534,298 +529,95 @@ fun Pan123CloudScreen(
     }
 }
 
-/** 123 文件操作菜单：下载/分享/移动/重命名/删除 */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun Pan123ActionSheet(
-    file: ShareFile,
-    viewModel: Pan123CloudViewModel,
-    onDownload: () -> Unit,
-    onDownloadFolder: (() -> Unit)? = null,
-    onRename: () -> Unit,
-    onMove: () -> Unit,
-    onShare: () -> Unit,
-    onDelete: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (file.isdir) Icons.Outlined.DriveFileMove else Icons.Outlined.Download,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(file.fname, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                    Text(
-                        text = if (file.isdir) "文件夹" else "文件",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-            if (!file.isdir) {
-                Pan123ActionItem(Icons.Outlined.Download, "下载", "使用内置下载功能保存到本机", MaterialTheme.colorScheme.primary, onDownload)
-            } else if (onDownloadFolder != null) {
-                Pan123ActionItem(Icons.Outlined.Download, "下载文件夹", "递归下载整个文件夹，保持目录结构", MaterialTheme.colorScheme.primary, onDownloadFolder)
-            }
-            Pan123ActionItem(Icons.Outlined.Share, "分享", "生成分享链接（可设提取码/有效期）", MaterialTheme.colorScheme.primary, onShare)
-            Pan123ActionItem(Icons.Outlined.DriveFileMove, "移动到", "移动到网盘的其他目录", MaterialTheme.colorScheme.primary, onMove)
-            Pan123ActionItem(Icons.Outlined.Edit, "重命名", "修改文件名", MaterialTheme.colorScheme.primary, onRename)
-            Pan123ActionItem(Icons.Outlined.Delete, "删除", "删除到回收站", MaterialTheme.colorScheme.error, onDelete)
-        }
-    }
-}
-
-@Composable
-private fun Pan123ActionItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    desc: String,
-    tint: androidx.compose.ui.graphics.Color,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(38.dp),
-            shape = MaterialTheme.shapes.large,
-            color = tint.copy(alpha = 0.12f)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-            }
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
 
 /** 移动目录选择弹窗（独立浏览，不影响主列表） */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Pan123MoveSheet(
-    viewModel: Pan123CloudViewModel,
-    onDismiss: () -> Unit
+private fun Pan123MoveStep(
+subtitle: String,
+viewModel: Pan123CloudViewModel,
+onBack: () -> Unit,
+onDone: () -> Unit
 ) {
-    val moveState by viewModel.moveUiState.collectAsState()
-    LaunchedEffect(Unit) { viewModel.openMoveRoot() }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
-        ) {
-            Text("移动到", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(8.dp))
-            CrumbBar(
-                rootTitle = "根目录",
-                pathNames = (moveState as? Pan123CloudUiState.Loaded)?.pathNames ?: emptyList(),
-                onNavigate = { viewModel.moveNavigateToLevel(it) }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            if ((moveState as? Pan123CloudUiState.Loaded)?.pathNames?.isNotEmpty() == true) {
-                BackToParentItem(onClick = { viewModel.moveBack() })
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            AnimatedContent(
-                targetState = moveState,
-                transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
-                label = "pan123MoveState"
-            ) { s ->
-                when (s) {
-                    is Pan123CloudUiState.Loading -> Box(
-                        modifier = Modifier.fillMaxWidth().height(180.dp),
-                        contentAlignment = Alignment.Center
-                    ) { YunXLoading() }
+val moveState by viewModel.moveUiState.collectAsState()
+LaunchedEffect(Unit) { viewModel.openMoveRoot() }
+Column(
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
+) {
+    StepHeader(title = "移动到", subtitle = subtitle, onBack = onBack)
+        Spacer(modifier = Modifier.height(8.dp))
+        CrumbBar(
+            rootTitle = "根目录",
+            pathNames = (moveState as? Pan123CloudUiState.Loaded)?.pathNames ?: emptyList(),
+            onNavigate = { viewModel.moveNavigateToLevel(it) }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        if ((moveState as? Pan123CloudUiState.Loaded)?.pathNames?.isNotEmpty() == true) {
+            BackToParentItem(onClick = { viewModel.moveBack() })
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        AnimatedContent(
+            targetState = moveState,
+            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
+            label = "pan123MoveState"
+        ) { s ->
+            when (s) {
+                is Pan123CloudUiState.Loading -> Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) { YunXLoading() }
 
-                    is Pan123CloudUiState.Error -> Box(
-                        modifier = Modifier.fillMaxWidth().height(140.dp),
-                        contentAlignment = Alignment.Center
-                    ) { Text(s.message, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                is Pan123CloudUiState.Error -> Box(
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text(s.message, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 
-                    is Pan123CloudUiState.Loaded -> {
-                        val dirs = s.files.filter { it.isdir }
-                        if (dirs.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().height(90.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "当前目录没有子文件夹，可直接移动到此处",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                items(dirs, key = { it.fid }) { dir ->
-                                    ShareFileRow(file = dir, onClick = { viewModel.openMoveFolder(dir) })
-                                }
+                is Pan123CloudUiState.Loaded -> {
+                    val dirs = s.files.filter { it.isdir }
+                    if (dirs.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(90.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "当前目录没有子文件夹，可直接移动到此处",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(dirs, key = { it.fid }) { dir ->
+                                ShareFileRow(file = dir, onClick = { viewModel.openMoveFolder(dir) })
                             }
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            val dirName = (moveState as? Pan123CloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
-            Button(
-                onClick = {
-                    val to = (moveState as? Pan123CloudUiState.Loaded)?.dirId ?: "0"
-                    if (viewModel.multiSelectMode) viewModel.moveSelected(to) else viewModel.moveFile(to)
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("移动到此处（$dirName）")
-            }
         }
-    }
-}
-
-/** 分享设置弹窗（有效期 + 可选提取码） */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun Pan123ShareSheet(
-    viewModel: Pan123CloudViewModel,
-    onDismiss: () -> Unit
-) {
-    var withPassword by remember { mutableStateOf(false) }
-    var passcode by remember { mutableStateOf("") }
-    var period by remember { mutableStateOf<Int?>(null) }
-    val periodOptions = listOf<Pair<String, Int?>>(
-        "永久有效" to null,
-        "1 天" to 1,
-        "7 天" to 7,
-        "30 天" to 30
-    )
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
+        Spacer(modifier = Modifier.height(16.dp))
+        val dirName = (moveState as? Pan123CloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+        Button(
+            onClick = {
+                val to = (moveState as? Pan123CloudUiState.Loaded)?.dirId ?: "0"
+                if (viewModel.multiSelectMode) viewModel.moveSelected(to) else viewModel.moveFile(to)
+                onDone()
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
-            Text("分享文件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                if (viewModel.multiSelectMode) "已选 ${viewModel.selected.size} 项" else "分享到 123 云盘链接",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = !withPassword,
-                    onClick = { withPassword = false },
-                    label = { Text("无提取码") },
-                    colors = FilterChipDefaults.filterChipColors()
-                )
-                FilterChip(
-                    selected = withPassword,
-                    onClick = {
-                        withPassword = true
-                        if (passcode.isBlank()) passcode = randomPan123Passcode()
-                    },
-                    label = { Text("设置提取码") },
-                    colors = FilterChipDefaults.filterChipColors()
-                )
-            }
-            if (withPassword) {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = passcode,
-                    onValueChange = { passcode = it.take(4).filter { c -> c.isLetterOrDigit() } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("4 位提取码") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.large
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("有效期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                periodOptions.forEach { (name, value) ->
-                    FilterChip(
-                        selected = period == value,
-                        onClick = { period = value },
-                        label = { Text(name) },
-                        colors = FilterChipDefaults.filterChipColors()
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = {
-                    val pwd = if (withPassword) passcode.takeIf { it.isNotBlank() } else null
-                    if (viewModel.multiSelectMode) {
-                        viewModel.shareSelected(period, pwd)
-                    } else {
-                        viewModel.shareFile(period, pwd)
-                    }
-                    onDismiss()
-                },
-                enabled = !withPassword || passcode.length == 4,
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("创建分享")
-            }
+            Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("移动到此处（$dirName）")
         }
-    }
 }
+}
+
 
 private fun randomPan123Passcode(): String {
     val chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
