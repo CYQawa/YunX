@@ -190,6 +190,12 @@ MaterialShapes、波浪进度条、FloatingToolbar、FAB 菜单等**组件只存
 升级 BOM 或该 alpha 前，必须逐条重新核对三条门槛（kotlin-stdlib 要求的 Kotlin 版本 / AAR 的 minCompileSdk ≤ compileSdk /
 manifest 的 minSdk），依据与历史版本对照写在 `gradle/libs.versions.toml` 中 `material3Expressive` 上方。
 
+**动效规格的读取位置有硬性约束**：`MaterialTheme.motionScheme` 是 `@Composable` 属性，只能在 composable 作用域读取。
+要把它取出的规格传给 `AnimatedContent` 的 `transitionSpec`、`remember {}`、点击回调等**非 @Composable 的 lambda** 时，
+必须先在 composable 里取到局部变量再捕获进 lambda；写在 lambda 内会报
+`@Composable invocations can only happen from the context of a @Composable function`。
+（`AnimatedVisibility` 的 `enter` / `exit` 参数位在 composable 参数位置求值，可直接写。）
+
 ---
 
 ## 4. 验证

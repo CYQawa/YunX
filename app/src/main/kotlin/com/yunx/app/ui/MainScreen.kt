@@ -68,6 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.res.Configuration
 import android.Manifest
@@ -617,6 +618,12 @@ fun MainScreen() {
             )
         )
     }
+    // ★ Material 3 Expressive 动效规格：MaterialTheme.motionScheme 是 @Composable 属性，只能在 composable 作用域读取；
+    //   而 AnimatedContent 的 transitionSpec 是普通 lambda（非 @Composable），所以必须在这里先取好、再捕获进 lambda。
+    //   （P4 全项目替换 tween 时遵循同一规则：规格取在 composable 里，transitionSpec / 回调里只用捕获值）
+    val motionScheme = MaterialTheme.motionScheme
+    val tabSlideSpec = motionScheme.defaultSpatialSpec<IntOffset>()
+    val tabFadeSpec = motionScheme.defaultEffectsSpec<Float>()
     // Tab 内容区（竖屏 / 横屏共用）：每个页面独立保存状态，切换 Tab 再切回来不丢失；带 Material3 过渡动画（按 Tab 顺序决定方向）
     val tabContent: @Composable () -> Unit = {
         AnimatedContent(
@@ -624,12 +631,13 @@ fun MainScreen() {
             transitionSpec = {
                 // 根据 Tab 顺序决定滑动方向：向右切（新Tab在右边）→ 新页从右滑入；向左切反向
                 val forward = targetState.ordinal > initialState.ordinal
+                // 位移/尺寸走 spatial 弹簧，透明度/颜色走 effects 弹簧（替代原来的 tween(220)/tween(160)）
                 if (forward) {
-                    (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 4 })
-                        .togetherWith(fadeOut(tween(160)) + slideOutHorizontally(tween(160)) { -it / 4 })
+                    (fadeIn(tabFadeSpec) + slideInHorizontally(tabSlideSpec) { it / 4 })
+                        .togetherWith(fadeOut(tabFadeSpec) + slideOutHorizontally(tabSlideSpec) { -it / 4 })
                 } else {
-                    (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { -it / 4 })
-                        .togetherWith(fadeOut(tween(160)) + slideOutHorizontally(tween(160)) { it / 4 })
+                    (fadeIn(tabFadeSpec) + slideInHorizontally(tabSlideSpec) { -it / 4 })
+                        .togetherWith(fadeOut(tabFadeSpec) + slideOutHorizontally(tabSlideSpec) { it / 4 })
                 }
             },
             label = "mainTab"

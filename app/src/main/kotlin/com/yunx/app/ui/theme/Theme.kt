@@ -21,7 +21,10 @@ package com.yunx.app.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -33,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.SchemeTonalSpot
 
@@ -263,6 +267,30 @@ private val highContrastDarkColorScheme = darkColorScheme(
     surfaceContainerHigh = surfaceContainerHighDarkHighContrast,
     surfaceContainerHighest = surfaceContainerHighestDarkHighContrast,
 )
+
+/**
+ * M3 Expressive 圆角刻度。
+ * 比经典 M3 多出 largeIncreased / extraLargeIncreased / extraExtraLarge 三档（20 / 32 / 48dp）：
+ * Expressive 组件（工具栏、FAB 菜单、底部面板、按钮组…）默认取这三档，容器越大圆角越明显。
+ * 本项目此前完全没定制过 Shapes，这里直接把整套刻度按 Expressive 规范钉死，避免各组件回落到经典刻度。
+ */
+private val ExpressiveShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    largeIncreased = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+    extraLargeIncreased = RoundedCornerShape(32.dp),
+    extraExtraLarge = RoundedCornerShape(48.dp)
+)
+
+/**
+ * Expressive 动效方案（弹簧物理：位移/尺寸用 spatial，透明度/颜色用 effects）。
+ * 低端机掉帧或想更克制时，换成 MotionScheme.standard() 即可，这是全局唯一开关。
+ */
+private val ExpressiveMotion = MotionScheme.expressive()
+
 @Composable
 fun ComposeEmptyActivityTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -290,8 +318,14 @@ fun ComposeEmptyActivityTheme(
         else -> lightScheme
     }
 
-    MaterialTheme(
+    // Material 3 Expressive 主题入口：一次性注入 colorScheme / motionScheme / shapes / typography，
+    // 并置 LocalUsingExpressiveTheme=true —— 所有 M3 组件据此切换到 Expressive 形态
+    // （尺寸、圆角、形变、弹簧动效），无需逐个组件改造。
+    // 颜色部分完全沿用原有逻辑（动态取色 / 种子色 / 深浅色 / 对比度方案），Expressive 不改变颜色角色。
+    MaterialExpressiveTheme(
         colorScheme = colorScheme,
+        motionScheme = ExpressiveMotion,
+        shapes = ExpressiveShapes,
         typography = Typography,
         content = content
     )
