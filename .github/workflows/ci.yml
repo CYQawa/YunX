@@ -23,9 +23,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 显式安装 Android SDK（compileSdk=36 / build-tools），避免依赖 runner 预装版本或 AGP 现场下载
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
@@ -40,14 +41,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 完整构建 debug APK（验证编译链路 + 产出可安装包）
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
-      # 上传 debug APK 产物（PR 评论 / Actions 页面可下载）
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
