@@ -19,6 +19,9 @@
 package com.yunx.app.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -147,6 +150,19 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+
+/**
+ * 容器变换的共享 key：源（设置页那一行）与目标（叠加页）必须用同一个 key，形变才会发生。
+ * 两处都在本文件里构造（源侧修饰符见 MainScreen 里 themeRowModifier 等，目标侧见 OverlayPage 的调用处）。
+ */
+internal const val OVERLAY_KEY_ABOUT = "overlay-about"
+internal const val OVERLAY_KEY_SUPPORT = "overlay-support"
+internal const val OVERLAY_KEY_THEME = "overlay-theme"
+
+/** 收藏页从顶栏图标进入，没有"被点的那一项"，不做共享元素形变（普通淡入即可） */
+internal const val OVERLAY_KEY_BOOKMARKS = "overlay-bookmarks"
 
 /**
  * 主页框架：
@@ -155,7 +171,11 @@ import com.yunx.app.data.network.HttpClients
  * - 通过 SaveableStateHolder 保存各页面状态，切换 Tab 再切回来不会重置；
  * - 夸克登录页全屏覆盖展示。
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalSharedTransitionApi::class
+)
 @Composable
 fun MainScreen() {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Resolve) }
@@ -582,51 +602,18 @@ fun MainScreen() {
         return
     }
 
-    // 关于云析 / 支持开发 / 主题与外观 / 收藏：整屏替换当前内容（与上面登录页同一模式）。
-    // ★ 为什么不用"叠加在 Tab 内容之上"：实测叠加方式下，这些页面的 Card 底色会整片画不出来
-    //   （内容还在、底色没了，分界线随滚动/折叠状态变化；换成写死的颜色也一样不画），
-    //   而登录页这种"整屏替换"从来没出过这个问题 —— 差别就在于叠加时下层 Tab 内容仍被组合/绘制。
-    if (showAbout) {
-        OverlayPage {
-            AboutScreen(
-                onBack = { showAbout = false },
-                onPreviewOnboarding = {
-                    context.getSharedPreferences("yunx_prefs", android.content.Context.MODE_PRIVATE)
-                        .edit()
-                        .putBoolean("onboarding_shown", false)
-                        .apply()
-                    showAbout = false
-                    showOnboarding = true
-                }
-            )
-        }
-        return
+    // 当前叠加页路由（null = 主界面）：容器变换用它当"源/目标"的共享 key
+    val overlayRoute = when {
+        showAbout -> OVERLAY_KEY_ABOUT
+        showSupport -> OVERLAY_KEY_SUPPORT
+        showTheme -> OVERLAY_KEY_THEME
+        showBookmarks -> OVERLAY_KEY_BOOKMARKS
+        else -> null
     }
-    if (showSupport) {
-        OverlayPage {
-            SupportScreen(onBack = { showSupport = false })
-        }
-        return
-    }
-    if (showTheme) {
-        OverlayPage {
-            ThemeScreen(onBack = { showTheme = false })
-        }
-        return
-    }
-    if (showBookmarks) {
-        OverlayPage {
-            BookmarkScreen(
-                viewModel = bookmarkViewModel,
-                onBack = { showBookmarks = false },
-                onResolve = { link, pwd ->
-                    showBookmarks = false
-                    currentTab = MainTab.Resolve
-                    resolveViewModel.startResolve(link, pwd)
-                }
-            )
-        }
-        return
+    // 正在展示的叠加页路由：打开时更新，关闭时**保留**（退出动画要用它渲染那个页面）
+    var shownRoute by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(overlayRoute) {
+        if (overlayRoute != null) shownRoute = overlayRoute
     }
 
     // 折叠标题状态提升到本层：跨页面共享，页面切换时折叠/展开状态保持不变
@@ -646,175 +633,266 @@ fun MainScreen() {
     // 全局 Snackbar 宿主（Material3，替换原 Toast 提示）
     val snackbarHostState = rememberGlobalSnackbarHostState()
 
-    // 主框架与全屏覆盖层（关于页）放在同一 Box：覆盖层带过渡动画
-    Box(modifier = Modifier.fillMaxSize()) {
-    // 顶部可折叠标题（竖屏 / 横屏共用）：Expressive 的「中号柔性顶栏」
-    val topBarContent: @Composable () -> Unit = {
-        // ★ 标题不要写死 style/fontWeight：柔性顶栏内部用 ProvideContentColorTextStyle 注入样式，
-        //   展开时取 headlineMedium、收起时取 titleLarge，并在这两档之间做字号形变；
-        //   这两个 token 都解析到 MaterialTheme.typography（即本项目 Type.kt 的 22sp / 18sp SemiBold），
-        //   自己再传 style 会覆盖注入值，柔性形变直接失效。
-        MediumFlexibleTopAppBar(
-            title = {
-                Text(text = currentTab.title)
-            },
-            actions = {
-                // 解析页标题右上角：收藏网盘链接入口
-                if (currentTab == MainTab.Resolve) {
-                    IconButton(onClick = { showBookmarks = true }) {
-                        Icon(Icons.Outlined.Bookmarks, contentDescription = "收藏网盘链接")
-                    }
-                }
-            },
-            scrollBehavior = scrollBehavior,
-            // 柔性顶栏没有专用的 largeTopAppBarColors，用通用 topAppBarColors（同为 TopAppBarColors 类型）
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                scrolledContainerColor = MaterialTheme.colorScheme.surface
-            )
-        )
-    }
-    // ★ Material 3 Expressive 动效规格：MaterialTheme.motionScheme 是 @Composable 属性，只能在 composable 作用域读取；
-    //   而 AnimatedContent 的 transitionSpec 是普通 lambda（非 @Composable），所以必须在这里先取好、再捕获进 lambda。
-    //   （P4 全项目替换 tween 时遵循同一规则：规格取在 composable 里，transitionSpec / 回调里只用捕获值）
-    val motionScheme = MaterialTheme.motionScheme
-    val tabSlideSpec = motionScheme.defaultSpatialSpec<IntOffset>()
-    val tabFadeSpec = motionScheme.defaultEffectsSpec<Float>()
-    // Tab 内容区（竖屏 / 横屏共用）：每个页面独立保存状态，切换 Tab 再切回来不丢失；带 Material3 过渡动画（按 Tab 顺序决定方向）
-    val tabContent: @Composable () -> Unit = {
-        AnimatedContent(
-            targetState = currentTab,
-            transitionSpec = {
-                // 根据 Tab 顺序决定滑动方向：向右切（新Tab在右边）→ 新页从右滑入；向左切反向
-                val forward = targetState.ordinal > initialState.ordinal
-                // 位移/尺寸走 spatial 弹簧，透明度/颜色走 effects 弹簧（替代原来的 tween(220)/tween(160)）
-                if (forward) {
-                    (fadeIn(tabFadeSpec) + slideInHorizontally(tabSlideSpec) { it / 4 })
-                        .togetherWith(fadeOut(tabFadeSpec) + slideOutHorizontally(tabSlideSpec) { -it / 4 })
-                } else {
-                    (fadeIn(tabFadeSpec) + slideInHorizontally(tabSlideSpec) { -it / 4 })
-                        .togetherWith(fadeOut(tabFadeSpec) + slideOutHorizontally(tabSlideSpec) { it / 4 })
-                }
-            },
-            label = "mainTab"
-        ) { tab ->
-            saveableStateHolder.SaveableStateProvider(tab) {
-                when (tab) {
-                    MainTab.Resolve -> ResolveScreen(
-                        scrollBehavior,
-                        resolveViewModel,
-                        quarkCloudViewModel,
-                        xunleiCloudViewModel,
-                        baiduCloudViewModel,
-                        c139CloudViewModel,
-                        ucCloudViewModel,
-                        pan123CloudViewModel
-                    )
-                    MainTab.Drive -> DriveScreen(
-                        scrollBehavior = scrollBehavior,
-                        quarkAccount = quarkAccount,
-                        ucAccount = ucAccount,
-                        xunleiAccount = xunleiAccount,
-                        baiduAccount = baiduAccount,
-                        c139Account = c139Account,
-                        pan123Account = pan123Account,
-                        quarkCloudViewModel = quarkCloudViewModel,
-                        ucCloudViewModel = ucCloudViewModel,
-                        xunleiCloudViewModel = xunleiCloudViewModel,
-                        baiduCloudViewModel = baiduCloudViewModel,
-                        c139CloudViewModel = c139CloudViewModel,
-                        pan123CloudViewModel = pan123CloudViewModel,
-                        driveQuotaViewModel = driveQuotaViewModel,
-                        onQuarkLogin = { showQuarkLogin = true },
-                        onQuarkLogout = { viewModel.logout() },
-                        onDownloadStarted = { currentTab = MainTab.Download },
-                        onUCLogin = { showUCLogin = true },
-                        onUCLogout = { ucViewModel.logout() },
-                        onXunleiLogin = { showXunleiLogin = true },
-                        onXunleiLogout = { xunleiViewModel.logout() },
-                        onBaiduLogin = { showBaiduLogin = true },
-                        onBaiduLogout = { baiduViewModel.logout() },
-                        onC139Login = { showC139Login = true },
-                        onC139Logout = { c139ViewModel.logout() },
-                        onPan123Login = { showPan123Login = true },
-                        onPan123Logout = { pan123ViewModel.logout() }
-                    )
-                    MainTab.Download -> DownloadScreen(scrollBehavior, downloadViewModel)
-                    MainTab.Settings -> SettingsScreen(
-                        scrollBehavior = scrollBehavior,
-                        onThemeClick = { showTheme = true },
-                        onAboutClick = { showAbout = true },
-                        onSupportClick = { showSupport = true },
-                        backupManager = backupManager,
-                        onDownloadUpdateApk = { url, name ->
-                            scope.launch {
-                                downloadManager.enqueue(url = url, fileName = name)
-                                currentTab = MainTab.Download
-                            }
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    if (isLandscape) {
-        // 横屏：左侧侧边导航栏（NavigationRail）+ 右侧顶栏 & 内容
+    // ★ 容器变换（Container Transform）：源 = 主界面（设置页里被点的那一行），目标 = 叠加页。
+    //   两者在同一个 SharedTransitionLayout 里、用同一个 key 的 sharedBounds 做形变：
+    //   被点的卡片自己长成整页，行内内容淡出、页面内容在容器内淡入。
+    //   ★ 主界面这个"源"用 AnimatedVisibility 承载：叠加页打开时它会被真正移出组合，
+    //     而不是像以前那样常驻叠在下面 —— 那正是"卡片底色整片画不出来"的根因（见 OverlayPage 注释）。
+    SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+        // 底色放最外面：过渡期间主界面淡出、叠加页容器还在长大时，露出来的是页面底色而不是系统窗口的白色
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // 竖屏由 Scaffold 提供主题背景；横屏手动布局需显式设置，否则露出窗口默认白色
-                .background(MaterialTheme.colorScheme.background)
+                .background(MaterialTheme.colorScheme.surface)
         ) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                MainNavigationRail(
-                    currentTab = currentTab,
-                    onTabSelected = { currentTab = it }
+            AnimatedVisibility(
+                visible = overlayRoute == null,
+                enter = fadeIn(effectsDefault()),
+                exit = fadeOut(effectsFast())
+            ) {
+                // 源侧共享元素修饰符：设置页那三行各自对应一个 key（见 SettingsScreen）。
+                // ★ rememberSharedContentState 是 @Composable，必须在 composable 作用域里直接调用，
+                //   不能包在普通 lambda 里延迟构造 —— 所以这里一次性建好三个传下去。
+                val sourceScope = this
+                val themeRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_THEME),
+                    animatedVisibilityScope = sourceScope
                 )
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                ) {
-                    topBarContent()
+                val aboutRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_ABOUT),
+                    animatedVisibilityScope = sourceScope
+                )
+                val supportRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_SUPPORT),
+                    animatedVisibilityScope = sourceScope
+                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                // 顶部可折叠标题（竖屏 / 横屏共用）：Expressive 的「中号柔性顶栏」
+                val topBarContent: @Composable () -> Unit = {
+                    // ★ 标题不要写死 style/fontWeight：柔性顶栏内部用 ProvideContentColorTextStyle 注入样式，
+                    //   展开时取 headlineMedium、收起时取 titleLarge，并在这两档之间做字号形变；
+                    //   这两个 token 都解析到 MaterialTheme.typography（即本项目 Type.kt 的 22sp / 18sp SemiBold），
+                    //   自己再传 style 会覆盖注入值，柔性形变直接失效。
+                    MediumFlexibleTopAppBar(
+                        title = {
+                            Text(text = currentTab.title)
+                        },
+                        actions = {
+                            // 解析页标题右上角：收藏网盘链接入口
+                            if (currentTab == MainTab.Resolve) {
+                                IconButton(onClick = { showBookmarks = true }) {
+                                    Icon(Icons.Outlined.Bookmarks, contentDescription = "收藏网盘链接")
+                                }
+                            }
+                        },
+                        scrollBehavior = scrollBehavior,
+                        // 柔性顶栏没有专用的 largeTopAppBarColors，用通用 topAppBarColors（同为 TopAppBarColors 类型）
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            scrolledContainerColor = MaterialTheme.colorScheme.surface
+                        )
+                    )
+                }
+                // ★ Material 3 Expressive 动效规格：MaterialTheme.motionScheme 是 @Composable 属性，只能在 composable 作用域读取；
+                //   而 AnimatedContent 的 transitionSpec 是普通 lambda（非 @Composable），所以必须在这里先取好、再捕获进 lambda。
+                //   （P4 全项目替换 tween 时遵循同一规则：规格取在 composable 里，transitionSpec / 回调里只用捕获值）
+                val motionScheme = MaterialTheme.motionScheme
+                val tabSlideSpec = motionScheme.defaultSpatialSpec<IntOffset>()
+                val tabFadeSpec = motionScheme.defaultEffectsSpec<Float>()
+                // Tab 内容区（竖屏 / 横屏共用）：每个页面独立保存状态，切换 Tab 再切回来不丢失；带 Material3 过渡动画（按 Tab 顺序决定方向）
+                val tabContent: @Composable () -> Unit = {
+                    AnimatedContent(
+                        targetState = currentTab,
+                        transitionSpec = {
+                            // 根据 Tab 顺序决定滑动方向：向右切（新Tab在右边）→ 新页从右滑入；向左切反向
+                            val forward = targetState.ordinal > initialState.ordinal
+                            // 位移/尺寸走 spatial 弹簧，透明度/颜色走 effects 弹簧（替代原来的 tween(220)/tween(160)）
+                            if (forward) {
+                                (fadeIn(tabFadeSpec) + slideInHorizontally(tabSlideSpec) { it / 4 })
+                                    .togetherWith(fadeOut(tabFadeSpec) + slideOutHorizontally(tabSlideSpec) { -it / 4 })
+                            } else {
+                                (fadeIn(tabFadeSpec) + slideInHorizontally(tabSlideSpec) { -it / 4 })
+                                    .togetherWith(fadeOut(tabFadeSpec) + slideOutHorizontally(tabSlideSpec) { it / 4 })
+                            }
+                        },
+                        label = "mainTab"
+                    ) { tab ->
+                        saveableStateHolder.SaveableStateProvider(tab) {
+                            when (tab) {
+                                MainTab.Resolve -> ResolveScreen(
+                                    scrollBehavior,
+                                    resolveViewModel,
+                                    quarkCloudViewModel,
+                                    xunleiCloudViewModel,
+                                    baiduCloudViewModel,
+                                    c139CloudViewModel,
+                                    ucCloudViewModel,
+                                    pan123CloudViewModel
+                                )
+                                MainTab.Drive -> DriveScreen(
+                                    scrollBehavior = scrollBehavior,
+                                    quarkAccount = quarkAccount,
+                                    ucAccount = ucAccount,
+                                    xunleiAccount = xunleiAccount,
+                                    baiduAccount = baiduAccount,
+                                    c139Account = c139Account,
+                                    pan123Account = pan123Account,
+                                    quarkCloudViewModel = quarkCloudViewModel,
+                                    ucCloudViewModel = ucCloudViewModel,
+                                    xunleiCloudViewModel = xunleiCloudViewModel,
+                                    baiduCloudViewModel = baiduCloudViewModel,
+                                    c139CloudViewModel = c139CloudViewModel,
+                                    pan123CloudViewModel = pan123CloudViewModel,
+                                    driveQuotaViewModel = driveQuotaViewModel,
+                                    onQuarkLogin = { showQuarkLogin = true },
+                                    onQuarkLogout = { viewModel.logout() },
+                                    onDownloadStarted = { currentTab = MainTab.Download },
+                                    onUCLogin = { showUCLogin = true },
+                                    onUCLogout = { ucViewModel.logout() },
+                                    onXunleiLogin = { showXunleiLogin = true },
+                                    onXunleiLogout = { xunleiViewModel.logout() },
+                                    onBaiduLogin = { showBaiduLogin = true },
+                                    onBaiduLogout = { baiduViewModel.logout() },
+                                    onC139Login = { showC139Login = true },
+                                    onC139Logout = { c139ViewModel.logout() },
+                                    onPan123Login = { showPan123Login = true },
+                                    onPan123Logout = { pan123ViewModel.logout() }
+                                )
+                                MainTab.Download -> DownloadScreen(scrollBehavior, downloadViewModel)
+                                MainTab.Settings -> SettingsScreen(
+                                    scrollBehavior = scrollBehavior,
+                                    themeRowModifier = themeRowModifier,
+                                    aboutRowModifier = aboutRowModifier,
+                                    supportRowModifier = supportRowModifier,
+                                    onThemeClick = { showTheme = true },
+                                    onAboutClick = { showAbout = true },
+                                    onSupportClick = { showSupport = true },
+                                    backupManager = backupManager,
+                                    onDownloadUpdateApk = { url, name ->
+                                        scope.launch {
+                                            downloadManager.enqueue(url = url, fileName = name)
+                                            currentTab = MainTab.Download
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (isLandscape) {
+                    // 横屏：左侧侧边导航栏（NavigationRail）+ 右侧顶栏 & 内容
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
+                            .fillMaxSize()
+                            // 竖屏由 Scaffold 提供主题背景；横屏手动布局需显式设置，否则露出窗口默认白色
+                            .background(MaterialTheme.colorScheme.background)
                     ) {
-                        tabContent()
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            MainNavigationRail(
+                                currentTab = currentTab,
+                                onTabSelected = { currentTab = it }
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxSize()
+                            ) {
+                                topBarContent()
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                ) {
+                                    tabContent()
+                                }
+                            }
+                        }
+                        // 全局 Snackbar（横屏无底部栏，悬浮底部居中）
+                        SnackbarHost(
+                            hostState = snackbarHostState,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
+                    }
+                } else {
+                    // 竖屏：Scaffold + 底部导航栏
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        topBar = { topBarContent() },
+                        bottomBar = {
+                            MainBottomBar(
+                                currentTab = currentTab,
+                                onTabSelected = { currentTab = it }
+                            )
+                        }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            tabContent()
+                        }
+                    }
+                }
+
+                }
+            }
+
+            // 目标：叠加页（整屏 + 不透明底 + sharedBounds：从被点那一项长出来）
+            AnimatedVisibility(
+                visible = overlayRoute != null,
+                enter = fadeIn(effectsDefault()),
+                // ★ 退出时长必须≥ sharedBounds 形变的时长（默认 bounds 弹簧约 300ms）：
+                //   AnimatedVisibility 的退出一结束就会把内容移出组合，页面提前消失 → 回收形变被截断，
+                //   观感就是"退出一闪而过、像没做动画"。所以这里刻意用 300ms 的 tween 而不是 effectsFast(≈64ms)。
+                exit = fadeOut(tween(durationMillis = 300))
+            ) {
+                val targetScope = this
+                // ★ 读"正在展示的路由"而不是 overlayRoute：后者在点返回的瞬间就变 null 了，
+                //   退出动画会因此没有内容可放（整段退出效果消失）。
+                val route = shownRoute
+                if (route != null) {
+                    OverlayPage(
+                        modifier = if (route == OVERLAY_KEY_BOOKMARKS) {
+                            // 收藏页是从顶栏图标进来的，没有"被点的卡片"，不做形变
+                            Modifier
+                        } else {
+                            Modifier.sharedBounds(
+                                rememberSharedContentState(route),
+                                animatedVisibilityScope = targetScope
+                            )
+                        }
+                    ) {
+                        when (route) {
+                            OVERLAY_KEY_ABOUT -> AboutScreen(
+                                onBack = { showAbout = false },
+                                onPreviewOnboarding = {
+                                    context.getSharedPreferences("yunx_prefs", android.content.Context.MODE_PRIVATE)
+                                        .edit()
+                                        .putBoolean("onboarding_shown", false)
+                                        .apply()
+                                    showAbout = false
+                                    showOnboarding = true
+                                }
+                            )
+                            OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
+                            OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
+                            else -> BookmarkScreen(
+                                viewModel = bookmarkViewModel,
+                                onBack = { showBookmarks = false },
+                                onResolve = { link, pwd ->
+                                    showBookmarks = false
+                                    currentTab = MainTab.Resolve
+                                    resolveViewModel.startResolve(link, pwd)
+                                }
+                            )
+                        }
                     }
                 }
             }
-            // 全局 Snackbar（横屏无底部栏，悬浮底部居中）
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
         }
-    } else {
-        // 竖屏：Scaffold + 底部导航栏
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            topBar = { topBarContent() },
-            bottomBar = {
-                MainBottomBar(
-                    currentTab = currentTab,
-                    onTabSelected = { currentTab = it }
-                )
-            }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                tabContent()
-            }
-        }
-    }
-
     }
 
     // 首次下载引导：加入「忽略电池优化」白名单（锁屏保持下载生效的前提）
@@ -898,20 +976,27 @@ fun MainScreen() {
 
 
 /**
- * 整屏页面容器（关于云析 / 支持开发 / 主题与外观 / 收藏），与登录页同样以「整屏替换」方式呈现。
+ * 叠加页容器（关于云析 / 支持开发 / 主题与外观 / 收藏）：整屏 + 不透明底色 + 可选的 sharedBounds 形变。
  *
- * ★ 为什么不做成"叠加在 Tab 内容之上"（曾经那样，且试过各种过渡动画）：
- *   叠加时这些页面里的 Card 底色会整片画不出来 —— 文字、图标、描边、分隔线都在，就是**底色没了**
- *   （写死成亮绿也一样不画，所以与颜色无关），分界线还随滚动/折叠状态移动。
- *   而登录页这种「整屏替换」从来没出现过这个问题，两者唯一的差别就是：叠加时下层 Tab 内容仍在组合与绘制。
- *   所以这里统一改成整屏替换：不做裁剪、不做位移、不做缩放、不做淡入，也不再有下层内容。
+ * ★ 它与主界面的关系是「互斥」而不是「叠加」：两者是同一个 SharedTransitionLayout 下两个
+ *   `AnimatedVisibility`，叠加页打开时**主界面会被移出组合**。这一点是硬要求，不是洁癖——
+ *   实测（多轮截图 + E 级日志）证明：只要主界面常驻叠在下面，这些页面里的 `Card` 底色就会整片
+ *   画不出来（文字/图标/描边/分隔线都在，就是底色没了；把底色写死成亮绿也一样不画 ⇒ 与颜色无关），
+ *   而且缺失区域的分界线会随滚动/折叠状态移动。改成互斥（源被移除）后完全正常。
+ *   过渡期间两者会短暂共存（形变需要源的边界），这是可接受的：动画一结束源就被释放。
  *
  * ★ 底色仍要自己铺：M3E(material3 1.5.0-alpha18) 的 Scaffold 已不带底色
  *   （`ScaffoldDefaults` 只剩 `getContentWindowInsets`），页面不铺底就是透的。
  */
 @Composable
-private fun OverlayPage(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+private fun OverlayPage(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    // sharedBounds 加在"底色之外"：形变中的容器自带不透明底色，过渡期间不会透出下层的窗口底色
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(modifier)
+            .background(MaterialTheme.colorScheme.surface)
+    ) {
         content()
     }
 }

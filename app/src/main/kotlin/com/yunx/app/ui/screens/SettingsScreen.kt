@@ -153,6 +153,13 @@ private fun openNotificationSettings(context: Context) {
 @Composable
 fun SettingsScreen(
     scrollBehavior: TopAppBarScrollBehavior,
+    /**
+     * 容器变换（Container Transform）源侧修饰符：由 MainScreen 在 SharedTransitionLayout 作用域内构造
+     * （设置页自己拿不到那个作用域），分别挂到「主题与外观 / 关于云析 / 支持开发」三行上。
+     */
+    themeRowModifier: Modifier = Modifier,
+    aboutRowModifier: Modifier = Modifier,
+    supportRowModifier: Modifier = Modifier,
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
@@ -408,6 +415,8 @@ fun SettingsScreen(
             icon = Icons.Outlined.Palette,
             title = "主题与外观",
             description = "主题色、动态色彩与深色模式",
+            // 容器变换的源：点击后这一行会长成「主题与外观」整页（key 需与 MainScreen 一致）
+            modifier = themeRowModifier,
             onClick = onThemeClick
         )
 
@@ -472,6 +481,7 @@ fun SettingsScreen(
             shape = listGroupShape(ListGroupPos.FIRST),
             title = "关于云析",
             description = "版本信息、支持平台与技术说明",
+            modifier = aboutRowModifier,
             onClick = onAboutClick,
             onLongClick = { showDevMenu = true } // 长按打开隐藏开发调试菜单
         )
@@ -482,6 +492,7 @@ fun SettingsScreen(
             shape = listGroupShape(ListGroupPos.LAST),
             title = "支持开发",
             description = "微信扫码捐赠，支持项目持续维护",
+            modifier = supportRowModifier,
             onClick = onSupportClick
         )
     }
@@ -1162,11 +1173,13 @@ private fun SettingsItem(
     /** 自定义尾部内容（如「恢复默认」操作）；null 时显示默认 ChevronRight */
     trailing: @Composable (() -> Unit)? = null,
     /** 列表组分段圆角：同一分组内的行传 listGroupShape(...)；默认四角整圆（单行分组） */
-    shape: Shape = MaterialTheme.shapes.large
+    shape: Shape = MaterialTheme.shapes.large,
+    /** 容器变换源侧修饰符（sharedBounds）；普通行不传 */
+    modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .combinedClickable(
