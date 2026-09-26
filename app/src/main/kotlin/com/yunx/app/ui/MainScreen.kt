@@ -20,6 +20,7 @@ package com.yunx.app.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -52,6 +53,7 @@ import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarDefaults
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -150,7 +152,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yunx.app.data.network.HttpClients
-import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
@@ -775,13 +776,8 @@ fun MainScreen() {
         }
     }
 
-    // 关于云析：叠加覆盖层（淡入 + 轻微缩放过渡）
-    AnimatedVisibility(
-        visible = showAbout,
-        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
-        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
-        modifier = Modifier.fillMaxSize()
-    ) {
+    // 关于云析：叠加覆盖层
+    OverlayScreen(visible = showAbout) {
         AboutScreen(
             onBack = { showAbout = false },
             onPreviewOnboarding = {
@@ -795,37 +791,22 @@ fun MainScreen() {
         )
     }
 
-    // 支持开发：叠加覆盖层（淡入 + 轻微缩放过渡）
-    AnimatedVisibility(
-        visible = showSupport,
-        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
-        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
-        modifier = Modifier.fillMaxSize()
-    ) {
+    // 支持开发：叠加覆盖层
+    OverlayScreen(visible = showSupport) {
         SupportScreen(
             onBack = { showSupport = false }
         )
     }
 
-    // 主题与外观：叠加覆盖层（淡入 + 轻微缩放过渡）
-    AnimatedVisibility(
-        visible = showTheme,
-        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
-        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
-        modifier = Modifier.fillMaxSize()
-    ) {
+    // 主题与外观：叠加覆盖层
+    OverlayScreen(visible = showTheme) {
         ThemeScreen(
             onBack = { showTheme = false }
         )
     }
 
-    // 收藏网盘链接：叠加覆盖层（淡入 + 轻微缩放过渡）
-    AnimatedVisibility(
-        visible = showBookmarks,
-        enter = fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.96f),
-        exit = fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.96f),
-        modifier = Modifier.fillMaxSize()
-    ) {
+    // 收藏网盘链接：叠加覆盖层
+    OverlayScreen(visible = showBookmarks) {
         BookmarkScreen(
             viewModel = bookmarkViewModel,
             onBack = { showBookmarks = false },
@@ -914,6 +895,43 @@ fun MainScreen() {
                 }
             )
         }
+    }
+}
+
+/**
+ * 叠加页容器（关于云析 / 支持开发 / 主题与外观 / 收藏）。
+ *
+ * ★ 为什么底色要单独一层、且打开时不做动画：叠加层下面是**仍在组合中**的 Tab 内容
+ *   （登录页那种 `return` 整屏替换的不受影响），而两页的卡片颜色几乎一样
+ *   （surface 与 surfaceContainer 只差十几个色阶，两页都是「留白的卡片列表」），
+ *   只要两页内容同时可见 —— 不管用淡入还是整页滑动 —— 看起来都像「新页面的卡片是透明的 / 在闪」。
+ *   所以：底色先**立刻**铺满把下层遮住（[EnterTransition.None]），内容再从底色上淡入，全程没有两页叠影。
+ *
+ * ★ 底色还必须由叠加页自己铺：M3E(material3 1.5.0-alpha18) 的 Scaffold 已经不带底色
+ *   （`ScaffoldDefaults` 只剩 `getContentWindowInsets`），页面不铺底就是透的。
+ *   Surface 用的就是页面底色（与旧版 Scaffold 默认一致）。
+ */
+@Composable
+private fun OverlayScreen(visible: Boolean, content: @Composable () -> Unit) {
+    // 底色层：立刻不透明，退出时与内容一起淡出（避免下层内容突兀地瞬间出现）
+    AnimatedVisibility(
+        visible = visible,
+        enter = EnterTransition.None,
+        exit = fadeOut(effectsFast()),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {}
+    }
+    // 内容层：只做轻微缩放，★ 不做淡入 ★
+    //   淡入 = 整页内容从 alpha 0 起来，那一瞬卡片底色和标题文字都"消失"（看到的正是页面底色 #FBF8FF），
+    //   观感就是「闪一下」。缩放则内容始终完整可见，配合上面已铺好的不透明底色，全程既不透明也不缺内容。
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(animationSpec = spatialDefault(), initialScale = 0.97f),
+        exit = scaleOut(animationSpec = spatialFast(), targetScale = 0.97f),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        content()
     }
 }
 
