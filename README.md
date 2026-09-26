@@ -17,6 +17,8 @@
 
 [下载最新版](https://github.com/CYQawa/YunX/releases/latest) · [功能](#功能) · [使用](#使用) · [构建](#构建) · [常见问题](#常见问题)
 
+[![QQ交流群](https://img.shields.io/badge/QQ%E7%BE%A4-635207650-12B7F5?style=flat-square&logo=qq&logoColor=white)](http://qm.qq.com/cgi-bin/qm/qr?...&group_code=635207650)
+
 </div>
 
 ---
@@ -91,7 +93,7 @@ git clone https://github.com/CYQawa/YunX.git
 <details>
 <summary><b>百度网盘下载/转存不了？</b></summary>
 
-可能是你的账号被风控了
+你的账号被风控了，见issue #9
 </details>
 
 <details>
