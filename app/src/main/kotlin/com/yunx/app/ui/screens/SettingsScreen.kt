@@ -106,6 +106,7 @@ import com.yunx.app.data.download.DownloadSaver
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.ListGroupPos
 import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.util.LogExporter
@@ -292,7 +293,7 @@ fun SettingsScreen(
             onClick = { showThreadsDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 下载保存目录：系统文件夹选择器（SAF，适配各 Android 版本分区存储）；
         // 已自定义时卡片右侧内嵌「恢复默认」操作（不单独外露按钮）
@@ -325,7 +326,7 @@ fun SettingsScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 网络与下载策略
         SettingsItem(
@@ -336,7 +337,7 @@ fun SettingsScreen(
             onClick = { showConcurrencyDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         SettingsItem(
             icon = Icons.Outlined.Speed,
@@ -346,7 +347,7 @@ fun SettingsScreen(
             onClick = { showSpeedDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         SettingsItem(
             icon = Icons.Outlined.Refresh,
@@ -356,7 +357,7 @@ fun SettingsScreen(
             onClick = { showRetryDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 用户体验与系统适配：锁屏保持下载 / 通知栏进度样式
         SettingsItem(
@@ -377,7 +378,7 @@ fun SettingsScreen(
             trailing = { Switch(checked = keepLocked, onCheckedChange = null) }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         SettingsItem(
             icon = Icons.Outlined.Notifications,
@@ -444,7 +445,7 @@ fun SettingsScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.Article,
             shape = listGroupShape(ListGroupPos.LAST),
@@ -464,7 +465,7 @@ fun SettingsScreen(
             onClick = { showExportAuthDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.Restore,
             shape = listGroupShape(ListGroupPos.LAST),
@@ -486,7 +487,7 @@ fun SettingsScreen(
             onLongClick = { showDevMenu = true } // 长按打开隐藏开发调试菜单
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.VolunteerActivism,
             shape = listGroupShape(ListGroupPos.LAST),

@@ -103,6 +103,7 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
@@ -419,7 +420,7 @@ internal fun QuarkMoveStep(
                             .fillMaxWidth()
                             .heightIn(max = 260.dp),
                         // 目录列表同样拼成一组
-                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                        verticalArrangement = Arrangement.spacedBy(ListGroupGap)
                     ) {
                         itemsIndexed(dirs, key = { _, d -> d.fid }) { index, dir ->
                             ShareFileRow(

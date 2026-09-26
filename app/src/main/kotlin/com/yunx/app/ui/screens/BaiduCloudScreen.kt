@@ -105,6 +105,7 @@ import com.yunx.app.ui.viewmodel.BaiduCloudUiState
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
@@ -258,7 +259,7 @@ fun BaiduCloudScreen(
                                 bottom = if (viewModel.multiSelectMode) 96.dp else 16.dp
                             ),
                             // 列表组：各项首尾相接（只留 1dp 发丝缝区分行），行圆角按首/中/末分段给
-                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                            verticalArrangement = Arrangement.spacedBy(ListGroupGap)
                         ) {
                             item {
                                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
@@ -666,7 +667,7 @@ Column(
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
                             // 目录列表同样拼成一组
-                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                            verticalArrangement = Arrangement.spacedBy(ListGroupGap)
                         ) {
                             itemsIndexed(dirs, key = { _, d -> d.fid }) { index, dir ->
                                 ShareFileRow(

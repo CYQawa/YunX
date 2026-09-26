@@ -297,6 +297,12 @@ internal enum class ListGroupPos { FIRST, MIDDLE, LAST, SINGLE }
 private val ListGroupInnerCorner = 2.dp
 
 /**
+ * 列表组内相邻两项之间的间距（发丝缝）。
+ * 太小（1dp）会连成一片、看不出行与行的分界；太大就不像"一组"了 —— 想调组内间距只改这一处。
+ */
+internal val ListGroupGap = 3.dp
+
+/**
  * 列表组分段圆角：让一组首尾相接的列表项看起来是「一整块」。
  *
  * 规则：首项只圆上两角、末项只圆下两角（都用 16dp 外圈圆角），中间项只留 2dp 内圆角。

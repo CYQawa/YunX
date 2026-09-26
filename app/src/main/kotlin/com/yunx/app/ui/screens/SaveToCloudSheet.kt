@@ -34,7 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.SaveAlt
@@ -69,7 +69,9 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.listGroupShape
 
 /**
  * 转存到网盘弹窗：浏览夸克个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -220,11 +222,13 @@ fun SaveToCloudSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 280.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(ListGroupGap)
                         ) {
-                            items(dirs, key = { it.fid }) { dir ->
+                            // 目录列表拼成一组：首/末项大圆角、中间项小圆角
+                            itemsIndexed(dirs, key = { _, d -> d.fid }) { index, dir ->
                                 ShareFileRow(
                                     file = dir,
+                                    shape = listGroupShape(index, dirs.size),
                                     onClick = { cloudViewModel.openFolder(dir) }
                                 )
                             }
