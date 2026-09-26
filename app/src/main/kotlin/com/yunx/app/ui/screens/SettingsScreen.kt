@@ -88,9 +88,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -153,9 +156,10 @@ private fun openNotificationSettings(context: Context) {
 @Composable
 fun SettingsScreen(
     scrollBehavior: TopAppBarScrollBehavior,
-    onThemeClick: () -> Unit,
-    onAboutClick: () -> Unit,
-    onSupportClick: () -> Unit,
+    /** 点击时把被点卡片在 root 坐标下的矩形一并回传：MainScreen 用它做容器变换（卡片展开成整页）的起点 */
+    onThemeClick: (Rect) -> Unit,
+    onAboutClick: (Rect) -> Unit,
+    onSupportClick: (Rect) -> Unit,
     backupManager: AuthBackupManager,
     /** 用应用内置下载器下载更新 APK（URL + 文件名），由 MainScreen 注入 DownloadManager */
     onDownloadUpdateApk: (url: String, fileName: String) -> Unit,
@@ -404,11 +408,14 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         SectionLabel("外观")
+        // 下面三项点击后会展开成整页（容器变换），故各自记录自身矩形作为展开起点
+        var themeBounds by remember { mutableStateOf(Rect.Zero) }
         SettingsItem(
             icon = Icons.Outlined.Palette,
             title = "主题与外观",
             description = "主题色、动态色彩与深色模式",
-            onClick = onThemeClick
+            modifier = Modifier.onGloballyPositioned { themeBounds = it.boundsInRoot() },
+            onClick = { onThemeClick(themeBounds) }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -467,12 +474,16 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         SectionLabel("关于")
+        // 两项点击后都会展开成整页（容器变换），矩形即展开起点
+        var aboutBounds by remember { mutableStateOf(Rect.Zero) }
+        var supportBounds by remember { mutableStateOf(Rect.Zero) }
         SettingsItem(
             icon = Icons.Outlined.Info,
             shape = listGroupShape(ListGroupPos.FIRST),
             title = "关于云析",
             description = "版本信息、支持平台与技术说明",
-            onClick = onAboutClick,
+            modifier = Modifier.onGloballyPositioned { aboutBounds = it.boundsInRoot() },
+            onClick = { onAboutClick(aboutBounds) },
             onLongClick = { showDevMenu = true } // 长按打开隐藏开发调试菜单
         )
 
@@ -482,7 +493,8 @@ fun SettingsScreen(
             shape = listGroupShape(ListGroupPos.LAST),
             title = "支持开发",
             description = "微信扫码捐赠，支持项目持续维护",
-            onClick = onSupportClick
+            modifier = Modifier.onGloballyPositioned { supportBounds = it.boundsInRoot() },
+            onClick = { onSupportClick(supportBounds) }
         )
     }
 
@@ -1162,11 +1174,12 @@ private fun SettingsItem(
     /** 自定义尾部内容（如「恢复默认」操作）；null 时显示默认 ChevronRight */
     trailing: @Composable (() -> Unit)? = null,
     /** 列表组分段圆角：同一分组内的行传 listGroupShape(...)；默认四角整圆（单行分组） */
-    shape: Shape = MaterialTheme.shapes.large
+    shape: Shape = MaterialTheme.shapes.large,
+    modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .combinedClickable(

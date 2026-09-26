@@ -19,13 +19,10 @@
 package com.yunx.app.ui
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -53,7 +50,6 @@ import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarDefaults
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -70,9 +66,22 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.res.Configuration
@@ -152,7 +161,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yunx.app.data.network.HttpClients
-import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
 
@@ -180,6 +188,8 @@ fun MainScreen() {
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
+    // 容器变换的展开起点：被点那一项在 root 坐标下的矩形（打开时由点击方写入，收起动画仍用它）
+    var overlayOrigin by remember { mutableStateOf(Rect.Zero) }
     val saveableStateHolder = rememberSaveableStateHolder()
 
     val context = LocalContext.current
@@ -620,9 +630,16 @@ fun MainScreen() {
                 Text(text = currentTab.title)
             },
             actions = {
-                // 解析页标题右上角：收藏网盘链接入口
+                // 解析页标题右上角：收藏网盘链接入口（记录按钮矩形，作为容器变换的展开起点）
                 if (currentTab == MainTab.Resolve) {
-                    IconButton(onClick = { showBookmarks = true }) {
+                    var iconRect by remember { mutableStateOf(Rect.Zero) }
+                    IconButton(
+                        onClick = {
+                            overlayOrigin = iconRect
+                            showBookmarks = true
+                        },
+                        modifier = Modifier.onGloballyPositioned { iconRect = it.boundsInRoot() }
+                    ) {
                         Icon(Icons.Outlined.Bookmarks, contentDescription = "收藏网盘链接")
                     }
                 }
@@ -703,9 +720,18 @@ fun MainScreen() {
                     MainTab.Download -> DownloadScreen(scrollBehavior, downloadViewModel)
                     MainTab.Settings -> SettingsScreen(
                         scrollBehavior = scrollBehavior,
-                        onThemeClick = { showTheme = true },
-                        onAboutClick = { showAbout = true },
-                        onSupportClick = { showSupport = true },
+                        onThemeClick = { rect ->
+                            overlayOrigin = rect
+                            showTheme = true
+                        },
+                        onAboutClick = { rect ->
+                            overlayOrigin = rect
+                            showAbout = true
+                        },
+                        onSupportClick = { rect ->
+                            overlayOrigin = rect
+                            showSupport = true
+                        },
                         backupManager = backupManager,
                         onDownloadUpdateApk = { url, name ->
                             scope.launch {
@@ -777,7 +803,7 @@ fun MainScreen() {
     }
 
     // 关于云析：叠加覆盖层
-    OverlayScreen(visible = showAbout) {
+    OverlayScreen(visible = showAbout, origin = overlayOrigin) {
         AboutScreen(
             onBack = { showAbout = false },
             onPreviewOnboarding = {
@@ -792,21 +818,21 @@ fun MainScreen() {
     }
 
     // 支持开发：叠加覆盖层
-    OverlayScreen(visible = showSupport) {
+    OverlayScreen(visible = showSupport, origin = overlayOrigin) {
         SupportScreen(
             onBack = { showSupport = false }
         )
     }
 
     // 主题与外观：叠加覆盖层
-    OverlayScreen(visible = showTheme) {
+    OverlayScreen(visible = showTheme, origin = overlayOrigin) {
         ThemeScreen(
             onBack = { showTheme = false }
         )
     }
 
     // 收藏网盘链接：叠加覆盖层
-    OverlayScreen(visible = showBookmarks) {
+    OverlayScreen(visible = showBookmarks, origin = overlayOrigin) {
         BookmarkScreen(
             viewModel = bookmarkViewModel,
             onBack = { showBookmarks = false },
@@ -899,40 +925,63 @@ fun MainScreen() {
 }
 
 /**
- * 叠加页容器（关于云析 / 支持开发 / 主题与外观 / 收藏）。
+ * 叠加页容器（关于云析 / 支持开发 / 主题与外观 / 收藏），过渡用 **容器变换（Container Transform）**：
+ * 被点的那一项自己展开成整页 —— 整个动画期间只画「一块从被点项矩形长到整屏的圆角窗口」，
+ * 页面内容在这块窗口里被**逐步显露**（不是淡入、也不是缩放）。
  *
- * ★ 为什么底色要单独一层、且打开时不做动画：叠加层下面是**仍在组合中**的 Tab 内容
- *   （登录页那种 `return` 整屏替换的不受影响），而两页的卡片颜色几乎一样
- *   （surface 与 surfaceContainer 只差十几个色阶，两页都是「留白的卡片列表」），
- *   只要两页内容同时可见 —— 不管用淡入还是整页滑动 —— 看起来都像「新页面的卡片是透明的 / 在闪」。
- *   所以：底色先**立刻**铺满把下层遮住（[EnterTransition.None]），内容再从底色上淡入，全程没有两页叠影。
+ * ★ 为什么不能用淡入/缩放（前几版都栽在这）：
+ *   1) 淡入 = 内容整体从 alpha 0 起来，那一瞬卡片底色与标题文字都"消失"（看到的就是页面底色 #FBF8FF）；
+ *   2) 叠加层下面是**仍在组合中**的 Tab 内容（不像登录页那样 `return` 整屏替换），而两页都是同色的卡片列表，
+ *      只要两页内容同时可见（淡入期间 / 整页滑动期间），看起来就是「卡片透明 / 在闪」。
+ *   裁窗口方案：全程不透明、内容从不缺失，两页也永远不会同框。
  *
- * ★ 底色还必须由叠加页自己铺：M3E(material3 1.5.0-alpha18) 的 Scaffold 已经不带底色
- *   （`ScaffoldDefaults` 只剩 `getContentWindowInsets`），页面不铺底就是透的。
- *   Surface 用的就是页面底色（与旧版 Scaffold 默认一致）。
+ * ★ 底色得由叠加页自己铺：M3E(material3 1.5.0-alpha18) 的 Scaffold 已不带底色
+ *   （`ScaffoldDefaults` 只剩 `getContentWindowInsets`），页面不铺底就是透的。窗口内先铺页面底色再放内容。
+ *
+ * @param origin 被点项在 root 坐标下的矩形（`boundsInRoot()`）；[Rect.Zero] 时退化为整屏出现
  */
 @Composable
-private fun OverlayScreen(visible: Boolean, content: @Composable () -> Unit) {
-    // 底色层：立刻不透明，退出时与内容一起淡出（避免下层内容突兀地瞬间出现）
-    AnimatedVisibility(
-        visible = visible,
-        enter = EnterTransition.None,
-        exit = fadeOut(effectsFast()),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {}
+private fun OverlayScreen(
+    visible: Boolean,
+    origin: Rect,
+    content: @Composable () -> Unit
+) {
+    val progress = remember { Animatable(if (visible) 1f else 0f) }
+    // 收起动画播完才从组合里移除；只在开关时改动，不会每帧重组（每帧的插值都发生在 graphicsLayer 里）
+    var alive by remember { mutableStateOf(visible) }
+    LaunchedEffect(visible) {
+        if (visible) {
+            alive = true
+            progress.animateTo(1f, spatialDefault())
+        } else {
+            progress.animateTo(0f, spatialFast())
+            alive = false
+        }
     }
-    // 内容层：只做轻微缩放，★ 不做淡入 ★
-    //   淡入 = 整页内容从 alpha 0 起来，那一瞬卡片底色和标题文字都"消失"（看到的正是页面底色 #FBF8FF），
-    //   观感就是「闪一下」。缩放则内容始终完整可见，配合上面已铺好的不透明底色，全程既不透明也不缺内容。
-    AnimatedVisibility(
-        visible = visible,
-        enter = scaleIn(animationSpec = spatialDefault(), initialScale = 0.97f),
-        exit = scaleOut(animationSpec = spatialFast(), targetScale = 0.97f),
-        modifier = Modifier.fillMaxSize()
+    if (!alive) return
+
+    val color = MaterialTheme.colorScheme.surface
+    val cornerStart = with(LocalDensity.current) { 16.dp.toPx() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // ★ 在 graphicsLayer 里读 progress：只有图层块逐帧重跑，整页内容不会逐帧重组
+            .graphicsLayer {
+                val full = Rect(0f, 0f, size.width, size.height)
+                val window = if (origin == Rect.Zero) full else lerp(origin, full, progress.value)
+                clip = true
+                shape = RevealShape(window, cornerPx = cornerStart * (1f - progress.value).coerceIn(0f, 1f))
+            }
+            .background(color)
     ) {
         content()
     }
+}
+
+/** 容器变换的裁切窗口：按像素矩形 + 圆角画出的圆角矩形（圆角随展开进度收到 0） */
+private class RevealShape(private val rect: Rect, private val cornerPx: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
+        Outline.Rounded(RoundRect(rect, CornerRadius(cornerPx)))
 }
 
 /**
