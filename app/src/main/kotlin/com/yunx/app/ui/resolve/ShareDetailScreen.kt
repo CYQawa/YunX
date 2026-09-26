@@ -37,9 +37,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -58,10 +59,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -78,6 +82,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -85,7 +90,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -95,6 +99,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.components.ScrollToTopButton
+import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.screens.AddToBookmarkDialog
@@ -111,6 +116,12 @@ import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import com.yunx.app.ui.theme.ListGroupGap
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.listGroupShape
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -200,10 +211,11 @@ fun ShareDetailScreen(
                         start = 16.dp, end = 16.dp, top = 16.dp,
                         bottom = if (viewModel.multiSelectMode) 96.dp else 16.dp
                     ),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            // 列表组：各项首尾相接（组内间距用 ListGroupGap），行圆角按首/中/末分段给
+            verticalArrangement = Arrangement.spacedBy(ListGroupGap)
         ) {
             item {
-                Column {
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (viewModel.multiSelectMode) {
                             // 多选模式：取消选择
@@ -278,8 +290,8 @@ fun ShareDetailScreen(
                     // 搜索框（点击放大镜展开；与面包屑保持间距 + 展开/收起动画）
                     AnimatedVisibility(
                         visible = showSearch && !viewModel.multiSelectMode,
-                        enter = expandVertically(tween(180)) + fadeIn(tween(180)),
-                        exit = shrinkVertically(tween(140)) + fadeOut(tween(120))
+                        enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                        exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
                     ) {
                         Column {
                             Spacer(modifier = Modifier.height(10.dp))
@@ -304,14 +316,16 @@ fun ShareDetailScreen(
                 }
             }
 
-            // 返回上一级（单独列表项；根目录时不显示）
+            // 返回上一级（独立于文件列表组，故自带下间距）
             if (pathNames.isNotEmpty()) {
                 item {
-                    BackToParentItem(onClick = {
-                        // 记录当前目录滚动位置，返回上级后恢复上级位置
-                        scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
-                        onBack()
-                    })
+                    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                        BackToParentItem(onClick = {
+                            // 记录当前目录滚动位置，返回上级后恢复上级位置
+                            scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
+                            onBack()
+                        })
+                    }
                 }
             }
 
@@ -329,9 +343,10 @@ fun ShareDetailScreen(
                 }
             }
 
-            items(displayFiles, key = { it.fid }) { file ->
+            itemsIndexed(displayFiles, key = { _, f -> f.fid }) { index, file ->
                 ShareFileRow(
                     file = file,
+                    shape = listGroupShape(index, displayFiles.size),
                     onClick = {
                         if (viewModel.multiSelectMode) {
                             viewModel.toggleSelect(file)
@@ -450,10 +465,7 @@ fun ShareDetailScreen(
             title = { Text("批量处理中") },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
+                    YunXLoading(modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = viewModel.batchProgress?.let { "正在获取下载链接 $it" }
@@ -617,7 +629,7 @@ internal fun CrumbBar(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ShareFileRow(
     file: ShareFile,
@@ -632,17 +644,22 @@ internal fun ShareFileRow(
     selected: Boolean = false,
     /** 是否显示行首复选框（仅多选模式列表传 true；移动/转存等选择器不显示） */
     showCheckbox: Boolean = false,
+    /** 行形状：网盘页列表组传 listGroupShape(index, count)（首/末项大圆角、中间项小圆角）；默认整行圆角 */
+    shape: Shape = MaterialTheme.shapes.large,
     /** 列表项动画等（调用方传入 Modifier.animateItem()） */
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
+            // ★ 必须先裁到卡片圆角再挂点击/长按：combinedClickable 位于 Card 的 Surface 之外，
+            //   不裁剪的话点击与长按涟漪会画到圆角之外（四角溢出）。
+            .clip(shape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = MaterialTheme.shapes.large,
+        shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -651,53 +668,19 @@ internal fun ShareFileRow(
             }
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 多选模式：行首复选框（仅多选列表显示）
-            if (showCheckbox) {
-                Checkbox(
-                    checked = selected,
-                    onCheckedChange = { onClick() },
-                    modifier = Modifier.size(36.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = if (file.isdir) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = if (file.isdir) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+        // ★ 行内容交给 Material 3 的 ListItem（不再手写 Row + Column）：
+        //   行高、内边距、标题/副标题字号层级由组件按 M3 规范给出，六个网盘页与本页共用同一形态。
+        //   外层保留 Card 负责圆角、选中底色与涟漪裁剪，故 ListItem 容器设为透明。
+        ListItem(
+            headlineContent = {
                 // 文件名过长时滚动播放显示
                 Text(
                     text = file.fname,
-                    style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
                     modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+            },
+            supportingContent = {
                 // 副标题行：文件夹/大小 + 修改时间（同一行展示）
                 Text(
                     text = buildString {
@@ -708,38 +691,77 @@ internal fun ShareFileRow(
                             append(time)
                         }
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-            if (onSave != null) {
-                IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
+            },
+            leadingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 多选模式：行首复选框（仅多选列表显示）
+                    if (showCheckbox) {
+                        Checkbox(
+                            checked = selected,
+                            onCheckedChange = { onClick() },
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        color = if (file.isdir) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (file.isdir) {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onSave != null) {
+                        IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Outlined.SaveAlt,
+                                contentDescription = "转存",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    if (onMore != null) {
+                        IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Outlined.MoreVert,
+                                contentDescription = "更多",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     Icon(
-                        imageVector = Icons.Outlined.SaveAlt,
-                        contentDescription = "转存",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline
                     )
                 }
-            }
-            if (onMore != null) {
-                IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.MoreVert,
-                        contentDescription = "更多",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Icon(
-                imageVector = Icons.Outlined.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline
-            )
-        }
+            },
+            // 底色/选中底色由外层 Card 决定，这里必须透明，否则会盖住卡片颜色
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        )
     }
 }
 

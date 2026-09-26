@@ -92,6 +92,11 @@ import com.yunx.app.ui.viewmodel.ResolveUiState
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import com.yunx.app.ui.components.YunXLoading
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /**
  * 解析页：输入分享链接与提取码 → 解析 → 展示分享详情 → 获取下载直链。
@@ -206,7 +211,7 @@ fun ResolveScreen(
         AnimatedContent(
             targetState = state,
             transitionSpec = {
-                fadeIn(tween(200)) togetherWith fadeOut(tween(140))
+                fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast())
             },
             label = "resolveState"
         ) { s ->
@@ -259,12 +264,12 @@ fun ResolveScreen(
         }
         AnimatedVisibility(
             visible = state is ResolveUiState.Idle && clipboardSuggestion != null,
-            enter = fadeIn(tween(200)) +
-                slideInVertically(tween(250)) { -it / 2 } +
-                scaleIn(tween(250, delayMillis = 60)),
-            exit = fadeOut(tween(150)) +
-                slideOutVertically(tween(200)) { -it / 2 } +
-                scaleOut(tween(200)),
+            enter = fadeIn(effectsDefault()) +
+                slideInVertically(spatialDefault()) { -it / 2 } +
+                scaleIn(tween(250, delayMillis = 60)),   // 保留 tween：弹簧规格无法表达 60ms 延迟
+            exit = fadeOut(effectsFast()) +
+                slideOutVertically(spatialFast()) { -it / 2 } +
+                scaleOut(spatialFast()),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
@@ -298,10 +303,7 @@ fun ResolveScreen(
             title = { Text("获取下载链接") },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
+                    YunXLoading(modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "正在获取下载链接，请稍候…",
@@ -441,7 +443,7 @@ private fun LoadingContent() {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+            YunXLoading(modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "加载中…",

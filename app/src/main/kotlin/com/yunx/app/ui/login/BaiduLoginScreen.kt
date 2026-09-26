@@ -47,7 +47,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -69,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.yunx.app.data.network.BaiduConstants
 import com.yunx.app.ui.viewmodel.BaiduAccountViewModel
+import com.yunx.app.ui.components.YunXWavyLoading
 import kotlinx.coroutines.launch
 
 /**
@@ -216,7 +216,7 @@ fun BaiduLoginScreen(
                 modifier = Modifier.fillMaxSize()
             )
             if (isLoading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                YunXWavyLoading(modifier = Modifier.fillMaxWidth())
             }
         }
     }

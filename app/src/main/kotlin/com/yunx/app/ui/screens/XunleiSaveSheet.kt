@@ -19,7 +19,6 @@
 package com.yunx.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -35,7 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.SaveAlt
@@ -68,6 +67,11 @@ import com.yunx.app.ui.resolve.ShareFileRow
 import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudUiState
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import com.yunx.app.ui.components.YunXLoading
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.ListGroupGap
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.listGroupShape
 
 /**
  * 转存到迅雷网盘弹窗：浏览迅雷个人网盘目录（只进文件夹），确认后转存到当前目录。
@@ -164,7 +168,7 @@ fun XunleiSaveSheet(
             // 目录切换：淡入过渡（与网盘移动弹窗一致）
             AnimatedContent(
                 targetState = cloudState,
-                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
+                transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
                 label = "xunleiSaveState"
             ) { s ->
                 when (s) {
@@ -174,7 +178,7 @@ fun XunleiSaveSheet(
                         .height(200.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    YunXLoading()
                 }
 
                 is XunleiCloudUiState.Error -> Box(
@@ -218,11 +222,13 @@ fun XunleiSaveSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 280.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(ListGroupGap)
                         ) {
-                            items(dirs, key = { it.fid }) { dir ->
+                            // 目录列表拼成一组：首/末项大圆角、中间项小圆角
+                            itemsIndexed(dirs, key = { _, d -> d.fid }) { index, dir ->
                                 ShareFileRow(
                                     file = dir,
+                                    shape = listGroupShape(index, dirs.size),
                                     onClick = { cloudViewModel.openFolder(dir) }
                                 )
                             }

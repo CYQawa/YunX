@@ -31,7 +31,6 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -81,7 +80,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -89,6 +87,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +108,11 @@ import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.download.DownloadStats
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.viewmodel.DownloadViewModel
+import com.yunx.app.ui.components.YunXWavyProgress
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 import java.io.File
 
 /**
@@ -545,13 +549,13 @@ private fun FolderDownloadGroup(
             // 展开区：总体进度条 + 子任务紧凑列表
             AnimatedVisibility(
                 visible = expanded,
-                enter = fadeIn(tween(200)) + expandVertically(tween(200), expandFrom = Alignment.Top),
-                exit = fadeOut(tween(150)) + shrinkVertically(tween(150), shrinkTowards = Alignment.Top)
+                enter = fadeIn(effectsDefault()) + expandVertically(spatialDefault(), expandFrom = Alignment.Top),
+                exit = fadeOut(effectsFast()) + shrinkVertically(spatialFast(), shrinkTowards = Alignment.Top)
             ) {
                 Column {
-                    // 总体进度条（已完成时隐藏）
+                    // 总体进度条（已完成时隐藏）；Expressive 波浪进度条（仅在有子任务下载中时起伏）
                     if (!done) {
-                        LinearProgressIndicator(
+                        YunXWavyProgress(
                             progress = { fraction },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -559,7 +563,8 @@ private fun FolderDownloadGroup(
                                 .height(4.dp)
                                 .clip(RoundedCornerShape(2.dp)),
                             color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            waving = tasks.any { it.status == DownloadTaskEntity.STATUS_DOWNLOADING }
                         )
                     }
                     // 子任务列表（紧凑行，含子文件夹内文件）
@@ -703,10 +708,10 @@ private fun DownloadSubTaskRow(
             // 细进度条（完成态折叠，带过渡动画）
             AnimatedVisibility(
                 visible = task.status != DownloadTaskEntity.STATUS_COMPLETED,
-                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
             ) {
-                LinearProgressIndicator(
+                YunXWavyProgress(
                     progress = { fraction },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -718,7 +723,8 @@ private fun DownloadSubTaskRow(
                     } else {
                         MaterialTheme.colorScheme.primary
                     },
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    waving = task.status == DownloadTaskEntity.STATUS_DOWNLOADING
                 )
             }
         }
@@ -884,26 +890,49 @@ private fun DownloadTaskCard(
             // 实时统计 + 进度条：完成态整体折叠（带高度过渡动画，不残留空白）
             AnimatedVisibility(
                 visible = task.status != DownloadTaskEntity.STATUS_COMPLETED,
-                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+                enter = expandVertically(spatialDefault()) + fadeIn(effectsDefault()),
+                exit = shrinkVertically(spatialFast()) + fadeOut(effectsFast())
             ) {
                 Column {
-                    if (isDownloading && stats != null && stats.speed > 0) {
-                        Text(
-                            text = "${formatSpeed(stats.speed)} · 剩余 ${formatRemain(stats.remainMillis)} · ${stats.chunkCount} 线程",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
+                    // 速度/线程行：随下载状态淡入淡出 + 高度过渡。
+                    // 原来用 if 直接增删这一行，暂停/开始时它"啪"地消失/出现，与上下元素位移很突兀。
+                    //
+                    // ★ 文本必须在这里（composable 作用域）算好，不能写进 AnimatedVisibility 的 content：
+                    //   content 是独立 lambda，里面享受不到 stats 的智能转换（编译报 nullable receiver）；
+                    //   而用 !! 会在"退出动画期间 visible 已为 false、stats 已变 null"时崩溃。
+                    //   退出动画期间沿用上一帧文本（lastStatsText），避免文字先消失再收高度。
+                    val liveStatsText = stats
+                        ?.takeIf { isDownloading && it.speed > 0 }
+                        ?.let { "${formatSpeed(it.speed)} · 剩余 ${formatRemain(it.remainMillis)} · ${it.chunkCount} 线程" }
+                    var lastStatsText by remember { mutableStateOf("") }
+                    LaunchedEffect(liveStatsText) {
+                        if (!liveStatsText.isNullOrEmpty()) lastStatsText = liveStatsText
                     }
-                    LinearProgressIndicator(
+                    AnimatedVisibility(
+                        visible = liveStatsText != null,
+                        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                            expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                        exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                            shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec())
+                    ) {
+                        Column {
+                            Text(
+                                text = lastStatsText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                    }
+                    YunXWavyProgress(
                         progress = { fraction },
                         modifier = Modifier.fillMaxWidth(),
                         color = when (task.status) {
                             DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
                             else -> MaterialTheme.colorScheme.primary
                         },
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        waving = task.status == DownloadTaskEntity.STATUS_DOWNLOADING
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }

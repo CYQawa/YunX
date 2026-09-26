@@ -119,6 +119,10 @@ import androidx.compose.ui.window.Dialog
 import com.yunx.app.R
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.theme.ThemeController
+import com.yunx.app.ui.theme.effectsDefault
+import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.ui.theme.spatialFast
 
 /** 预置主题色（Material 风格种子色） */
 private val presetColors = listOf(
@@ -160,7 +164,7 @@ fun ThemeScreen(
     LaunchedEffect(expanded) {
         expandProgress.animateTo(
             targetValue = if (expanded) 1f else 0f,
-            animationSpec = tween(250, easing = FastOutSlowInEasing)
+            animationSpec = spatialDefault()   // 折叠进度（高度+透明度）：改用 spatial 弹簧
         )
     }
 
@@ -275,8 +279,8 @@ fun ThemeScreen(
                             )
                             AnimatedVisibility(
                                 visible = !expanded,
-                                enter = fadeIn(tween(200)) + expandVertically(tween(200), expandFrom = Alignment.Top),
-                                exit = fadeOut(tween(200)) + shrinkVertically(tween(200), shrinkTowards = Alignment.Top)
+                                enter = fadeIn(effectsDefault()) + expandVertically(spatialDefault(), expandFrom = Alignment.Top),
+                                exit = fadeOut(effectsFast()) + shrinkVertically(spatialFast(), shrinkTowards = Alignment.Top)
                             ) {
                                 Text(
                                     text = when {
@@ -293,7 +297,7 @@ fun ThemeScreen(
                         val rotation by animateFloatAsState(
                             targetValue = if (expanded) 180f else 0f,
                             label = "arrow",
-                            animationSpec = tween(expandDuration)
+                            animationSpec = spatialDefault()
                         )
                         Icon(
                             imageVector = Icons.Filled.ExpandMore,
@@ -423,8 +427,8 @@ fun ThemeScreen(
                             // 与主题色卡片一致的副标题动画：展开时隐藏、收起时显示
                             AnimatedVisibility(
                                 visible = !iconExpanded,
-                                enter = fadeIn(tween(200)) + expandVertically(tween(200), expandFrom = Alignment.Top),
-                                exit = fadeOut(tween(200)) + shrinkVertically(tween(200), shrinkTowards = Alignment.Top)
+                                enter = fadeIn(effectsDefault()) + expandVertically(spatialDefault(), expandFrom = Alignment.Top),
+                                exit = fadeOut(effectsFast()) + shrinkVertically(spatialFast(), shrinkTowards = Alignment.Top)
                             ) {
                                 Text(
                                     text = if (appIconVariant == 1) "新图标" else "经典图标",
@@ -437,7 +441,7 @@ fun ThemeScreen(
                         val iconRotation by animateFloatAsState(
                             targetValue = if (iconExpanded) 180f else 0f,
                             label = "iconArrow",
-                            animationSpec = tween(200)
+                            animationSpec = spatialDefault()
                         )
                         Icon(
                             imageVector = Icons.Filled.ExpandMore,
@@ -447,8 +451,8 @@ fun ThemeScreen(
                     }
                     AnimatedVisibility(
                         visible = iconExpanded,
-                        enter = fadeIn(tween(200)) + expandVertically(tween(200), expandFrom = Alignment.Top),
-                        exit = fadeOut(tween(150)) + shrinkVertically(tween(150), shrinkTowards = Alignment.Top)
+                        enter = fadeIn(effectsDefault()) + expandVertically(spatialDefault(), expandFrom = Alignment.Top),
+                        exit = fadeOut(effectsFast()) + shrinkVertically(spatialFast(), shrinkTowards = Alignment.Top)
                     ) {
                         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -515,7 +519,7 @@ private fun SmoothFilterChip(
     val duration = 200
     val containerColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-        animationSpec = tween(durationMillis = duration, easing = LinearEasing),
+        animationSpec = tween(durationMillis = duration, easing = LinearEasing),   // 刻意线性：颜色扫过动画
         label = "container"
     )
     val contentColor by animateColorAsState(

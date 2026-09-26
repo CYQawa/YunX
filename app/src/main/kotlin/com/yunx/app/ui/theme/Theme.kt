@@ -21,7 +21,10 @@ package com.yunx.app.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -33,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.SchemeTonalSpot
 
@@ -263,6 +267,74 @@ private val highContrastDarkColorScheme = darkColorScheme(
     surfaceContainerHigh = surfaceContainerHighDarkHighContrast,
     surfaceContainerHighest = surfaceContainerHighestDarkHighContrast,
 )
+
+/**
+ * 列表组外圈圆角：与下面 Shapes.large 共用同一个值，避免两处各写一份走样。
+ */
+private val CornerLarge = 16.dp
+
+/**
+ * M3 Expressive 圆角刻度。
+ * 比经典 M3 多出 largeIncreased / extraLargeIncreased / extraExtraLarge 三档（20 / 32 / 48dp）：
+ * Expressive 组件（工具栏、FAB 菜单、底部面板、按钮组…）默认取这三档，容器越大圆角越明显。
+ * 本项目此前完全没定制过 Shapes，这里直接把整套刻度按 Expressive 规范钉死，避免各组件回落到经典刻度。
+ */
+private val ExpressiveShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(CornerLarge),
+    largeIncreased = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+    extraLargeIncreased = RoundedCornerShape(32.dp),
+    extraExtraLarge = RoundedCornerShape(48.dp)
+)
+
+/** 列表组内的位置：决定这一项该用分段圆角里的哪一档 */
+internal enum class ListGroupPos { FIRST, MIDDLE, LAST, SINGLE }
+
+/** 组内衔接处的内圆角：刻意很小，相邻两项拼在一起时不会出现明显缺口 */
+private val ListGroupInnerCorner = 2.dp
+
+/**
+ * 列表组内相邻两项之间的间距（发丝缝）。
+ * 太小（1dp）会连成一片、看不出行与行的分界；太大就不像"一组"了 —— 想调组内间距只改这一处。
+ */
+internal val ListGroupGap = 3.dp
+
+/**
+ * 列表组分段圆角：让一组首尾相接的列表项看起来是「一整块」。
+ *
+ * 规则：首项只圆上两角、末项只圆下两角（都用 16dp 外圈圆角），中间项只留 2dp 内圆角。
+ * 调用方需保证组内各项之间几乎没有间距（约定留 1dp 发丝缝）——留大间距的话
+ * 中间项的小圆角会各自露出来，看着像一堆没对齐的卡片而不是一个列表组。
+ */
+internal fun listGroupShape(pos: ListGroupPos): RoundedCornerShape {
+    val top = if (pos == ListGroupPos.FIRST || pos == ListGroupPos.SINGLE) CornerLarge else ListGroupInnerCorner
+    val bottom = if (pos == ListGroupPos.LAST || pos == ListGroupPos.SINGLE) CornerLarge else ListGroupInnerCorner
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
+}
+
+/** 按下标取列表组圆角：LazyColumn（itemsIndexed）等能拿到 index/count 的列表直接调用 */
+internal fun listGroupShape(index: Int, count: Int): RoundedCornerShape = listGroupShape(
+    when {
+        count <= 1 -> ListGroupPos.SINGLE
+        index <= 0 -> ListGroupPos.FIRST
+        index >= count - 1 -> ListGroupPos.LAST
+        else -> ListGroupPos.MIDDLE
+    }
+)
+
+/**
+ * 全局动效方案（弹簧物理：位移/尺寸用 spatial，透明度/颜色用 effects）。
+ * 低端机掉帧或想更克制时，换成 MotionScheme.standard() 即可，这是全局唯一开关。
+ *
+ * ★ 刻意声明为 internal 顶层属性（而非私有）：`ui/theme/Motion.kt` 里的
+ *   spatialDefault/effectsDefault 等顶层函数也用它，从而保证「组件内部动效」与
+ *   「页面自定义动效」用的是同一个 scheme；只有一处可改。
+ */
+internal val AppMotionScheme = MotionScheme.expressive()
+
 @Composable
 fun ComposeEmptyActivityTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -290,8 +362,14 @@ fun ComposeEmptyActivityTheme(
         else -> lightScheme
     }
 
-    MaterialTheme(
+    // Material 3 Expressive 主题入口：一次性注入 colorScheme / motionScheme / shapes / typography，
+    // 并置 LocalUsingExpressiveTheme=true —— 所有 M3 组件据此切换到 Expressive 形态
+    // （尺寸、圆角、形变、弹簧动效），无需逐个组件改造。
+    // 颜色部分完全沿用原有逻辑（动态取色 / 种子色 / 深浅色 / 对比度方案），Expressive 不改变颜色角色。
+    MaterialExpressiveTheme(
         colorScheme = colorScheme,
+        motionScheme = AppMotionScheme,
+        shapes = ExpressiveShapes,
         typography = Typography,
         content = content
     )

@@ -182,6 +182,20 @@ object DownloadPlatform {
 
 成对创建 `{X}Api.kt` / `{X}Constants.kt` / `{X}AccountRepository.kt` / `{X}ResolveRepository.kt`（实现 `ShareResolveRepository`）/ `{X}Account{Entity,Dao}.kt` / `{X}AccountSheet.kt` / `{X}CloudScreen.kt` / `{X}LoginScreen.kt` / `{X}AccountViewModel.kt` / `{X}CloudViewModel.kt`，并在 `ShareLinkParser`、`DownloadPlatform`、`AppDatabase` 中登记。
 
+### 3.10 UI 依赖：material3 显式钉 alpha（Material 3 Expressive，勿"顺手"改回）
+
+版本目录里 `androidx-material3` **自带版本号**（`material3Expressive = "1.5.0-alpha18"`），刻意覆盖 Compose BOM 给的 1.4.0：
+Expressive 的主题/动效/排版/形状在 1.4.0 已稳定可用，但 ButtonGroup、SplitButton、ToggleButton、LoadingIndicator、
+MaterialShapes、波浪进度条、FloatingToolbar、FAB 菜单等**组件只存在于 1.5.0-alpha** —— 这是有意取舍，不是遗漏或笔误。
+升级 BOM 或该 alpha 前，必须逐条重新核对三条门槛（kotlin-stdlib 要求的 Kotlin 版本 / AAR 的 minCompileSdk ≤ compileSdk /
+manifest 的 minSdk），依据与历史版本对照写在 `gradle/libs.versions.toml` 中 `material3Expressive` 上方。
+
+**动效规格的读取位置有硬性约束**：`MaterialTheme.motionScheme` 是 `@Composable` 属性，只能在 composable 作用域读取。
+要把它取出的规格传给 `AnimatedContent` 的 `transitionSpec`、`remember {}`、点击回调等**非 @Composable 的 lambda** 时，
+必须先在 composable 里取到局部变量再捕获进 lambda；写在 lambda 内会报
+`@Composable invocations can only happen from the context of a @Composable function`。
+（`AnimatedVisibility` 的 `enter` / `exit` 参数位在 composable 参数位置求值，可直接写。）
+
 ---
 
 ## 4. 验证

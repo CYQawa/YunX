@@ -73,7 +73,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -89,6 +88,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -106,7 +106,11 @@ import com.yunx.app.data.download.DownloadSaver
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.ui.theme.ListGroupGap
+import com.yunx.app.ui.theme.ListGroupPos
+import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.util.LogExporter
+import com.yunx.app.ui.components.YunXLoading
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -150,6 +154,13 @@ private fun openNotificationSettings(context: Context) {
 @Composable
 fun SettingsScreen(
     scrollBehavior: TopAppBarScrollBehavior,
+    /**
+     * 容器变换（Container Transform）源侧修饰符：由 MainScreen 在 SharedTransitionLayout 作用域内构造
+     * （设置页自己拿不到那个作用域），分别挂到「主题与外观 / 关于云析 / 支持开发」三行上。
+     */
+    themeRowModifier: Modifier = Modifier,
+    aboutRowModifier: Modifier = Modifier,
+    supportRowModifier: Modifier = Modifier,
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
@@ -264,6 +275,8 @@ fun SettingsScreen(
         }
     }
 
+    // 列表组：同一分组内的行首尾相接（只留 1dp 发丝缝，圆角由 listGroupShape 按首/中/末分段给），
+    // 分组之间仍用 24dp 间距隔开。
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -274,17 +287,19 @@ fun SettingsScreen(
         SectionLabel("下载")
         SettingsItem(
             icon = Icons.Outlined.Tune,
+            shape = listGroupShape(ListGroupPos.FIRST),
             title = "下载线程数",
             description = "按网盘分别设置分片并发数（默认 32，最高 512）",
             onClick = { showThreadsDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 下载保存目录：系统文件夹选择器（SAF，适配各 Android 版本分区存储）；
         // 已自定义时卡片右侧内嵌「恢复默认」操作（不单独外露按钮）
         SettingsItem(
             icon = Icons.Outlined.FolderOpen,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "下载保存目录",
             description = downloadDirUri?.let { "已自定义：${DownloadSaver.safDirDisplay(it)}" }
                 ?: "系统默认 Download（点击自定义）",
@@ -311,39 +326,43 @@ fun SettingsScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 网络与下载策略
         SettingsItem(
             icon = Icons.Outlined.Layers,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "最大同时下载任务数",
             description = "同时下载 $maxConcurrent 个任务（限制后台并发，避免占满带宽）",
             onClick = { showConcurrencyDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         SettingsItem(
             icon = Icons.Outlined.Speed,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "下载速度限制",
             description = speedLimitText(speedLimitBps),
             onClick = { showSpeedDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         SettingsItem(
             icon = Icons.Outlined.Refresh,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "失败自动重试",
             description = if (retryCount == 0) "失败后不自动重试" else "失败后自动重试 $retryCount 次（断点续传）",
             onClick = { showRetryDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 用户体验与系统适配：锁屏保持下载 / 通知栏进度样式
         SettingsItem(
             icon = Icons.Outlined.Power,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "锁屏后保持下载",
             description = "开启后下载时获取 WakeLock 维持网络，并可加入「忽略电池优化」白名单",
             onClick = {
@@ -359,10 +378,11 @@ fun SettingsScreen(
             trailing = { Switch(checked = keepLocked, onCheckedChange = null) }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         SettingsItem(
             icon = Icons.Outlined.Notifications,
+            shape = listGroupShape(ListGroupPos.LAST),
             title = "通知栏下载进度",
             description = when {
                 // 任意版本：系统通知被禁用（Android 13+ 未授权/低版本被系统或用户关闭）时提示去开启
@@ -396,6 +416,8 @@ fun SettingsScreen(
             icon = Icons.Outlined.Palette,
             title = "主题与外观",
             description = "主题色、动态色彩与深色模式",
+            // 容器变换的源：点击后这一行会长成「主题与外观」整页（key 需与 MainScreen 一致）
+            modifier = themeRowModifier,
             onClick = onThemeClick
         )
 
@@ -404,6 +426,7 @@ fun SettingsScreen(
         SectionLabel("通用")
         SettingsItem(
             icon = Icons.Outlined.SystemUpdate,
+            shape = listGroupShape(ListGroupPos.FIRST),
             title = "检查更新",
             description = "检查 GitHub 是否有新版本可用",
             onClick = {
@@ -422,9 +445,10 @@ fun SettingsScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.Article,
+            shape = listGroupShape(ListGroupPos.LAST),
             title = "导出日志",
             description = "导出崩溃日志与应用信息，便于排查问题",
             onClick = { showLogDialog = true }
@@ -435,14 +459,16 @@ fun SettingsScreen(
         SectionLabel("网盘认证")
         SettingsItem(
             icon = Icons.Outlined.Backup,
+            shape = listGroupShape(ListGroupPos.FIRST),
             title = "导出网盘认证",
             description = "使用至少 8 位口令加密 Cookie/JWT 后导出",
             onClick = { showExportAuthDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.Restore,
+            shape = listGroupShape(ListGroupPos.LAST),
             title = "导入网盘认证",
             description = "选择加密或明文的认证备份文件，恢复网盘登录",
             onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) }
@@ -453,17 +479,21 @@ fun SettingsScreen(
         SectionLabel("关于")
         SettingsItem(
             icon = Icons.Outlined.Info,
+            shape = listGroupShape(ListGroupPos.FIRST),
             title = "关于云析",
             description = "版本信息、支持平台与技术说明",
+            modifier = aboutRowModifier,
             onClick = onAboutClick,
             onLongClick = { showDevMenu = true } // 长按打开隐藏开发调试菜单
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.VolunteerActivism,
+            shape = listGroupShape(ListGroupPos.LAST),
             title = "支持开发",
             description = "微信扫码捐赠，支持项目持续维护",
+            modifier = supportRowModifier,
             onClick = onSupportClick
         )
     }
@@ -1114,7 +1144,7 @@ private fun OperationLoadingDialog(message: String) {
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                YunXLoading()
             }
         },
         confirmButton = {},
@@ -1142,12 +1172,15 @@ private fun SettingsItem(
     /** 长按回调（隐藏菜单等）；null 时不启用长按 */
     onLongClick: (() -> Unit)? = null,
     /** 自定义尾部内容（如「恢复默认」操作）；null 时显示默认 ChevronRight */
-    trailing: @Composable (() -> Unit)? = null
+    trailing: @Composable (() -> Unit)? = null,
+    /** 列表组分段圆角：同一分组内的行传 listGroupShape(...)；默认四角整圆（单行分组） */
+    shape: Shape = MaterialTheme.shapes.large,
+    /** 容器变换源侧修饰符（sharedBounds）；普通行不传 */
+    modifier: Modifier = Modifier
 ) {
-    val shape = MaterialTheme.shapes.large
     val interactionSource = remember { MutableInteractionSource() }
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .combinedClickable(
