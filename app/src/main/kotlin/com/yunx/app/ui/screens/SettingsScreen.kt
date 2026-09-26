@@ -104,7 +104,6 @@ import com.yunx.app.data.backup.AuthCrypto
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSaver
 import com.yunx.app.data.prefs.SettingsRepository
-import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.ListGroupPos
@@ -165,14 +164,14 @@ fun SettingsScreen(
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
     backupManager: AuthBackupManager,
-    /** 用应用内置下载器下载更新 APK（URL + 文件名），由 MainScreen 注入 DownloadManager */
-    onDownloadUpdateApk: (url: String, fileName: String) -> Unit,
+    /** 手动检查更新（弹窗与下载逻辑都由 MainScreen 统一持有，设置页不再自己实现一份） */
+    onCheckUpdate: () -> Unit,
+    /** 开发调试菜单的「显示检查更新弹窗」：直接用 MainScreen 已拿到的真实 Release 弹窗，不发请求、不比较版本 */
+    onPreviewUpdateSheet: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showThreadsDialog by remember { mutableStateOf(false) }
     var showLogDialog by remember { mutableStateOf(false) }
-    // 检查更新结果（非空时弹更新对话框）
-    var updateRelease by remember { mutableStateOf<UpdateChecker.Release?>(null) }
     // 网盘认证导出弹窗（AES 加密 + 导出范围）
     var showExportAuthDialog by remember { mutableStateOf(false) }
     // 网盘认证导入：加密文件内容（非空时弹解密密码框）
@@ -429,20 +428,7 @@ fun SettingsScreen(
             shape = listGroupShape(ListGroupPos.FIRST),
             title = "检查更新",
             description = "检查 GitHub 是否有新版本可用",
-            onClick = {
-                scope.launch {
-                    SnackbarController.show("正在检查更新…")
-                    val release = runCatching { UpdateChecker.fetchLatestRelease() }.getOrNull()
-                    val current = UpdateChecker.currentVersion(context)
-                    if (release == null) {
-                        SnackbarController.show("检查更新失败，请检查网络")
-                    } else if (UpdateChecker.compareVersions(release.tagName, current) > 0) {
-                        updateRelease = release
-                    } else {
-                        SnackbarController.show("已是最新版本")
-                    }
-                }
-            }
+            onClick = onCheckUpdate
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))
@@ -573,16 +559,8 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             showDevMenu = false
-                            // 调试用途：直接弹出更新弹窗（不判断是否已是最新版），预览弹窗 UI
-                            scope.launch {
-                                val release = runCatching { UpdateChecker.fetchLatestRelease() }.getOrNull()
-                                updateRelease = release ?: UpdateChecker.Release(
-                                    tagName = "v1.2.4（预览）",
-                                    body = "这是调试预览弹窗，用于查看更新弹窗 UI（含镜像站下载按钮）。",
-                                    assets = emptyList(),
-                                    publishedAt = ""
-                                )
-                            }
+                            // 调试用途：直接拿 MainScreen 已获取到的真实 Release 弹出更新弹窗（不再发请求、不比较版本号）
+                            onPreviewUpdateSheet()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("显示检查更新弹窗") }
@@ -590,42 +568,6 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showDevMenu = false }) { Text("关闭") }
-            }
-        )
-    }
-
-    // 检查更新结果弹窗（发现新版本时展示，下载走系统浏览器）
-    updateRelease?.let { release ->
-        UpdateDialog(
-            currentVersion = UpdateChecker.currentVersion(context),
-            release = release,
-            onDownload = {
-                updateRelease = null
-                val apk = release.assets.firstOrNull { it.name.endsWith(".apk", true) }
-                if (apk != null) {
-                    onDownloadUpdateApk(apk.downloadUrl, apk.name)
-                    SnackbarController.show("已加入下载 ${apk.name}")
-                } else {
-                    SnackbarController.show("未找到 APK 下载链接")
-                }
-            },
-            onDownloadMirror = {
-                updateRelease = null
-                val apk = release.assets.firstOrNull { it.name.endsWith(".apk", true) }
-                if (apk != null) {
-                    onDownloadUpdateApk(UpdateChecker.mirrorUrl(apk.downloadUrl), apk.name)
-                    SnackbarController.show("已通过镜像站加入下载 ${apk.name}")
-                } else {
-                    SnackbarController.show("未找到 APK 下载链接")
-                }
-            },
-            onLater = { updateRelease = null },
-            onIgnore = {
-                context.getSharedPreferences("yunx_prefs", android.content.Context.MODE_PRIVATE)
-                    .edit()
-                    .putString("ignored_version", release.tagName)
-                    .apply()
-                updateRelease = null
             }
         )
     }
