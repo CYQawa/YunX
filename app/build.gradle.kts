@@ -85,6 +85,9 @@ dependencies {
     implementation(libs.room.ktx)          // 提供协程扩展，如 Flow、suspend
     ksp(libs.room.compiler)
 
+    // GitHub README 的 GFM 渲染（表格/嵌套列表/代码高亮/折叠/图片）
+    implementation(libs.markdownRenderer)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -96,4 +99,10 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // 强制 kotlin-stdlib 与项目 Kotlin 2.1.0 对齐，避免第三方库（如 mikepenz）
+    // 传递引入更高版本 stdlib 导致 "compiled with an incompatible version of Kotlin"。
+    constraints {
+        implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")
+    }
 }

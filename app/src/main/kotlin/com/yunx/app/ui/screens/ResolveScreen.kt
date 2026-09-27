@@ -31,9 +31,11 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -75,13 +77,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.SharePlatform
 import com.yunx.app.ui.SnackbarController
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.model.DefaultMarkdownTypography
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import com.yunx.app.ui.components.GitHubMarkdownImageTransformer
 import com.yunx.app.ui.resolve.DownloadLinkDialog
 import com.yunx.app.ui.resolve.ShareDetailScreen
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
@@ -149,7 +160,7 @@ fun ResolveScreen(
             text.isNotBlank() &&
             text != link &&
             text != ignoredClipboard &&
-            ShareLinkParser.parse(text) != null
+            (ShareLinkParser.parse(text) != null || GitHubLinkParser.parse(text) != null)
         ) {
             clipboardSuggestion = text
         }
@@ -232,7 +243,106 @@ fun ResolveScreen(
                     // 顶部左上角返回：退出文件页回到输入页（输入框内容保留）
                     onExit = { viewModel.backToInput() },
                     // 列表「返回上一级」：子目录回上级，根目录回输入页
-                    onBack = { viewModel.navigateBack() }
+                    onBack = { viewModel.navigateBack() },
+                    // GitHub 专属：forked from 头部、README 底部、文件徽章
+                    extraHeaderContent = if (viewModel.isGitHubPlatform) {
+                        {
+                            val parent = viewModel.githubParentFullName
+                            if (parent != null) {
+                                TextButton(
+                                    onClick = { viewModel.openGitHubParentRepo() },
+                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "forked from $parent",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    } else null,
+                    extraFooterContent = if (viewModel.isGitHubPlatform) {
+                        {
+                            val md = viewModel.githubReadme
+                            val owner = viewModel.githubRepoOwner
+                            val repo = viewModel.githubRepoName
+                            val branch = viewModel.githubDefaultBranch
+                            if (!md.isNullOrBlank() && owner != null && repo != null && branch != null) {
+                                Column(modifier = Modifier.padding(top = 12.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(1.dp)
+                                            .background(MaterialTheme.colorScheme.outlineVariant)
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = "README",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    // 用成熟 GFM 库渲染 README（表格/任务列表/代码高亮/HTML 子集/emoji/自动链接）
+                                    // 预处理：相对链接与相对图片补全为绝对 URL（raw.githubusercontent.com）
+                                    val processed = remember(md, owner, repo, branch) {
+                                        preprocessReadme(md, owner, repo, branch)
+                                    }
+                                    // 注入自定义图片加载器（OkHttp 自研，无 Coil）
+                                    GitHubMarkdownImageTransformer.mirrorPrefix = remember {
+                                        com.yunx.app.data.prefs.SettingsRepository(context)
+                                            .githubMirrorPrefix?.ifBlank { null }
+                                    }
+                                    // 紧凑字号：对齐 GitHub 移动端观感（正文 14sp、标题逐级收紧、行距 1.35 倍）
+                                    val compactTypography = remember {
+                                        fun body(size: Int, bold: Boolean = false) = TextStyle(
+                                            fontSize = size.sp,
+                                            lineHeight = (size * 1.35f).toInt().sp,
+                                            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        DefaultMarkdownTypography(
+                                            text = body(14),
+                                            code = body(13),
+                                            inlineCode = body(13),
+                                            h1 = body(20, true),
+                                            h2 = body(18, true),
+                                            h3 = body(16, true),
+                                            h4 = body(15, true),
+                                            h5 = body(14, true),
+                                            h6 = body(14, true),
+                                            quote = body(13),
+                                            paragraph = body(14),
+                                            ordered = body(14),
+                                            bullet = body(14),
+                                            list = body(14),
+                                            link = body(14),
+                                            textLink = TextLinkStyles(),
+                                            table = body(13)
+                                        )
+                                    }
+                                    Markdown(
+                                        content = processed,
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                        typography = compactTypography,
+                                        imageTransformer = GitHubMarkdownImageTransformer
+                                    )
+                                }
+                            }
+                        }
+                    } else null,
+                    fileBadge = if (viewModel.isGitHubPlatform) {
+                        { file ->
+                            val label = viewModel.githubBadges[file.fid]
+                            if (!label.isNullOrBlank()) {
+                                GitHubBadge(label)
+                            }
+                        }
+                    } else null,
+                    // 仅 GitHub 平台启用下拉刷新当前节点
+                    onRefresh = if (viewModel.isGitHubPlatform) {
+                        { viewModel.refreshGitHubCurrentNode() }
+                    } else null,
+                    refreshing = viewModel.githubRefreshing
                 )
                 is ResolveUiState.Loading -> LoadingContent()
                 else -> ResolveInputContent(
@@ -276,15 +386,25 @@ fun ResolveScreen(
                 .padding(16.dp)
         ) {
             animatedSuggestion?.let { suggestion ->
-                val parsed = ShareLinkParser.parse(suggestion)
+                val shareParsed = ShareLinkParser.parse(suggestion)
+                val githubParsed = GitHubLinkParser.parse(suggestion)
                 ClipboardSuggestCard(
-                    platformName = parsed?.platform?.let { platformLabel(it) } ?: "网盘",
+                    platformName = when {
+                        githubParsed != null -> "GitHub"
+                        shareParsed != null -> platformLabel(shareParsed.platform)
+                        else -> "网盘"
+                    },
                     onPaste = {
                         link = suggestion
-                        pwd = parsed?.pwd.orEmpty()
+                        pwd = shareParsed?.pwd.orEmpty()
                         pwdEdited = true
                         clipboardSuggestion = null
-                        viewModel.startResolve(suggestion, parsed?.pwd)
+                        // GitHub 链接走 ViewModel 的 GitHub 解析入口（复用 ShareDetailScreen 框架）
+                        if (githubParsed != null) {
+                            viewModel.startGitHubResolve(githubParsed)
+                        } else {
+                            viewModel.startResolve(suggestion, shareParsed?.pwd)
+                        }
                     },
                     onDismiss = {
                         ignoredClipboard = suggestion
@@ -389,7 +509,15 @@ private fun ResolveInputContent(
         )
 
         Button(
-            onClick = { viewModel.startResolve(link, pwd) },
+            onClick = {
+                // 优先识别 GitHub 链接（仓库 / 账号 / 文件直链），走 ViewModel 的 GitHub 解析入口
+                val github = GitHubLinkParser.parse(link)
+                if (github != null) {
+                    viewModel.startGitHubResolve(github)
+                } else {
+                    viewModel.startResolve(link, pwd)
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
@@ -472,6 +600,7 @@ private fun platformLabel(platform: SharePlatform): String = when (platform) {
     SharePlatform.BAIDU -> "百度网盘"
     SharePlatform.C139 -> "139 网盘"
     SharePlatform.PAN123 -> "123云盘"
+    SharePlatform.GITHUB -> "GitHub"
 }
 
 /** 剪贴板分享链接提示卡片：检测到分享链接时，询问是否粘贴解析 */
@@ -533,4 +662,66 @@ private fun ClipboardSuggestCard(
             }
         }
     }
+}
+/**
+ * GitHub 文件徽章：紧凑彩色标签。
+ * 最新=绿、预发布=橙、草稿=灰、其余（Fork/语言）=中性次要色。
+ */
+@Composable
+private fun GitHubBadge(label: String) {
+    val (bg, fg) = when (label) {
+        "最新" -> androidx.compose.ui.graphics.Color(0xFF2DA44E) to androidx.compose.ui.graphics.Color.White
+        "预发布" -> androidx.compose.ui.graphics.Color(0xFFBF8700) to androidx.compose.ui.graphics.Color.White
+        "草稿" -> androidx.compose.ui.graphics.Color(0xFF6E7681) to androidx.compose.ui.graphics.Color.White
+        else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+    }
+    Box(
+        modifier = Modifier
+            .background(bg, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = fg
+        )
+    }
+}
+
+/**
+ * README 预处理：把 Markdown 中的相对链接/相对图片补全为绝对 URL。
+ * - [text](./x) / [text](x) → https://github.com/{owner}/{repo}/blob/{branch}/x
+ * - ![alt](./img.png) / ![alt](img.png) → https://raw.githubusercontent.com/{owner}/{repo}/{branch}/img.png
+ * - http(s)/mailto 开头的绝对 URL 不动。
+ */
+private fun preprocessReadme(md: String, owner: String, repo: String, branch: String): String {
+    val blobBase = "https://github.com/$owner/$repo/blob/$branch/"
+    val rawBase = "https://raw.githubusercontent.com/$owner/$repo/$branch/"
+    // 图片 ![alt](url)
+    var out = Regex("!\\[([^]]*)\\]\\(([^)]+)\\)").replace(md) { m ->
+        val alt = m.groupValues[1]
+        val url = m.groupValues[2].trim()
+        val resolved = resolveRel(rawBase, url)
+        "![$alt]($resolved)"
+    }
+    // 普通链接 [text](url)（排除已处理的图片）
+    out = Regex("(?<!!)\\[([^]]+)\\]\\(([^)]+)\\)").replace(out) { m ->
+        val label = m.groupValues[1]
+        val url = m.groupValues[2].trim()
+        val resolved = resolveRel(blobBase, url)
+        "[$label]($resolved)"
+    }
+    return out
+}
+
+/**
+ * 把 README 相对链接补全为绝对 URL。
+ * - 绝对 URL（http/https/mailto）原样返回；
+ * - 相对路径用 URI.resolve 处理 `./`、`../`（上溯目录），避免 `../` 被当作普通路径段拼错。
+ */
+private fun resolveRel(base: String, rel: String): String {
+    if (rel.startsWith("http://") || rel.startsWith("https://") || rel.startsWith("mailto:")) return rel
+    // 含转义括号的链接（如 [a](b\(c\))）按原样保留，不做路径补全，避免被错误补全
+    if (rel.contains('\\')) return rel
+    return runCatching { java.net.URI(base).resolve(rel).toString() }.getOrDefault(base + rel)
 }

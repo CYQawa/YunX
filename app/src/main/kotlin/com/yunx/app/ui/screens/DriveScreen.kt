@@ -50,9 +50,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -143,6 +147,14 @@ fun DriveScreen(
     onC139Logout: () -> Unit,
     onPan123Login: () -> Unit,
     onPan123Logout: () -> Unit,
+    /** 是否已配置 GitHub Token（控制 GitHub 卡片副标题与登录态样式） */
+    githubHasToken: Boolean = false,
+    /** 点击 GitHub 卡片：已配置 Token 时进入「我的主页」（账号仓库浏览）；未配置时打开 Token 管理弹窗 */
+    onGitHubTokenClick: () -> Unit = {},
+    /** 已配置 Token 时点击卡片主体：进入当前 Token 账号的仓库列表 */
+    onGitHubBrowseHome: () -> Unit = {},
+    /** 「更多」菜单中清除 Token（二次确认后回调） */
+    onGitHubClearToken: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showQuarkSheet by remember { mutableStateOf(false) }
@@ -151,6 +163,8 @@ fun DriveScreen(
     var showBaiduSheet by remember { mutableStateOf(false) }
     var showC139Sheet by remember { mutableStateOf(false) }
     var showPan123Sheet by remember { mutableStateOf(false) }
+    // GitHub 卡片「更多」菜单（浏览主页 / 配置 Token / 清除 Token）
+    var showGitHubSheet by remember { mutableStateOf(false) }
     // 夸克云盘浏览：网盘 Tab 内切换（非全屏），切 Tab 再回来仍保留
     var showCloud by rememberSaveable { mutableStateOf(false) }
     // UC 网盘云盘浏览：网盘 Tab 内切换（非全屏）
@@ -206,6 +220,14 @@ fun DriveScreen(
         description = pan123Account?.nickname ?: "点击登录，支持解析下载",
         avatarText = "123",
         isLoggedIn = pan123Account != null
+    )
+    // GitHub：把 GitHub 当网盘浏览下载；此处仅做 Token 管理（提升 API 限额），浏览入口在解析页
+    val github = DriveAccount(
+        id = "github",
+        name = "GitHub",
+        description = if (githubHasToken) "已配置 Token" else "点击配置 Token",
+        avatarText = "GH",
+        isLoggedIn = githubHasToken
     )
     val others = remember {
         emptyList<DriveAccount>()
@@ -388,6 +410,14 @@ fun DriveScreen(
                         }
                     )
                 }
+                item(key = github.id) {
+                    // GitHub：已配置 Token 点击主体进入「我的主页」；未配置打开 Token 弹窗；更多按钮在登录后显示
+                    DriveAccountCard(
+                        account = github,
+                        onClick = if (githubHasToken) onGitHubBrowseHome else onGitHubTokenClick,
+                        onMoreClick = if (githubHasToken) { { showGitHubSheet = true } } else null
+                    )
+                }
                 items(others, key = { it.id }) { account ->
                     DriveAccountCard(account = account)
                 }
@@ -466,6 +496,53 @@ fun DriveScreen(
             },
             onDismiss = { showPan123Sheet = false }
         )
+    }
+
+    // GitHub 卡片「更多」菜单：浏览我的主页 / 配置 Token / 清除 Token（清除由上层做二次确认）
+    if (showGitHubSheet) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { showGitHubSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                Text(
+                    text = "GitHub",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                )
+                // 浏览我的主页
+                TextButton(
+                    onClick = {
+                        showGitHubSheet = false
+                        onGitHubBrowseHome()
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) { Text("浏览我的主页", modifier = Modifier.fillMaxWidth()) }
+                // 配置 Token
+                TextButton(
+                    onClick = {
+                        showGitHubSheet = false
+                        onGitHubTokenClick()
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) { Text("配置 Token", modifier = Modifier.fillMaxWidth()) }
+                // 清除 Token
+                TextButton(
+                    onClick = {
+                        showGitHubSheet = false
+                        onGitHubClearToken()
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) {
+                    Text(
+                        "清除 Token",
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
     }
 }
 

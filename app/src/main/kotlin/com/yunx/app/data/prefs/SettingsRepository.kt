@@ -135,12 +135,44 @@ class SettingsRepository(context: Context) {
             prefs.edit().putLong("theme_seed_color", value).apply()
         }
 
+    /**
+     * 自定义 GitHub 下载镜像前缀（如 "https://gh.dpik.top/"）。
+     * null/空字符串表示使用内置默认镜像（UpdateChecker.MIRROR_PREFIX）。
+     */
+    var githubMirrorPrefix: String?
+        get() = prefs.getString("github_mirror_prefix", null)
+        set(value) {
+            prefs.edit().putString("github_mirror_prefix", value).apply()
+        }
+
+    /** 是否启用 HTTP 代理（默认关闭，直连） */
+    var proxyEnabled: Boolean
+        get() = prefs.getBoolean("proxy_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("proxy_enabled", value).apply()
+        }
+
+    /** 代理主机地址（如 "127.0.0.1"），空串表示未配置 */
+    var proxyHost: String
+        get() = prefs.getString("proxy_host", "") ?: ""
+        set(value) {
+            prefs.edit().putString("proxy_host", value).apply()
+        }
+
+    /** 代理端口（默认 7890，范围 1-65535） */
+    var proxyPort: Int
+        get() = prefs.getInt("proxy_port", DEFAULT_PROXY_PORT)
+        set(value) {
+            prefs.edit().putInt("proxy_port", value.coerceIn(1, 65535)).apply()
+        }
+
     companion object {
         const val DEFAULT_DOWNLOAD_THREADS = 32
         const val MAX_DOWNLOAD_THREADS = 512
         const val XUNLEI_DOWNLOAD_THREADS = 8
         const val DEFAULT_MAX_CONCURRENT_DOWNLOADS = 1
         const val DEFAULT_DOWNLOAD_RETRY_COUNT = 3
+        const val DEFAULT_PROXY_PORT = 7890
 
         /** 默认主题种子色：Material Blue（与内置默认方案一致） */
         const val DEFAULT_SEED_COLOR = 0xFF415F91L

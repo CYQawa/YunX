@@ -19,7 +19,7 @@
 package com.yunx.app.data.network
 
 /** 网盘平台 */
-enum class SharePlatform { QUARK, UC, XUNLEI, BAIDU, C139, PAN123 }
+enum class SharePlatform { QUARK, UC, XUNLEI, BAIDU, C139, PAN123, GITHUB }
 
 /**
  * 解析结果：share_id + 提取码 + 平台。

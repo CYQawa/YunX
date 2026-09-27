@@ -83,6 +83,17 @@ class YunXApp : Application() {
         }
         scheduleDeepScan(this)
         com.yunx.app.data.network.XunleiDeviceFingerprint.init(this)
+        // 启动时恢复用户配置的 HTTP 代理（任何异常都不得影响应用启动）
+        runCatching {
+            val prefs = getSharedPreferences("yunx_settings", Context.MODE_PRIVATE)
+            if (prefs.getBoolean("proxy_enabled", false)) {
+                val host = prefs.getString("proxy_host", "")?.takeIf { it.isNotBlank() }
+                val port = prefs.getInt("proxy_port", 7890)
+                if (host != null && port in 1..65535) {
+                    com.yunx.app.data.network.HttpClients.setProxy(host, port)
+                }
+            }
+        }
         purgeDownloadLeftovers(this)
     }
 }

@@ -270,6 +270,9 @@ class DownloadManager(
     /** 已知文件大小（API 返回，避免探测失败）；-1 表示未知 */
     private val taskSizes = ConcurrentHashMap<Long, Long>()
 
+    /** 镜像主 URL 的回退直连（仅 GitHub 等显式传入）；主 URL 探测失败时整任务切到此 URL 重下 */
+    private val taskFallbackUrls = ConcurrentHashMap<Long, String>()
+
     /** 任务开始时间（毫秒）：完成时计算平均速度用（暂停/恢复会重置，表示最近一次运行段均值） */
     private val taskStartTimes = ConcurrentHashMap<Long, Long>()
 
@@ -296,7 +299,10 @@ class DownloadManager(
         size: Long = -1L,
         /** 下载来源平台标识（按平台应用下载线程数设置）；通用/手动添加传空串 */
         platform: String = "",
-        /** 下载成功完成后的清理回调（如删除网盘临时转存文件）；失败/取消不触发 */
+        /** 镜像主 URL 不可达时的回退直连（默认空=不回退）；仅 GitHub 等镜像下载传入 */
+        fallbackUrl: String = "",
+        /** 下载成功完成后的清理回调（如删除网盘临时转存文件）；失败/取消不触发。
+         * 注意：必须是最后一个参数（调用点有大量尾随 lambda 用法，放它之后会编译失败）。 */
         onComplete: suspend () -> Unit = {}
     ): Long {
         // 文件名兜底：空白时从 URL 推导，避免保存时变成时间戳
@@ -316,6 +322,7 @@ class DownloadManager(
         // 保存请求头（Cookie/UA），暂停后恢复仍需携带
         if (headers.isNotEmpty()) taskHeaders[id] = headers
         if (size > 0) taskSizes[id] = size
+        if (fallbackUrl.isNotBlank()) taskFallbackUrls[id] = fallbackUrl
         taskCallbacks[id] = onComplete
         start(id, headers)
         return id
@@ -471,6 +478,7 @@ class DownloadManager(
         downloader.cancelCalls(id)
         _stats.update { it - id }
         taskHeaders.remove(id)
+        taskFallbackUrls.remove(id)
         // 删除任务同样触发清理回调（如删除网盘临时转存文件）：
         // 用户放弃下载时云盘里已转存的临时文件也应一并清理
         val cleanup = taskCallbacks.remove(id)
@@ -584,7 +592,7 @@ class DownloadManager(
     private suspend fun runTask(id: Long, headers: Map<String, String>) {
         // 协程已被取消（暂停/删除）：直接退出，不写状态
         if (!isTaskActive()) return
-        val task = dao.get(id) ?: return
+        var task = dao.get(id) ?: return
         dao.updateStatus(id, DownloadTaskEntity.STATUS_DOWNLOADING)
         taskStartTimes[id] = System.currentTimeMillis()
         Log.d(TAG, "runTask: id=$id fileName=${task.fileName}")
@@ -598,7 +606,15 @@ class DownloadManager(
 
         // 总大小以服务器探测为准（Range0-0 的 Content-Range 是真实总大小），
         // 避免各平台传入的 size 与实际不符导致分片区间错误 → 文件截断/膨胀损坏
-        val total = downloader.getTotalSize(task.url, headers)
+        // 镜像主 URL 探测失败且带回退直连时（GitHub 下载），整任务切到原始直连重下，避免镜像挂掉整任务失败
+        val fallbackUrl = taskFallbackUrls[id]
+        var probedSize = downloader.getTotalSize(task.url, headers)
+        if (probedSize == null && !fallbackUrl.isNullOrBlank()) {
+            Log.w(TAG, "runTask: id=$id 镜像主 URL 不可达，回退原始直连下载")
+            task = task.copy(url = fallbackUrl)
+            probedSize = downloader.getTotalSize(task.url, headers)
+        }
+        val total = probedSize
             ?: taskSizes[id]?.takeIf { it > 0 }
         if (total == null) {
             // 服务器不返回文件大小（Range/Content-Length 均缺失）：降级为流式下载（开放区间 Range）

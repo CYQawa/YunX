@@ -22,6 +22,8 @@ import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
 /**
@@ -39,6 +41,36 @@ object HttpClients {
 
     @Volatile
     private var downloadCache: OkHttpClient? = null
+
+    /** 当前生效的 HTTP 代理主机；null 表示直连 */
+    @Volatile
+    private var proxyHost: String? = null
+
+    /** 当前生效的 HTTP 代理端口；0 表示直连 */
+    @Volatile
+    private var proxyPort: Int = 0
+
+    /**
+     * 配置全局 HTTP 代理。host 为 null 或 port 不在 1-65535 时视为不使用代理（直连）。
+     * 调用后清空已构建的客户端缓存，使下次获取时按新代理重建，立即生效。
+     * 本对象不持有 Context，仅依赖 java.net 标准库与 OkHttp 内置代理支持。
+     */
+    fun setProxy(host: String?, port: Int) {
+        synchronized(lock) {
+            proxyHost = host
+            proxyPort = port
+            // 使既有客户端失效：下次 apiClient()/downloadClient() 时重建，代理立即生效
+            apiCache = null
+            downloadCache = null
+        }
+    }
+
+    /** 构建代理实例；仅在代理主机与端口均有效时返回非 null，否则返回 null（直连） */
+    private fun currentProxy(): Proxy? {
+        val host = proxyHost ?: return null
+        if (proxyPort !in 1..65535) return null
+        return Proxy(Proxy.Type.HTTP, InetSocketAddress(host, proxyPort))
+    }
 
     /** 普通 API 客户端（各平台 API、HLS、更新检查） */
     fun apiClient(): OkHttpClient {
@@ -64,6 +96,10 @@ object HttpClients {
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            .apply {
+                // 配置了有效代理时注入；否则保持默认直连，行为与改动前完全一致
+                currentProxy()?.let { proxy -> proxy(proxy) }
+            }
             .build()
     }
 
@@ -86,6 +122,10 @@ object HttpClients {
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            .apply {
+                // 配置了有效代理时注入；否则保持默认直连，行为与改动前完全一致
+                currentProxy()?.let { proxy -> proxy(proxy) }
+            }
             .build()
     }
 }

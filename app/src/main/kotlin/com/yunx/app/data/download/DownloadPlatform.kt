@@ -29,6 +29,8 @@ object DownloadPlatform {
     const val BAIDU = "baidu"
     const val C139 = "c139"
     const val PAN123 = "pan123"
+    /** GitHub 仓库/Release 下载 */
+    const val GITHUB = "github"
     /** 通用/未知来源（手动添加、应用更新下载等） */
     const val GENERIC = "generic"
 }

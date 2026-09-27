@@ -36,6 +36,7 @@ import com.yunx.app.data.db.UCAccountDao
 import com.yunx.app.data.db.UCAccountEntity
 import com.yunx.app.data.db.XunleiAccountDao
 import com.yunx.app.data.db.XunleiAccountEntity
+import com.yunx.app.data.network.GitHubTokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -68,17 +69,18 @@ class AuthBackupManager(
      * 导出网盘认证（强制 AES-GCM 加密）：
      * @param password 至少 8 位的备份口令
      * @param onlyLoggedIn true=仅导出凭证可用的已登录平台；false=导出数据库里全部绑定记录
+     * @param context 用于读取 GitHub Token（Keystore 解密）
      * @return 明文 JSON 或 Base64 密文
      */
-    suspend fun export(password: String? = null, onlyLoggedIn: Boolean = true): String =
+    suspend fun export(password: String? = null, onlyLoggedIn: Boolean = true, context: Context): String =
         withContext(Dispatchers.IO) {
             require(!password.isNullOrBlank() && password.length >= 8) { "备份口令至少 8 位" }
-            val json = exportJson(onlyLoggedIn)
+            val json = exportJson(onlyLoggedIn, context)
             AuthCrypto.encrypt(json, password)
         }
 
     /** 导出所有已登录平台为 JSON 字符串；无已登录平台时返回空 accounts */
-    suspend fun exportJson(onlyLoggedIn: Boolean = true): String = withContext(Dispatchers.IO) {
+    suspend fun exportJson(onlyLoggedIn: Boolean = true, context: Context): String = withContext(Dispatchers.IO) {
         val accounts = JSONArray()
         quarkDao.getAccount()?.let { a ->
             if (!onlyLoggedIn || a.cookie.isNotBlank()) accounts.put(
@@ -139,26 +141,35 @@ class AuthBackupManager(
                     .put("updatedAt", a.updatedAt)
             )
         }
-        JSONObject()
+        val root = JSONObject()
             .put("app", APP_TAG)
             .put("version", VERSION)
             .put("exportedAt", System.currentTimeMillis())
             .put("accounts", accounts)
-            .toString(2)
+        // GitHub Token 单独顶层字段（它是单个标量凭证，存 Keystore 而非 Room，与网盘账号结构不同）。
+        // 仅在已配置 Token 时导出；明文 token 仅存在于导出 JSON 内，最终由 AuthCrypto 口令加密保护，
+        // 不落盘到其他位置、不打印日志。
+        // 注意：runCatching 返回 Result，必须先 getOrNull() 解包出 String? 才能 ?.takeIf（否则 it 是 Result 类型编译失败）
+        runCatching { GitHubTokenStore.getToken(context) }.getOrNull()
+            ?.takeIf { !it.isNullOrBlank() && (!onlyLoggedIn || GitHubTokenStore.hasToken(context)) }
+            ?.let { root.put("githubToken", it) }
+        root.toString(2)
     }
 
     /**
      * 导入认证内容（可选 AES 解密）：
      * @param password 非空时先解密（密码错误抛异常）；null/空按明文 JSON 解析
+     * @param context 用于恢复 GitHub Token（Keystore 重新加密）
      * @return 成功恢复的平台数；文件不合法抛异常
      */
-    suspend fun import(content: String, password: String? = null): Int = withContext(Dispatchers.IO) {
-        val json = if (password.isNullOrBlank()) content else AuthCrypto.decrypt(content, password)
-        importJson(json)
-    }
+    suspend fun import(content: String, password: String? = null, context: Context): Int =
+        withContext(Dispatchers.IO) {
+            val json = if (password.isNullOrBlank()) content else AuthCrypto.decrypt(content, password)
+            importJson(json, context)
+        }
 
     /** 导入 JSON，恢复各平台凭证；返回成功恢复的平台数；文件不合法抛异常 */
-    suspend fun importJson(json: String): Int = withContext(Dispatchers.IO) {
+    suspend fun importJson(json: String, context: Context): Int = withContext(Dispatchers.IO) {
         val root = JSONObject(json)
         if (root.optString("app") != APP_TAG) {
             throw IllegalArgumentException("不是有效的云析认证备份文件")
@@ -245,6 +256,15 @@ class AuthBackupManager(
                         ); count++
                     }
                 }
+            }
+        }
+        // GitHub Token：顶层字段恢复。单独 runCatching 包住，失败不阻断其余账号导入；
+        // 旧备份无该字段时 optString 返回空串，跳过——**不清除**设备上现有 Token（避免导入旧备份误清）。
+        runCatching {
+            val ghToken = root.optString("githubToken", "")
+            if (ghToken.isNotBlank()) {
+                GitHubTokenStore.setToken(context, ghToken)
+                count++
             }
         }
         count

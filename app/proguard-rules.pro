@@ -19,6 +19,23 @@
 -keepnames class com.yunx.app.ui.login.XunleiVerifyWebViewScreen*
 -keepnames class com.yunx.app.ui.login.XunleiLoginScreen*
 
+# Room：保留 @Entity / @Dao / @Database 类及其成员（KSP 生成的实现类依赖反射读取字段名）
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-keep @androidx.room.Dao interface *
+-keepclassmembers class * {
+    @androidx.room.* <methods>;
+    @androidx.room.* <fields>;
+}
+# Room 实体字段名即列名，禁止混淆/重命名字段
+-keepclassmembers @androidx.room.Entity class * {
+    <fields>;
+}
+
+# multiplatform-markdown-renderer（mikepenz）：保留其内部模型/解析类，避免 R8 裁剪 GFM 节点
+-keep class com.mikepenz.** { *; }
+-dontwarn com.mikepenz.**
+
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable

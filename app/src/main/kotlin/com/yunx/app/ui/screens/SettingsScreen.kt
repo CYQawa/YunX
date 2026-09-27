@@ -50,6 +50,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Power
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
@@ -103,7 +105,9 @@ import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.backup.AuthCrypto
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSaver
+import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.ListGroupPos
@@ -196,6 +200,14 @@ fun SettingsScreen(
     var showConcurrencyDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRetryDialog by remember { mutableStateOf(false) }
+    // GitHub 下载镜像前缀：null/空 = 使用内置默认（UpdateChecker.MIRROR_PREFIX）
+    var githubMirror by remember { mutableStateOf(settingsRepo.githubMirrorPrefix) }
+    var showMirrorDialog by remember { mutableStateOf(false) }
+    // 网络代理：本地状态驱动副标题，弹窗内使用临时变量编辑
+    var proxyEnabled by remember { mutableStateOf(settingsRepo.proxyEnabled) }
+    var proxyHost by remember { mutableStateOf(settingsRepo.proxyHost) }
+    var proxyPort by remember { mutableStateOf(settingsRepo.proxyPort.toString()) }
+    var showProxyDialog by remember { mutableStateOf(false) }
     // 用户体验与系统适配：锁屏保持下载 / 通知栏速度
     var keepLocked by remember { mutableStateOf(settingsRepo.keepDownloadWhenLocked) }
     var showSpeed by remember { mutableStateOf(settingsRepo.notificationShowSpeed) }
@@ -260,7 +272,7 @@ fun SettingsScreen(
                     } else {
                         // 明文备份：直接导入
                         val count = runCatching {
-                            withContext(Dispatchers.IO) { backupManager.importJson(text) }
+                            withContext(Dispatchers.IO) { backupManager.importJson(text, context) }
                         }.getOrElse { e ->
                             SnackbarController.show("导入失败：${e.message}")
                             return@launch
@@ -429,6 +441,32 @@ fun SettingsScreen(
             title = "检查更新",
             description = "检查 GitHub 是否有新版本可用",
             onClick = onCheckUpdate
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // GitHub 下载镜像：自定义前缀，留空使用内置默认镜像
+        SettingsItem(
+            icon = Icons.Outlined.Cloud,
+            title = "GitHub 下载镜像",
+            description = githubMirror?.takeIf { it.isNotBlank() }
+                ?.let { "已自定义：$it" }
+                ?: "默认：${UpdateChecker.MIRROR_PREFIX}",
+            onClick = { showMirrorDialog = true }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 网络代理：HTTP 代理（Clash/v2ray 等本地代理），未启用时直连
+        SettingsItem(
+            icon = Icons.Outlined.Security,
+            title = "网络代理",
+            description = if (proxyEnabled && proxyHost.isNotBlank()) {
+                "已启用：$proxyHost:$proxyPort"
+            } else {
+                "未启用（直连）"
+            },
+            onClick = { showProxyDialog = true }
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))
@@ -686,7 +724,7 @@ fun SettingsScreen(
                 scope.launch {
                     try {
                         val content = runCatching {
-                            withContext(Dispatchers.IO) { backupManager.export(password, onlyLoggedIn) }
+                            withContext(Dispatchers.IO) { backupManager.export(password, onlyLoggedIn, context) }
                         }.getOrNull()
                         if (content == null) {
                             SnackbarController.show("导出失败")
@@ -727,7 +765,7 @@ fun SettingsScreen(
                     scope.launch {
                         try {
                             val count = try {
-                                withContext(Dispatchers.IO) { backupManager.import(content, password) }
+                                withContext(Dispatchers.IO) { backupManager.import(content, password, context) }
                             } catch (e: javax.crypto.AEADBadTagException) {
                                 SnackbarController.show("密码错误，解密失败")
                                 return@launch
@@ -962,6 +1000,150 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showBatteryDialog = false }) { Text("暂不") }
+            }
+        )
+    }
+
+    // GitHub 下载镜像前缀设置弹窗（留空 = 使用内置默认镜像）
+    if (showMirrorDialog) {
+        // 弹窗内临时输入：打开时带出当前已保存的自定义前缀（无则空）
+        var mirrorInput by remember { mutableStateOf(githubMirror ?: "") }
+        AlertDialog(
+            onDismissRequest = { showMirrorDialog = false },
+            title = { Text("GitHub 下载镜像") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = mirrorInput,
+                        onValueChange = { mirrorInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("镜像前缀 URL") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        singleLine = true
+                    )
+                    Text(
+                        text = "留空使用默认镜像 ${UpdateChecker.MIRROR_PREFIX}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = { mirrorInput = "" }) {
+                        Text("恢复默认")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val raw = mirrorInput.trim()
+                        if (raw.isBlank()) {
+                            // 空：恢复内置默认镜像
+                            settingsRepo.githubMirrorPrefix = null
+                            githubMirror = null
+                            showMirrorDialog = false
+                            SnackbarController.show("已恢复默认镜像")
+                        } else if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+                            // 必须是 http/https 开头，否则报错不保存
+                            SnackbarController.show("镜像前缀需以 http:// 或 https:// 开头")
+                        } else {
+                            // 规范化：统一以 / 结尾，拼接原直链时不会粘连
+                            val normalized = if (raw.endsWith("/")) raw else "$raw/"
+                            settingsRepo.githubMirrorPrefix = normalized
+                            githubMirror = normalized
+                            showMirrorDialog = false
+                            SnackbarController.show("GitHub 镜像已更新")
+                        }
+                    }
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMirrorDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // 网络代理设置弹窗（HTTP 代理；未启用时直连）
+    if (showProxyDialog) {
+        // 弹窗内临时变量：取消时不回写已保存值
+        var tempEnabled by remember { mutableStateOf(proxyEnabled) }
+        var tempHost by remember { mutableStateOf(proxyHost) }
+        var tempPort by remember { mutableStateOf(proxyPort) }
+        AlertDialog(
+            onDismissRequest = { showProxyDialog = false },
+            title = { Text("网络代理") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "启用代理",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(checked = tempEnabled, onCheckedChange = { tempEnabled = it })
+                    }
+                    OutlinedTextField(
+                        value = tempHost,
+                        onValueChange = { tempHost = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("代理主机地址（如 127.0.0.1）") },
+                        singleLine = true,
+                        enabled = tempEnabled
+                    )
+                    OutlinedTextField(
+                        value = tempPort,
+                        onValueChange = { tempPort = it.filter(Char::isDigit).take(5) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("代理端口（如 7890）") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        enabled = tempEnabled
+                    )
+                    Text(
+                        text = "代理用于加速 GitHub 等海外资源；不启用时所有请求直连。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (tempEnabled) {
+                            val host = tempHost.trim()
+                            val port = tempPort.toIntOrNull()
+                            when {
+                                // 校验失败仅提示，不关闭弹窗
+                                host.isBlank() ->
+                                    SnackbarController.show("请填写代理主机地址")
+                                port == null || port !in 1..65535 ->
+                                    SnackbarController.show("代理端口需为 1-65535 之间的数字")
+                                else -> {
+                                    settingsRepo.proxyEnabled = true
+                                    settingsRepo.proxyHost = host
+                                    settingsRepo.proxyPort = port
+                                    HttpClients.setProxy(host, port)
+                                    proxyEnabled = true
+                                    proxyHost = host
+                                    proxyPort = port.toString()
+                                    showProxyDialog = false
+                                    SnackbarController.show("代理已启用：$host:$port")
+                                }
+                            }
+                        } else {
+                            // 关闭代理：恢复直连
+                            settingsRepo.proxyEnabled = false
+                            HttpClients.setProxy(null, 0)
+                            proxyEnabled = false
+                            showProxyDialog = false
+                            SnackbarController.show("已关闭代理，恢复直连")
+                        }
+                    }
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProxyDialog = false }) { Text("取消") }
             }
         )
     }
