@@ -1,0 +1,128 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches: [master, main]
+    # paths 过滤：仅当构建相关文件变化时才触发，避免改 README 等空跑 CI
+    paths:
+      - '.github/workflows/build-apk.yml'
+      - 'app/**'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradlew'
+      - 'gradlew.bat'
+  workflow_dispatch:
+
+# 发布 GitHub Release 需要写权限（默认 token 为只读时会 403）
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 需要完整历史与 tag 才能用 git describe 找上一版本、生成变更列表
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle and dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build release APK
+        # 项目 settings.gradle.kts 按 YUNX_USE_MIRROR 切换仓库：CI 上阿里云镜像不可达，必须走官方源。
+        # runner 镜像预装 Android SDK（licenses 已接受），AGP 会自动补装缺失的 SDK 组件。
+        # release 变体开启 R8 混淆 + 资源压缩，产物显著小于 debug。
+        env:
+          YUNX_USE_MIRROR: 'false'
+        run: |
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: yunx-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      # 构建产物自动发布到 GitHub Releases（与上游命名习惯一致：tag=v1.2.6-gh2，asset=YunX_release_1.2.6-gh2.apk）。
+      # 同一版本号重复构建时更新已有资产（--clobber），不重复建 Release。
+      # Release notes 由 git 历史自动生成：上一 tag..HEAD 的 commit 列表（含 commit/compare 链接、@作者）。
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          TAG="v${VERSION}"
+          ASSET_NAME="YunX_release_${VERSION}.apk"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          REPO_URL="https://github.com/$GITHUB_REPOSITORY"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+
+          # 上一个 release tag（排除当前 tag），用于生成 compare 链接与变更范围
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+            COMPARE_URL="${REPO_URL}/compare/${PREV_TAG}...${TAG}"
+          else
+            RANGE="HEAD"
+            COMPARE_URL=""
+          fi
+          # 每行：commit 短链 + 标题 + @作者；commit 编号（#123）原样保留供 GitHub 自动渲染
+          CHANGELOG=$(git log --pretty=format:"- [\`%h\`](${REPO_URL}/commit/%H) %s (@%an)" "$RANGE")
+
+          # 逐行写入 release_notes.md（避免 heredoc 缩进与多行替换的转义问题）
+          {
+            echo "## YunX fork 版自动构建（Release）"
+            echo ""
+            echo "**版本**: ${TAG}"
+            echo "**提交**: \`${SHORT_SHA}\`"
+            echo "**触发**: ${GITHUB_EVENT_NAME}"
+            echo ""
+            echo "### 变更列表"
+            echo "${CHANGELOG}"
+            echo ""
+            if [ -n "${COMPARE_URL}" ]; then
+              echo "[查看完整对比](${COMPARE_URL})"
+            fi
+          } > release_notes.md
+
+          cp "$APK" "$ASSET_NAME"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在，更新资产 $ASSET_NAME"
+            gh release upload "$TAG" "$ASSET_NAME" --repo "$GITHUB_REPOSITORY" --clobber
+            # 幂等更新说明：仅当现有 body 不含自动生成的变更列表特征（"- [" commit 链接行）时才覆盖，
+            # 避免覆盖人工编辑过的 Release notes。
+            BODY_HAS_LOG=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' | grep -c '^- \[`' || true)
+            if [ "$BODY_HAS_LOG" = "0" ]; then
+              echo "Release $TAG body 无自动变更列表，回填 notes"
+              gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file release_notes.md
+            else
+              echo "Release $TAG body 已含变更列表，保留人工内容"
+            fi
+          else
+            echo "创建 Release $TAG"
+            gh release create "$TAG" "$ASSET_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "YunX_${VERSION}" \
+              --notes-file release_notes.md
+          fi
