@@ -41,8 +41,8 @@ object UpdateChecker {
     /** GitHub 下载加速镜像站前缀（国内直连 GitHub 慢/失败时的兜底下载通道） */
     const val MIRROR_PREFIX = "https://cdn.gh-proxy.org/"
 
-    /** 把 GitHub release 直链转成镜像站直链：https://cdn.gh-proxy.org/<原直链> */
-    fun mirrorUrl(url: String): String = MIRROR_PREFIX + url
+    /** 把 GitHub release 直链转成镜像站直链：<prefix><原直链>；默认使用内置镜像前缀 */
+    fun mirrorUrl(url: String, prefix: String = MIRROR_PREFIX): String = prefix + url
 
     /**
      * Release 说明里「网盘下载」条目的匹配规则，形如：
@@ -79,18 +79,23 @@ object UpdateChecker {
             ?.trim()
             ?.takeIf { it.isNotBlank() }
 
-    /** 比较两个版本号：v1 > v2 返回正数，v1 < v2 返回负数，相等返回 0 */
+    /**
+     * 比较两个版本号：v1 > v2 返回正数，v1 < v2 返回负数，相等返回 0。
+     * 兼容 fork 构建后缀（如 "1.2.6-gh1"）：每段取数字前缀比较，后缀（-gh<n> 等）不影响主版本比较。
+     */
     fun compareVersions(v1: String, v2: String): Int {
         val parts1 = v1.trimStart('v').split(".")
         val parts2 = v2.trimStart('v').split(".")
         val maxLength = maxOf(parts1.size, parts2.size)
         for (i in 0 until maxLength) {
-            val num1 = parts1.getOrNull(i)?.toIntOrNull() ?: 0
-            val num2 = parts2.getOrNull(i)?.toIntOrNull() ?: 0
+            val num1 = parts1.getOrNull(i)?.let { DIGITS.find(it)?.value?.toIntOrNull() } ?: 0
+            val num2 = parts2.getOrNull(i)?.let { DIGITS.find(it)?.value?.toIntOrNull() } ?: 0
             if (num1 != num2) return num1 - num2
         }
         return 0
     }
+
+    private val DIGITS = Regex("\\d+")
 
     /** 当前应用版本号（packageManager.versionName） */
     fun currentVersion(context: Context): String =

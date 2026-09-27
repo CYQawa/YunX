@@ -50,6 +50,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Power
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
@@ -103,7 +105,9 @@ import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.backup.AuthCrypto
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSaver
+import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.ListGroupPos
@@ -196,6 +200,9 @@ fun SettingsScreen(
     var showConcurrencyDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRetryDialog by remember { mutableStateOf(false) }
+    // GitHub 下载镜像前缀：null/空 = 使用内置默认（UpdateChecker.MIRROR_PREFIX）
+    var githubMirror by remember { mutableStateOf(settingsRepo.githubMirrorPrefix) }
+    var showMirrorDialog by remember { mutableStateOf(false) }
     // 用户体验与系统适配：锁屏保持下载 / 通知栏速度
     var keepLocked by remember { mutableStateOf(settingsRepo.keepDownloadWhenLocked) }
     var showSpeed by remember { mutableStateOf(settingsRepo.notificationShowSpeed) }
@@ -260,7 +267,7 @@ fun SettingsScreen(
                     } else {
                         // 明文备份：直接导入
                         val count = runCatching {
-                            withContext(Dispatchers.IO) { backupManager.importJson(text) }
+                            withContext(Dispatchers.IO) { backupManager.importJson(text, context) }
                         }.getOrElse { e ->
                             SnackbarController.show("导入失败：${e.message}")
                             return@launch
@@ -429,6 +436,18 @@ fun SettingsScreen(
             title = "检查更新",
             description = "检查 GitHub 是否有新版本可用",
             onClick = onCheckUpdate
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // GitHub 下载镜像：自定义前缀，留空使用内置默认镜像
+        SettingsItem(
+            icon = Icons.Outlined.Cloud,
+            title = "GitHub 下载镜像",
+            description = githubMirror?.takeIf { it.isNotBlank() }
+                ?.let { "已自定义：$it" }
+                ?: "默认：${UpdateChecker.MIRROR_PREFIX}",
+            onClick = { showMirrorDialog = true }
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))
@@ -686,7 +705,7 @@ fun SettingsScreen(
                 scope.launch {
                     try {
                         val content = runCatching {
-                            withContext(Dispatchers.IO) { backupManager.export(password, onlyLoggedIn) }
+                            withContext(Dispatchers.IO) { backupManager.export(password, onlyLoggedIn, context) }
                         }.getOrNull()
                         if (content == null) {
                             SnackbarController.show("导出失败")
@@ -727,7 +746,7 @@ fun SettingsScreen(
                     scope.launch {
                         try {
                             val count = try {
-                                withContext(Dispatchers.IO) { backupManager.import(content, password) }
+                                withContext(Dispatchers.IO) { backupManager.import(content, password, context) }
                             } catch (e: javax.crypto.AEADBadTagException) {
                                 SnackbarController.show("密码错误，解密失败")
                                 return@launch
@@ -962,6 +981,63 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showBatteryDialog = false }) { Text("暂不") }
+            }
+        )
+    }
+
+    // GitHub 下载镜像前缀设置弹窗（留空 = 使用内置默认镜像）
+    if (showMirrorDialog) {
+        // 弹窗内临时输入：打开时带出当前已保存的自定义前缀（无则空）
+        var mirrorInput by remember { mutableStateOf(githubMirror ?: "") }
+        AlertDialog(
+            onDismissRequest = { showMirrorDialog = false },
+            title = { Text("GitHub 下载镜像") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = mirrorInput,
+                        onValueChange = { mirrorInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("镜像前缀 URL") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        singleLine = true
+                    )
+                    Text(
+                        text = "留空使用默认镜像 ${UpdateChecker.MIRROR_PREFIX}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = { mirrorInput = "" }) {
+                        Text("恢复默认")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val raw = mirrorInput.trim()
+                        if (raw.isBlank()) {
+                            // 空：恢复内置默认镜像
+                            settingsRepo.githubMirrorPrefix = null
+                            githubMirror = null
+                            showMirrorDialog = false
+                            SnackbarController.show("已恢复默认镜像")
+                        } else if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+                            // 必须是 http/https 开头，否则报错不保存
+                            SnackbarController.show("镜像前缀需以 http:// 或 https:// 开头")
+                        } else {
+                            // 规范化：统一以 / 结尾，拼接原直链时不会粘连
+                            val normalized = if (raw.endsWith("/")) raw else "$raw/"
+                            settingsRepo.githubMirrorPrefix = normalized
+                            githubMirror = normalized
+                            showMirrorDialog = false
+                            SnackbarController.show("GitHub 镜像已更新")
+                        }
+                    }
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMirrorDialog = false }) { Text("取消") }
             }
         )
     }

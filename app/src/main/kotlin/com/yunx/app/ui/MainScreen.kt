@@ -986,11 +986,17 @@ fun MainScreen() {
                 },
                 onDownloadMirror = {
                     showUpdateSheet = false
-                    // 镜像站下载：GitHub 直连慢/失败时走国内加速镜像
+                    // 镜像站下载：GitHub 直连慢/失败时走国内加速镜像；
+                    // 镜像前缀可在设置页自定义，未配置用内置默认；失败自动回退直连（fallbackUrl）。
                     val apk = release.assets.firstOrNull { it.name.endsWith(".apk", true) }
                     if (apk != null) {
+                        val prefix = settings.githubMirrorPrefix?.ifBlank { null } ?: UpdateChecker.MIRROR_PREFIX
                         scope.launch {
-                            downloadManager.enqueue(url = UpdateChecker.mirrorUrl(apk.downloadUrl), fileName = apk.name)
+                            downloadManager.enqueue(
+                                url = UpdateChecker.mirrorUrl(apk.downloadUrl, prefix),
+                                fileName = apk.name,
+                                fallbackUrl = apk.downloadUrl
+                            )
                             currentTab = MainTab.Download
                         }
                         SnackbarController.show("已通过镜像站加入下载，完成后点击「打开」即可安装")
