@@ -19,6 +19,16 @@
 -keepnames class com.yunx.app.ui.login.XunleiVerifyWebViewScreen*
 -keepnames class com.yunx.app.ui.login.XunleiLoginScreen*
 
+# Room：保留 @Entity / @Dao / @Database 类及成员（KSP 实现依赖反射读字段名）
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-keep @androidx.room.Dao interface *
+-keepclassmembers class * {
+    @androidx.room.* <methods>;
+    @androidx.room.* <fields>;
+}
+-keepclassmembers @androidx.room.Entity class * { <fields>; }
+
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable
