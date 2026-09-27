@@ -3,6 +3,16 @@ name: Android CI
 on:
   push:
     branches: [ "master" ]
+    # paths 过滤：仅当构建相关文件变化时才触发，避免空跑 CI（workflow 自身必须在列表内，否则改它不触发）
+    paths:
+      - '.github/workflows/ci.yml'
+      - 'app/**'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradlew'
+      - 'gradlew.bat'
   pull_request:
     branches: [ "master" ]
 
@@ -23,10 +33,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      # 不再使用 android-actions/setup-android@v3：该 action 内部执行 `sdkmanager tools`
+      # 会因新版 cmdline-tools 已移除废弃 `tools` 包而失败（Failed to find package 'tools'）。
+      # ubuntu-latest runner 已预装 Android SDK（licenses 已接受），缺失组件由 AGP 自动补装，
+      # 与 build-apk.yml 的可行方案保持一致。
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
@@ -41,11 +51,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Build debug & release APK
+        # release 变体带 R8 混淆+资源压缩，编译验证一并做（避免 R8 错误只靠发布流程发现）
+        run: ./gradlew assembleDebug assembleRelease --no-daemon
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest
+        run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
