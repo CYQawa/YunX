@@ -52,6 +52,18 @@ android {
         debug {
             signingConfig = signingConfigs.getByName("debug")
         }
+        // Release 变体：R8 代码混淆 + 资源压缩瘦身（未使用的代码/资源裁剪）。
+        // 仍用 debug 签名以便本地/CI 直接安装；正式分发可替换为自有签名。
+        // R8 可能误删反射/序列化类，已在 proguard-rules.pro 补 Room 等 keep 规则。
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
     }
 
     buildFeatures {
