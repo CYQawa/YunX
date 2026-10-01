@@ -998,7 +998,12 @@ class ResolveViewModel(
             uiState = ResolveUiState.Error("加载 Releases 失败")
             return
         }
-        if (rels != null) currentGitHubReleases.addAll(rels)
+        if (rels != null) {
+            // 并发/重放的加载（切 Tab 会重放 ShareDetailScreen 的 LaunchedEffect）会重复追加同一页，
+            // fid 重复 → LazyColumn key 冲突崩溃；按 tagName 去重后追加
+            val seen = currentGitHubReleases.mapTo(HashSet()) { it.tagName }
+            currentGitHubReleases.addAll(rels.filter { seen.add(it.tagName) })
+        }
         // 计算徽章：第一个非预发布非草稿 = 最新；其余按 prerelease/draft
         val badgeMap = mutableMapOf<String, String>()
         var latestMarked = false
@@ -1087,7 +1092,11 @@ class ResolveViewModel(
             uiState = ResolveUiState.Error("无法获取 $owner 的仓库列表")
             return
         }
-        if (repos != null) currentGitHubRepos.addAll(repos)
+        if (repos != null) {
+            // 同上：按 fullName 去重，避免重复 fid 触发 LazyColumn key 冲突
+            val seen = currentGitHubRepos.mapTo(HashSet()) { it.fullName }
+            currentGitHubRepos.addAll(repos.filter { seen.add(it.fullName) })
+        }
         // 徽章：fork 标记 + 主语言
         val badgeMap = mutableMapOf<String, String>()
         for (r in currentGitHubRepos) {
