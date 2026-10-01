@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16 实时更新（OPPO ColorOS 16 流体云按此规范接入）：把下载进度提升为「进行中」通知 -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 锁屏保持下载：息屏时维持 Wi-Fi/CPU，避免长时间下载断连 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />

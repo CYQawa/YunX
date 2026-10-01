@@ -96,12 +96,13 @@ class DownloadService : Service() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }
+        val hasSpeed = showSpeed && speed.isNotBlank()
         builder
             .setSmallIcon(R.drawable.icon)
             .setContentTitle(title)
             // 完整通知显示下载速度；简化模式仅提示下载中（且不显示进度条）
             .setContentText(
-                if (showSpeed && speed.isNotBlank()) "下载速度 $speed"
+                if (hasSpeed) "下载速度 $speed"
                 else "正在后台下载，完成前请勿关闭应用"
             )
             .setContentIntent(contentIntent)
@@ -111,7 +112,32 @@ class DownloadService : Service() {
         if (showSpeed && progress in 0..100) {
             builder.setProgress(100, progress, false)
         }
-        return builder.build()
+        // Android 16 实时更新（Live Updates）：OPPO ColorOS 16 流体云采用该规范，
+        // 应用无需接入 OPPO 私有 SDK，按此实现即可在状态栏胶囊 / 卡片 / 锁屏 / 息屏展示下载进度。
+        if (showSpeed && Build.VERSION.SDK_INT >= 36) {
+            // ① 样式必须为 ProgressStyle / BigTextStyle 等标准样式之一（ProgressStyle 可呈现进度条）
+            val style = Notification.ProgressStyle().setStyledByProgress(true)
+            if (progress in 0..100) {
+                // 单段进度条：段长用千分比（1000）而非文件字节数，避免大文件字节数超出 Int 上限
+                style.setProgressSegments(listOf(Notification.ProgressStyle.Segment(PROGRESS_SCALE)))
+                style.setProgress((progress * PROGRESS_SCALE / 100).coerceIn(0, PROGRESS_SCALE))
+            } else {
+                // 总大小未知（流式 / HLS 下载）：不确定态进度条
+                style.setProgressIndeterminate(true)
+            }
+            builder.setStyle(style)
+        }
+        val notification = builder.build()
+        if (showSpeed && Build.VERSION.SDK_INT >= 36) {
+            // ② 请求提升为「进行中」通知（等价于 API 36.1 的 Notification.Builder.setRequestPromotedOngoing(true)）
+            notification.extras.putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
+            // ③ 状态栏胶囊的简短文案（等价于 Notification.Builder.setShortCriticalText(...)）
+            notification.extras.putCharSequence(
+                EXTRA_SHORT_CRITICAL_TEXT,
+                if (progress in 0..100) "$progress%" else "下载中"
+            )
+        }
+        return notification
     }
 
     companion object {
@@ -122,6 +148,15 @@ class DownloadService : Service() {
         private const val EXTRA_PROGRESS = "progress"
         private const val EXTRA_SPEED = "speed"
         private const val EXTRA_SHOW_SPEED = "show_speed"
+
+        /** 进度条总刻度（千分比）：段长不用文件字节数，避免大文件字节数超出 Int 上限而溢出 */
+        private const val PROGRESS_SCALE = 1000
+
+        /** 请求提升为「进行中」通知的 extras 键（与 Notification.EXTRA_REQUEST_PROMOTED_ONGOING 同值） */
+        private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
+
+        /** 状态栏胶囊简短文案的 extras 键（与 Notification.EXTRA_SHORT_CRITICAL_TEXT 同值） */
+        private const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
 
         /** 下载任务开始时调用（服务不存在则创建前台服务） */
         fun start(context: Context, title: String, progress: Int = 0) {
