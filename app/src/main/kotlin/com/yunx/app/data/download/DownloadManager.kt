@@ -80,11 +80,8 @@ private const val RANGE_WORKERS_CAP = 8
 private const val STAGGER_CAP = 8
 private const val STAGGER_MS = 25L
 
-/** ★ 临时诊断（尾部掉速排查）：在飞分片快照的输出间隔（毫秒）。排查完可整体删除 */
-private const val DIAG_INTERVAL_MS = 5_000L
-
-/** ★ 临时诊断：并发路数超过此值时只列最慢的几路，避免中途刷屏（尾部并发本来就少，会全列） */
-private const val DIAG_MAX_ROWS = 12
+/** 慢连接抢占的采样间隔：看门狗每隔这么久刷新一次每路瞬时速度，再据此判定是否换连接 */
+private const val PREEMPT_TICK_MS = 5_000L
 
 // ---------- ★ 慢连接抢占（治「收尾塌到 KB 级」，勿删）----------
 // 网盘 CDN 是**按连接**限速的，且个别连接会落在慢节点上：真机日志（70.6MB 文件）实测多数连接
@@ -184,13 +181,13 @@ private class ElasticAllocator(
 }
 
 /**
- * 一个在飞分片的实时状态。
+ * 一个在飞分片的采样状态（慢连接抢占的判定依据，**永久结构，勿删**）。
  *
  * 累加已收字节（每个读块一次 `AtomicLong.addAndGet`，开销可忽略）、记住起点/块大小，供看门狗协程
- * 算瞬时速度。日志部分（`★ 临时诊断`）排查完可删，但 [preempt] / [preemptCount] / [lastPreemptAtMs]
- * 是**慢连接抢占的判定依据，不能随日志一起删**（否则收尾长尾会回来，见 PREEMPT_MIN_BPS 注释）。
+ * 每 PREEMPT_TICK_MS 刷新一次瞬时速度（[lastBps]）；[preempt] / [preemptCount] / [lastPreemptAtMs]
+ * 决定该路是否换连接续传——删掉它们收尾长尾就会回来（见 PREEMPT_MIN_BPS 注释）。
  */
-private class ChunkDiag(val start: Long, val size: Long) {
+private class InflightChunk(val start: Long, val size: Long) {
     val bytes = AtomicLong(0L)
     val startedAtMs = System.currentTimeMillis()
 
@@ -320,53 +317,19 @@ class DownloadManager(
     }
 
     /**
-     * ★ 临时诊断（尾部掉速排查用）：输出一次「在飞分片快照」（E 级）。
-     * 排查「大文件尾部掉到 KB 级」只看三件事：
-     *   ① `在飞=n/used/cap` + `剩主池片` → 分片是否已发完、是不是只剩一两路在跑（尾部并发塌缩）；
-     *   ② 每路的 `块大小 / 瞬时 / 均速 / 已跑` → 慢的那一路是「单连接被限速」（均速低且已跑很久），
-     *      还是刚起步的正常慢；块大小还能看出动态分片在尾部有没有真的收缩；
-     *   ③ `总速` 与各路瞬时之和的量级差 → 判断是不是只有一路在贡献带宽。
+     * 刷新每路在飞分片的瞬时速度（抢占判定的依据，不产生日志）。
+     *
+     * 每个采样周期调一次：`lastBps = 本周期新增字节 / 本周期耗时`，随后由 [preemptSlowChunks]
+     * 挑出「远低于同伴」的那几路换连接续传。真实速度必须来自窗口差值（累计均速看不出刚变慢的连接）。
      */
-    private fun logInflightDiag(
-        id: Long,
-        total: Long,
-        downloaded: Long,
-        aggBps: Long,
-        mainPoolCount: Int,
-        claimedMain: Int,
-        diag: Map<String, ChunkDiag>
-    ) {
+    private fun sampleInflightChunks(diag: Map<String, InflightChunk>) {
         val now = System.currentTimeMillis()
-        val used = MAX_INFLIGHT_CHUNKS - inflightLimiter.availablePermits
-        // 先按本次窗口刷新每路瞬时速度（最慢的排最前，尾部一眼能看到卡住的那路）
         for (d in diag.values) {
             val bytes = d.bytes.get()
             d.lastBps = (bytes - d.lastBytes).coerceAtLeast(0L) * 1000 / (now - d.lastAtMs).coerceAtLeast(1L)
             d.lastBytes = bytes
             d.lastAtMs = now
         }
-        val rows = diag.entries.sortedBy { it.value.lastBps }
-        val head = "runTask 诊断: id=$id 在飞=${rows.size} used=$used/$MAX_INFLIGHT_CHUNKS " +
-            "剩主池片=${(mainPoolCount - claimedMain).coerceAtLeast(0)} 总速=${formatSpeed(aggBps)} " +
-            "已下=${diagSize(downloaded)}/${diagSize(total)} 剩余=${diagSize((total - downloaded).coerceAtLeast(0L))}"
-        if (rows.isEmpty()) {
-            Log.e(TAG, "$head（没有在飞分片：分片已发完，正在等最后一块结束 / 或准备合并）")
-            return
-        }
-        val sb = StringBuilder(head).append(" 在飞分片(慢→快):")
-        rows.take(DIAG_MAX_ROWS).forEach { (key, d) ->
-            sb.append('\n').append("  └ ").append(key)
-                .append(" 起点=").append(d.start)
-                .append(" 块大小=").append(diagSize(d.size))
-                .append(" 已收=").append(diagSize(d.bytes.get()))
-                .append(" 瞬时=").append(formatSpeed(d.lastBps))
-                .append(" 均速=").append(formatSpeed(if (d.elapsedMs > 0) d.bytes.get() * 1000 / d.elapsedMs else 0L))
-                .append(" 已跑=").append(d.elapsedMs / 1000).append('s')
-        }
-        if (rows.size > DIAG_MAX_ROWS) {
-            sb.append("\n  └ …其余 ").append(rows.size - DIAG_MAX_ROWS).append(" 路未列出（只列最慢 $DIAG_MAX_ROWS 路）")
-        }
-        Log.e(TAG, sb.toString())
     }
 
     /**
@@ -374,7 +337,7 @@ class DownloadManager(
      *
      * 判定阈值 = max(绝对下限 PREEMPT_MIN_BPS, 本任务平均单连接速度 / 2)：
      * 用相对值是为了适配不同 CDN 的限速档次（夸克单连接几十 KB/s、迅雷更低），绝对下限兜住
-     * 「收尾只剩一两路、平均值被自己拉低」的退化情况。命中后只把 [ChunkDiag.preempt] 置位，
+     * 「收尾只剩一两路、平均值被自己拉低」的退化情况。命中后只把 [InflightChunk.preempt] 置位，
      * 由 ChunkDownloader 断开连接并从已收字节续传——不丢数据、不退避、不改变对外结果。
      *
      * 每轮最多抢 PREEMPT_PER_TICK 路、单路最多 PREEMPT_MAX 次，避免全局慢时变成重连风暴。
@@ -386,7 +349,7 @@ class DownloadManager(
         downloaded: Long,
         elapsedMs: Long,
         workers: Int,
-        diag: Map<String, ChunkDiag>
+        diag: Map<String, InflightChunk>
     ) {
         if (diag.isEmpty()) return
         val avgPerConn = if (elapsedMs > 0 && workers > 0) downloaded * 1000 / elapsedMs / workers else 0L
@@ -415,7 +378,7 @@ class DownloadManager(
         }
     }
 
-    /** ★ 临时诊断：字节数转可读文本（只用于诊断日志） */
+    /** 字节数转可读文本（抢占日志用） */
     private fun diagSize(bytes: Long): String = when {
         bytes >= 1024L * 1024 * 1024 -> String.format("%.2fGB", bytes / 1073741824.0)
         bytes >= 1024L * 1024 -> String.format("%.1fMB", bytes / 1048576.0)
@@ -917,8 +880,8 @@ class DownloadManager(
             elasticAllocator.skipTo(resumeNext)
         }
         val elasticResults = ConcurrentHashMap<String, ChunkResult>()
-        // ★ 临时诊断（尾部掉速排查）：在飞分片表，key = m<片号> / seg@<起点> / retry@<起点>
-        val inflightDiag = ConcurrentHashMap<String, ChunkDiag>()
+        // 在飞分片表（key = m<片号> / seg@<起点> / retry@<起点>）：仅供看门狗算瞬时速度与抢占判定
+        val inflightChunks = ConcurrentHashMap<String, InflightChunk>()
 
         val allOk = coroutineScope {
             // ★ worker 数已钳到 actualWorkers；在飞槽位由全进程共享的 inflightLimiter 控制
@@ -936,10 +899,10 @@ class DownloadManager(
                             if (fallback.get()) return@withPermit
                             val start = i * chunkSize
                             val end = min(start + chunkSize - 1, total - 1)
-                            // ★ 临时诊断：登记在飞分片（key=m<片号>），供 5 秒一次的 E 级快照输出单路速度
+                            // 登记在飞分片（key=m<片号>）：看门狗据此算单路瞬时速度、判定慢连接抢占
                             val diagKey = "m${i + 1}"
-                            val diag = ChunkDiag(start, end - start + 1)
-                            inflightDiag[diagKey] = diag
+                            val diag = InflightChunk(start, end - start + 1)
+                            inflightChunks[diagKey] = diag
                             val res = try {
                                 downloader.downloadChunk(
                                     taskId = id, url = task.url, start = start, end = end,
@@ -947,7 +910,7 @@ class DownloadManager(
                                     preempt = diag.preempt
                                 ) { bytes ->
                                     speedLimiter.awaitAllow(bytes)
-                                    diag.bytes.addAndGet(bytes)   // ★ 临时诊断
+                                    diag.bytes.addAndGet(bytes)   // 采样：供看门狗算瞬时速度
                                     // ★ 钳制到 total：任何竞态都不可能让显示超过总大小
                                     val new = minOf(downloaded.addAndGet(bytes), total)
                                     if (!isTaskActive()) return@downloadChunk
@@ -966,10 +929,7 @@ class DownloadManager(
                                 failReason.compareAndSet(null, "分片 ${i + 1}/$mainPoolCount：${e.message ?: e.javaClass.simpleName}")
                                 ChunkResult.FAILED
                             } finally {
-                                // ★ 临时诊断：分片结束（含耗时/均速）——尾部那几片慢在哪一行就能看出来
-                                Log.e(TAG, "分片结束: id=$id $diagKey 收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
-                                    "耗时=${diag.elapsedMs / 1000}s 均速=${formatSpeed(if (diag.elapsedMs > 0) diag.bytes.get() * 1000 / diag.elapsedMs else 0L)}")
-                                inflightDiag.remove(diagKey)
+                                inflightChunks.remove(diagKey)
                             }
                             results[i] = res
                             when (res) {
@@ -991,12 +951,10 @@ class DownloadManager(
                         val s = range.first
                         val e = range.last
                         val key = "${s}_${e}"
-                        // ★ 临时诊断：弹性块大小 = 动态分片实际块大小，分配时打一行（尾部会看到块逐渐变小）
+                        // 登记在飞弹性块（key=seg@<起点>）：看门狗据此算单路瞬时速度、判定慢连接抢占
                         val diagKey = "seg@$s"
-                        val diag = ChunkDiag(s, e - s + 1)
-                        inflightDiag[diagKey] = diag
-                        Log.e(TAG, "弹性块分配: id=$id 起=$s 大小=${diagSize(diag.size)} 在飞=${inflightDiag.size} " +
-                            "分配器基准速度=${formatSpeed(elasticAllocator.recentSpeedBps)}")
+                        val diag = InflightChunk(s, e - s + 1)
+                        inflightChunks[diagKey] = diag
                         val res = try {
                             inflightLimiter.withPermit {
                                 if (fallback.get()) return@withPermit ChunkResult.FAILED
@@ -1006,7 +964,7 @@ class DownloadManager(
                                     preempt = diag.preempt
                                 ) { bytes ->
                                     speedLimiter.awaitAllow(bytes)
-                                    diag.bytes.addAndGet(bytes)   // ★ 临时诊断
+                                    diag.bytes.addAndGet(bytes)   // 采样：供看门狗算瞬时速度
                                     // ★ 钳制到 total：任何竞态都不可能让显示超过总大小
                                     val new = minOf(downloaded.addAndGet(bytes), total)
                                     if (!isTaskActive()) return@downloadChunk
@@ -1025,11 +983,7 @@ class DownloadManager(
                         } catch (e: Exception) {
                             ChunkResult.FAILED
                         } finally {
-                            // ★ 临时诊断：弹性块结束（块大小 + 耗时 + 均速，尾部掉速的关键证据）
-                            Log.e(TAG, "弹性块结束: id=$id $diagKey 起=${diag.start} 大小=${diagSize(diag.size)} " +
-                                "收=${diagSize(diag.bytes.get())} 耗时=${diag.elapsedMs / 1000}s " +
-                                "均速=${formatSpeed(if (diag.elapsedMs > 0) diag.bytes.get() * 1000 / diag.elapsedMs else 0L)}")
-                            inflightDiag.remove(diagKey)
+                            inflightChunks.remove(diagKey)
                         }
                         elasticResults[key] = res
                         when (res) {
@@ -1044,25 +998,18 @@ class DownloadManager(
                     }
                 }
             }
-            // ★ 临时诊断：每 DIAG_INTERVAL_MS 输出一次在飞分片快照（E 级），worker 跑完即停
-            val diagJob = launch(Dispatchers.IO) {
-                var lastDl = downloaded.get()
-                var lastAt = System.currentTimeMillis()
-                val runStartMs = lastAt
+            // 看门狗：周期刷新每路瞬时速度，并判定是否把慢连接换掉（worker 全部跑完即停）
+            val preemptJob = launch(Dispatchers.IO) {
+                val runStartMs = System.currentTimeMillis()
                 while (true) {
-                    delay(DIAG_INTERVAL_MS)
-                    val now = System.currentTimeMillis()
-                    val cur = downloaded.get()
-                    val agg = (cur - lastDl).coerceAtLeast(0L) * 1000 / (now - lastAt).coerceAtLeast(1L)
-                    logInflightDiag(id, total, cur, agg, mainPoolCount, nextIdx.get(), inflightDiag)
-                    // ★ 慢连接抢占（永久逻辑，勿随日志一起删）：刷新瞬时速度后立刻判定，本任务的平均单连接速度做参照
-                    preemptSlowChunks(id, cur, now - runStartMs, actualWorkers, inflightDiag)
-                    lastDl = cur
-                    lastAt = now
+                    delay(PREEMPT_TICK_MS)
+                    // ★ 慢连接抢占（永久逻辑，勿删）：先刷新瞬时速度，再以本任务的平均单连接速度为参照
+                    sampleInflightChunks(inflightChunks)
+                    preemptSlowChunks(id, downloaded.get(), System.currentTimeMillis() - runStartMs, actualWorkers, inflightChunks)
                 }
             }
             workers.awaitAll()
-            diagJob.cancel()
+            preemptJob.cancel()
             !fallback.get() && results.all { it == ChunkResult.OK } &&
                 elasticResults.values.all { it == ChunkResult.OK }
         }
@@ -1102,10 +1049,10 @@ class DownloadManager(
                             val pos = retryIdx.getAndIncrement()
                             if (pos >= missing.size) break
                             val m = missing[pos]
-                            // ★ 临时诊断：重试区间同样登记（重试退避造成的空转在快照里能直接看到）
+                            // 重试区间同样登记：重试期间的慢连接也会被看门狗采样、抢占
                             val diagKey = "retry@${m.start}"
-                            val diag = ChunkDiag(m.start, m.end - m.start + 1)
-                            inflightDiag[diagKey] = diag
+                            val diag = InflightChunk(m.start, m.end - m.start + 1)
+                            inflightChunks[diagKey] = diag
                             val res = try {
                                 // ★ 重试同样走全进程在飞信号量：少这一处会让「主池 + 弹性区 + 重试」
                                 //   三路并发叠加，正是 OOM 的成因之一
@@ -1116,7 +1063,7 @@ class DownloadManager(
                                         preempt = diag.preempt
                                     ) { bytes ->
                                         speedLimiter.awaitAllow(bytes)
-                                        diag.bytes.addAndGet(bytes)   // ★ 临时诊断
+                                        diag.bytes.addAndGet(bytes)   // 采样：供看门狗算瞬时速度
                                         // ★ 钳制到 total：任何竞态都不可能让显示超过总大小
                                         val new = minOf(downloaded.addAndGet(bytes), total)
                                         if (!isTaskActive()) return@downloadChunk
@@ -1129,10 +1076,7 @@ class DownloadManager(
                             } catch (e: Exception) {
                                 ChunkResult.FAILED
                             } finally {
-                                // ★ 临时诊断：重试区间结束
-                                Log.e(TAG, "重试结束: id=$id $diagKey 收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
-                                    "耗时=${diag.elapsedMs / 1000}s 均速=${formatSpeed(if (diag.elapsedMs > 0) diag.bytes.get() * 1000 / diag.elapsedMs else 0L)}")
-                                inflightDiag.remove(diagKey)
+                                inflightChunks.remove(diagKey)
                             }
                             retryResults[pos] = res
                             if (res != ChunkResult.OK) {
@@ -1183,23 +1127,11 @@ class DownloadManager(
         val fullFile = File(chunkDir, "full_single.bin").apply { delete() } // 全新整文件，从 0 开始
         val fullDownloaded = AtomicLong(0)
         val fullLastAt = AtomicLong(0L)
-        // ★ 临时诊断：单流阶段每 DIAG_INTERVAL_MS 打一行真实单连接速度（尾部掉到 KB 的另一大嫌疑）
-        var diagAt = System.currentTimeMillis()
-        var diagBytes = 0L
         val ok = downloader.downloadFull(id, task.url, fullFile, headers, total) { bytes ->
             speedLimiter.awaitAllow(bytes)
             // ★ 钳制到 total：任何竞态都不可能让显示超过总大小
             val new = minOf(fullDownloaded.addAndGet(bytes), total)
             if (!isTaskActive()) return@downloadFull
-            // ★ 临时诊断：单连接速度（顺序回调，普通变量即可，无需原子）
-            diagBytes += bytes
-            val nowMs = System.currentTimeMillis()
-            if (nowMs - diagAt >= DIAG_INTERVAL_MS) {
-                Log.e(TAG, "单流诊断: id=$id 单连接速度=${formatSpeed(diagBytes * 1000 / (nowMs - diagAt))} " +
-                    "已下=${diagSize(new)}/${diagSize(total)}（回退后是从 0 重下的整文件）")
-                diagAt = nowMs
-                diagBytes = 0L
-            }
             persistProgressIfDue(id, new, total, force = false, lastAt = fullLastAt)
             notifyProgress(id, task.fileName, new, total)
         }

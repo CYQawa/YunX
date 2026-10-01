@@ -139,7 +139,7 @@ object HttpClients {
             //   —— log/oom 两份崩溃的栈（Http2Stream$FramingSource.receive → SegmentPool.take）正在这里。
             //   HTTP/1.1 没有应用层流窗口，读多少由 TCP 背压决定，堆占用只剩每路 64KB 读缓冲。
             //   代价：分片不再多路复用，每路各占一条连接。若实测总速明显变差，把下面一行改回
-            //   listOf(Protocol.HTTP_2, Protocol.HTTP_1_1) 即可；协议是否生效看 ChunkDownloader 的「协议诊断」日志。
+            //   listOf(Protocol.HTTP_2, Protocol.HTTP_1_1) 即可；要确认协议是否生效，可在 ChunkDownloader 里临时打印 response.protocol。
             .protocols(listOf(Protocol.HTTP_1_1))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)

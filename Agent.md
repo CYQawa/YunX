@@ -286,8 +286,8 @@ manifest 的 minSdk），依据与历史版本对照写在 `gradle/libs.versions
   `.protocols(...)` 由 `listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)` 改为 `listOf(Protocol.HTTP_1_1)`，
   从源头去掉上一条的「每流 16MB 应用层接收窗口」——HTTP/1.1 没有流窗口，读多少完全由 TCP 背压决定，
   堆占用只剩每路 64KB 读缓冲（代价：分片不再多路复用，每路各占一条连接）。是否影响总速**必须实测**：
-  先用 `ChunkDownloader` 的 `协议诊断: 域名=… 协议=…`（★ 临时诊断，随诊断日志一起删）确认 CDN 实际协商到的协议，
-  再对比 `runTask 诊断` 的总速；要回退只改那一行为两个协议即可。API 客户端（`buildApi()`）**不设** `protocols`，
+  验证办法：需要在 `ChunkDownloader` 里临时打一行 `response.protocol`（或抓包）确认协商到 `http/1.1`，
+  再对比 `runTask:` 的总速；要回退只改那一行为两个协议即可。API 客户端（`buildApi()`）**不设** `protocols`，
   仍按 OkHttp 默认（h2 优先）——JSON 响应体小，没有流缓冲问题。
 - 主池、弹性区、**失败重试**三条路径都必须走 `inflightLimiter.withPermit` —— 少任何一条，三路并发就会叠加。
 - `threadCount` 仍**原样传给 `chunkCountFor`**：`plan.txt` 签名（`chunks=… total=… main=…`）不能变，否则所有用户的断点续传失效。钳的是 worker 数，不是分片数。
@@ -324,7 +324,7 @@ private const val STAGGER_CAP = 8; STAGGER_MS = 25L  // 错峰建连，平摊 TC
 
 ### 5.3.1 慢连接抢占（治「收尾塌到 KB 级」，**不要删**）
 
-网盘 CDN 是**按连接**限速的，且个别连接会落在慢节点上。真机日志（70.6MB 文件，`YunX-DL` E 级诊断）实测：
+网盘 CDN 是**按连接**限速的，且个别连接会落在慢节点上。真机日志（70.6MB 文件，当时 `YunX-DL` 的诊断输出，日志已删）实测：
 
 ```
 runTask 诊断: id=16 在飞=1 used=1/64 剩主池片=0 总速=3.2 KB/s 已下=70.6MB/70.6MB 剩余=25.0KB
@@ -349,20 +349,21 @@ private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
 判定阈值 = max(PREEMPT_MIN_BPS, 本任务平均单连接速度 / 2)
 ```
 
-- 看门狗 = 每 5s 的在飞快照协程（`preemptSlowChunks`）；命中只把 `ChunkDiag.preempt` 置位。
+- 看门狗 = 每 `PREEMPT_TICK_MS`（5s）的采样协程：`sampleInflightChunks` 刷新每路瞬时速度后交给
+  `preemptSlowChunks` 判定；命中只把 `InflightChunk.preempt` 置位。
 - **收尾放宽**：在飞 ≤ `PREEMPT_ENDGAME_INFLIGHT` 时不再要求「跑满 15s / 剩余 ≥128KB」——只剩几路在磨时，
   那几路的速度就是用户看到的总速度，重连握手（~0.5s）比继续等便宜得多。
 - `ChunkDownloader.downloadChunk(preempt = …)` 读到置位即 `throw PreemptedException`：**已写字节全部保留**，
   下一轮从 `partFile.length()` 续传，**不退避、不计失败**（`ChunkResult` 对外仍是三态）。
 - 因此抢占**永远不丢数据、不产生空洞**：`written == expected` 校验与合并前的字节校验照旧。
-- 抢占计数/`抢占慢连接 …` 日志是永久逻辑；`★ 临时诊断` 的快照日志可删，但
-  `ChunkDiag.preempt / preemptCount / lastPreemptAtMs` **不能跟着删**，否则收尾长尾会回来。
+- 抢占计数/`抢占慢连接 …` 日志、`sampleInflightChunks` 采样与 `InflightChunk.preempt / preemptCount /
+  lastPreemptAtMs` 都是**永久逻辑**（抢占判定依据）。排查用的临时诊断日志（在飞快照 `runTask 诊断`、
+  `分片结束`、`弹性块分配`/`弹性块结束`、`单流诊断`、`协议诊断`）已于 2026-10-01 删除；
+  **不要因为「日志都删干净了」就把这些字段和采样一起删掉**，否则收尾长尾会回来（见 `PREEMPT_MIN_BPS` 注释）。
 - 2026-10-01 的另两份复现日志（`log/3/2/`）显示同一形态的变体：总速 3~7MB/s 全程正常，
   但主池慢片 `m34 21s/12.0KB/s`、`m93 18s/13.6KB/s`、`m37 17s/14.6KB/s`、`m128 16s/15.7KB/s`
   在别的片以 4s/50~60KB/s 完成时还在爬，收尾最后 200~400KB 只剩 1~5 路（`seg@58726398 233.3KB
   已收=111.3KB 瞬时=18.3KB/s`）→ 正是抢占要处理的对象。
-- 抢占计数/`抢占慢连接 …` 日志是永久逻辑；`★ 临时诊断` 的快照日志可删，但
-  `ChunkDiag.preempt / preemptCount / lastPreemptAtMs` **不能跟着删**，否则收尾长尾会回来。
 
 ### 5.4 断点续传与分片计划签名
 

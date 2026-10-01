@@ -28,7 +28,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -92,21 +91,6 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
         Collections.newSetFromMap(ConcurrentHashMap<Call, Boolean>())
     fun cancelCalls(taskId: Long) {
         activeCalls.remove(taskId)?.forEach { call -> runCatching { call.cancel() } }
-    }
-
-    /** ★ 临时诊断：已打印过协议的域名（每个 CDN 域名只打一行） */
-    private val protoLoggedHosts = ConcurrentHashMap<String, Boolean>()
-
-    /**
-     * ★ 临时诊断：域名首次响应时打印实际协商到的协议。
-     * 用途：核对下载客户端固定 HTTP/1.1（[com.yunx.app.data.network.HttpClients.buildDownload]）是否生效，
-     * 以及 CDN 是否另有 HTTP/2 入口。随诊断日志一起删除即可，不影响下载逻辑。
-     */
-    private fun logProtocolOnce(response: Response) {
-        val host = response.request.url.host
-        if (protoLoggedHosts.putIfAbsent(host, true) == null) {
-            Log.e(TAG, "协议诊断: 域名=$host 协议=${response.protocol}")
-        }
     }
 
     // ---------- 总大小探测 ----------
@@ -241,7 +225,6 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
         val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
         try {
             return call.execute().use { response ->
-                logProtocolOnce(response)
                 // 防盗链/广告回退页：直接判失败
                 if (response.header("Content-Type").orEmpty().contains("text/html", ignoreCase = true)) {
                     Log.w(TAG, "downloadChunk: task=$taskId 返回 text/html（疑似广告/错误页），终止")
@@ -340,7 +323,6 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
         val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
         try {
             call.execute().use { response ->
-                logProtocolOnce(response)
                 // ★ 最终响应若是 HTML（防盗链/过期/错误页），直接失败，绝不存盘
                 if (response.header("Content-Type").orEmpty().contains("text/html", ignoreCase = true)) {
                     Log.w(TAG, "downloadFull: task=$taskId 返回 text/html（疑似过期/防盗链/错误页），终止")
