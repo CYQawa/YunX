@@ -44,6 +44,10 @@ object ThemeController {
     var seedColor by mutableStateOf(SettingsRepository.DEFAULT_SEED_COLOR)
         private set
 
+    /** 文件名显示方式：false=单行跑马灯滚动（默认），true=多行折行显示 */
+    var fileNameMultiLine by mutableStateOf(false)
+        private set
+
     private var initialized = false
 
     /** 从持久化存储加载（幂等；首次调用有效） */
@@ -53,6 +57,7 @@ object ThemeController {
         darkMode = s.darkMode
         colorMode = s.themeColorMode
         seedColor = s.themeSeedColor
+        fileNameMultiLine = s.fileNameMultiLine
         initialized = true
     }
 
@@ -76,5 +81,11 @@ object ThemeController {
             themeSeedColor = argb
             themeColorMode = 2
         }
+    }
+
+    /** 设置文件名显示方式并持久化（true=多行折行，false=单行跑马灯） */
+    fun setFileNameMultiLine(context: Context, value: Boolean) {
+        fileNameMultiLine = value
+        SettingsRepository(context).fileNameMultiLine = value
     }
 }

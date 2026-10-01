@@ -215,6 +215,21 @@ manifest 的 minSdk），依据与历史版本对照写在 `gradle/libs.versions
 
 **降回 23 的前提**：确认 AGP 已修掉该 D8 脱糖缺陷（换版本后用 debug 包打开带表格的 README，实测不崩）。
 
+### 3.12 文件名显示：统一用 `FileNameText`（别再手写 maxLines）
+
+文件名（含文件夹名）的展示方式由用户设置决定（「主题与外观 → 文件名显示」，`SettingsRepository.fileNameMultiLine`，
+内存态在 `ThemeController`），因此**展示文件名的地方一律用 `ui/components/FileNameText.kt` 的 `FileNameText`**：
+
+```kotlin
+FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+```
+
+- 默认（`fileNameMultiLine = false`）：单行 + `basicMarquee` 跑马灯，与历史观感一致；`true` 时折行显示（最多 3 行）。
+- 已接入：`ShareFileRow`（解析页 + 六个网盘页 + 转存/移动选择器的**唯一行组件**）、
+  六个 `*SaveSheet`/`SaveToCloudSheet` 的文件名头、`CloudFileSheets` 文件详情头、`DownloadScreen` 的任务行/分组行。
+- 不要在各调用处再写 `maxLines` / `overflow` / `basicMarquee`：写死单行会让该设置失效，写死多行则默认观感被改。
+- 面包屑、对话框标题、分享标题（`BookmarkScreen`）**不**走它：它们不是文件名，横向空间紧张时折行会破坏布局。
+
 ---
 
 ## 4. 验证

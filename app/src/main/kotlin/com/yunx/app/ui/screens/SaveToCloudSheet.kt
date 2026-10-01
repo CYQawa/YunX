@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
 import com.yunx.app.ui.resolve.CrumbBar
@@ -139,11 +140,10 @@ fun SaveToCloudSheet(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium
                     )
-                    Text(
+                    FileNameText(
                         text = resolveViewModel.saveTarget?.fname ?: "",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

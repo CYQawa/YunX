@@ -141,6 +141,7 @@ private val presetColors = listOf(
 /**
  * 主题与外观设置页（参考 WebIDE ThemeSettingsItem 风格）：
  * - 外观模式：FilterChip 胶囊单选（跟随系统 / 浅色 / 深色）
+ * - 文件名显示：FilterChip 胶囊单选（跑马灯滚动 / 多行显示），全局生效见 FileNameText
  * - 主题色：可折叠卡片，动态色彩开关（Android12+）+ LazyRow 色圆选择 + 自定义调色盘
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -241,6 +242,41 @@ fun ThemeScreen(
                                 selected = ThemeController.darkMode == index,
                                 label = label,
                                 onClick = { ThemeController.setDarkMode(context, index) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ---------- 文件名显示 ----------
+            SectionLabel("文件名显示")
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "文件名过长时的展示方式",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 默认「跑马灯滚动」= 改动前的观感；「多行显示」把长文件名折成最多 3 行
+                        val nameModes = listOf("跑马灯滚动", "多行显示")
+                        nameModes.forEachIndexed { index, label ->
+                            SmoothFilterChip(
+                                selected = ThemeController.fileNameMultiLine == (index == 1),
+                                label = label,
+                                onClick = { ThemeController.setFileNameMultiLine(context, index == 1) },
                                 modifier = Modifier.weight(1f)
                             )
                         }

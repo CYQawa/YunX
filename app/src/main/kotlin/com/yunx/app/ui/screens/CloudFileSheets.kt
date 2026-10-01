@@ -94,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
 import com.yunx.app.ui.resolve.CrumbBar
@@ -242,11 +243,10 @@ private fun ActionMenu(
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                FileNameText(
                     text = file.fname,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
+                    fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = if (file.isdir) "文件夹" else "文件",

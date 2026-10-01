@@ -100,6 +100,13 @@ class SettingsRepository(context: Context) {
             prefs.edit().putInt("app_icon_variant", value.coerceIn(0, 1)).apply()
         }
 
+    /** 文件名显示方式：false=单行跑马灯滚动（默认，保持原有观感），true=多行折行显示 */
+    var fileNameMultiLine: Boolean
+        get() = prefs.getBoolean("file_name_multi_line", false)
+        set(value) {
+            prefs.edit().putBoolean("file_name_multi_line", value).apply()
+        }
+
     /** 忽略 SSL 证书校验（抓包调试用，隐藏菜单开启；默认关闭） */
     var ignoreSslCert: Boolean
         get() = prefs.getBoolean("ignore_ssl_cert", false)

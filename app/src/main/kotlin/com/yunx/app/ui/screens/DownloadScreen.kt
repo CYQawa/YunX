@@ -108,6 +108,7 @@ import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.download.DownloadStats
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.viewmodel.DownloadViewModel
+import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.components.YunXWavyProgress
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
@@ -503,12 +504,10 @@ private fun FolderDownloadGroup(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    FileNameText(
                         text = folder,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -643,12 +642,10 @@ private fun DownloadSubTaskRow(
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    FileNameText(
                         text = displayName,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = when {
@@ -827,12 +824,10 @@ private fun DownloadTaskCard(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    FileNameText(
                         text = task.fileName,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(

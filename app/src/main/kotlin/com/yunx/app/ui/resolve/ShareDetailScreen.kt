@@ -19,7 +19,6 @@
 package com.yunx.app.ui.resolve
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -99,6 +98,7 @@ import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.components.ScrollToTopButton
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.items.MultiSelectAction
@@ -715,12 +715,12 @@ internal fun ShareFileRow(
         //   外层保留 Card 负责圆角、选中底色与涟漪裁剪，故 ListItem 容器设为透明。
         ListItem(
             headlineContent = {
-                // 文件名 + 徽章（同一行；文件名过长时滚动播放）
+                // 文件名 + 徽章（同一行；展示方式由「主题与外观 → 文件名显示」决定：跑马灯 / 多行折行）
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
+                    FileNameText(
                         text = file.fname,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+                        // weight(fill = false)：先给徽章留出位置，文件名再占满剩余宽度（短名不拉伸）
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     if (badge != null) {
                         Spacer(modifier = Modifier.width(6.dp))
