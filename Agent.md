@@ -19,7 +19,7 @@
 | UI | Jetpack Compose + Material Design 3 |
 | 持久化 | Room（KSP 注解处理）+ SharedPreferences |
 | 网络 | OkHttp 4.12.0 |
-| minSdk / targetSdk / compileSdk | 23 / 34 / 36 |
+| minSdk / targetSdk / compileSdk | 24 / 34 / 36 |
 | JVM target | 17 |
 | 开源协议 | GNU AGPL-3.0 |
 
@@ -195,6 +195,25 @@ manifest 的 minSdk），依据与历史版本对照写在 `gradle/libs.versions
 必须先在 composable 里取到局部变量再捕获进 lambda；写在 lambda 内会报
 `@Composable invocations can only happen from the context of a @Composable function`。
 （`AnimatedVisibility` 的 `enter` / `exit` 参数位在 composable 参数位置求值，可直接写。）
+
+### 3.11 minSdk 钉 24（勿降回 23）
+
+`minSdk = 24` 是被 AGP 8.13 的 D8 缺陷逼出来的，不是随手抬的：
+
+- `minSdk < 24` 时 D8 必须脱糖接口的静态方法：它把接口上的 `$default` 桥方法（`RowScope.weight$default`、
+  `DrawScope.drawLine-…$default` 这类）搬进合成的 `Xxx$-CC` 伴生类，**却不改写第三方库（AAR）字节码里的调用点**，
+  调用点仍指向原接口 ⇒ 运行时 `NoSuchMethodError: No static method weight$default(...) in class …RowScope`。
+  实测证据：崩溃包 `classes15.dex` 能 dump 出悬空调用点 `invoke-static/range → RowScope.weight$default`，
+  同时 `classes.dex` 里已生成 `RowScope$-CC`。触发点：mikepenz markdown 渲染 README 表格/引用块
+  （`MarkdownTable.kt:106`、`MarkdownBlockQuote.kt:46`）。
+- **只有未混淆的包会崩**：release 变体开 R8，R8 在 D8 之前就把桥内联掉了（实测 release APK 内
+  `weight$default` / `drawLine-…$default` / `*-CC` 出现 0 次）。所以这个坑只在 debug / CI 包上暴露，
+  与设备系统版本无关（Android 10 上同样崩，因为缺的是 APK 里的方法，不是系统能力）。
+- 24 起系统原生支持接口的静态/默认方法，D8 不再脱糖，调用点天然成立。同类问题 Sentry 也踩到过
+  （AGP 8.13 + `minSdk < 24` 的接口 `$default` 桥，见 getsentry/sentry-java#5302），他们的解法是在自己的
+  调用点上显式传参绕开桥；我们改不了第三方 AAR 的字节码，所以抬 minSdk 是代价最小且确定有效的修法。
+
+**降回 23 的前提**：确认 AGP 已修掉该 D8 脱糖缺陷（换版本后用 debug 包打开带表格的 README，实测不崩）。
 
 ---
 

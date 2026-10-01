@@ -80,7 +80,7 @@
 
 ## 构建
 
-要求：minSdk 21，targetSdk 34。
+要求：minSdk 24，targetSdk 34。
 
 ```bash
 git clone https://github.com/CYQawa/YunX.git
