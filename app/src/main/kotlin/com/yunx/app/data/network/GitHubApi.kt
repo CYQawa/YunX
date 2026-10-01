@@ -41,6 +41,24 @@ class GitHubApi(
     /** 每次请求动态获取全局客户端（忽略 SSL 开关切换即时生效） */
     private val client get() = clientProvider()
 
+    /**
+     * 携带的 Token 被 GitHub 拒绝（HTTP 401）时回调，只回调一次。
+     *
+     * 为什么必须处理：GitHub 对带**无效** Authorization 头的一切请求都返回 401，
+     * 连公开仓库/Release 解析也会全量失败（不只是限额问题），所以上层要清除这个 Token 才能恢复匿名访问。
+     */
+    var onUnauthorized: (() -> Unit)? = null
+
+    private var unauthorizedNotified = false
+
+    /** 统一检查响应码：401 → 清空缓存（失败条目会缓存 1 分钟，不清会让「修好之后」仍失败）并通知上层 */
+    private fun noteResponseCode(code: Int) {
+        if (code != 401 || unauthorizedNotified) return
+        unauthorizedNotified = true
+        GitHubResponseCache.clear()
+        onUnauthorized?.invoke()
+    }
+
     /** 获取单个仓库信息：GET /repos/{owner}/{repo}（结果经统一缓存） */
     suspend fun getRepo(owner: String, repo: String): GitHubRepo? = withContext(Dispatchers.IO) {
         runCatching {
@@ -159,6 +177,34 @@ class GitHubApi(
         }
 
     /**
+     * 校验一个**尚未保存**的 Token：GET /user。
+     *
+     * 不走 [cachedBody]（缓存 key 带 Token 指纹，校验的 Token 还没保存，会与匿名 key 串号）。
+     * 保存前先校验可拦住乱填的 Token —— 无效 Token 会让之后所有 GitHub 请求返回 401。
+     */
+    suspend fun validateToken(token: String): TokenCheck = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder()
+                .url("https://api.github.com/user")
+                .header("User-Agent", "YunX")
+                .header("Accept", "application/vnd.github+json")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    // 401 = Token 无效/已过期/被撤销；其余（403 限流、5xx 等）无法判定有效性
+                    if (resp.code == 401) TokenCheck.Invalid else TokenCheck.Unknown
+                } else {
+                    val login = resp.body?.string()
+                        ?.let { body -> runCatching { JSONObject(body).optString("login") }.getOrNull() }
+                    if (login.isNullOrBlank()) TokenCheck.Unknown else TokenCheck.Valid(login)
+                }
+            }
+        }.getOrElse { TokenCheck.Unknown }
+    }
+
+    /**
      * 获取仓库 README 原文（Markdown）。
      * - 优先 GET /repos/{owner}/{repo}/readme，Accept: application/vnd.github.raw（返回纯文本，自动识别 README.md/readme.rst 等）；
      * - 404 视为无 README，返回 null；
@@ -181,6 +227,7 @@ class GitHubApi(
                         }
                         .build()
                     client.newCall(apiRequest).execute().use { resp ->
+                        noteResponseCode(resp.code)
                         if (resp.isSuccessful) {
                             val body = resp.body?.string()
                             if (!body.isNullOrBlank()) return@getOrFetch body
@@ -276,6 +323,7 @@ class GitHubApi(
     private suspend fun cachedBody(key: String, url: String): String? =
         GitHubResponseCache.getOrFetch(key) {
             client.newCall(buildRequest(url)).execute().use { resp ->
+                noteResponseCode(resp.code)
                 if (!resp.isSuccessful) return@use null
                 resp.body?.string()
             }
@@ -285,6 +333,7 @@ class GitHubApi(
     private fun requestJson(url: String): JSONObject? {
         val request = buildRequest(url)
         client.newCall(request).execute().use { response ->
+            noteResponseCode(response.code)
             if (!response.isSuccessful) return null
             val body = response.body?.string() ?: return null
             return runCatching { JSONObject(body) }.getOrNull()
@@ -295,6 +344,7 @@ class GitHubApi(
     private fun requestJsonArray(url: String): JSONArray? {
         val request = buildRequest(url)
         client.newCall(request).execute().use { response ->
+            noteResponseCode(response.code)
             if (!response.isSuccessful) return null
             val body = response.body?.string() ?: return null
             return runCatching { JSONArray(body) }.getOrNull()
@@ -314,4 +364,16 @@ class GitHubApi(
         }
         return builder.build()
     }
+}
+
+/** [GitHubApi.validateToken] 的校验结果 */
+sealed class TokenCheck {
+    /** 校验通过，[login] 为 Token 对应的 GitHub 登录名 */
+    data class Valid(val login: String) : TokenCheck()
+
+    /** GitHub 明确拒绝（HTTP 401）：Token 无效 / 已过期 / 被撤销 */
+    object Invalid : TokenCheck()
+
+    /** 无法判定（网络异常等）：不落盘，提示用户联网后重试 */
+    object Unknown : TokenCheck()
 }

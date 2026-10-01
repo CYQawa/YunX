@@ -102,6 +102,9 @@ object GitHubResponseCache {
         cache.keys.removeAll { it.startsWith(prefix) }
     }
 
+    /** 清空全部条目（Token 失效时失败条目会污染所有 key，需整体作废） */
+    fun clear() = invalidatePrefix("")
+
     /** 容量超限按 fetchedAt 淘汰最旧条目 */
     private suspend fun evictIfNeeded() = evictMutex.withLock {
         if (cache.size <= MAX_ENTRIES) return@withLock

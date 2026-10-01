@@ -104,6 +104,7 @@ import com.yunx.app.data.network.GitHubApi
 import com.yunx.app.data.network.GitHubTokenStore
 import com.yunx.app.data.network.Pan123Api
 import com.yunx.app.data.network.QuarkApi
+import com.yunx.app.data.network.TokenCheck
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.prefs.SettingsRepository
@@ -313,6 +314,16 @@ fun MainScreen() {
     }
     // 网盘页 GitHub 卡片登录态：保存/清除 Token 后即时刷新卡片主按钮文案
     var githubHasTokenState by remember { mutableStateOf(GitHubTokenStore.hasToken(context)) }
+    // 无效 Token 会被 GitHub 全量拒绝（401，连公开仓库解析也失败）：自动清除 Token、清空缓存并提示
+    LaunchedEffect(githubApi) {
+        githubApi.onUnauthorized = {
+            scope.launch {
+                GitHubTokenStore.setToken(context, null)
+                githubHasTokenState = false
+                SnackbarController.show("GitHub Token 无效或已过期，已自动清除并回退匿名限额，请重新配置")
+            }
+        }
+    }
     // GitHub Token 配置弹窗 / 清除二次确认
     var showGitHubTokenDialog by remember { mutableStateOf(false) }
     var showGitHubClearConfirm by remember { mutableStateOf(false) }
@@ -826,6 +837,9 @@ fun MainScreen() {
                                             if (!login.isNullOrBlank()) {
                                                 resolveViewModel.startResolve("https://github.com/$login", "")
                                                 currentTab = MainTab.Resolve
+                                            } else {
+                                                // 取不到 login：Token 无效/已过期，或网络异常
+                                                SnackbarController.show("无法获取 GitHub 账号信息，请检查网络或重新配置 Token")
                                             }
                                         }
                                     },
@@ -1055,6 +1069,8 @@ fun MainScreen() {
     if (showGitHubTokenDialog) {
         var tokenInput by rememberSaveable { mutableStateOf(GitHubTokenStore.getToken(context) ?: "") }
         var passwordVisible by remember { mutableStateOf(false) }
+        // 校验失败提示（显示在输入框下方），修改输入即清除
+        var tokenError by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { showGitHubTokenDialog = false },
             title = { Text("GitHub Token") },
@@ -1087,9 +1103,14 @@ fun MainScreen() {
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = tokenInput,
-                        onValueChange = { tokenInput = it },
+                        onValueChange = {
+                            tokenInput = it
+                            tokenError = null
+                        },
                         singleLine = true,
+                        isError = tokenError != null,
                         label = { Text("Personal Access Token") },
+                        supportingText = { tokenError?.let { Text(it) } },
                         visualTransformation = if (passwordVisible) VisualTransformation.None
                         else PasswordVisualTransformation(),
                         trailingIcon = {
@@ -1106,10 +1127,28 @@ fun MainScreen() {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    GitHubTokenStore.setToken(context, tokenInput.trim())
-                    githubHasTokenState = GitHubTokenStore.hasToken(context)
-                    showGitHubTokenDialog = false
-                    SnackbarController.show(if (tokenInput.isBlank()) "已清除 GitHub Token" else "GitHub Token 已保存")
+                    val input = tokenInput.trim()
+                    if (input.isBlank()) {
+                        // 清空即清除 Token（无需联网校验）
+                        GitHubTokenStore.setToken(context, null)
+                        githubHasTokenState = false
+                        showGitHubTokenDialog = false
+                        SnackbarController.show("已清除 GitHub Token")
+                    } else {
+                        // 保存前先校验：无效 Token 会让 GitHub 拒绝之后的所有请求（含公开仓库解析）
+                        scope.launch {
+                            when (val check = githubApi.validateToken(input)) {
+                                is TokenCheck.Valid -> {
+                                    GitHubTokenStore.setToken(context, input)
+                                    githubHasTokenState = true
+                                    showGitHubTokenDialog = false
+                                    SnackbarController.show("GitHub Token 已保存（@${check.login}）")
+                                }
+                                TokenCheck.Invalid -> tokenError = "Token 无效或已过期，请重新生成后再保存"
+                                TokenCheck.Unknown -> tokenError = "无法校验 Token（网络异常），请联网后重试"
+                            }
+                        }
+                    }
                 }) { Text("保存") }
             },
             dismissButton = {
