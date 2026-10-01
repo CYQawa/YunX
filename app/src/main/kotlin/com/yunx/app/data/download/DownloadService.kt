@@ -30,6 +30,11 @@ import android.os.Build
 import android.os.IBinder
 import com.yunx.app.MainActivity
 import com.yunx.app.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * 下载前台服务：下载进行中保持前台运行。
@@ -66,23 +71,12 @@ class DownloadService : Service() {
     }
 
     private fun startAsForeground(title: String, progress: Int, speed: String, showSpeed: Boolean) {
-        ensureChannel()
+        ensureChannel(this)
         val notification = buildNotification(title, progress, speed, showSpeed)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             startForeground(NOTIFICATION_ID, notification)
-        }
-    }
-
-    private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-                nm.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "下载任务", NotificationManager.IMPORTANCE_LOW)
-                )
-            }
         }
     }
 
@@ -157,6 +151,104 @@ class DownloadService : Service() {
 
         /** 状态栏胶囊简短文案的 extras 键（与 Notification.EXTRA_SHORT_CRITICAL_TEXT 同值） */
         private const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
+
+        /** 下载结果（完成/失败）通知 ID 基数：每个任务一条，避免并发任务互相覆盖 */
+        private const val RESULT_ID_BASE = 2000
+
+        /** 结果胶囊停留时长（毫秒）：让流体云有终态曝光，随后转为可划掉的普通通知 */
+        private const val RESULT_LINGER_MS = 3000L
+
+        /** 结果胶囊兜底自动取消时长（毫秒）：进程若在停留期内被杀，也不会留下无法划掉的 ongoing 通知 */
+        private const val RESULT_LINGER_TIMEOUT_MS = 10_000L
+
+        /** 结果通知派发用作用域：与服务生命周期无关（服务在任务结束时已停止） */
+        private val resultScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        private fun ensureChannel(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+                    nm.createNotificationChannel(
+                        NotificationChannel(CHANNEL_ID, "下载任务", NotificationManager.IMPORTANCE_LOW)
+                    )
+                }
+            }
+        }
+
+        /**
+         * 下载结束（完成/失败）：先在流体云保留一段终态胶囊，随后转为可划掉的普通通知。
+         * 由 DownloadManager 在任务终态时调用；不依赖服务存活（此时服务可能已随最后一个任务停止）。
+         *
+         * @param promote 是否参与流体云（跟随「完整通知」模式，与下载中的提升保持一致）
+         */
+        fun notifyResult(
+            context: Context,
+            taskId: Long,
+            fileName: String,
+            success: Boolean,
+            error: String = "",
+            promote: Boolean = true
+        ) {
+            val appContext = context.applicationContext
+            ensureChannel(appContext)
+            val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val id = (RESULT_ID_BASE + taskId).toInt()
+            if (!promote || Build.VERSION.SDK_INT < 36) {
+                // 简化通知模式或系统不支持实时更新：直接给可划掉的普通结果通知
+                nm.notify(id, buildResultNotification(appContext, fileName, success, error, linger = false))
+                return
+            }
+            // 终态胶囊：实时更新要求 ongoing，故停留期内保持 ongoing（另有超时兜底）
+            nm.notify(id, buildResultNotification(appContext, fileName, success, error, linger = true))
+            resultScope.launch {
+                delay(RESULT_LINGER_MS)
+                // 转为普通通知：可划掉、点击打开应用；流体云胶囊随之收起
+                nm.notify(id, buildResultNotification(appContext, fileName, success, error, linger = false))
+            }
+        }
+
+        /** 构建下载结果通知：linger=true 为流体云终态胶囊（ongoing + 请求提升），false 为可划掉的普通通知 */
+        private fun buildResultNotification(
+            context: Context,
+            fileName: String,
+            success: Boolean,
+            error: String,
+            linger: Boolean
+        ): Notification {
+            val contentIntent = PendingIntent.getActivity(
+                context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+            )
+            val title = if (success) "下载完成" else "下载失败"
+            val text = if (success) fileName else if (error.isBlank()) fileName else "$fileName：$error"
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(context, CHANNEL_ID)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(context)
+            }
+            builder
+                .setSmallIcon(R.drawable.icon)
+                .setContentTitle(title)
+                .setContentText(text)
+                // 实时更新必须是标准样式之一：结果通知用 BigTextStyle
+                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setContentIntent(contentIntent)
+                .setOnlyAlertOnce(true)
+            if (linger) {
+                builder.setOngoing(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    builder.setTimeoutAfter(RESULT_LINGER_TIMEOUT_MS)
+                }
+            } else {
+                builder.setOngoing(false).setAutoCancel(true)
+            }
+            val notification = builder.build()
+            if (linger && Build.VERSION.SDK_INT >= 36) {
+                notification.extras.putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
+                notification.extras.putCharSequence(EXTRA_SHORT_CRITICAL_TEXT, if (success) "完成" else "失败")
+            }
+            return notification
+        }
 
         /** 下载任务开始时调用（服务不存在则创建前台服务） */
         fun start(context: Context, title: String, progress: Int = 0) {

@@ -380,9 +380,15 @@ class DownloadManager(
                     _stats.update { it - id }
                     // 协程已被取消（暂停/删除）：不标记失败，避免覆盖 PAUSED 状态
                     if (isTaskActive()) {
-                        Log.e(TAG, "task $id failed: ${e.message ?: e.javaClass.simpleName}", e)
+                        val reason = e.message ?: e.javaClass.simpleName
+                        Log.e(TAG, "task $id failed: $reason", e)
                         dao.updateStatus(id, DownloadTaskEntity.STATUS_FAILED)
-                        dao.updateError(id, e.message ?: e.javaClass.simpleName)
+                        dao.updateError(id, reason)
+                        // 终态通知：失败同样先出流体云胶囊，随后转为可划掉的普通通知
+                        DownloadService.notifyResult(
+                            context, id, dao.get(id)?.fileName ?: "下载任务",
+                            success = false, error = reason, promote = showSpeedProvider()
+                        )
                     } else {
                         Log.w(TAG, "task $id cancelled: ${e.message}")
                     }
@@ -1010,6 +1016,10 @@ class DownloadManager(
         val hlsTotal = dao.get(id)?.totalSize ?: 0L
         completeWithAvg(id, savedPath, hlsTotal)
         Log.d(TAG, "hlsDownload: id=$id 下载完成 savedPath=$savedPath size=${hlsFile.length()}")
+        // 终态通知：完成后流体云先显示「下载完成」胶囊，随后转为可划掉的普通通知
+        DownloadService.notifyResult(
+            context, id, task.fileName, success = true, promote = showSpeedProvider()
+        )
         taskCallbacks.remove(id)?.let { cb -> runCatching { cb() } }
         _stats.update { it - id }
         hlsFile.delete()
@@ -1065,6 +1075,10 @@ class DownloadManager(
         }
         completeWithAvg(id, savedPath, total)
         Log.d(TAG, "finishDownload: id=$id 下载完成 savedPath=$savedPath size=$total")
+        // 终态通知：完成后流体云先显示「下载完成」胶囊，随后转为可划掉的普通通知
+        DownloadService.notifyResult(
+            context, id, fileName, success = true, promote = showSpeedProvider()
+        )
         taskCallbacks.remove(id)?.let { cb ->
             runCatching { cb() }
         }
