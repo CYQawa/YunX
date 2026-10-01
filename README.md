@@ -99,7 +99,9 @@ git clone https://github.com/CYQawa/YunX.git
 <details>
 <summary><b>能否开发PC端？</b></summary>
 
-我个人没有电脑，故无法开发pc端。社区内已有人开发PC移植
+我个人没有电脑，故无法开发pc端。
+
+社区内已有人开发PC移植， 如 [YunX-Desktop](https://github.com/tidain/YunX-Desktop)
 </details>
 
 ## 反倒卖
