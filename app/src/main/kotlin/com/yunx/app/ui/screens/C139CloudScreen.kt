@@ -467,7 +467,7 @@ fun C139CloudScreen(
             passcodeMode = PasscodeMode.SERVER_GENERATED,
             onShare = { _, _, period -> viewModel.shareFile(period) },
             onRename = { viewModel.renameFile(it) },
-            onDelete = { showDeleteConfirm = true },
+            onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
                 showActionSheet = false
                 viewModel.dismissActions()

@@ -464,7 +464,7 @@ fun Pan123CloudScreen(
             onDownloadFolder = { viewModel.downloadFolder() },
             onShare = { _, pwd, period -> viewModel.shareFile(period, pwd) },
             onRename = { viewModel.renameFile(it) },
-            onDelete = { showDeleteConfirm = true },
+            onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
                 showActionSheet = false
                 viewModel.dismissActions()

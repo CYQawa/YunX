@@ -478,7 +478,7 @@ fun UCCoudScreen(
                 )
             },
             onRename = { viewModel.renameFile(it) },
-            onDelete = { showDeleteConfirm = true },
+            onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
                 showActionSheet = false
                 viewModel.dismissActions()

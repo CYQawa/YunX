@@ -466,7 +466,7 @@ fun XunleiCloudScreen(
             passcodeMode = PasscodeMode.REQUIRED_OR_AUTO,
             onShare = { _, passcode, expiredType -> viewModel.shareFile(expiredType, passcode) },
             onRename = { viewModel.renameFile(it) },
-            onDelete = { showDeleteConfirm = true },
+            onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
                 showActionSheet = false
                 viewModel.dismissActions()

@@ -491,7 +491,7 @@ fun BaiduCloudScreen(
             passcodeMode = PasscodeMode.REQUIRED,
             onShare = { _, passcode, period -> viewModel.shareFile(period, passcode) },
             onRename = { viewModel.renameFile(it) },
-            onDelete = { showDeleteConfirm = true },
+            onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
                 showActionSheet = false
                 viewModel.dismissActions()

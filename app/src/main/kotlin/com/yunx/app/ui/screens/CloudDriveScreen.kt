@@ -471,7 +471,7 @@ fun CloudDriveScreen(
                     )
                 },
                 onRename = { viewModel.renameFile(it) },
-                onDelete = { showDeleteConfirm = true },
+                onConfirmDelete = { viewModel.deleteFile() },
                 onDismiss = { viewModel.dismissActions() },
                 moveStep = { onBack, onDone ->
                     QuarkMoveStep(
