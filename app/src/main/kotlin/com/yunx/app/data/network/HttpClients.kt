@@ -34,6 +34,9 @@ import java.util.concurrent.TimeUnit
  */
 object HttpClients {
 
+    /** 下载客户端排队 Call 上限：真实并发受 DownloadManager 的在飞上限约束，见 buildDownload 注释 */
+    private const val MAX_QUEUED_CALLS = 64
+
     private val lock = Any()
 
     @Volatile
@@ -90,6 +93,15 @@ object HttpClients {
         }
     }
 
+    /**
+     * 释放两个客户端的空闲连接（socket + Conscrypt/HTTP2 缓冲），由 Application.onTrimMemory
+     * 在系统内存压力下调用。只影响空闲连接，进行中的请求不受影响；任何异常都不得抛给调用方。
+     */
+    fun evictIdleConnections() {
+        runCatching { apiCache?.connectionPool?.evictAll() }
+        runCatching { downloadCache?.connectionPool?.evictAll() }
+    }
+
     private fun buildApi(): OkHttpClient {
         return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -105,19 +117,30 @@ object HttpClients {
 
     private fun buildDownload(): OkHttpClient {
         val dispatcher = Dispatcher().apply {
-            maxRequests = 512
-            maxRequestsPerHost = 512 // 与设置页线程数上限（512）对齐，不锁死并发
+            // 排队 Call 上限：下载分片走同步 call.execute()，根本不经过这个队列 —— 真实并发由
+            // DownloadManager 的 inflightLimiter 与 chunkIoDispatcher 决定（见 Agent.md §5.1.1）
+            maxRequests = MAX_QUEUED_CALLS
+            maxRequestsPerHost = MAX_QUEUED_CALLS
         }
         return OkHttpClient.Builder()
             .dispatcher(dispatcher)
+            // 空闲连接池收紧：默认 64 条 × 5 分钟会常驻 socket + Conscrypt 缓冲，
+            // 下载是突发式，1 分钟足够复用
             .connectionPool(
                 ConnectionPool(
-                    maxIdleConnections = 64,
-                    keepAliveDuration = 5,
+                    maxIdleConnections = 8,
+                    keepAliveDuration = 1,
                     timeUnit = TimeUnit.MINUTES
                 )
             )
-            .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+            // ★ 下载客户端固定只用 HTTP/1.1（2026-10-01）：
+            //   OkHttp 的 HTTP/2 客户端对外声明「每流 16MB 接收窗口」（OKHTTP_CLIENT_WINDOW_SIZE，见 Agent.md §5.1.1），
+            //   消费端一慢（写盘慢/限速挂起），读线程仍会把数据堆进该流的 readBuffer，几十路叠加即撑满 256MB 堆
+            //   —— log/oom 两份崩溃的栈（Http2Stream$FramingSource.receive → SegmentPool.take）正在这里。
+            //   HTTP/1.1 没有应用层流窗口，读多少由 TCP 背压决定，堆占用只剩每路 64KB 读缓冲。
+            //   代价：分片不再多路复用，每路各占一条连接。若实测总速明显变差，把下面一行改回
+            //   listOf(Protocol.HTTP_2, Protocol.HTTP_1_1) 即可；协议是否生效看 ChunkDownloader 的「协议诊断」日志。
+            .protocols(listOf(Protocol.HTTP_1_1))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)

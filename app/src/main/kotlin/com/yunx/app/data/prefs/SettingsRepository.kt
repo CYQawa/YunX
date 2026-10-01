@@ -29,7 +29,7 @@ class SettingsRepository(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("yunx_settings", Context.MODE_PRIVATE)
 
-    /** 下载线程数（通用/手动添加，分片并发数），默认 32，上限 512 */
+    /** 下载线程数（通用/手动添加，分片并发数），默认 32，上限 512（真实并发另见 [MAX_DOWNLOAD_THREADS] 的说明） */
     var downloadThreads: Int
         get() = downloadThreadsFor(DownloadPlatform.GENERIC)
         set(value) = setDownloadThreads(DownloadPlatform.GENERIC, value)
@@ -41,7 +41,7 @@ class SettingsRepository(context: Context) {
             .coerceIn(1, MAX_DOWNLOAD_THREADS)
     }
 
-    /** 设置指定平台的下载线程数；迅雷不可修改 */
+    /** 设置指定平台的下载线程数；迅雷不可修改（上限见 [MAX_DOWNLOAD_THREADS]） */
     fun setDownloadThreads(platform: String, value: Int) {
         if (platform == DownloadPlatform.XUNLEI) return
         prefs.edit().putInt(prefsKey(platform), value.coerceIn(1, MAX_DOWNLOAD_THREADS)).apply()
@@ -168,6 +168,14 @@ class SettingsRepository(context: Context) {
 
     companion object {
         const val DEFAULT_DOWNLOAD_THREADS = 32
+        /**
+         * 线程数上限 = 512（与设置页档位一致）。
+         * 真正同时在飞的请求数另由 `DownloadManager.MAX_INFLIGHT_CHUNKS`（按最大堆预算推导、同样封顶 512）
+         * 与全进程 `inflightLimiter` 钉住：下载客户端已固定 HTTP/1.1，每路只占一条连接 + 64KB 读缓冲
+         * （256MB 堆 → 512 × 64KB = 32MB = 堆的 1/8，本机 FD 软限 32768），
+         * 所以这里放开到 512 不会再像 HTTP/2 时代那样把堆撑满（见 Agent.md §5.1.1）。
+         * 旧版本存过 128/256/512 的用户现在能真正用上这些档位。
+         */
         const val MAX_DOWNLOAD_THREADS = 512
         const val XUNLEI_DOWNLOAD_THREADS = 8
         const val DEFAULT_MAX_CONCURRENT_DOWNLOADS = 1

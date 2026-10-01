@@ -118,7 +118,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 可选的下载线程数档位（最高 512） */
+/**
+ * 可选的下载线程数档位（最高 512，与 `SettingsRepository.MAX_DOWNLOAD_THREADS` 一致）。
+ * 真实并发 = min(所选档位, `DownloadManager.MAX_INFLIGHT_CHUNKS`)：后者按最大堆预算推导并封顶 512，
+ * 与本档位上限一致 ⇒ 选 512 就是 512 路（真实值见日志 `runTask:` 行的 actualWorkers）。
+ * 下载客户端已固定 HTTP/1.1，每路只占一条连接 + 64KB 读缓冲（见 Agent.md §5.1.1）；
+ * 但并发越高越容易撞上 CDN 的同 IP 连接数上限与手机链路瓶颈 —— 调高不一定更快，看诊断日志的总速。
+ */
 private val threadOptions = listOf(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
 
 /** 按平台下载线程数设置项 */

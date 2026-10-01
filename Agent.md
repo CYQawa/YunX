@@ -251,16 +251,54 @@ manifest 的 minSdk），依据与历史版本对照写在 `gradle/libs.versions
 分片规划：chunkCount = chunkCountFor(total, threads)
           主池 = chunkCount × 0.7   → 文件 part_0 … part_{n-1}（等分区间）
           弹性区 = 剩余 30% 字节     → 文件 seg_{start}_{end}.part（按序领 4MB 块）
-并发 worker = effectiveWorkers（信号量 Semaphore 固定容量，绝不手动 release）
+并发 worker = actualWorkers = min(effectiveWorkers, MAX_INFLIGHT_CHUNKS)
+在飞上限 = inflightLimiter（★ 全进程共享的 Semaphore，跨任务生效，绝不手动 release）
 ```
 
 - worker **循环领片**，慢片不阻塞其他线程 → 根治"尾部并发塌缩"。
 - 弹性区用 `ElasticAllocator` **按字节顺序**分配，替代早期的"中点劈分"（劈分会导致主池耗尽瞬间全部线程涌入、区间跨度翻倍、连接复用率崩塌 → 中后段掉速）。
 
+### 5.1.1 全进程在飞上限（**不要改回「每任务一个信号量」**）
+
+```kotlin
+在飞上限 = inflightLimiter（★ 全进程共享的 Semaphore，跨任务生效，绝不手动 release）
+容量 = MAX_INFLIGHT_CHUNKS = inflightChunksFor(Runtime.getRuntime().maxMemory())
+     = clamp(maxHeap / 8 / BUFFER_SIZE, 8, 512)      // BUFFER_SIZE = 64KB
+并发 worker = actualWorkers = min(effectiveWorkers, MAX_INFLIGHT_CHUNKS)
+分片 IO 线程池 = chunkIoDispatcher（★ 专用线程池，不能退回去用 Dispatchers.IO：它把并行度钉在 max(64, 核数)）
+```
+
+- 旧实现是**每任务一个** `Semaphore(effectiveWorkers)` —— 容量恰等于自己创建的 worker 数，永不阻塞，等于从不限流。
+- **2026-10-01 修正（推翻了「512 线程 × 256KB = 128MB」这个简化归因）**：OOM 的直接机制在 OkHttp 侧 ——
+  客户端声明 `OKHTTP_CLIENT_WINDOW_SIZE = 16MB`（`Http2Connection.kt:114/993`，`Http2Stream.maxByteCount`
+  就取这个值），消费端一慢（写盘慢、限速 `speedLimiter.awaitAllow` 挂起、落盘节流），读线程仍会填满该流
+  readBuffer 的 16MB；几十路 × 16MB 远超 256MB 堆 —— 两份 OOM 报告的栈（`SegmentPool.take` ←
+  `Http2Stream$FramingSource.receive`）正是这里。该控的是**并发流数**与**每路读缓冲**，不是线程数
+  （`log/3/2/` 的两份日志里 60 路连接跑出 3~7MB/s、单连接 50~123KB/s，说明几十路已能打满链路）；
+  同日下载客户端固定 HTTP/1.1（见下一条）后，这条 16MB 的每流窗口已不复存在。
+- **并发真正由 `chunkIoDispatcher` 决定（2026-10-01 起）**：分片 IO **不能**再跑 `Dispatchers.IO` ——
+  它的并行度被钉在 `max(64, 核数)`，超出的 worker 只在队列里干等，于是「设置里 512 线程」永远只跑得出 64 路。
+  现在主池、失败重试的 worker 与 `ChunkDownloader` 内部的 5 处 `withContext` 都走
+  `DownloadManager.chunkIoDispatcher`（`ThreadPoolExecutor(core = max = MAX_INFLIGHT_CHUNKS, 30s, LinkedBlockingQueue)`
+  ＋ `allowCoreThreadTimeOut(true)`，线程名 `yunx-chunk-io`、daemon ⇒ 按需创建、空闲回收）。
+  ★ 必须 core = max：`core = 0` + 无界队列在 ThreadPoolExecutor 里只会养出 1 个 worker（等于退回单流）。
+- **2026-10-01 下载客户端固定 HTTP/1.1**：`HttpClients.buildDownload()` 的
+  `.protocols(...)` 由 `listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)` 改为 `listOf(Protocol.HTTP_1_1)`，
+  从源头去掉上一条的「每流 16MB 应用层接收窗口」——HTTP/1.1 没有流窗口，读多少完全由 TCP 背压决定，
+  堆占用只剩每路 64KB 读缓冲（代价：分片不再多路复用，每路各占一条连接）。是否影响总速**必须实测**：
+  先用 `ChunkDownloader` 的 `协议诊断: 域名=… 协议=…`（★ 临时诊断，随诊断日志一起删）确认 CDN 实际协商到的协议，
+  再对比 `runTask 诊断` 的总速；要回退只改那一行为两个协议即可。API 客户端（`buildApi()`）**不设** `protocols`，
+  仍按 OkHttp 默认（h2 优先）——JSON 响应体小，没有流缓冲问题。
+- 主池、弹性区、**失败重试**三条路径都必须走 `inflightLimiter.withPermit` —— 少任何一条，三路并发就会叠加。
+- `threadCount` 仍**原样传给 `chunkCountFor`**：`plan.txt` 签名（`chunks=… total=… main=…`）不能变，否则所有用户的断点续传失效。钳的是 worker 数，不是分片数。
+- 单路读缓冲 `ChunkDownloader.BUFFER_SIZE` = 64KB（原 256KB）；`HttpClients.buildDownload()` 排队上限 `MAX_QUEUED_CALLS = 64`、空闲连接池 8 条 / 1 分钟（原 512 / 64 条 × 5 分钟），并在 `Application.onTrimMemory` 调 `HttpClients.evictIdleConnections()`。
+- 边界由 `InflightChunkBudgetTest` 守住：小堆保底 8 路、大堆封顶 512 路、总缓冲不超过最大堆的 1/8。
+- 设置页档位已恢复到 512（`SettingsRepository.MAX_DOWNLOAD_THREADS = 512`，`threadOptions` 到 512），**上限 512 与档位一致 ⇒ 选 512 就是真的 512 路**：256MB 堆按预算算得 512（`512 × 64KB = 32MB = 堆的 1/8`），FD 实测软限 32768（`/proc/self/limits`，512 路 ≈ 1100 个连接+句柄）。真实值仍见日志 `runTask:` 行的 `actualWorkers`（低内存机型会被堆预算夹到 512 以下）。因为 `chunkCountFor` 在 `threads ≥ 64` 时结果恒等（`want = threads × 8` 已 ≥ 512 硬封顶），`plan.txt` 签名不变，断点续传不受影响。同理，选 512 也可能只是多撞 CDN 的同 IP 限连（`尝试N IO异常`），不一定更快。
+
 ### 5.2 `chunkCountFor` 的真实语义（易被误读）
 
 ```kotlin
-val minChunkBytes = 1 * 1024 * 1024L      // 「单片最小 1MB」= 分片数上限阀，不是"每片就是 1MB"
+val minChunkBytes = 256 * 1024L            // 「单片最小 256KB」= 分片数上限阀，不是"每片就是 256KB"
 val bySize = when {                        // 按文件大小的基础分片数
     total < 5MB -> 1;  total < 50MB -> 8;  total < 500MB -> 32;  else -> 64
 }
@@ -268,7 +306,7 @@ val want = maxOf(bySize, threads * 8)      // 每线程平均 8 片盈余
 return minOf(want, (total / minChunkBytes).toInt(), 512)   // 512 为硬封顶
 ```
 
-**实际单片大小 = `ceil(total / chunkCount)`**，并非固定 1MB——大文件的单片远大于 1MB，线程数越高、分片数封顶后单片越大。
+**实际单片大小 = `ceil(total / chunkCount)`**，并非固定 256KB——大文件的单片远大于 256KB，线程数越高、分片数封顶后单片越大。主池片就是这个大小（`DownloadManager.kt:926` 的 `part_$i`），只有弹性区（后 30%）才用 `ElasticAllocator` 按实测速度动态定块（`clamp(单路速度 × 5s, 256KB, 4MB)`，尾部收缩到 `remaining / workers`、下限 64KB）。
 
 同时注意：分片数还会被 `total / minChunkBytes` 夹住，所以**小文件的分片数（进而实际并发路数）可能低于用户设置的线程数**，这是当前设计为避免碎片化而做的取舍。排查"线程数设置没生效"类问题时先核对这一层。
 
@@ -283,6 +321,48 @@ private const val STAGGER_CAP = 8; STAGGER_MS = 25L  // 错峰建连，平摊 TC
 - 迅雷并发超过约 8 会被降级为 `200` 整文件响应（忽略 Range）→ 整任务回退单流、速度暴跌。
   故 `SettingsRepository.XUNLEI_DOWNLOAD_THREADS = 8` **固定不可改**，`setDownloadThreads` 对迅雷直接 return。
 - 提高任何平台的并发上限前，**必须实测是否触发 200 降级**，"并发越大越快"在网盘 CDN 上不成立。
+
+### 5.3.1 慢连接抢占（治「收尾塌到 KB 级」，**不要删**）
+
+网盘 CDN 是**按连接**限速的，且个别连接会落在慢节点上。真机日志（70.6MB 文件，`YunX-DL` E 级诊断）实测：
+
+```
+runTask 诊断: id=16 在飞=1 used=1/64 剩主池片=0 总速=3.2 KB/s 已下=70.6MB/70.6MB 剩余=25.0KB
+  └ m169 起点=44094960 块大小=256.3KB 已收=231.3KB 瞬时=3.2 KB/s 均速=5.4 KB/s 已跑=42s
+分片结束: id=16 m169 收=256.3KB/256.3KB 耗时=49s 均速=5.2 KB/s
+```
+
+同一时刻其余 61 路早已空转 —— **最后 500KB 拖了 37 秒**。多数连接 40~80KB/s，慢的只有 3~7KB/s，
+说明不是「整站变慢」，而是那几条连接坏了；而慢分片原先会一直跑到死，没有任何换连接的机制。
+
+机制（`DownloadManager` 看门狗 + `ChunkDownloader`）：
+
+```kotlin
+private const val PREEMPT_MIN_BPS = 12 * 1024L      // 绝对下限：低于 12KB/s 才算慢（正常 40~80KB/s）
+private const val PREEMPT_MIN_AGE_MS = 15_000L      // 至少跑 15s 才判（避开建连/TCP 爬坡）
+private const val PREEMPT_COOLDOWN_MS = 10_000L     // 同一分片两次抢占之间的冷却
+private const val PREEMPT_MIN_REMAIN = 128 * 1024L  // 剩余太少就不折腾
+private const val PREEMPT_MAX = 3                   // 单分片最多抢 3 次（全站慢时防重连风暴）
+private const val PREEMPT_PER_TICK = 2              // 每轮（5s）最多抢 2 路
+private const val PREEMPT_ENDGAME_INFLIGHT = 3      // 在飞 ≤3 视为收尾：放宽年龄/剩余门槛
+private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
+判定阈值 = max(PREEMPT_MIN_BPS, 本任务平均单连接速度 / 2)
+```
+
+- 看门狗 = 每 5s 的在飞快照协程（`preemptSlowChunks`）；命中只把 `ChunkDiag.preempt` 置位。
+- **收尾放宽**：在飞 ≤ `PREEMPT_ENDGAME_INFLIGHT` 时不再要求「跑满 15s / 剩余 ≥128KB」——只剩几路在磨时，
+  那几路的速度就是用户看到的总速度，重连握手（~0.5s）比继续等便宜得多。
+- `ChunkDownloader.downloadChunk(preempt = …)` 读到置位即 `throw PreemptedException`：**已写字节全部保留**，
+  下一轮从 `partFile.length()` 续传，**不退避、不计失败**（`ChunkResult` 对外仍是三态）。
+- 因此抢占**永远不丢数据、不产生空洞**：`written == expected` 校验与合并前的字节校验照旧。
+- 抢占计数/`抢占慢连接 …` 日志是永久逻辑；`★ 临时诊断` 的快照日志可删，但
+  `ChunkDiag.preempt / preemptCount / lastPreemptAtMs` **不能跟着删**，否则收尾长尾会回来。
+- 2026-10-01 的另两份复现日志（`log/3/2/`）显示同一形态的变体：总速 3~7MB/s 全程正常，
+  但主池慢片 `m34 21s/12.0KB/s`、`m93 18s/13.6KB/s`、`m37 17s/14.6KB/s`、`m128 16s/15.7KB/s`
+  在别的片以 4s/50~60KB/s 完成时还在爬，收尾最后 200~400KB 只剩 1~5 路（`seg@58726398 233.3KB
+  已收=111.3KB 瞬时=18.3KB/s`）→ 正是抢占要处理的对象。
+- 抢占计数/`抢占慢连接 …` 日志是永久逻辑；`★ 临时诊断` 的快照日志可删，但
+  `ChunkDiag.preempt / preemptCount / lastPreemptAtMs` **不能跟着删**，否则收尾长尾会回来。
 
 ### 5.4 断点续传与分片计划签名
 

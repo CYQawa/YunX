@@ -29,6 +29,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** 内存快照的换算单位 */
+private const val MB = 1024 * 1024
+
 /**
  * 全局崩溃捕获：
  * 1. 生成崩溃报告（时间 / 线程 / 设备 / 堆栈）；
@@ -68,9 +71,23 @@ class CrashHandler(private val context: Context) : Thread.UncaughtExceptionHandl
             appendLine("线程：${thread.name}")
             appendLine("设备：${Build.MANUFACTURER} ${Build.MODEL}（Android ${Build.VERSION.RELEASE}，SDK ${Build.VERSION.SDK_INT}）")
             appendLine("版本：$versionName")
+            appendLine(memorySnapshot())
             appendLine()
             appendLine(sw.toString())
         }
+    }
+
+    /**
+     * 崩溃瞬间的内存快照。OOM 报告里最该知道的是「堆用了多少 / 在飞分片上限多少」——
+     * 只看堆栈只能看到最后那次失败分配（见 log/oom：一次是 16 字节，一次是 8KB）。
+     */
+    private fun memorySnapshot(): String {
+        val rt = Runtime.getRuntime()
+        val used = rt.totalMemory() - rt.freeMemory()
+        val native = runCatching { android.os.Debug.getNativeHeapAllocatedSize() }.getOrDefault(0L)
+        return "内存：java堆 used=${used / MB}MB / max=${rt.maxMemory() / MB}MB" +
+            " native=${native / MB}MB" +
+            " 在飞分片上限=${com.yunx.app.data.download.DownloadManager.MAX_INFLIGHT_CHUNKS}"
     }
 
     private fun saveCrashLog(log: String) {

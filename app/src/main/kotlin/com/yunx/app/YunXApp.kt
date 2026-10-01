@@ -96,6 +96,18 @@ class YunXApp : Application() {
         }
         purgeDownloadLeftovers(this)
     }
+
+    /**
+     * 内存压力回调：系统回收前先释放「可再生」的内存 —— 空闲 HTTP 连接及其 socket/Conscrypt 缓冲。
+     * 分片下载的数据全部流式落盘、不在堆上缓存，所以这里只丢弃空闲连接，不会影响进行中的下载。
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            com.yunx.app.data.network.HttpClients.evictIdleConnections()
+            android.util.Log.w("YunX", "onTrimMemory level=$level：已释放空闲连接")
+        }
+    }
 }
 
 /** 清理历史版本保存失败遗留的不可见下载半成品（详见 DownloadSaver.purgeOwnPendingFiles）。
