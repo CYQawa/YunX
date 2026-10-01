@@ -443,11 +443,12 @@ fun SettingsScreen(
             onClick = onCheckUpdate
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // GitHub 下载镜像：自定义前缀，留空使用内置默认镜像
         SettingsItem(
             icon = Icons.Outlined.Cloud,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "GitHub 下载镜像",
             description = githubMirror?.takeIf { it.isNotBlank() }
                 ?.let { "已自定义：$it" }
@@ -455,11 +456,12 @@ fun SettingsScreen(
             onClick = { showMirrorDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 网络代理：HTTP 代理（Clash/v2ray 等本地代理），未启用时直连
         SettingsItem(
             icon = Icons.Outlined.Security,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "网络代理",
             description = if (proxyEnabled && proxyHost.isNotBlank()) {
                 "已启用：$proxyHost:$proxyPort"
