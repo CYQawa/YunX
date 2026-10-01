@@ -244,8 +244,8 @@ fun ResolveScreen(
                     onExit = { viewModel.backToInput() },
                     // 列表「返回上一级」：子目录回上级，根目录回输入页
                     onBack = { viewModel.navigateBack() },
-                    // GitHub 专属：forked from 头部、README 底部、文件徽章
-                    extraHeaderContent = if (viewModel.isGitHubPlatform) {
+                    // GitHub 专属：forked from 头部、README 底部（只在仓库首页显示，进子目录/退回账号列表不残留）
+                    extraHeaderContent = if (viewModel.githubAtRepoRoot) {
                         {
                             val parent = viewModel.githubParentFullName
                             if (parent != null) {
@@ -262,7 +262,7 @@ fun ResolveScreen(
                             }
                         }
                     } else null,
-                    extraFooterContent = if (viewModel.isGitHubPlatform) {
+                    extraFooterContent = if (viewModel.githubAtRepoRoot) {
                         {
                             val md = viewModel.githubReadme
                             val owner = viewModel.githubRepoOwner
