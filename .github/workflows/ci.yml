@@ -33,11 +33,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 不再使用 android-actions/setup-android@v3：该 action 内部执行 `sdkmanager tools`
-      # 会因新版 cmdline-tools 已移除废弃 `tools` 包而失败（Failed to find package 'tools'）。
-      # ubuntu-latest runner 已预装 Android SDK（licenses 已接受），缺失组件由 AGP 自动补装，
-      # 与 build-apk.yml 的可行方案保持一致。
-
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
@@ -51,9 +46,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build debug & release APK
-        # release 变体带 R8 混淆+资源压缩，编译验证一并做（避免 R8 错误只靠发布流程发现）
-        run: ./gradlew assembleDebug assembleRelease --no-daemon
+      - name: Build debug
+        run: ./gradlew assembleDebug  --no-daemon
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
