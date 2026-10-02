@@ -53,6 +53,7 @@ import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarDefaults
 import androidx.compose.material3.ShortNavigationBarItem
@@ -878,37 +879,41 @@ fun MainScreen() {
 
                 if (isLandscape) {
                     // 横屏：左侧侧边导航栏（NavigationRail）+ 右侧顶栏 & 内容
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            // 竖屏由 Scaffold 提供主题背景；横屏手动布局需显式设置，否则露出窗口默认白色
-                            .background(MaterialTheme.colorScheme.background)
+                    // ★ 外层 Surface 不只是底色（竖屏由 Scaffold 提供背景，横屏手动布局必须自己铺，
+                    //   否则露出窗口默认白色）：**只有 Surface/Scaffold 才会提供 LocalContentColor**
+                    //   （其默认值是黑色）——横屏没有 Scaffold，少了这层，深色模式下没写 color 的文本
+                    //   （例如 ShareFileRow 里的文件名）就会变成黑字。
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
                     ) {
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            MainNavigationRail(
-                                currentTab = currentTab,
-                                onTabSelected = { currentTab = it }
-                            )
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxSize()
-                            ) {
-                                topBarContent()
-                                Box(
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                MainNavigationRail(
+                                    currentTab = currentTab,
+                                    onTabSelected = { currentTab = it }
+                                )
+                                Column(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .fillMaxWidth()
+                                        .fillMaxSize()
                                 ) {
-                                    tabContent()
+                                    topBarContent()
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxWidth()
+                                    ) {
+                                        tabContent()
+                                    }
                                 }
                             }
+                            // 全局 Snackbar（横屏无底部栏，悬浮底部居中）
+                            SnackbarHost(
+                                hostState = snackbarHostState,
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            )
                         }
-                        // 全局 Snackbar（横屏无底部栏，悬浮底部居中）
-                        SnackbarHost(
-                            hostState = snackbarHostState,
-                            modifier = Modifier.align(Alignment.BottomCenter)
-                        )
                     }
                 } else {
                     // 竖屏：Scaffold + 底部导航栏

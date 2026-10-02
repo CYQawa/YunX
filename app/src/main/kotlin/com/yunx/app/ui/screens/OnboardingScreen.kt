@@ -115,45 +115,54 @@ fun OnboardingScreen(
     // 只在换页时变化的粗粒度读取：按钮文案/指示器需要它
     val page = pagerState.currentPage
 
-    Box(modifier = modifier.fillMaxSize()) {
-        BlobBackground()
+    // ★ 整页铺一层 Surface：引导页是 MainScreen 里提前 return 的全屏覆盖页，**不在 Scaffold 里**，
+    //   没有 Surface/Scaffold 就没人提供 LocalContentColor（其默认值是黑色）——
+    //   于是没写 color 的文本（第 1 页「云析」、第 2 页「使用前请阅读」）在深色模式下会变成黑字。
+    //   底色用 scheme.surface，与 BlobBackground 自己铺的 base 完全一致，观感不变。
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            BlobBackground()
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-        ) {
-            HorizontalPager(
-                state = pagerState,
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) { index ->
-                // 页面内部的过渡：随滑动比例做轻微位移 + 淡出。
-                // ★ currentPageOffsetFraction 只在 graphicsLayer 块里读 —— 逐帧只失效图层，不重组页面内容。
-                Box(
+                    .fillMaxSize()
+                    .safeDrawingPadding()
+            ) {
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val offset = (pagerState.currentPage - index) + pagerState.currentPageOffsetFraction
-                            translationX = offset * size.width * 0.22f
-                            alpha = (1f - abs(offset)).coerceIn(0f, 1f)
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) { index ->
+                    // 页面内部的过渡：随滑动比例做轻微位移 + 淡出。
+                    // ★ currentPageOffsetFraction 只在 graphicsLayer 块里读 —— 逐帧只失效图层，不重组页面内容。
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val offset = (pagerState.currentPage - index) + pagerState.currentPageOffsetFraction
+                                translationX = offset * size.width * 0.22f
+                                alpha = (1f - abs(offset)).coerceIn(0f, 1f)
+                            }
+                    ) {
+                        when (index) {
+                            0 -> WelcomePage(context)
+                            else -> TermsPage()
                         }
-                ) {
-                    when (index) {
-                        0 -> WelcomePage(context)
-                        else -> TermsPage()
                     }
                 }
-            }
 
-            OnboardingBottomBar(
-                page = page,
-                pageCount = pagerState.pageCount,
-                onPrev = { scope.launch { pagerState.animateScrollToPage(page - 1) } },
-                onNext = { scope.launch { pagerState.animateScrollToPage(page + 1) } },
-                onFinish = onFinish
-            )
+                OnboardingBottomBar(
+                    page = page,
+                    pageCount = pagerState.pageCount,
+                    onPrev = { scope.launch { pagerState.animateScrollToPage(page - 1) } },
+                    onNext = { scope.launch { pagerState.animateScrollToPage(page + 1) } },
+                    onFinish = onFinish
+                )
+            }
         }
     }
 }
@@ -257,7 +266,9 @@ private fun WelcomePage(context: Context) {
         Text(
             text = "云析",
             style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            // 显式给色：全屏覆盖页里不依赖 LocalContentColor（默认黑色，深色模式下会变黑字）
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
@@ -369,7 +380,9 @@ private fun TermsPage() {
         Text(
             text = "使用前请阅读",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            // 同上：不依赖 LocalContentColor，避免深色模式下黑字
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(

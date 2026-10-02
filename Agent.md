@@ -299,6 +299,26 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
   否则退出一结束内容就被移出组合，回收形变被截断，观感像"没做动画"。
 - CSS 式的"共享元素"在这里就是同一把 key 的两侧修饰符；key 定义在 `MainScreen.kt` 的 `internal const val OVERLAY_KEY_*`。
 
+### 3.16 深色模式字体发黑：全屏页必须有 `Surface`（`LocalContentColor` 默认是黑色）
+
+**症状**：深色模式下个别文字仍是黑色（历史案例：引导页第 1 页「云析」、第 2 页「使用前请阅读」）。
+**根因**：`LocalContentColor` 的默认值是 `Color.Black`，**只有 `Surface` / `Scaffold`（以及 Button、Card 这类自绘容器）才会把它设成
+`contentColorFor(底色)`**（如 `surface → onSurface`）。页面只要不在这些容器里，`Text` 不写 `color` 就是黑字 ——
+浅色模式看不出来，深色模式立刻暴露。
+
+**本项目的雷区**（都是「手动铺底色」、绕开了 Scaffold 的地方）：
+- `ui/screens/OnboardingScreen.kt`：`MainScreen.kt` 里 `if (showOnboarding) { OnboardingScreen(...); return }` 的提前返回全屏覆盖页；
+  已用 `Surface(modifier = modifier.fillMaxSize(), color = colorScheme.surface)` 包住整页（底色与 `BlobBackground` 的 base 一致，观感不变），
+  第 1 页「云析」与第 2 页「使用前请阅读」另外显式写了 `color = colorScheme.onSurface`。
+- `ui/MainScreen.kt` 的**横屏分支**：手动 `Row(NavigationRail + 内容)`，原先只有 `Box.background(background)`；
+  同样已换成 `Surface(color = colorScheme.background)` 包住内容与 Snackbar（此前横屏 + 深色模式下，列表里没写 color 的文件名会是黑字）。
+- 其它页面（登录页 / 关于 / 支持 / 主题 / 收藏 / 各 Tab 页）都有 `Scaffold`，或本身就是 `AlertDialog` / `ModalBottomSheet`（自带 Surface），不受影响。
+
+**约定**：
+1. 新增「全屏覆盖页 / 手动布局页」时用 `Surface` 铺底，不要用 `Modifier.background(...)`；确实只能用 `background` 时，页内每个 `Text` 都要显式给 `color`。
+2. 深色模式自查重点看**大标题**这类没写 `color` 的文本（最容易漏）。
+3. 排查手段：`grep -rn "Color(0x\|Color.White\|Color.Black" app/src/main/kotlin/com/yunx/app`（正常只应命中 `ui/theme/Color.kt` 的方案令牌）。
+
 ---
 
 ## 4. 验证
