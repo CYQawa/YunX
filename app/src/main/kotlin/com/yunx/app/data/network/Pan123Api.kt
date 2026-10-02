@@ -21,6 +21,7 @@ package com.yunx.app.data.network
 import android.util.Base64
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.QuotaInfo
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import kotlinx.coroutines.Dispatchers
@@ -438,7 +439,9 @@ class Pan123Api(
     /**
      * 创建分享：POST /b/api/share/create（文档 §5.10）。
      * @param fileIds 文件/目录 ID 列表（单文件抓包为标量 int，多文件用数组）
-     * @param expiration 过期时间 ISO（永久用 Pan123Constants.EXPIRATION_FOREVER）
+     * @param expiration 过期时间 ISO**绝对时间**（永久用 Pan123Constants.EXPIRATION_FOREVER，其余 =
+     *   now + 天数）。⚠️ 必须先用 [com.yunx.app.data.network.model.ShareExpire.daysOrNull] 把 UI
+     *   中性码转成天数——直接把中性码当天数会让「永久」变成 now+1 天、「7 天」变成 now+3 天（Agent.md §3.20）。
      * @param sharePwd 提取码（null/空 = 无提取码）
      */
     suspend fun createShare(
@@ -484,7 +487,9 @@ class Pan123Api(
             passcode = sharePwd.orEmpty(),
             pwdId = shareKey,
             title = shareName,
-            expiredType = if (expiration == Pan123Constants.EXPIRATION_FOREVER) 1 else 4
+            // 123 响应不返回有效期；调用方（Pan123CloudViewModel）会用用户所选中性码覆盖此处，
+            // 未覆盖时显示「未知」比硬猜「30 天」更安全（原实现 else -> 4 是错的）
+            expiredType = ShareExpire.UNKNOWN
         )
     }
 

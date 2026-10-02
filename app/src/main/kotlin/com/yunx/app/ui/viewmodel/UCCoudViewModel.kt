@@ -30,6 +30,7 @@ import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.UCConstants
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.network.model.ShareToken
@@ -276,7 +277,7 @@ class UCCoudViewModel(
             title = file.fname,
             urlType = 1,       // 1=无提取码
             passcode = "",
-            expiredType = 2,   // 2=1 天
+            expiredType = ShareExpire.ONE_DAY,   // UC 的 expired_type 就等于中性码
             cookie = cookie
         ) ?: return null
         // ② 查分享信息拿**对外分享码 pwd_id**（share_id 是内部 ID，直接当 pwd_id 调 token 会 41006 分享不存在）

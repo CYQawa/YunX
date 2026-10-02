@@ -20,6 +20,7 @@ package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.QuotaInfo
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import kotlinx.coroutines.Dispatchers
@@ -662,9 +663,11 @@ class XunleiApi(
     }
 
     /** 创建分享（POST /drive/v1/share，迅雷分享带提取码；官方默认自动生成，可自定义 4 位）
-     *  @param expirationDays "-1"=永久 "1"/"7"/"30"=天数
+     *  @param expirationDays "-1"=永久 "1"/"7"/"30"=天数（用 [com.yunx.app.data.network.model.ShareExpire.xunleiDays]
+     *    从中性码转换，别直接下发中性码，Agent.md §3.20）
      *  @param passCode 自定义提取码（4 位字母数字，留空则服务端自动生成）
-     *  @return 分享信息（share_url/pass_code 直接返回，无需二次查询）
+     *  @return 分享信息（share_url/pass_code 直接返回，无需二次查询）；接口不返回有效期，
+     *    `expiredType` 填 [com.yunx.app.data.network.model.ShareExpire.UNKNOWN]，由调用方用用户所选值覆盖
      */
     suspend fun createShare(
         fileIds: List<String>,
@@ -698,7 +701,8 @@ class XunleiApi(
                 passcode = data.optString("pass_code"),
                 pwdId = data.optString("share_id"),
                 title = data.optString("title").ifBlank { title },
-                expiredType = 1
+                // 响应的 data 里没有有效期字段，中性码由调用方（XunleiCloudViewModel）覆盖
+                expiredType = ShareExpire.UNKNOWN
             )
         }
     }

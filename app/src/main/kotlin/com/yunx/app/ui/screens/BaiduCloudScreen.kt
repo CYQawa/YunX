@@ -489,7 +489,7 @@ fun BaiduCloudScreen(
             onDownloadFolder = { viewModel.downloadFolder() },
             // 百度分享必须带 4 位提取码
             passcodeMode = PasscodeMode.REQUIRED,
-            onShare = { _, passcode, period -> viewModel.shareFile(period, passcode) },
+            onShare = { _, passcode, expiredType -> viewModel.shareFile(expiredType, passcode) },
             onRename = { viewModel.renameFile(it) },
             onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
@@ -514,7 +514,7 @@ fun BaiduCloudScreen(
             operating = viewModel.isOperating,
             onDownload = { maybeShowBaiduLimit(viewModel.selected, "batch") { viewModel.downloadSelected() } },
             passcodeMode = PasscodeMode.REQUIRED,
-            onShare = { _, passcode, period -> viewModel.shareSelected(period, passcode) },
+            onShare = { _, passcode, expiredType -> viewModel.shareSelected(expiredType, passcode) },
             onDelete = {
                 showBatchActions = false
                 showDeleteConfirm = true

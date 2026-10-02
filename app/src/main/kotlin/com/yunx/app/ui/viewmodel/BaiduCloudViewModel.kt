@@ -29,6 +29,7 @@ import com.yunx.app.data.download.DownloadManager
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.BaiduConstants
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
@@ -426,19 +427,25 @@ class BaiduCloudViewModel(
         }
     }
 
-    /** 创建分享（百度必须带 4 位提取码） */
-    fun shareFile(period: Int, pwd: String) {
+    /**
+     * 创建分享（百度必须带 4 位提取码）。
+     *
+     * @param expiredType UI 中性码（[ShareExpire]），**必须转成百度 period**（0/1/7/30，0=永久）：
+     *   直接下发中性码会让「永久」变成 1 天、「7 天」变成 3 天（Agent.md §3.20）。
+     */
+    fun shareFile(expiredType: Int, pwd: String) {
         val file = actionFile ?: return
         viewModelScope.launch {
             isOperating = true
             try {
-                val result = api.createShare(listOf(file.fid), period, pwd, cookie())
+                val result = api.createShare(listOf(file.fid), ShareExpire.baiduPeriod(expiredType), pwd, cookie())
                 shareResult = ShareInfo(
                     shareUrl = result.link,
                     passcode = result.pwd,
                     pwdId = result.shareId,
                     title = file.fname,
-                    expiredType = expireType(period)
+                    // 优先用服务端回填的真实有效期，响应没给才回退到用户所选值
+                    expiredType = result.expiredType?.let { expireType(it) } ?: expiredType
                 )
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "分享失败"
@@ -532,22 +539,22 @@ class BaiduCloudViewModel(
         }
     }
 
-    /** 批量分享 */
-    fun shareSelected(period: Int, pwd: String) {
+    /** 批量分享（@param expiredType UI 中性码，转换见 [shareFile]） */
+    fun shareSelected(expiredType: Int, pwd: String) {
         val files = _selected.toList()
         if (files.isEmpty()) return
         viewModelScope.launch {
             isOperating = true
             try {
                 val result = api.createShare(
-                    files.map { it.fid }, period, pwd, cookie()
+                    files.map { it.fid }, ShareExpire.baiduPeriod(expiredType), pwd, cookie()
                 )
                 shareResult = ShareInfo(
                     shareUrl = result.link,
                     passcode = result.pwd,
                     pwdId = result.shareId,
                     title = if (files.size == 1) files[0].fname else "分享 ${files.size} 个文件",
-                    expiredType = expireType(period)
+                    expiredType = result.expiredType?.let { expireType(it) } ?: expiredType
                 )
                 exitMultiSelect()
             } catch (e: Exception) {
@@ -641,12 +648,13 @@ class BaiduCloudViewModel(
         }
     }
 
-    /** 百度 period → ShareInfo.expiredType（0永久/1一天/7七天/30三十天 → 1/2/3/4） */
+    /** 百度 period → ShareInfo.expiredType（0永久/1一天/7七天/30三十天 → 中性码）；其他取值显示为「未知」 */
     private fun expireType(period: Int): Int = when (period) {
-        1 -> 2
-        7 -> 3
-        30 -> 4
-        else -> 1
+        0 -> ShareExpire.FOREVER
+        1 -> ShareExpire.ONE_DAY
+        7 -> ShareExpire.SEVEN_DAYS
+        30 -> ShareExpire.THIRTY_DAYS
+        else -> ShareExpire.UNKNOWN
     }
 
     class Factory(

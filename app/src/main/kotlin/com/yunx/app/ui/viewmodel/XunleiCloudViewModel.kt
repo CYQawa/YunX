@@ -30,6 +30,7 @@ import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.XunleiConstants
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -432,7 +433,7 @@ class XunleiCloudViewModel(
     }
 
     /** 创建分享（迅雷必须带提取码；留空自动生成，可自定义 4 位）
-     *  @param expiredType 1=永久 2=1天 3=7天 4=30天（内部映射为 API 的 "-1"/"1"/"7"/"30"）
+     *  @param expiredType UI 中性码（见 [ShareExpire]），内部映射为 API 的 "-1"/"1"/"7"/"30"
      *  @param passCode 自定义提取码（4 位字母数字，留空则服务端自动生成）
      */
     fun shareFile(expiredType: Int, passCode: String = "") {
@@ -442,9 +443,10 @@ class XunleiCloudViewModel(
             try {
                 val c = creds() ?: throw IllegalStateException("请先登录迅雷网盘")
                 val info = api.createShare(
-                    listOf(file.fid), file.fname, expireDays(expiredType),
+                    listOf(file.fid), file.fname, ShareExpire.xunleiDays(expiredType),
                     c.first, c.second, c.third, passCode
                 ) ?: throw IllegalStateException("创建分享失败")
+                // 迅雷接口不返回有效期，用用户所选的中性码回填结果弹窗
                 shareResult = info.copy(expiredType = expiredType)
                 // 保留 actionFile：弹窗存活才能显示分享结果
             } catch (e: Exception) {
@@ -541,7 +543,7 @@ class XunleiCloudViewModel(
         }
     }
 
-    /** 批量分享 */
+    /** 批量分享（@param expiredType UI 中性码，转换见 [shareFile]） */
     fun shareSelected(expiredType: Int, passCode: String = "") {
         val files = _selected.toList()
         if (files.isEmpty()) return
@@ -552,7 +554,7 @@ class XunleiCloudViewModel(
                 val info = api.createShare(
                     files.map { it.fid },
                     if (files.size == 1) files[0].fname else "分享 ${files.size} 个文件",
-                    expireDays(expiredType), c.first, c.second, c.third, passCode
+                    ShareExpire.xunleiDays(expiredType), c.first, c.second, c.third, passCode
                 ) ?: throw IllegalStateException("创建分享失败")
                 shareResult = info.copy(expiredType = expiredType)
                 exitMultiSelect()
@@ -562,14 +564,6 @@ class XunleiCloudViewModel(
                 isOperating = false
             }
         }
-    }
-
-    /** 有效期类型 → API 天数：1=永久 2=1天 3=7天 4=30天 */
-    private fun expireDays(type: Int): String = when (type) {
-        2 -> "1"
-        3 -> "7"
-        4 -> "30"
-        else -> "-1"
     }
 
     /** 批量移动 */

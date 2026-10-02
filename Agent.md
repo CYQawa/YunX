@@ -421,6 +421,36 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 
 ---
 
+### 3.20 分享有效期：UI 中性码必须经 `ShareExpire` 转换（**别把中性码直接下发给接口**）
+
+**中性码只有一套**：`1`=永久有效、`2`=1 天、`3`=7 天、`4`=30 天，定义在
+`app/src/main/kotlin/com/yunx/app/data/network/model/ShareExpire.kt`（`FOREVER` / `ONE_DAY` / `SEVEN_DAYS` / `THIRTY_DAYS`）。
+有效期选择器与结果展示都在 `app/src/main/kotlin/com/yunx/app/ui/screens/CloudFileSheets.kt`
+（`expireOptions` 选项、`expireLabel()` 文案），各网盘页 `onShare = { _, passcode, expiredType -> ... }` 下发的就是这个码。
+
+**各平台 `createShare` 的有效期语义完全不同**（这就是 139/百度/123 三个平台「选永久建成 1 天、选 1/7/30 天显示永久」的原因）：
+
+| 平台 | 接口字段 | 真实语义 | 转换函数 |
+|---|---|---|---|
+| 139（`C139Api.createShare`） | `period` | 天数；**永久 = 完全不传该字段** | `ShareExpire.daysOrNull()`（返回 `null` 即不传） |
+| 百度（`BaiduApi.createShare`） | `period` | 字面天数 `0/1/7/30`；`0` = 永久 | `ShareExpire.baiduPeriod()` |
+| 123（`Pan123Api.createShare`） | `expiration` | 绝对 ISO 时间串（now + 天数）；永久 = 2099 哨兵 | `ShareExpire.daysOrNull()` 后交给 `expiration()` 拼串 |
+| 迅雷（`XunleiApi.createShare`） | `expiration_days` | **字符串** `"-1"/"1"/"7"/"30"`；`-1` = 永久 | `ShareExpire.xunleiDays()` |
+| 夸克 / UC（`QuarkApi` / `UCApi`） | `expired_type` | 取值恰好等于中性码，原值直传 | 无（`QuarkApi` / `UCApi` KDoc 已注明） |
+
+**转换必须在 ViewModel 层完成**，`api.createShare(...)` 只接受平台真实语义（各 API 的 KDoc 都写了「不是 UI 中性码」）。新增平台或改有效期选项时，
+只要走 `ShareExpire` 就不会再错位；`ShareExpire.daysOrNull()` 对未知码**抛异常**（fail-loud），不允许再用 `else -> 永久 / 30 天 / "-1"` 兜底——
+那会把「新加了一种有效期但忘了映射」静默变成另一种有效期，比报错更难查。
+
+**回填显示**：接口不返回有效期的平台（139/123/迅雷）用**用户所选的中性码**回填 `ShareInfo.expiredType`；
+百度用响应里的 `expiredType`（`BaiduApi.BaiduShareResult.expiredType`，字段缺失为 `null`，回退到用户所选值，**别用 0 兜底——0 是永久**）。
+认不出的值统一回填 `ShareExpire.UNKNOWN = 0`，`expireLabel()` 显示「未知」，不再 fail-open 成「永久有效」。
+夸克/UC 用 `optInt("expired_type")` 取值，字段缺失同样落到「未知」。
+
+**回退**：删掉 `ShareExpire.kt` 并在各 ViewModel 恢复「中性码直传 + `else -> 1`」即可回到旧行为（不推荐，bug 会复现）。
+
+---
+
 ## 4. 验证
 
 

@@ -92,6 +92,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.FileNameText
@@ -112,12 +113,12 @@ import com.yunx.app.ui.theme.spatialFast
 /** 文件操作菜单类型（FileActionSheet 内切换） */
 private enum class ActionStep { MENU, MOVE, SHARE, RENAME, DELETE }
 
-/** 有效期选项：名称 + expired_type 值 */
+/** 有效期选项：名称 + UI 中性码（[ShareExpire]；各平台 API 取值不同，由 ViewModel 负责转换，Agent.md §3.20） */
 private val expireOptions = listOf(
-    "永久有效" to 1,
-    "1 天" to 2,
-    "7 天" to 3,
-    "30 天" to 4
+    "永久有效" to ShareExpire.FOREVER,
+    "1 天" to ShareExpire.ONE_DAY,
+    "7 天" to ShareExpire.SEVEN_DAYS,
+    "30 天" to ShareExpire.THIRTY_DAYS
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -495,7 +496,7 @@ private fun ShareStep(
 ) {
     var withPassword by remember { mutableStateOf(false) }
     var passcode by remember { mutableStateOf("") }
-    var expiredType by remember { mutableStateOf(1) }
+    var expiredType by remember { mutableStateOf(ShareExpire.FOREVER) }
 
     Column(
         modifier = Modifier
@@ -922,11 +923,13 @@ private fun randomPasscode(): String {
     return (1..4).map { chars.random() }.joinToString("")
 }
 
+/** 中性码 → 展示文案；未知值显示「未知」而不是 fail-open 成「永久有效」 */
 private fun expireLabel(type: Int): String = when (type) {
-    2 -> "1 天"
-    3 -> "7 天"
-    4 -> "30 天"
-    else -> "永久有效"
+    ShareExpire.FOREVER -> "永久有效"
+    ShareExpire.ONE_DAY -> "1 天"
+    ShareExpire.SEVEN_DAYS -> "7 天"
+    ShareExpire.THIRTY_DAYS -> "30 天"
+    else -> "未知"
 }
 
 /** 批量操作步骤类型 */

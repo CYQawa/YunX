@@ -29,6 +29,7 @@ import com.yunx.app.data.download.DownloadManager
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.C139Api
 import com.yunx.app.data.network.C139Constants
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareInfo
@@ -419,15 +420,20 @@ class C139CloudViewModel(
         }
     }
 
-    /** 创建分享（139 提取码系统自动生成，仅选有效期） */
-    fun shareFile(period: Int?) {
+    /**
+     * 创建分享（139 提取码系统自动生成，仅选有效期）。
+     *
+     * @param expiredType UI 中性码（[ShareExpire]），**必须转成天数**：139 的 `period` 语义是
+     *   天数，永久有效则完全不传该字段（见 `C139Api.createShare`）。
+     */
+    fun shareFile(expiredType: Int) {
         val file = actionFile ?: return
         viewModelScope.launch {
             isOperating = true
             try {
                 val coLst = if (file.isdir) emptyList() else listOf(file.fid)
                 val caLst = if (file.isdir) listOf(file.fid) else emptyList()
-                val info = api.createShare(coLst, caLst, period, file.fname, cookie())
+                val info = api.createShare(coLst, caLst, ShareExpire.daysOrNull(expiredType), file.fname, cookie())
                 shareResult = info
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "分享失败"
@@ -525,7 +531,8 @@ class C139CloudViewModel(
     }
 
     /** 批量分享 */
-    fun shareSelected(period: Int?) {
+    /** 批量分享（@param expiredType UI 中性码，转天数见 [shareFile]） */
+    fun shareSelected(expiredType: Int) {
         val files = _selected.toList()
         if (files.isEmpty()) return
         viewModelScope.launch {
@@ -534,7 +541,7 @@ class C139CloudViewModel(
                 val coLst = files.filter { !it.isdir }.map { it.fid }
                 val caLst = files.filter { it.isdir }.map { it.fid }
                 val title = if (files.size == 1) files[0].fname else "分享 ${files.size} 个文件"
-                val info = api.createShare(coLst, caLst, period, title, cookie())
+                val info = api.createShare(coLst, caLst, ShareExpire.daysOrNull(expiredType), title, cookie())
                 shareResult = info
                 exitMultiSelect()
             } catch (e: Exception) {

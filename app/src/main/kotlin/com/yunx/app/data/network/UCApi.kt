@@ -675,8 +675,9 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
             parseData(request) { data -> data.optString("task_id").takeIf { it.isNotBlank() } }
         }
 
-    /** 创建分享（抓包：POST /1/clouddrive/share，url_type 1=无提取码 2=带提取码，expired_type 1永久/2一天/3七天/4三十天）。
- * 注意：分享创建是**异步任务**——响应只有 data.task_id，必须轮询 /1/clouddrive/task 直到完成拿到 share_id。 */
+    /** 创建分享（抓包：POST /1/clouddrive/share，url_type 1=无提取码 2=带提取码，
+     *  expired_type 1永久/2一天/3七天/4三十天，**取值域与 UI 中性码一致**（[com.yunx.app.data.network.model.ShareExpire]），无需转换，Agent.md §3.20；调用方只能传 1..4）。
+     *  注意：分享创建是**异步任务**——响应只有 data.task_id，必须轮询 /1/clouddrive/task 直到完成拿到 share_id。 */
     suspend fun createShare(
         fidList: List<String>,
         title: String,

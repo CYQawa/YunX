@@ -465,7 +465,7 @@ fun C139CloudScreen(
             // 139 的提取码由系统自动生成，不提供自定义入口
             // 139 的提取码由服务端自动生成，不可设置
             passcodeMode = PasscodeMode.SERVER_GENERATED,
-            onShare = { _, _, period -> viewModel.shareFile(period) },
+            onShare = { _, _, expiredType -> viewModel.shareFile(expiredType) },
             onRename = { viewModel.renameFile(it) },
             onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
@@ -491,7 +491,7 @@ fun C139CloudScreen(
             onDownload = { viewModel.downloadSelected() },
             // 139 的提取码由服务端自动生成，不可设置
             passcodeMode = PasscodeMode.SERVER_GENERATED,
-            onShare = { _, _, period -> viewModel.shareSelected(period) },
+            onShare = { _, _, expiredType -> viewModel.shareSelected(expiredType) },
             onDelete = {
                 showBatchActions = false
                 showDeleteConfirm = true

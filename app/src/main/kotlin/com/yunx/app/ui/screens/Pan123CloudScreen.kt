@@ -462,7 +462,7 @@ fun Pan123CloudScreen(
             operating = viewModel.isOperating,
             onDownload = { viewModel.downloadFile() },
             onDownloadFolder = { viewModel.downloadFolder() },
-            onShare = { _, pwd, period -> viewModel.shareFile(period, pwd) },
+            onShare = { _, pwd, expiredType -> viewModel.shareFile(expiredType, pwd) },
             onRename = { viewModel.renameFile(it) },
             onConfirmDelete = { viewModel.deleteFile() },
             onDismiss = {
@@ -486,7 +486,7 @@ fun Pan123CloudScreen(
             count = viewModel.selected.size,
             operating = viewModel.isOperating,
             onDownload = { viewModel.downloadSelected() },
-            onShare = { _, pwd, period -> viewModel.shareSelected(period, pwd) },
+            onShare = { _, pwd, expiredType -> viewModel.shareSelected(expiredType, pwd) },
             onDelete = {
                 showBatchActions = false
                 showDeleteConfirm = true

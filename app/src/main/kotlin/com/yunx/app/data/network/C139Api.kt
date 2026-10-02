@@ -21,6 +21,7 @@ package com.yunx.app.data.network
 import android.util.Base64
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.QuotaInfo
+import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import kotlinx.coroutines.Dispatchers
@@ -501,7 +502,10 @@ class C139Api(
     }
 
     /** 创建分享（getOutLink，需 Cookie + mcloud-skey；提取码系统自动生成）
-     *  @param period 有效期：null=永久 1/7/30=天数
+     *
+     *  @param period 有效期**天数**：null=永久（不传 period 字段）、1/7/30=天数。
+     *    ⚠️ 这里不是 UI 中性码（1/2/3/4），调用方必须先用 [com.yunx.app.data.network.model.ShareExpire.daysOrNull]
+     *    转换——否则「永久」会变成 1 天、「7 天」会变成 3 天（Agent.md §3.20）。
      */
     suspend fun createShare(
         coIDLst: List<String>,
@@ -544,11 +548,13 @@ class C139Api(
             passcode = set.optString("passwd"),
             pwdId = set.optString("linkID"),
             title = dedicatedName,
+            // 139 响应不返回有效期，只能按请求时用的天数回填中性码；未知取值显示「未知」而不是猜「永久」
             expiredType = when (period) {
-                1 -> 2
-                7 -> 3
-                30 -> 4
-                else -> 1
+                null -> ShareExpire.FOREVER
+                1 -> ShareExpire.ONE_DAY
+                7 -> ShareExpire.SEVEN_DAYS
+                30 -> ShareExpire.THIRTY_DAYS
+                else -> ShareExpire.UNKNOWN
             }
         )
     }
