@@ -393,14 +393,23 @@ class ResolveViewModel(
         }
     }
 
-    /** 批量下载：逐个取直链入队（选中文件夹时递归下载整个文件夹并保持目录结构，全部获取完再统一切到下载页） */
-    fun batchDownload() {
+    /** 批量下载（多选栏）：逐个取直链入队（选中文件夹时递归下载整个文件夹并保持目录结构，全部获取完再统一切到下载页） */
+    fun batchDownload() = downloadFiles(_selected.toList())
+
+    /**
+     * 解析页文件操作弹窗：下载单个文件夹（递归收集整个文件夹后逐个入队，与批量下载同一条链路）。
+     * 弹窗里的单文件下载不走这里 —— 那条路径要弹「下载链接」弹窗（可复制直链），见 [fetchDownloadLink]。
+     */
+    fun downloadFolder(file: ShareFile) = downloadFiles(listOf(file))
+
+    /** 下载给定的一批文件/文件夹（文件夹递归展开；全部取链完成后一次性切到下载页） */
+    private fun downloadFiles(files: List<ShareFile>) {
+        if (files.isEmpty()) return
         // GitHub 分支：无需凭证/取链 API，逐文件构造直链入队（代码文件夹递归收集 blob）
         if (currentPlatform == SharePlatform.GITHUB) {
-            batchGitHubDownload()
+            batchGitHubDownload(files)
             return
         }
-        val files = _selected.toList()
         val s = session ?: return
         viewModelScope.launch {
             isBatchWorking = true
@@ -418,7 +427,7 @@ class ResolveViewModel(
                     SharePlatform.UC -> ucAccountRepository.getFreshCookie() ?: credential
                     else -> credential
                 }
-                // 展开选中项：文件直接加入，文件夹递归收集（相对路径 = 文件夹名/子/...）
+                // 展开待下载项：文件直接加入，文件夹递归收集（相对路径 = 文件夹名/子/...）
                 val tasks = mutableListOf<Pair<ShareFile, String>>()
                 for (file in files) {
                     if (file.isdir) {
@@ -490,11 +499,10 @@ class ResolveViewModel(
     }
 
     /**
-     * GitHub 批量下载：选中的叶子文件直接入队；代码文件夹（github:code:*）递归 getTree 收集 blob；
+     * GitHub 批量下载：传入的叶子文件直接入队；代码文件夹（github:code:*）递归 getTree 收集 blob；
      * Releases 文件夹展开为资产；其余（repo 根/账号列表）跳过。全部直链先经镜像前缀转换。
      */
-    private fun batchGitHubDownload() {
-        val selected = _selected.toList()
+    private fun batchGitHubDownload(files: List<ShareFile>) {
         viewModelScope.launch {
             isBatchWorking = true
             batchProgress = "正在收集文件…"
@@ -503,7 +511,7 @@ class ResolveViewModel(
                 val prefix = mirrorPrefixProvider()
                 val tasks = mutableListOf<Triple<String, String, Long>>() // url, fileName, size
                 // 收集文件
-                for (file in selected) {
+                for (file in files) {
                     if (batchCancelRequested) break
                     when {
                         // 叶子文件：直接构造 URL

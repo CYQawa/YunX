@@ -210,6 +210,43 @@ internal fun FileActionSheet(
     }
 }
 
+/**
+ * 底部弹窗顶部：图标 + 文件名 + 类型（文件夹/文件）。
+ * 网盘页文件操作弹窗（[FileActionSheet]）与解析页文件操作弹窗
+ * （`com.yunx.app.ui.resolve.ResolveFileActionSheet`）共用，保证两处形态一致。
+ */
+@Composable
+internal fun FileSheetHeader(file: ShareFile) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.primaryContainer
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.Download,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            FileNameText(
+                text = file.fname,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = if (file.isdir) "文件夹" else "文件",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
 /** 操作菜单主界面 */
 @Composable
 private fun ActionMenu(
@@ -227,34 +264,7 @@ private fun ActionMenu(
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
         // 标题
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.Download,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                FileNameText(
-                    text = file.fname,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = if (file.isdir) "文件夹" else "文件",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        FileSheetHeader(file = file)
 
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider()
@@ -309,9 +319,12 @@ private fun ActionMenu(
     }
 }
 
-/** 操作项行 */
+/**
+ * 操作项行（图标 + 标题 + 说明）。
+ * 网盘页与解析页的文件操作弹窗共用，新增操作项请沿用本组件，不要再手写一份。
+ */
 @Composable
-private fun ActionItem(
+internal fun ActionItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     desc: String,
@@ -847,10 +860,15 @@ internal fun ShareResultDialog(
     )
 }
 
-/** 步骤头部：返回按钮 + 标题（六大网盘页的移动步骤也用它，故为 internal） */
+/** 步骤头部：返回按钮 + 标题 + 副标题（六大网盘页的移动步骤与解析页转存步骤都用它，故为 internal） */
 @Composable
-internal fun StepHeader(title: String, subtitle: String, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+internal fun StepHeader(
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -864,13 +882,38 @@ internal fun StepHeader(title: String, subtitle: String, onBack: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
-            Text(
+            // 副标题是文件名（单文件传文件名，批量传"已选 N 项"）→ 走 FileNameText，跟随文件名显示设置
+            FileNameText(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/**
+ * 「转存」步骤外框（解析页文件操作弹窗内的二级步骤）。
+ *
+ * 六大平台的转存目录选择器（`XxxSaveContent`）共用：顶部是带返回箭头的 [StepHeader]，
+ * 下面直接放各自的内容（内容自带 24dp 内边距），因此切换步骤时只有内容淡入淡出，
+ * 不会像另开一个 [androidx.compose.material3.ModalBottomSheet] 那样整块弹窗重新升起。
+ */
+@Composable
+internal fun SaveStepScaffold(
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        StepHeader(
+            title = title,
+            subtitle = subtitle,
+            onBack = onBack,
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp)
+        )
+        content()
     }
 }
 

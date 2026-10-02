@@ -230,6 +230,29 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 - 不要在各调用处再写 `maxLines` / `overflow` / `basicMarquee`：写死单行会让该设置失效，写死多行则默认观感被改。
 - 面包屑、对话框标题、分享标题（`BookmarkScreen`）**不**走它：它们不是文件名，横向空间紧张时折行会破坏布局。
 
+### 3.13 文件操作弹窗：解析页与网盘页同一套（别再往行里塞图标按钮）
+
+文件/文件夹的操作统一收进底部弹窗，行内不放操作图标（历史遗留的「转存」图标已删除）：
+
+- **解析页**（`ui/resolve/ResolveFileActionSheet.kt`）：点击文件行弹出（下载 / 转存）；文件夹点击是进入目录，
+  用行尾「更多」按钮弹出同一个弹窗（下载文件夹 / 转存）。动作链路：下载 → `checkBaiduLimit` + `fetchDownloadLink`（下载链接弹窗）；
+  下载文件夹 → `ResolveViewModel.downloadFolder`（与批量下载同一条链路 `downloadFiles`，文件夹递归）；
+  转存 → `ResolveViewModel.requestSave`，随后**在同一弹窗内**切到转存步骤（见下条）。
+- **转存是弹窗内的二级步骤，不是第二个弹窗**（与网盘页「移动到」完全同构）：`ResolveFileActionSheet` 内部
+  `private enum class ResolveActionStep { MENU, SAVE }` + `AnimatedContent(fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()))`；
+  SAVE 内容由 `saveStep: @Composable (onBack, onDone) -> Unit` 插槽提供，返回箭头回主菜单。
+  六个平台的目录选择器是 `ui/screens/*SaveSheet.kt` 里的 `internal fun XxxSaveContent(resolveViewModel, cloudViewModel, onBack)`
+  （`SaveToCloudContent` / `UCSaveContent` / `XunleiSaveContent` / `BaiduSaveContent` / `C139SaveContent` / `Pan123SaveContent`），
+  外壳统一用 `SaveStepScaffold(title, subtitle, onBack, content)`（`CloudFileSheets.kt`，内部就是带返回箭头的 `StepHeader`）——
+  **不要再写 `ModalBottomSheet` + 自绘标题行**。转存成功判定：`ResolveViewModel.saveTarget` 由非空变 null（成功才清空，
+  失败/未登录保留原值让用户重试），`ShareDetailScreen` 用 `LaunchedEffect(saveTarget) { if (saveTarget == null) onDone() }` 关闭整个弹窗；
+  `saving` 期间禁止下滑关闭与返回菜单（避免进度提示随内容一起消失）。
+- **网盘页**（`ui/screens/CloudFileSheets.kt` 的 `FileActionSheet`）：形态同源，多出分享/移动/重命名/删除（自己网盘才有的操作）。
+- 顶部信息头 `FileSheetHeader` 与操作项 `ActionItem` 两个组件为两处共用 —— 改样式只改这两处，**不要再手写一份菜单行**。
+- 过渡：只有「下载 / 下载文件夹」这类**要另开弹窗或直接入队**的动作才先 `sheetState.hide()` 播完退场动画再执行
+  （否则弹窗会瞬间消失，并与紧接着弹出的链接弹窗叠在一起）；同弹窗内的步骤切换（转存）不关弹窗，靠 `AnimatedContent` 淡入淡出。
+- `ShareFileRow` 只剩 `onClick` / `onMore` / `onLongClick`（`onSave` 参数已删）：行尾按钮只用于「点击行为被占用」的场景（文件夹点击进目录）。
+
 ---
 
 ## 4. 验证

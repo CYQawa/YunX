@@ -104,12 +104,12 @@ import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.screens.AddToBookmarkDialog
-import com.yunx.app.ui.screens.BaiduSaveSheet
-import com.yunx.app.ui.screens.C139SaveSheet
-import com.yunx.app.ui.screens.Pan123SaveSheet
-import com.yunx.app.ui.screens.SaveToCloudSheet
-import com.yunx.app.ui.screens.UCSaveSheet
-import com.yunx.app.ui.screens.XunleiSaveSheet
+import com.yunx.app.ui.screens.BaiduSaveContent
+import com.yunx.app.ui.screens.C139SaveContent
+import com.yunx.app.ui.screens.Pan123SaveContent
+import com.yunx.app.ui.screens.SaveToCloudContent
+import com.yunx.app.ui.screens.UCSaveContent
+import com.yunx.app.ui.screens.XunleiSaveContent
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
@@ -183,6 +183,8 @@ fun ShareDetailScreen(
     var pendingBaiduAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     // 「添加至收藏」弹窗
     var showAddBookmark by remember { mutableStateOf(false) }
+    // 文件操作弹窗（点击文件行 / 文件夹行尾「更多」打开）：下载 / 转存
+    var actionFile by remember { mutableStateOf<ShareFile?>(null) }
 
     /** 百度分享下载前检查：>300MB 且未忽略时弹提示，确认后执行 */
     fun checkBaiduLimit(file: ShareFile, proceed: () -> Unit) {
@@ -373,12 +375,14 @@ fun ShareDetailScreen(
                             scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
                             viewModel.openFolder(file)
                         } else {
-                            checkBaiduLimit(file) { viewModel.fetchDownloadLink(file) }
+                            // 文件：先弹文件操作弹窗（下载/转存），不再直接进入下载流程
+                            actionFile = file
                         }
                     },
-                    // 仅夸克分享显示转存按钮（多选时隐藏）
-                    onSave = if (!viewModel.multiSelectMode && viewModel.canSave) {
-                        { viewModel.requestSave(file) }
+                    // 文件夹点击是进入目录，故用行尾「更多」打开同一个弹窗（与网盘页一致）；
+                    // 文件点击即弹窗，不再需要行尾按钮（原来的「转存」图标已统一进弹窗）
+                    onMore = if (!viewModel.multiSelectMode && file.isdir) {
+                        { actionFile = file }
                     } else {
                         null
                     },
@@ -531,40 +535,46 @@ fun ShareDetailScreen(
         )
     }
 
-    // 转存弹窗：浏览网盘目录并保存（单文件转存；夸克/迅雷/百度按平台选目录选择器）
-    if (viewModel.saveTarget != null) {
-        when {
-            viewModel.isSaveXunlei -> XunleiSaveSheet(
-                resolveViewModel = viewModel,
-                cloudViewModel = xunleiCloudViewModel,
-                onDismiss = { viewModel.dismissSave() }
-            )
-            viewModel.isSaveBaidu -> BaiduSaveSheet(
-                resolveViewModel = viewModel,
-                cloudViewModel = baiduCloudViewModel,
-                onDismiss = { viewModel.dismissSave() }
-            )
-            viewModel.isSaveC139 -> C139SaveSheet(
-                resolveViewModel = viewModel,
-                cloudViewModel = c139CloudViewModel,
-                onDismiss = { viewModel.dismissSave() }
-            )
-            viewModel.isSaveUC -> UCSaveSheet(
-                resolveViewModel = viewModel,
-                cloudViewModel = ucCloudViewModel,
-                onDismiss = { viewModel.dismissSave() }
-            )
-            viewModel.isSavePan123 -> Pan123SaveSheet(
-                resolveViewModel = viewModel,
-                cloudViewModel = pan123CloudViewModel,
-                onDismiss = { viewModel.dismissSave() }
-            )
-            else -> SaveToCloudSheet(
-                resolveViewModel = viewModel,
-                cloudViewModel = quarkCloudViewModel,
-                onDismiss = { viewModel.dismissSave() }
-            )
-        }
+    // 文件操作弹窗（点击文件行 / 文件夹行尾「更多」）：下载 / 转存
+    // 与网盘页同一形态（ModalBottomSheet + 文件信息 + 操作项）；弹窗内部先播放退场动画再动作，
+    // 所以这里一关弹窗就执行动作不会出现「弹窗瞬间消失」或与下载链接弹窗/转存弹窗重叠。
+    actionFile?.let { file ->
+        ResolveFileActionSheet(
+            file = file,
+            canSave = viewModel.canSave,
+            saving = viewModel.isSaving,
+            onDownload = {
+                actionFile = null
+                // 百度分享 >300MB 限速提示（与原来直接点击文件时一致）
+                checkBaiduLimit(file) { viewModel.fetchDownloadLink(file) }
+            },
+            onDownloadFolder = {
+                actionFile = null
+                viewModel.downloadFolder(file)
+            },
+            // 不关弹窗：准备好转存状态后弹窗内部切到转存步骤（内容淡入淡出，不再另开一个弹窗）
+            onSave = { viewModel.requestSave(file) },
+            // 关弹窗时顺手清掉转存状态，避免下次打开仍停在上次的目录选择
+            onDismiss = {
+                actionFile = null
+                viewModel.dismissSave()
+            },
+            // 转存步骤：与网盘页「移动到」同为弹窗内二级内容，返回箭头回主菜单
+            saveStep = { onBack, onDone ->
+                // 转存成功后 ViewModel 会清空 saveTarget（失败/未登录则保留，让用户重试）
+                LaunchedEffect(viewModel.saveTarget) {
+                    if (viewModel.saveTarget == null) onDone()
+                }
+                when {
+                    viewModel.isSaveXunlei -> XunleiSaveContent(viewModel, xunleiCloudViewModel, onBack)
+                    viewModel.isSaveBaidu -> BaiduSaveContent(viewModel, baiduCloudViewModel, onBack)
+                    viewModel.isSaveC139 -> C139SaveContent(viewModel, c139CloudViewModel, onBack)
+                    viewModel.isSaveUC -> UCSaveContent(viewModel, ucCloudViewModel, onBack)
+                    viewModel.isSavePan123 -> Pan123SaveContent(viewModel, pan123CloudViewModel, onBack)
+                    else -> SaveToCloudContent(viewModel, quarkCloudViewModel, onBack)
+                }
+            }
+        )
     }
 }
 
@@ -674,9 +684,7 @@ internal fun CrumbBar(
 internal fun ShareFileRow(
     file: ShareFile,
     onClick: () -> Unit,
-    /** 非空时行尾显示「转存」按钮 */
-    onSave: (() -> Unit)? = null,
-    /** 非空时行尾显示「更多」按钮（打开文件操作菜单） */
+    /** 非空时行尾显示「更多」按钮（打开文件操作弹窗） */
     onMore: (() -> Unit)? = null,
     /** 长按进入多选（多选模式下为 null） */
     onLongClick: (() -> Unit)? = null,
@@ -780,16 +788,6 @@ internal fun ShareFileRow(
             },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onSave != null) {
-                        IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
-                            Icon(
-                                imageVector = Icons.Outlined.SaveAlt,
-                                contentDescription = "转存",
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
                     if (onMore != null) {
                         IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
                             Icon(
