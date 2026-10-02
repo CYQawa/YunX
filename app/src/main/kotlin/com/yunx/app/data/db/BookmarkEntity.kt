@@ -40,6 +40,8 @@ data class BookmarkEntity(
     val category: String = DEFAULT_CATEGORY,
     /** 是否已添加到主页快捷方式：主页（解析页）下方网格展示，点击直接解析 */
     val homePinned: Boolean = false,
+    /** 主页快捷方式色块的自定义文字（空串 = 自动取标题前几个字） */
+    val homeLabel: String = "",
     val createTime: Long = System.currentTimeMillis()
 ) {
     companion object {

@@ -752,7 +752,15 @@ fun MainScreen() {
                         actions = {
                             // 解析页标题右上角：收藏网盘链接入口
                             if (currentTab == MainTab.Resolve) {
-                                IconButton(onClick = { showBookmarks = true }) {
+                                IconButton(
+                                    onClick = { showBookmarks = true },
+                                    // ★ 收藏页就是从这个图标进来的：图标本身当"源"，用同一个 key 做容器变换，
+                                    //   打开时图标长成整页、关闭时收回图标（与设置页那三行的做法完全一致）
+                                    modifier = Modifier.sharedBounds(
+                                        rememberSharedContentState(OVERLAY_KEY_BOOKMARKS),
+                                        animatedVisibilityScope = sourceScope
+                                    )
+                                ) {
                                     Icon(Icons.Outlined.Bookmarks, contentDescription = "收藏网盘链接")
                                 }
                             }
@@ -943,15 +951,12 @@ fun MainScreen() {
                 val route = shownRoute
                 if (route != null) {
                     OverlayPage(
-                        modifier = if (route == OVERLAY_KEY_BOOKMARKS) {
-                            // 收藏页是从顶栏图标进来的，没有"被点的卡片"，不做形变
-                            Modifier
-                        } else {
-                            Modifier.sharedBounds(
-                                rememberSharedContentState(route),
-                                animatedVisibilityScope = targetScope
-                            )
-                        }
+                        // 收藏页的"源"是顶栏那个书签图标（见上），其余三页是设置页里被点的那一行；
+                        // 两者都用同一个 route key，所以这里不再需要特例分支
+                        modifier = Modifier.sharedBounds(
+                            rememberSharedContentState(route),
+                            animatedVisibilityScope = targetScope
+                        )
                     ) {
                         when (route) {
                             OVERLAY_KEY_ABOUT -> AboutScreen(

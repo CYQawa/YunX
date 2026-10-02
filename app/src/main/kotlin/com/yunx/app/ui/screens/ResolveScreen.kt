@@ -87,6 +87,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -733,20 +734,28 @@ private fun HomeShortcutTile(
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
-            val short = platformShortLabel(bookmark.platform)
-            if (short != null) {
-                Text(
-                    text = short,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            } else {
+            val label = homeTileLabel(bookmark)
+            if (label.isEmpty()) {
                 Icon(
                     imageVector = Icons.Outlined.Link,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Text(
+                    text = label,
+                    // 字越多字号越小：4 个字（自定义上限）也能塞进 48dp 方块
+                    style = when {
+                        label.length <= 2 -> MaterialTheme.typography.titleMedium
+                        label.length == 3 -> MaterialTheme.typography.labelLarge
+                        else -> MaterialTheme.typography.labelSmall
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
         }
@@ -761,7 +770,23 @@ private fun HomeShortcutTile(
     }
 }
 
-/** 平台简称（快捷方式色块里的文字）；未知平台返回 null，调用处退回通用链接图标 */
+/** 快捷方式色块最多显示几个字（标题截断、自定义文字都受它约束） */
+internal const val HOME_LABEL_MAX_LENGTH = 4
+
+/**
+ * 快捷方式色块文字：自定义文字 > 标题前几个字 > 平台简称（标题为空时的兜底）。
+ * 返回空串表示没有可显示的文字，调用处退回通用链接图标。
+ * 收藏页的「自定义图标文字」弹窗也用它做占位提示，保证"自动文字"只有一个实现。
+ */
+internal fun homeTileLabel(bookmark: BookmarkEntity): String {
+    val custom = bookmark.homeLabel.trim()
+    if (custom.isNotEmpty()) return custom.take(HOME_LABEL_MAX_LENGTH)
+    val title = bookmark.title.trim()
+    if (title.isNotEmpty()) return title.take(HOME_LABEL_MAX_LENGTH)
+    return (platformShortLabel(bookmark.platform) ?: "").take(HOME_LABEL_MAX_LENGTH)
+}
+
+/** 平台简称（色块兜底文字）；未知平台返回 null，调用处退回通用链接图标 */
 private fun platformShortLabel(platform: String): String? = when (platform) {
     "QUARK" -> "夸克"
     "UC" -> "UC"

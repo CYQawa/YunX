@@ -108,6 +108,14 @@ class BookmarkViewModel(private val dao: BookmarkDao) : ViewModel() {
         }
     }
 
+    /** 自定义主页快捷方式色块文字（空串 = 自动取标题前几个字） */
+    fun setHomeLabel(id: Long, label: String) {
+        viewModelScope.launch {
+            dao.updateHomeLabel(id, label.trim())
+            SnackbarController.show(if (label.isBlank()) "已恢复自动文字" else "已更新快捷方式文字")
+        }
+    }
+
     class Factory(private val dao: BookmarkDao) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

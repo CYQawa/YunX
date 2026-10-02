@@ -47,6 +47,10 @@ interface BookmarkDao {
     @Query("UPDATE bookmark SET homePinned = :pinned WHERE id = :id")
     suspend fun updateHomePinned(id: Long, pinned: Boolean)
 
+    /** 主页快捷方式色块的自定义文字（空串 = 自动取标题前几个字） */
+    @Query("UPDATE bookmark SET homeLabel = :label WHERE id = :id")
+    suspend fun updateHomeLabel(id: Long, label: String)
+
     @Query("DELETE FROM bookmark WHERE id = :id")
     suspend fun delete(id: Long)
 }
