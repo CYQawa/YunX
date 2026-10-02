@@ -18,6 +18,7 @@
 
 package com.yunx.app.ui.screens
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -313,14 +314,22 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 下载保存目录：系统文件夹选择器（SAF，适配各 Android 版本分区存储）；
-        // 已自定义时卡片右侧内嵌「恢复默认」操作（不单独外露按钮）
+        // 已自定义时卡片右侧内嵌「恢复默认」操作（不单独外露按钮）。
+        // 系统选择器被卸载或禁用时 launch 抛 ActivityNotFoundException（#90）：
+        // 只提示恢复选择器，不改已保存的目录，也不改用其他文件管理器。
         SettingsItem(
             icon = Icons.Outlined.FolderOpen,
             shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "下载保存目录",
             description = downloadDirUri?.let { "已自定义：${DownloadSaver.safDirDisplay(it)}" }
                 ?: "系统默认 Download（点击自定义）",
-            onClick = { dirLauncher.launch(null) },
+            onClick = {
+                try {
+                    dirLauncher.launch(null)
+                } catch (_: ActivityNotFoundException) {
+                    SnackbarController.show("无法打开文件夹选择器，请恢复或启用系统文件选择器后重试")
+                }
+            },
             trailing = if (downloadDirUri != null) {
                 {
                     TextButton(
