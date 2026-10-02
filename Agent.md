@@ -321,6 +321,44 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 
 ---
 
+### 3.17 权限申请统一收口在引导页第 3 页（**别再往业务页面加"每次启动都弹"的检查**）
+
+**现状**：引导页第 3 页（`ui/screens/OnboardingPermissionPage.kt` 的 `PermissionPage(storageGranted, storageDenied, onRequestStorage)`）一次性过三件事：
+| 卡片 | 权限/设置 | 可申请的系统版本 | 入口 |
+| --- | --- | --- | --- |
+| 通知权限 | `POST_NOTIFICATIONS` | Android 13+ 可申请；低版本/被系统关闭 → 跳系统设置 | `PermissionState.canRequestNotifications()` → 申请，否则 `openNotificationSettings()` |
+| 后台运行 | 「忽略电池优化」白名单 | 全版本（系统设置页） | `PermissionState.requestIgnoreBatteryOptimizations()` |
+| 存储权限 | `WRITE_EXTERNAL_STORAGE` | **仅 Android 9 及以下**需要；10+ 走媒体库无需授权 | `PermissionState.storagePermissionRequired()` |
+
+**能否跳过**：通知与后台运行可跳过（只影响提醒 / 息屏存活）；**存储权限在 Android 9 及以下是必要权限，不给跳过** ——
+没有它 `DownloadManager` 会在保存前直接抛「未授予存储权限，无法保存到下载目录」（`data/download/DownloadManager.kt` 的 HLS 分支与分片合并分支各一处），
+所以存储权限状态提升在 `ui/screens/OnboardingScreen.kt`（`storageGranted` / `storageDenied` / `requestStorage` / `storageBlocking`）：
+未授权时底部 `OnboardingBottomBar(finishEnabled = !storageBlocking, ...)` 把「开始使用」按钮**置灰禁用**（`Button(enabled = false)`），
+**文案与图标恒为「开始使用」+ Check，不随状态改字**（用户明确要求：改文案会让人以为按钮变成了别的东西）；
+授权入口是权限页的「存储权限」卡片，授权成功返回后 `ON_RESUME` 重查 ⇒ 按钮自动恢复可点。
+卡片按钮在拒绝过一次后由「授权」改成「去设置授权」并走 `PermissionState.openAppDetails()`
+（避免授权框已被「不再询问」吞掉、点了没反应）。Android 10+ 的 `storageGranted()` 恒为 true ⇒ 这套阻塞逻辑完全不生效。
+
+**卡片按钮显示规则**：`PermissionCard` 内部只要 `granted == true` 就不渲染操作按钮 ——「去设置」只在真的需要用户动手时才出现，别在调用处补 `if`。
+
+**唯一状态入口**：`app/src/main/kotlin/com/yunx/app/util/PermissionState.kt`。
+`Build.VERSION.SDK_INT` 的分支只允许写在这个文件里（13+ 的运行时通知权限、9- 的存储权限、各系统设置 Intent 的兜底跳转都在里面），调用处不要再自己判断版本。
+
+**已从业务页面移除**（历史行为，勿恢复）：
+- `MainActivity.kt`：启动时的通知权限申请 + 「通知权限」引导弹窗（`notificationPermLauncher` / `showNotificationGuide` / `NotificationPermissionDialog`）。
+- `ui/MainScreen.kt`：首次下载任务启动时弹的「保持后台下载」电池优化 `AlertDialog`（`showBatteryGuide` / 监听 `downloadViewModel.tasks` 的 `LaunchedEffect`）。
+
+**保留的兜底**（有意为之，不冲突：只有用户真的用到该功能且权限缺失时才提示）：
+- `ui/MainScreen.kt` 的 `storagePermissionLauncher` + `downloadManager.storagePermissionProvider`（保存前兜底，Android 9- 才真会弹）。
+- `ui/screens/DownloadScreen.kt`：手动添加下载任务入口的存储权限兜底。
+- `ui/screens/SupportScreen.kt`：保存图片时的存储权限兜底。
+- `ui/screens/SettingsScreen.kt`：通知状态展示与手动申请、「通知栏下载进度」开关点击时申请、电池优化手动入口（设置页是用户主动去改的地方，不算打扰）。
+
+**注意**：权限授权框和系统设置页返回都会触发 `ON_RESUME`，所以引导页第 3 页的卡片状态用 `DisposableEffect(lifecycleOwner)` + `LifecycleEventObserver` 重查，
+不能只用 `remember { mutableStateOf(...) }` 的初值（否则会出现"授权完返回，卡片还显示未授权"）。
+
+---
+
 ## 4. 验证
 
 
