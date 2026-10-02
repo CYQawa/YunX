@@ -80,11 +80,18 @@ jobs:
         run: |
           ./gradlew assembleRelease --no-daemon
 
-      # 产物只上传为 Actions Artifacts，命名带 run_id（每日唯一），便于在 Actions 页区分每日构建。
+      # 产物只上传为 Actions Artifacts，命名按作者要求：YunX-nightly-<日期>-<短SHA>。
+      # 日期/短SHA 先在 shell 里算出来写进 GITHUB_ENV，再在 upload-artifact 的 name 里引用
+      # （name 字段不做 shell 展开，直接写 $() 在 Actions 里不会生效）。
+      - name: Resolve artifact name (date-shortSHA)
+        if: env.SKIP_BUILD != '1'
+        run: |
+          echo "ARTIFACT_NAME=YunX-nightly-$(date +%Y%m%d)-${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+
       - name: Upload APK as artifact
         if: env.SKIP_BUILD != '1'
         uses: actions/upload-artifact@v4
         with:
-          name: YunX-nightly-${{ github.run_id }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
