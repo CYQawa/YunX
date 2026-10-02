@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.MoreVert
@@ -333,6 +334,11 @@ fun ShareDetailScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         header()
                     }
+                    // 游客模式（未登录）：列表可用，但下载/转存需要登录 —— 常驻一行说明，避免点了才报错
+                    if (viewModel.isGuest) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        GuestBrowseNotice()
+                    }
                 }
             }
 
@@ -553,7 +559,11 @@ fun ShareDetailScreen(
                 viewModel.downloadFolder(file)
             },
             // 不关弹窗：准备好转存状态后弹窗内部切到转存步骤（内容淡入淡出，不再另开一个弹窗）
-            onSave = { viewModel.requestSave(file) },
+            // 游客模式例外：转存会被 ViewModel 拦下并弹 Snackbar，这里先关掉弹窗让提示可见
+            onSave = {
+                if (viewModel.isGuest) actionFile = null
+                viewModel.requestSave(file)
+            },
             // 关弹窗时顺手清掉转存状态，避免下次打开仍停在上次的目录选择
             onDismiss = {
                 actionFile = null
@@ -575,6 +585,37 @@ fun ShareDetailScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * 游客模式提示条：未登录也能浏览分享列表（6 个网盘的列表接口都允许匿名），
+ * 但下载（取直链）与转存需要登录 —— 见 Agent.md §3.19。
+ */
+@Composable
+private fun GuestBrowseNotice() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "未登录浏览：可查看文件列表，下载/转存需先到「网盘」页登录",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

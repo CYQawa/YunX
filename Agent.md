@@ -383,6 +383,42 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 - `.gitignore` 已挡 `*.jks` / `*.keystore` / `keystore.properties`（`!debug.keystore` 例外）。
 - 生成 `KEYSTORE_BASE64`：Linux/macOS `base64 -w 0 你的.jks`（macOS 若报 `-w` 不支持就用 `base64 -i 你的.jks`），Windows PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes("你的.jks"))`。
 
+### 3.19 游客模式：列目录不要求登录，下载/转存仍要求登录（**别再往列目录加登录拦截**）
+
+**结论**：解析分享**不再要求登录**。6 个网盘的分享**列表**接口都允许匿名访问（用户实测：浏览器未登录也能列出文件）；
+但**取直链/转存**基本都要账号，所以登录闸门只保留在下载/转存入口。
+
+**各平台列目录的匿名能力（实测 + 源码核对）**：
+
+| 平台 | 列目录 | 依据 |
+|------|--------|------|
+| 123 | 匿名 | `Pan123Api.getShareFiles`（`/b/api/share/get`）无鉴权头、注释「匿名、无签名」；`fidToken = S3KeyFlag\|Etag\|StorageNode` 已随列表返回 |
+| 139 | 匿名 | `C139Api.getShareFiles` 走 `sharePostAnonymous`，body `account:""`、无 authorization/mcloud-sign |
+| 百度 | 匿名 | 公共分享（无提取码）时 `sekey=""`、省略 `&sekey=`；仓库层无登录前置检查 |
+| 夸克 / UC | 匿名 | API 层无 cookie 预检；仓库/VM 也不再有闸门 |
+| 迅雷 | 匿名 | `XunleiApi.getShare` / `getShareDetail` 在 token 为空时**不写 Authorization 头**（带上失效 Bearer 反而被判 `unauthenticated`） |
+| GitHub | —— | 本来就不需要登录 |
+
+**闸门在哪（`ResolveViewModel`）**：
+- `startResolve` / `openFolder` / `goBack`：空凭据**照常下传**，并置 `isGuest = credential.isBlank()`（`backToInput` / `startGitHubResolve` 复位 false）。
+  解析失败时给服务端原文 + 一句「当前未登录，可到「网盘」页登录 XX 后重试」。
+- 仍要求登录（不要动）：`fetchDownloadLink`（取直链）、`downloadFiles` / `batchDownload`、`startDownload`、`saveToCloud`、`batchSaveToCloud`、`requestSave`（游客直接提示并 return，不打开目录选择）。
+  提示语统一为「下载/转存需要先登录 X（未登录仅能浏览文件列表）」，走 `downloadError` → Snackbar。
+
+**UI**：`ShareDetailScreen` 的 `GuestBrowseNotice()`（`viewModel.isGuest` 时显示在标题/面包屑下方）说明「可查看文件列表，下载/转存需先到「网盘」页登录」；
+操作弹窗里点「转存」会先关弹窗再弹 Snackbar（否则提示被 `ModalBottomSheet` 挡住）。
+
+**迅雷专属实现**（唯一需要改请求构造的平台）：
+- `XunleiApi.panRequest` / `panRequestM`：`accessToken` 为空 ⇒ 不写 `Authorization`（`currentAccessToken` 的旧值不会漏进来）。
+- `XunleiApi.panCall(..., anonymous = true)`：不带验证码、失败也不刷新 token / 不重试 `captcha_invalid`，把服务端真实错误直接抛上来。
+- `XunleiResolveRepository.accessOrEmpty()`：未登录返回 `""`；`deviceIdOrGuest()`：未登录回退 `XunleiApi.newDeviceId()`（否则「缺少设备标识」会把匿名列目录挡在门外，且该 id 只在进程内复用、不落库）。
+- 转存/取直链仍走 `access()` ⇒ 游客点下载会看到「请先登录迅雷网盘」。
+
+**排错提示**：
+- 服务端拒绝时优先看文案里的 `HTTP xxx` / `errno`：百度 `-6` = 未登录或登录态失效（此时提示「需要提取码，或需要登录百度网盘」），夸克/UC 非 JSON 响应会带 `HTTP 401/403`。
+- 游客模式下「某些平台列不出来」不代表协议不行：多数是分享本身需要提取码（先输密码再判断），或风控限速。
+- 回退：把 `startResolve` / `openFolder` / `goBack` 的空凭据下传换回「凭据为空即报错」，并恢复各仓库的 `isNullOrBlank` 校验即可；UI 提示条随 `isGuest` 自动消失。
+
 ---
 
 ## 4. 验证

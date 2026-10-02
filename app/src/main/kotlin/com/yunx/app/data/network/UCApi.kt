@@ -763,9 +763,12 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
             it.body?.string() ?: throw QuarkApiException("请求失败：响应为空")
         }
         val json = runCatching { JSONObject(body) }.getOrElse {
-            throw QuarkApiException("响应解析失败")
+            // 服务端返回非 JSON（多半是 HTML 错误页/风控页）时带上 HTTP 状态码，
+            // 便于分辨「未登录被拒（401/403）」与「分享已失效」
+            throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
         }
         if (json.optInt("status") != 200) {
+            // 透传服务端 message，如「提取码错误」「分享已失效」等
             throw QuarkApiException(json.optString("message").ifBlank { "请求失败" })
         }
         return parser(json.optJSONObject("data") ?: throw QuarkApiException("响应缺少 data"))

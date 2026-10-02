@@ -26,18 +26,19 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
 
 /**
- * 139（和彩云）分享解析仓库：cookie → getOutLinkInfoV6 列目录 → getContentInfoFromOutLink 直链。
+ * 139（和彩云）分享解析仓库：cookie → getOutLinkInfoV6 列目录 → dlFromOutLinkV3 直链。
  * 139 分享无需转存（share host 直接列目录 + 取直链），credential 为登录 Cookie（含账号信息）；
  * authorization 从 cookie 提取，分享接口按需携带（可空）。
+ * 列目录允许游客（cookie 为空）：getOutLinkInfoV6 是匿名端点；取直链仍要求登录（Agent.md §3.19）。
  */
 class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
 
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
             ?: return Result.failure(IllegalArgumentException("无法识别分享链接"))
-        if (C139Constants.extractAccountFull(cookie).isNullOrBlank()) {
-            return Result.failure(IllegalStateException("登录态缺少账号信息，请重新登录"))
-        }
+        // 游客模式：不再要求 cookie 里含账号信息 —— 139 的列表端点（getOutLinkInfoV6）本身就是
+        // 匿名调用（account 固定空串、不带 authorization/mcloud-sign，见 C139Api.getShareFiles），
+        // 空 cookie 也能列出目录。下载/转存仍会在各自入口要求登录（见 Agent.md §3.19）。
         return runCatching {
             // 139 分享无 token：shareId 即 linkID，stoken 暂存提取码
             // 密码优先级：用户手输 > 139 getOutLinkGeneral 明文回吐的 passwd（避免下载因缺密码报 9188）

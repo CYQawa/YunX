@@ -104,6 +104,15 @@ class ResolveViewModel(
     var uiState by mutableStateOf<ResolveUiState>(ResolveUiState.Idle)
         private set
 
+    /**
+     * 游客模式：本次解析没有携带任何登录凭据（列目录可用，下载/转存需登录）。
+     * 6 个网盘的分享**列表**接口都允许匿名（123/139/百度/夸克/UC 直接匿名；迅雷走不带
+     * Authorization 的分享接口），因此解析不再要求登录；下载/转存仍在各自入口要求登录。
+     * 详见 Agent.md §3.19。
+     */
+    var isGuest by mutableStateOf(false)
+        private set
+
     var downloadLink by mutableStateOf<DownloadLink?>(null)
         private set
 
@@ -161,6 +170,11 @@ class ResolveViewModel(
 
     /** 请求转存：记录目标文件并打开目录选择弹窗 */
     fun requestSave(file: ShareFile) {
+        // 游客模式只开放列目录：转存需要登录，直接给提示，别让用户进到空的目录选择
+        if (isGuest) {
+            downloadError = "转存需要先登录${platformName()}（未登录仅能浏览文件列表）"
+            return
+        }
         saveTarget = file
         saveMessage = null
     }
@@ -342,7 +356,8 @@ class ResolveViewModel(
             try {
                 val credential = currentCredential()
                 if (credential.isNullOrBlank()) {
-                    downloadError = "请先登录${platformName()}"
+                    // 游客模式只开放列目录：转存需要登录
+                    downloadError = "转存需要先登录${platformName()}（未登录仅能浏览文件列表）"
                     return@launch
                 }
                 var okCount = 0
@@ -418,7 +433,8 @@ class ResolveViewModel(
             try {
                 val credential = currentCredential()
                 if (credential.isNullOrBlank()) {
-                    downloadError = "请先登录网盘"
+                    // 游客模式只开放列目录：下载需要登录（取直链/转存中转都要账号）
+                    downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
                     return@launch
                 }
                 // 夸克/UC 共用 __puus：取链与下载必须用同一份已刷新 Cookie（直链签名绑定取链时刻的 __puus）
@@ -788,11 +804,11 @@ class ResolveViewModel(
                 return@launch
             }
             currentPlatform = parsed.platform
-            val credential = currentCredential()
-            if (credential.isNullOrBlank()) {
-                uiState = ResolveUiState.Error("请先在「网盘」页登录${platformName()}")
-                return@launch
-            }
+            isGuest = false
+            // 游客模式：列目录不要求登录（6 个网盘的分享列表接口都允许匿名，详见 Agent.md §3.19）。
+            // 凭据为空时传空串，是否放行由服务端决定；下载/转存仍在各自入口要求登录。
+            val credential = currentCredential().orEmpty()
+            isGuest = credential.isBlank()
             val repo = currentRepo()
             repo.createSession(link, pwd, credential)
                 .onSuccess { s ->
@@ -803,7 +819,11 @@ class ResolveViewModel(
                     loadFiles(s, currentDirFid, credential, repo)
                 }
                 .onFailure { e ->
-                    uiState = ResolveUiState.Error(e.message ?: "解析失败")
+                    val msg = e.message ?: "解析失败"
+                    // 游客模式失败时补一句可执行的引导，而不是只抛服务端原文
+                    uiState = ResolveUiState.Error(
+                        if (isGuest) "$msg（当前未登录，可到「网盘」页登录${platformName()}后重试）" else msg
+                    )
                 }
         }
     }
@@ -816,6 +836,8 @@ class ResolveViewModel(
      */
     fun startGitHubResolve(linkType: GitHubLinkType) {
         currentPlatform = SharePlatform.GITHUB
+        // GitHub 不需要登录，也不属于「游客模式」提示的适用范围
+        isGuest = false
         currentPwd = null
         // 重置 GitHub 状态
         currentGitHubRepo = null
@@ -1236,11 +1258,8 @@ class ResolveViewModel(
         currentDirFid = file.fid
         viewModelScope.launch {
             uiState = ResolveUiState.Loading
-            val credential = currentCredential()
-            if (credential.isNullOrBlank()) {
-                uiState = ResolveUiState.Error("登录已失效，请重新登录")
-                return@launch
-            }
+            val credential = currentCredential().orEmpty()
+            // 游客模式：子目录同样允许匿名列出（见 Agent.md §3.19）
             loadFiles(s, file.fid, credential, currentRepo())
         }
     }
@@ -1264,9 +1283,8 @@ class ResolveViewModel(
         pathNames = pathNames.dropLast(1)
         viewModelScope.launch {
             uiState = ResolveUiState.Loading
-            val credential = currentCredential()
-            if (credential.isNullOrBlank()) return@launch
-            loadFiles(s, currentDirFid, credential, currentRepo())
+            // 游客模式：空凭据照常加载（见 Agent.md §3.19）
+            loadFiles(s, currentDirFid, currentCredential().orEmpty(), currentRepo())
         }
     }
 
@@ -1294,6 +1312,7 @@ class ResolveViewModel(
         githubReadme = null
         githubParentFullName = null
         githubBadges = emptyMap()
+        isGuest = false
         uiState = ResolveUiState.Idle
     }
 
@@ -1385,7 +1404,8 @@ class ResolveViewModel(
                 }
                 val credential = currentCredential()
                 if (credential.isNullOrBlank()) {
-                    downloadError = "登录已失效，请重新登录"
+                    // 游客模式只开放列目录：取直链需要登录
+                    downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
                     return@launch
                 }
                 // 夸克/UC 共用 __puus：取链前确保新鲜（直链签名绑定取链时刻的 Cookie）
@@ -1521,7 +1541,7 @@ class ResolveViewModel(
             }
             val credential = currentCredential()
             if (credential.isNullOrBlank()) {
-                downloadError = "请先登录网盘"
+                downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
                 return@launch
             }
             enqueueDownload(link, credential)

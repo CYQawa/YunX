@@ -21,7 +21,5 @@ local.properties
 
 # 签名证书与口令：正式证书不要进仓库（CI 用 GitHub Secrets，见 .github/workflows/build-apk.yml）
 *.jks
-*.keystore
-!debug.keystore
 keystore.properties
 

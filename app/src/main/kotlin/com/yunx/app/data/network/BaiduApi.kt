@@ -157,8 +157,14 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         val json = executeJson(request)
         val errno = json.optInt("errno")
         if (errno != 0) {
-            // 无 sekey 却失败 → 实为加密分享，提示用户索取提取码
-            if (sekey.isBlank()) throw BaiduApiException("该分享需要提取码")
+            // 无 sekey 却失败 → 多数情况是加密分享，提示用户索取提取码。
+            // 但 errno=-6 是「未登录/身份验证失败」（游客模式下常见），此时光提示提取码会让人白找密码，单独区分。
+            if (sekey.isBlank()) {
+                throw BaiduApiException(
+                    if (errno == -6) "该分享需要提取码，或需要登录百度网盘（errno=$errno）"
+                    else "该分享需要提取码（errno=$errno）"
+                )
+            }
             checkErrno(json, "获取分享文件列表失败")
         }
         val array = json.optJSONArray("list") ?: org.json.JSONArray()
