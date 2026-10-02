@@ -66,7 +66,12 @@ import kotlin.math.min
 data class DownloadStats(
     val speed: Long = 0L,        // 字节/秒
     val remainMillis: Long = -1L, // 剩余时间（毫秒），未知为 -1
-    val chunkCount: Int = 1       // 分片（线程）数
+    val chunkCount: Int = 1,      // 分片（线程）数
+    /**
+     * 分片合并进度（0~100）：-1 表示不在合并阶段。
+     * 合并只活在内存里、不写 DB —— 进程被杀时合并本来就会中断，无需在库里留状态。
+     */
+    val mergePercent: Int = -1
 )
 
 private const val TAG = "YunX-DL"
@@ -282,6 +287,9 @@ class DownloadManager(
     /** 前台通知进度节流（毫秒）：2 秒更新一次，避免频繁刷新系统通知 */
     private val notifyThrottleMs = 2000L
     private val lastNotifyTs = AtomicLong(0)
+
+    /** 合并阶段进度上报节流（毫秒）：分片合并回调很密，百分比不变时最多这么久报一次 */
+    private val mergeReportIntervalMs = 300L
 
     /** 更新前台通知进度（2 秒节流；total<=0 时不确定进度，只更新标题；可显示下载速度） */
     private fun notifyProgress(id: Long, fileName: String, new: Long, total: Long) {
@@ -1258,12 +1266,37 @@ class DownloadManager(
         // 3) 流式写入最终位置（自定义目录经 SAF；默认目录走 MediaStore/传统路径）
         // ★ 同步阻塞写入必须切 IO 线程：任务跑在 Dispatchers.Default（CPU 池），
         //   大文件写盘若占满 Default 线程会让整个下载器协程饿死（"100% 卡死保存不了"）
+        // 合并阶段单独上报进度（界面/通知显示「合并中 n%」）：大文件合并要几十秒，
+        // 一直停在 100% 不动会让用户以为卡死。进度只走内存态 stats、不写 DB ——
+        // 进程被杀时合并本就中断，库里不需要再多一个会卡住的状态。
+        val mergeTotal = if (total > 0) total else chunkFiles.sumOf { it.length() }
+        var mergeLastPercent = -1
+        var mergeLastAtMs = 0L
+        fun reportMergeProgress(done: Long) {
+            if (mergeTotal <= 0) return
+            val percent = (done * 100 / mergeTotal).toInt().coerceIn(0, 100)
+            val now = System.currentTimeMillis()
+            if (percent == mergeLastPercent && now - mergeLastAtMs < mergeReportIntervalMs) return
+            mergeLastPercent = percent
+            mergeLastAtMs = now
+            _stats.update { it + (id to DownloadStats(mergePercent = percent)) }
+            // 通知沿用下载中那条 2 秒节流（合并回调很密，别把系统通知刷爆）
+            if (now - lastNotifyTs.get() >= notifyThrottleMs) {
+                lastNotifyTs.set(now)
+                DownloadService.update(
+                    context, fileName, percent, DownloadService.MERGE_TEXT, showSpeedProvider()
+                )
+            }
+        }
+        reportMergeProgress(0L)
         val savedPath = withContext(Dispatchers.IO) {
             val dest = DownloadSaver.openDestination(context, fileName, saveDirProvider())
                 ?: throw IllegalStateException("无法创建下载目标（下载目录不可用）")
             try {
                 val out = dest.open() ?: throw IllegalStateException("无法打开下载目标输出流")
-                val written = out.use { downloader.mergeChunksToStream(chunkFiles, it) }
+                val written = out.use {
+                    downloader.mergeChunksToStream(chunkFiles, it, ::reportMergeProgress)
+                }
                 if (total > 0 && written != total) {
                     throw IllegalStateException("文件大小校验失败：期望 $total 字节，实际 $written 字节（已拒绝保存损坏文件）")
                 }

@@ -94,9 +94,10 @@ class DownloadService : Service() {
         builder
             .setSmallIcon(R.drawable.icon)
             .setContentTitle(title)
-            // 完整通知显示下载速度；简化模式仅提示下载中（且不显示进度条）
+            // 完整通知显示下载速度；合并阶段单独提示（大文件合并可能几十秒）；简化模式仅提示下载中
             .setContentText(
-                if (hasSpeed) "下载速度 $speed"
+                if (speed == MERGE_TEXT) "正在合并分片，完成前请勿关闭应用"
+                else if (hasSpeed) "下载速度 $speed"
                 else "正在后台下载，完成前请勿关闭应用"
             )
             .setContentIntent(contentIntent)
@@ -145,6 +146,12 @@ class DownloadService : Service() {
 
         /** 进度条总刻度（千分比）：段长不用文件字节数，避免大文件字节数超出 Int 上限而溢出 */
         private const val PROGRESS_SCALE = 1000
+
+        /**
+         * 合并阶段速度栏占位文案：DownloadManager 合并分片时把它当作 speed 传进来，
+         * 通知正文因此显示「正在合并分片」，而不是「下载速度 合并中」。
+         */
+        const val MERGE_TEXT = "合并中"
 
         /** 请求提升为「进行中」通知的 extras 键（与 Notification.EXTRA_REQUEST_PROMOTED_ONGOING 同值） */
         private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"

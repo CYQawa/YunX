@@ -384,9 +384,15 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
      * 代价（有意取舍）：合并中途失败（含用户暂停）时已写出的分片已被删除，
      * 下次恢复按磁盘真实长度重算进度并重下这部分，不会出现区间错位。
      *
+     * @param onProgress 已合并字节数回调（每写完一个分片一次）：大文件合并耗时较长，
+     *                   由调用方据此上报「合并中」进度，避免界面停在 100% 像卡死。
      * @return 实际写入的总字节数
      */
-    suspend fun mergeChunksToStream(chunkFiles: List<File>, out: OutputStream): Long =
+    suspend fun mergeChunksToStream(
+        chunkFiles: List<File>,
+        out: OutputStream,
+        onProgress: ((Long) -> Unit)? = null
+    ): Long =
         withContext(DownloadManager.chunkIoDispatcher) {
             var total = 0L
             val buffer = ByteArray(BUFFER_SIZE)
@@ -404,6 +410,7 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
                 }
                 // 该片已完整写入目标，立即释放分片空间（在 use 之后，确保 fd 已关闭）
                 if (!part.delete()) Log.w(TAG, "mergeChunksToStream: 删除分片失败 $part")
+                onProgress?.invoke(total)
             }
             out.flush()
             Log.d(TAG, "mergeChunksToStream: parts=${chunkFiles.size} bytes=$total")

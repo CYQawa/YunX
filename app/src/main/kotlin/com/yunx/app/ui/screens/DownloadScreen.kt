@@ -516,7 +516,8 @@ private fun FolderDownloadGroup(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                // 总体进度徽标
+                // 总体进度徽标（有子任务在合并分片时显示"合并中"，避免停在 100% 像卡死）
+                val merging = tasks.any { (stats[it.id]?.mergePercent ?: -1) >= 0 }
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = if (done) {
@@ -526,7 +527,11 @@ private fun FolderDownloadGroup(
                     }
                 ) {
                     Text(
-                        text = if (done) "已完成" else "${(fraction * 100).toInt()}%",
+                        text = when {
+                            done -> "已完成"
+                            merging -> "合并中"
+                            else -> "${(fraction * 100).toInt()}%"
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = if (done) {
@@ -604,9 +609,15 @@ private fun DownloadSubTaskRow(
     val context = LocalContext.current
     val isDownloading = task.status == DownloadTaskEntity.STATUS_DOWNLOADING ||
         task.status == DownloadTaskEntity.STATUS_PENDING
-    val fraction = if (task.totalSize > 0) {
-        (task.downloadedSize.toFloat() / task.totalSize).coerceIn(0f, 1f)
-    } else 0f
+    // 合并阶段进度（-1 = 不在合并）：合并时下载早就 100% 了，进度条改用合并百分比，
+    // 否则大文件会一直停在 100% 像卡死
+    val mergePercent = stats?.mergePercent ?: -1
+    val merging = mergePercent >= 0
+    val fraction = when {
+        merging -> mergePercent / 100f
+        task.totalSize > 0 -> (task.downloadedSize.toFloat() / task.totalSize).coerceIn(0f, 1f)
+        else -> 0f
+    }
     // 显示相对路径（去掉顶级目录前缀，如 "A/B/b.mp4" → "B/b.mp4"）
     val displayName = task.fileName.substringAfter('/')
     // 长按任务行弹出操作菜单（复制直链 / 重新下载 / 删除）
@@ -649,6 +660,7 @@ private fun DownloadSubTaskRow(
                     )
                     Text(
                         text = when {
+                            merging -> "合并中 · $mergePercent%"
                             isDownloading && stats != null && stats.speed > 0 ->
                                 "${DownloadTaskEntity.statusText(task.status)} · ${formatSpeed(stats.speed)}"
                             task.status == DownloadTaskEntity.STATUS_COMPLETED && task.avgSpeed > 0 ->
@@ -787,9 +799,14 @@ private fun DownloadTaskCard(
     val context = LocalContext.current
     val isDownloading = task.status == DownloadTaskEntity.STATUS_DOWNLOADING ||
         task.status == DownloadTaskEntity.STATUS_PENDING
-    val fraction = if (task.totalSize > 0) {
-        (task.downloadedSize.toFloat() / task.totalSize).coerceIn(0f, 1f)
-    } else 0f
+    // 合并阶段进度（-1 = 不在合并）：合并时下载早就 100% 了，界面改显示合并百分比
+    val mergePercent = stats?.mergePercent ?: -1
+    val merging = mergePercent >= 0
+    val fraction = when {
+        merging -> mergePercent / 100f
+        task.totalSize > 0 -> (task.downloadedSize.toFloat() / task.totalSize).coerceIn(0f, 1f)
+        else -> 0f
+    }
     // 长按任务卡弹出操作菜单（复制直链 / 重新下载 / 删除）
     var showMenu by remember { mutableStateOf(false) }
 
@@ -831,7 +848,7 @@ private fun DownloadTaskCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = taskStatusLine(task),
+                        text = if (merging) "合并中 · $mergePercent%" else taskStatusLine(task),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -944,6 +961,9 @@ private fun DownloadTaskCard(
                         } else {
                             formatSize(task.totalSize)
                         }
+                    } else if (merging) {
+                        // 合并阶段：底部不要再显示"已下载 100%"，明确告知正在合并
+                        "正在合并分片 · $mergePercent% · ${formatSize(task.totalSize)}"
                     } else {
                         progressText(task)
                     },

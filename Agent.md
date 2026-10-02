@@ -402,6 +402,23 @@ private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
 - 暂停时以**磁盘 part/seg 真实长度**回写进度，避免恢复时进度回跳。
 - 进度累加一律 `minOf(..., total)` 钳制，防显示"已下载 > 总大小"。
 
+### 5.7 合并阶段进度（别让界面停在 100%）
+
+下载完成后 `finishDownload` 要把所有 `part_i` 顺序写进最终文件；几 GB 的文件这一步要几十秒，
+早期这段时间界面完全不动、通知还挂着最后的下载速度 → 用户以为卡死。现在：
+
+- `ChunkDownloader.mergeChunksToStream(chunkFiles, out, onProgress)` 每写完一个分片回调一次「已合并字节数」。
+- `DownloadManager.finishDownload` 用 `mergeReportIntervalMs = 300L` 节流（百分比没变时）上报：
+  - `_stats.update { it + (id to DownloadStats(mergePercent = percent)) }`；
+  - `DownloadService.update(context, fileName, percent, DownloadService.MERGE_TEXT, showSpeedProvider())`，
+    通知正文因此显示「正在合并分片，完成前请勿关闭应用」（`MERGE_TEXT` 让 `buildNotification` 走合并分支，别把它当速度拼成"下载速度 合并中"）。
+- UI 侧唯一判据是 `DownloadStats.mergePercent`（默认 `-1` = 不在合并）：`DownloadScreen` 主任务行 / 子任务行
+  的进度条与文案切成「合并中 · n%」，文件夹组徽标显示「合并中」。
+
+**为什么不在 DB 里加 `STATUS_MERGING`**：合并是进程内的短暂阶段，进程被杀合并本来就中断（分片还在，恢复即可），
+库里多一个状态只会换来"重启后永远卡在合并中"这种脏数据；同理也不要让 UI 用 `downloadedSize == totalSize` 判断合并（暂停/失败时同样成立）。
+合并期间「暂停」按钮照旧有效：取消协程 → `dest.abort()` 删半成品 → 按磁盘分片长度回写进度变「已暂停」。
+
 ---
 
 ## 6. 代理工作规范
