@@ -37,6 +37,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,6 +54,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.OpenInNew
@@ -479,7 +483,9 @@ private fun TermsCard(
 // ==================== 底部导航 ====================
 
 /**
- * 底部导航：圆点指示器 + 「上一步 / 下一步 / 开始使用」。
+ * 底部导航：进度指示器居中，「上一步」在左、「下一步 / 开始使用」在右（紧凑按钮，不占满整行）。
+ * ★ 用 Box + align 而不是 Row(SpaceBetween)：左右按钮宽度随文案变化（「上一步」与「开始使用」字数不同），
+ *   SpaceBetween 会把指示器挤偏；绝对居中才符合"进度条在中间"。
  * 指示器的宽度与颜色、按钮文案的切换都带过渡（规格取项目统一的 M3E 动效）。
  */
 @Composable
@@ -490,13 +496,17 @@ private fun OnboardingBottomBar(
     onNext: () -> Unit,
     onFinish: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.Center) {
+        // 中：进度指示器（绝对居中）
+        Row(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             repeat(pageCount) { i ->
                 val selected = i == page
                 val dotWidth by animateDpAsState(
@@ -523,37 +533,58 @@ private fun OnboardingBottomBar(
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // 第 2 页才出现「上一步」：淡入淡出，不挤动主按钮（主按钮占满剩余宽度）
-            AnimatedVisibility(
-                visible = page > 0,
-                enter = fadeIn(effectsDefault()),
-                exit = fadeOut(effectsFast())
+        // 左：上一步（第 1 页没有上一页：淡出且不占位，指示器因此始终居中）
+        AnimatedVisibility(
+            visible = page > 0,
+            enter = fadeIn(effectsDefault()),
+            exit = fadeOut(effectsFast()),
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            TextButton(
+                onClick = onPrev,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
             ) {
-                TextButton(onClick = onPrev) {
-                    Text("上一步", style = MaterialTheme.typography.titleSmall)
-                }
+                Icon(
+                    imageVector = Icons.Outlined.ChevronLeft,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(text = "上一步", style = MaterialTheme.typography.labelLarge)
             }
-            Box(modifier = Modifier.weight(1f)) {
-                AnimatedContent(
-                    targetState = page,
-                    transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
-                    label = "onboardingAction"
-                ) { p ->
-                    val last = p == pageCount - 1
-                    Button(
-                        onClick = { if (last) onFinish() else onNext() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                    ) {
-                        Text(
-                            text = if (last) "开始使用" else "下一步",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
+        }
+
+        // 右：下一步 / 开始使用
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = { fadeIn(effectsDefault()) togetherWith fadeOut(effectsFast()) },
+            modifier = Modifier.align(Alignment.CenterEnd),
+            label = "onboardingAction"
+        ) { p ->
+            val last = p == pageCount - 1
+            Button(
+                onClick = { if (last) onFinish() else onNext() },
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+            ) {
+                if (last) {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = if (last) "开始使用" else "下一步",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                if (!last) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
