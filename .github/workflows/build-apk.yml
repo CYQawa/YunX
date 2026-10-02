@@ -1,6 +1,9 @@
 # Nightly 测试包构建：每天北京时间 0 点（UTC 16:00）定时跑一次，另支持手动触发。
 # 按作者要求（PR #113）：不打 tag、不发 GitHub Release，产物仅上传为 Actions Artifacts，
 # 供每日最新 master 的尝鲜测试，不污染正式版本号与更新检测。
+# 签名：Release 包用仓库 Secrets 里的正式证书签名（KEYSTORE_BASE64 / KEYSTORE_PASSWORD /
+# KEY_ALIAS / KEY_PASSWORD），与正式版同签名 ⇒ 测试包可直接覆盖安装升级；
+# 本地构建没有这些变量，app/build.gradle.kts 会把 release 变体置为未签名（app-release-unsigned.apk）。
 name: Nightly Build APK
 
 on:
@@ -70,15 +73,60 @@ jobs:
             echo "SKIP_BUILD=1" >> "$GITHUB_ENV"
           fi
 
+      # 从 Secrets 还原正式签名证书：KEYSTORE_BASE64 解码到 runner 临时目录
+      # （不落仓库、不进 Artifacts，runner 销毁即消失）。四项 Secrets 缺一即报错退出，
+      # 避免 nightly 悄悄产出未签名包（本地构建不经过这里 ⇒ release 仍是未签名包）。
+      # 用 printf 而不是 echo 解码，防止个别 shell 对长字符串加换行/截断。
+      - name: Restore release keystore
+        if: env.SKIP_BUILD != '1'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::缺少 Secrets.$name（仓库 Settings → Secrets and variables → Actions）"
+              exit 1
+            fi
+          done
+          KEYSTORE_FILE="$RUNNER_TEMP/yunx-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+          # 先用 keytool 验一遍密钥库与口令、别名是否存在：早失败，别等 R8 跑完十分钟才发现
+          keytool -list -keystore "$KEYSTORE_FILE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null
+          echo "YUNX_KEYSTORE_FILE=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+          echo "::notice::发布签名证书已就绪（别名 $KEY_ALIAS）"
+
       - name: Build release APK
         if: env.SKIP_BUILD != '1'
         # 项目 settings.gradle.kts 按 YUNX_USE_MIRROR 切换仓库：CI 上阿里云镜像不可达，必须走官方源。
         # runner 镜像预装 Android SDK（licenses 已接受），AGP 会自动补装缺失的 SDK 组件。
         # release 变体开启 R8 混淆 + 资源压缩，产物显著小于 debug。
+        # 签名口令/别名只注入到这一步；证书路径 YUNX_KEYSTORE_FILE 已由上一步写进 GITHUB_ENV。
         env:
           YUNX_USE_MIRROR: 'false'
+          YUNX_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          YUNX_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          YUNX_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           ./gradlew assembleRelease --no-daemon
+
+      # 自检：产物必须存在且真的带上正式证书（apksigner 随 runner 预装的 build-tools 提供）。
+      # 有这一步，签名配置写错（变量名打错、证书没生效）会在 CI 里立刻红，而不是发出一堆装不上的包。
+      - name: Verify signed APK
+        if: env.SKIP_BUILD != '1'
+        run: |
+          set -e
+          APK=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "::error::未找到已签名产物 $APK —— release 签名配置未生效？"
+            exit 1
+          fi
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          APKSIGNER=$(ls "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK" | head -6
 
       # 产物只上传为 Actions Artifacts，命名按作者要求：YunX-nightly-<日期>-<短SHA>。
       # 日期/短SHA 先在 shell 里算出来写进 GITHUB_ENV，再在 upload-artifact 的 name 里引用

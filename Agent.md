@@ -359,6 +359,32 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 
 ---
 
+### 3.18 发布签名：CI 用 GitHub Secrets，本地构建未签名（**别把证书提交进仓库**）
+
+**证书在哪**：仓库 Settings → Secrets and variables → Actions 的四个 Secrets ——
+`KEYSTORE_BASE64`（.jks 的 base64 文本）、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`。
+
+**Gradle 侧**（`app/build.gradle.kts` 顶部）：读四个环境变量
+（`YUNX_KEYSTORE_FILE` / `YUNX_KEYSTORE_PASSWORD` / `YUNX_KEY_ALIAS` / `YUNX_KEY_PASSWORD`），
+**四项齐备且证书文件真实存在**才 `create("release")` 注册签名配置；否则 release 的 `signingConfig = null`
+⇒ 产物叫 `app-release-unsigned.apk`。
+所以本地与 `ci.yml` 不带变量构建时，`assembleRelease` 照样成功，只是不签名；本地想出自签名包，自己导出这四个变量再构建。
+`debug` 变体不受影响，仍用仓库里的 `debug.keystore`。
+
+**CI 侧**（`.github/workflows/build-apk.yml` nightly）：构建前多一步 `Restore release keystore` ——
+把 `secrets.KEYSTORE_BASE64` 解码到 `$RUNNER_TEMP/yunx-release.jks`、用 `keytool -list` 预校验口令与别名、
+把路径写进 `$GITHUB_ENV` 的 `YUNX_KEYSTORE_FILE`；口令/别名/密钥口令只注入 `Build release APK` 那一步。
+构建后用 `apksigner verify --print-certs` 自检产物确实带正式证书 —— **签名没生效就让 CI 红，而不是发出一堆装不上的包**。
+`ci.yml` 故意不注入这些变量：它只做编译校验，上传的也只有 debug 包。
+
+**装包注意**：
+- 换签名后，之前用 debug 签名装的包（含旧 nightly）与正式签名**互不兼容**，必须先卸载再装，否则 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
+- nightly 与正式版同签名 ⇒ 可直接覆盖安装升级（这也是给测试者的便利）。
+- `.gitignore` 已挡 `*.jks` / `*.keystore` / `keystore.properties`（`!debug.keystore` 例外）。
+- 生成 `KEYSTORE_BASE64`：Linux/macOS `base64 -w 0 你的.jks`（macOS 若报 `-w` 不支持就用 `base64 -i 你的.jks`），Windows PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes("你的.jks"))`。
+
+---
+
 ## 4. 验证
 
 
