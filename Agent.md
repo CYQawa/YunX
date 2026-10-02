@@ -253,6 +253,26 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
   （否则弹窗会瞬间消失，并与紧接着弹出的链接弹窗叠在一起）；同弹窗内的步骤切换（转存）不关弹窗，靠 `AnimatedContent` 淡入淡出。
 - `ShareFileRow` 只剩 `onClick` / `onMore` / `onLongClick`（`onSave` 参数已删）：行尾按钮只用于「点击行为被占用」的场景（文件夹点击进目录）。
 
+### 3.14 主页快捷方式：收藏链接「添加到主页」，标记存 Room 不存设置
+
+收藏页长按 → 「添加到主页」，被添加的收藏以网格出现在**解析页（主页）输入态下方**：
+
+- **数据**：`BookmarkEntity.homePinned: Boolean = false`（Room 列 `homePinned INTEGER NOT NULL DEFAULT 0`，`AppDatabase` 版本 13 → 14，
+  `MIGRATION_13_14` 用 `ALTER TABLE bookmark ADD COLUMN ...`）。**不要用 `SettingsRepository` 存一份 ID 列表** ——
+  置顶状态属于收藏本身，存设置会出现两份状态（删除收藏时残留、顺序无法同步）；Room Flow 天然让收藏页与主页同步刷新。
+  查询/写入走 `BookmarkDao.observeHomePinned()`（`WHERE homePinned = 1 ORDER BY createTime DESC`）与 `updateHomePinned(id, pinned)`，
+  经 `BookmarkViewModel.homeBookmarks`（StateFlow）与 `setHomePinned(id, pinned)` 暴露。
+- **UI**（`ui/screens/ResolveScreen.kt` 的 `HomeShortcutsSection` / `HomeShortcutTile`）：区块在「开始解析」按钮与错误卡片之后，
+  仍在同一个 `verticalScroll` 列里；**不能用 `LazyVerticalGrid`**（外层已纵向滚动，同方向嵌套滚动会崩），
+  用 `bookmarks.chunked(HOME_SHORTCUT_COLUMNS = 4)` 手写行网格，末行补 `Spacer(Modifier.weight(1f))` 保证格子等宽。
+  瓦片 = 48dp 圆角色块（平台简称文字，未知平台退回 `Icons.Outlined.Link`）+ `FileNameText(maxLines = 2, textAlign = Center)`；
+  空态给引导卡片（提示去收藏页添加）；标题右侧「管理」直接打开收藏页（`MainScreen` 的 `onOpenBookmarks = { showBookmarks = true }`）。
+- **交互**：点击瓦片 = 直接解析（GitHub 收藏先 `GitHubLinkParser.parse` → `startGitHubResolve`，其余 `startResolve`），
+  并把链接/提取码回填输入框；长按瓦片 → 确认弹窗后 `setHomePinned(id, false)` 移除（防误触）。
+- **收藏页**（`ui/screens/BookmarkScreen.kt`）：长按菜单增加「添加到主页 / 从主页移除」（`onToggleHome`），行内 `homePinned` 时显示「主页」小徽标。
+  `BookmarkScreen.onResolve` 与主页快捷方式都要走 GitHub 分支，GitHub 收藏（`platform = "GITHUB"`，即 `currentPlatform.name`）不能在网盘解析里被吞掉。
+- `FileNameText` 增加了带默认值的 `maxLines` / `textAlign` 参数（既有调用不受影响）：需要多行/居中的场景传参，不要绕开组件自己写 `Text`。
+
 ---
 
 ## 4. 验证

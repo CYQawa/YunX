@@ -31,7 +31,9 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,9 +48,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.AddToHomeScreen
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.Button
@@ -67,6 +72,7 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,23 +81,29 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.SharePlatform
 import com.yunx.app.ui.SnackbarController
 import com.mikepenz.markdown.m3.Markdown
+import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.components.GitHubMarkdownImageTransformer
 import com.yunx.app.ui.components.compactMarkdownTypography
 import com.yunx.app.ui.resolve.DownloadLinkDialog
 import com.yunx.app.ui.resolve.ShareDetailScreen
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
+import com.yunx.app.ui.viewmodel.BookmarkViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
@@ -125,12 +137,18 @@ fun ResolveScreen(
     ucCloudViewModel: UCCoudViewModel,
     /** 123 云盘浏览 ViewModel（123 分享转存目录选择用） */
     pan123CloudViewModel: Pan123CloudViewModel,
+    /** 收藏 ViewModel：主页快捷方式（已添加到主页的收藏链接）数据源 */
+    bookmarkViewModel: BookmarkViewModel,
+    /** 打开「收藏网盘链接」页（主页快捷方式区块的「管理」入口） */
+    onOpenBookmarks: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state = viewModel.uiState
     val downloadLink = viewModel.downloadLink
     val downloadError = viewModel.downloadError
     val context = LocalContext.current
+    // 主页快捷方式：已「添加到主页」的收藏，在输入页下方以网格展示
+    val homeBookmarks by bookmarkViewModel.homeBookmarks.collectAsState()
 
     // 详情页文件列表滚动状态（提升到 AnimatedContent 外层：进入文件夹/返回时列表重建，
     // 若放在 ShareDetailScreen 内会随目录切换丢失，导致返回后列表回到顶部）
@@ -332,7 +350,25 @@ fun ResolveScreen(
                         pwd = ""
                         pwdEdited = false
                     },
-                    onClearPwd = { pwd = "" }
+                    onClearPwd = { pwd = "" },
+                    // 主页快捷方式：点击直接解析（链接回填输入框，返回输入页时能看到当前解析的链接）
+                    homeBookmarks = homeBookmarks,
+                    onOpenShortcut = { bookmark ->
+                        link = bookmark.link
+                        pwd = bookmark.pwd
+                        pwdEdited = true
+                        // GitHub 收藏（收藏时存的仓库链接）不走网盘解析
+                        val github = GitHubLinkParser.parse(bookmark.link)
+                        if (github != null) {
+                            viewModel.startGitHubResolve(github)
+                        } else {
+                            viewModel.startResolve(bookmark.link, bookmark.pwd)
+                        }
+                    },
+                    onOpenBookmarks = onOpenBookmarks,
+                    onRemoveShortcut = { bookmark ->
+                        bookmarkViewModel.setHomePinned(bookmark.id, false)
+                    }
                 )
             }
         }
@@ -426,7 +462,15 @@ private fun ResolveInputContent(
     pwd: String,
     onPwdChange: (String) -> Unit,
     onClearLink: () -> Unit,
-    onClearPwd: () -> Unit
+    onClearPwd: () -> Unit,
+    /** 主页快捷方式数据（已添加到主页的收藏） */
+    homeBookmarks: List<BookmarkEntity>,
+    /** 点击快捷方式：直接解析该收藏链接 */
+    onOpenShortcut: (BookmarkEntity) -> Unit,
+    /** 打开收藏页管理快捷方式 */
+    onOpenBookmarks: () -> Unit,
+    /** 长按快捷方式确认后从主页移除 */
+    onRemoveShortcut: (BookmarkEntity) -> Unit
 ) {
     val isLoading = state is ResolveUiState.Loading
 
@@ -531,7 +575,202 @@ private fun ResolveInputContent(
                 }
             }
         }
+
+        // 主页快捷方式：收藏页「添加到主页」的链接在这里以网格呈现，点击直接解析
+        HomeShortcutsSection(
+            bookmarks = homeBookmarks,
+            onOpen = onOpenShortcut,
+            onOpenBookmarks = onOpenBookmarks,
+            onRemove = onRemoveShortcut
+        )
     }
+}
+
+/** 主页快捷方式列数（4 列在窄屏也能放下两字标题，观感贴近桌面图标网格） */
+private const val HOME_SHORTCUT_COLUMNS = 4
+
+/**
+ * 主页快捷方式区块：展示已「添加到主页」的收藏链接。
+ *
+ * 外层已是 verticalScroll，这里不能用 LazyVerticalGrid（同方向嵌套滚动会崩），
+ * 因此用 chunked 手写行网格，末行用 Spacer 占位保证每个格子等宽。
+ */
+@Composable
+private fun HomeShortcutsSection(
+    bookmarks: List<BookmarkEntity>,
+    onOpen: (BookmarkEntity) -> Unit,
+    onOpenBookmarks: () -> Unit,
+    onRemove: (BookmarkEntity) -> Unit
+) {
+    // 待确认移除的快捷方式（长按触发，避免误触直接消失）
+    var removing by remember { mutableStateOf<BookmarkEntity?>(null) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "快捷方式",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onOpenBookmarks) {
+                Icon(
+                    imageVector = Icons.Outlined.BookmarkBorder,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = "管理", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+
+        if (bookmarks.isEmpty()) {
+            // 空态：引导到收藏页添加，避免这里只剩一片空白
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AddToHomeScreen,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "还没有主页快捷方式",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "在「收藏网盘链接」页长按一条收藏 → 添加到主页",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                bookmarks.chunked(HOME_SHORTCUT_COLUMNS).forEach { rowItems ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        rowItems.forEach { bookmark ->
+                            HomeShortcutTile(
+                                bookmark = bookmark,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onOpen(bookmark) },
+                                onLongClick = { removing = bookmark }
+                            )
+                        }
+                        // 末行不足一列时补空位，保证每个格子宽度一致
+                        repeat(HOME_SHORTCUT_COLUMNS - rowItems.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    removing?.let { bookmark ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text("从主页移除") },
+            text = {
+                Text(
+                    text = "「${bookmark.title.ifBlank { bookmark.link }}」将不再显示在主页快捷方式中",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRemove(bookmark)
+                        removing = null
+                    }
+                ) {
+                    Text(text = "移除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { removing = null }) {
+                    Text(text = "取消")
+                }
+            }
+        )
+    }
+}
+
+/** 主页快捷方式单个瓦片：圆角色块（平台简称）+ 标题，长按移除 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomeShortcutTile(
+    bookmark: BookmarkEntity,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.large)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(vertical = 8.dp, horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            val short = platformShortLabel(bookmark.platform)
+            if (short != null) {
+                Text(
+                    text = short,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Outlined.Link,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        FileNameText(
+            text = bookmark.title.ifBlank { bookmark.link },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** 平台简称（快捷方式色块里的文字）；未知平台返回 null，调用处退回通用链接图标 */
+private fun platformShortLabel(platform: String): String? = when (platform) {
+    "QUARK" -> "夸克"
+    "UC" -> "UC"
+    "XUNLEI" -> "迅雷"
+    "BAIDU" -> "百度"
+    "C139" -> "139"
+    "PAN123" -> "123"
+    "GITHUB" -> "GitHub"
+    else -> null
 }
 
 /** 全屏加载中（进入文件夹/解析中展示，避免闪回输入页） */

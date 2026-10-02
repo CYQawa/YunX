@@ -101,6 +101,7 @@ import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.C139Api
 import com.yunx.app.data.network.GitHubApi
+import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.GitHubTokenStore
 import com.yunx.app.data.network.Pan123Api
 import com.yunx.app.data.network.QuarkApi
@@ -798,7 +799,9 @@ fun MainScreen() {
                                     baiduCloudViewModel,
                                     c139CloudViewModel,
                                     ucCloudViewModel,
-                                    pan123CloudViewModel
+                                    pan123CloudViewModel,
+                                    bookmarkViewModel = bookmarkViewModel,
+                                    onOpenBookmarks = { showBookmarks = true }
                                 )
                                 MainTab.Drive -> DriveScreen(
                                     scrollBehavior = scrollBehavior,
@@ -970,7 +973,13 @@ fun MainScreen() {
                                 onResolve = { link, pwd ->
                                     showBookmarks = false
                                     currentTab = MainTab.Resolve
-                                    resolveViewModel.startResolve(link, pwd)
+                                    // GitHub 收藏（仓库链接）走 GitHub 解析入口，与主页快捷方式一致
+                                    val github = GitHubLinkParser.parse(link)
+                                    if (github != null) {
+                                        resolveViewModel.startGitHubResolve(github)
+                                    } else {
+                                        resolveViewModel.startResolve(link, pwd)
+                                    }
                                 }
                             )
                         }

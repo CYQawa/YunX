@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.yunx.app.ui.theme.ThemeController
 
@@ -35,10 +36,13 @@ private const val FILE_NAME_MAX_LINES = 3
 /**
  * 文件名文本：跟随「主题与外观 → 文件名显示」设置。
  * - 跑马灯模式（默认）：单行 + 循环滚动，与改动前的观感一致；
- * - 多行模式：最多 [FILE_NAME_MAX_LINES] 行折行显示，仍放不下才用省略号截断。
+ * - 多行模式：最多 [maxLines] 行折行显示，仍放不下才用省略号截断。
  *
- * 展示文件名的地方统一用它（解析页 / 六个网盘页 / 转存另存弹窗 / 下载列表），
+ * 展示文件名的地方统一用它（解析页 / 六个网盘页 / 转存另存弹窗 / 下载列表 / 主页快捷方式），
  * 这样设置一处生效全局；调用处不要再自己写 maxLines / overflow。
+ *
+ * @param maxLines 多行模式下的最大行数（跑马灯模式恒为 1 行）
+ * @param textAlign 文本对齐；跑马灯模式也生效（如主页快捷方式网格要求居中）
  */
 @Composable
 fun FileNameText(
@@ -46,7 +50,9 @@ fun FileNameText(
     modifier: Modifier = Modifier,
     style: TextStyle = LocalTextStyle.current,
     color: Color = Color.Unspecified,
-    fontWeight: FontWeight? = null
+    fontWeight: FontWeight? = null,
+    maxLines: Int = FILE_NAME_MAX_LINES,
+    textAlign: TextAlign? = null
 ) {
     if (ThemeController.fileNameMultiLine) {
         Text(
@@ -55,8 +61,9 @@ fun FileNameText(
             style = style,
             color = color,
             fontWeight = fontWeight,
-            maxLines = FILE_NAME_MAX_LINES,
-            overflow = TextOverflow.Ellipsis
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = textAlign
         )
     } else {
         // basicMarquee 只在单行（maxLines = 1）且内容溢出时滚动
@@ -66,7 +73,8 @@ fun FileNameText(
             style = style,
             color = color,
             fontWeight = fontWeight,
-            maxLines = 1
+            maxLines = 1,
+            textAlign = textAlign
         )
     }
 }

@@ -51,11 +51,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AddToHomeScreen
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -239,6 +242,12 @@ fun BookmarkScreen(
                 menuBookmark = null
                 editingBookmark = bookmark
             },
+            onToggleHome = {
+                // 先关弹窗再切状态，避免菜单停留在旧状态上
+                val pinned = bookmark.homePinned
+                menuBookmark = null
+                viewModel.setHomePinned(bookmark.id, !pinned)
+            },
             onDelete = {
                 menuBookmark = null
                 viewModel.delete(bookmark.id)
@@ -320,6 +329,31 @@ private fun BookmarkRow(
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
+                }
+                if (bookmark.homePinned) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Home,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "主页",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -682,6 +716,7 @@ private fun BookmarkMenuDialog(
     onResolve: () -> Unit,
     onCopy: () -> Unit,
     onEditCategory: () -> Unit,
+    onToggleHome: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -710,6 +745,19 @@ private fun BookmarkMenuDialog(
                     Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("修改分类")
+                }
+                TextButton(onClick = onToggleHome, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        imageVector = if (bookmark.homePinned) {
+                            Icons.Outlined.RemoveCircleOutline
+                        } else {
+                            Icons.Outlined.AddToHomeScreen
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (bookmark.homePinned) "从主页移除" else "添加到主页")
                 }
                 TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
                     Icon(

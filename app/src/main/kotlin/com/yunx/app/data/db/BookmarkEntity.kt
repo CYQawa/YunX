@@ -38,6 +38,8 @@ data class BookmarkEntity(
     val pwd: String = "",
     /** 分类 */
     val category: String = DEFAULT_CATEGORY,
+    /** 是否已添加到主页快捷方式：主页（解析页）下方网格展示，点击直接解析 */
+    val homePinned: Boolean = false,
     val createTime: Long = System.currentTimeMillis()
 ) {
     companion object {

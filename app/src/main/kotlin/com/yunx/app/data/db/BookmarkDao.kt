@@ -29,6 +29,10 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmark ORDER BY createTime DESC")
     fun observeAll(): Flow<List<BookmarkEntity>>
 
+    /** 已添加到主页快捷方式的收藏 */
+    @Query("SELECT * FROM bookmark WHERE homePinned = 1 ORDER BY createTime DESC")
+    fun observeHomePinned(): Flow<List<BookmarkEntity>>
+
     /** 已出现的分类（去重），用于与预置分类合并展示 */
     @Query("SELECT DISTINCT category FROM bookmark ORDER BY category")
     fun observeCategories(): Flow<List<String>>
@@ -38,6 +42,10 @@ interface BookmarkDao {
 
     @Query("UPDATE bookmark SET category = :category WHERE id = :id")
     suspend fun updateCategory(id: Long, category: String)
+
+    /** 添加 / 移除主页快捷方式 */
+    @Query("UPDATE bookmark SET homePinned = :pinned WHERE id = :id")
+    suspend fun updateHomePinned(id: Long, pinned: Boolean)
 
     @Query("DELETE FROM bookmark WHERE id = :id")
     suspend fun delete(id: Long)
