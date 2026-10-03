@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
@@ -97,13 +98,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import com.yunx.app.R
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
+import com.yunx.app.util.AppLinks
 import com.yunx.app.util.PermissionState
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -289,9 +294,13 @@ private fun WelcomePage(context: Context) {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
     } ?: "1.0"
 
+    // ★ 允许滚动：小屏（≈640dp 高）上「图标 + 标题 + 标签 + 入口卡片」可能超出一屏。
+    //   fillMaxSize 会把可视高度带成 minHeight 约束，所以内容不足一屏时下方 Arrangement.Center 仍然居中，
+    //   内容超出时才变成可滚动 —— 两侧行为都对。
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -352,6 +361,9 @@ private fun WelcomePage(context: Context) {
 
         Spacer(modifier = Modifier.height(30.dp))
         GitHubCard(context)
+
+        Spacer(modifier = Modifier.height(12.dp))
+        QQGroupPill(context)
     }
 }
 
@@ -376,7 +388,7 @@ private fun FactChip(text: String) {
 private fun GitHubCard(context: Context) {
     Card(
         onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/CYQawa/YunX"))
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppLinks.GITHUB_REPO))
             context.startActivity(intent)
         },
         modifier = Modifier.fillMaxWidth(),
@@ -411,7 +423,7 @@ private fun GitHubCard(context: Context) {
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = "github.com/CYQawa/YunX",
+                    text = AppLinks.GITHUB_REPO_DISPLAY,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -424,6 +436,62 @@ private fun GitHubCard(context: Context) {
             )
         }
     }
+}
+
+/**
+ * QQ 交流群入口（胶囊）：点击拉起 QQ 群卡片，没装 QQ 时退回复制群号。
+ *
+ * ★ 反馈用系统 Toast：引导页是 MainScreen 里 early-return 的全屏页，不在 Scaffold 里，
+ *   拿不到 Snackbar 宿主（SnackbarController 的气泡挂在 MainScreen 的 Scaffold 上）；
+ *   Android 13+ 复制剪贴板时系统自己也会弹提示。
+ * ★ 做成胶囊而不是卡片：首页已经有一张 GitHub 卡片，小屏（≈640dp 高）再加一张卡片会挤掉图标区。
+ */
+@Composable
+private fun QQGroupPill(context: Context) {
+    Card(
+        onClick = {
+            // 优先拉起 QQ 群卡片（openQQGroup 内部靠 ActivityNotFoundException 判断有没有 QQ），失败才复制群号
+            if (!AppLinks.openQQGroup(context)) {
+                copyToClipboard(context, AppLinks.QQ_GROUP)
+                Toast.makeText(context, "未安装 QQ，群号已复制：${AppLinks.QQ_GROUP}", Toast.LENGTH_SHORT).show()
+            }
+        },
+        shape = CircleShape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Groups,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "QQ 群 ${AppLinks.QQ_GROUP}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.Outlined.OpenInNew,
+                contentDescription = "打开 QQ",
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+/** 复制文本到剪贴板（写剪贴板不受「自动识别剪贴板」开关约束，见 Agent.md §3.22） */
+private fun copyToClipboard(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("yunx_qq_group", text))
 }
 
 // ==================== 第 2 页：协议与声明 ====================
@@ -477,7 +545,7 @@ private fun TermsPage() {
             icon = Icons.Outlined.Code,
             title = "开源协议",
             paragraphs = listOf(
-                "本项目基于 GNU AGPL-3.0 协议开源，源码公开于 github.com/CYQawa/YunX。"
+                "本项目基于 GNU AGPL-3.0 协议开源，源码公开于 ${AppLinks.GITHUB_REPO_DISPLAY}。"
             )
         )
 

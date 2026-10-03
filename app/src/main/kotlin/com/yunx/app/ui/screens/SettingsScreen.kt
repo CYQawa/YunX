@@ -19,6 +19,8 @@
 package com.yunx.app.ui.screens
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -52,8 +54,10 @@ import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Notifications
@@ -115,6 +119,7 @@ import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.ListGroupPos
 import com.yunx.app.ui.theme.ThemeController
 import com.yunx.app.ui.theme.listGroupShape
+import com.yunx.app.util.AppLinks
 import com.yunx.app.util.LogExporter
 import com.yunx.app.ui.components.YunXLoading
 import kotlinx.coroutines.Dispatchers
@@ -156,6 +161,22 @@ private fun openNotificationSettings(context: Context) {
                     .setData(Uri.parse("package:${context.packageName}"))
             )
         }
+    }
+}
+
+/** 复制文本到剪贴板（写剪贴板不受「自动识别剪贴板」开关约束，见 Agent.md §3.22） */
+private fun copyToClipboard(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("yunx_contact", text))
+}
+
+/** 用系统浏览器打开链接：没有可用浏览器时退化成复制链接，不静默失败 */
+private fun openUrl(context: Context, url: String) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }.onFailure {
+        copyToClipboard(context, url)
+        SnackbarController.show("未找到可用浏览器，链接已复制")
     }
 }
 
@@ -577,11 +598,39 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.VolunteerActivism,
-            shape = listGroupShape(ListGroupPos.LAST),
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "支持开发",
             description = "微信扫码捐赠，支持项目持续维护",
             modifier = supportRowModifier,
             onClick = onSupportClick
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+        SettingsItem(
+            icon = Icons.Outlined.Groups,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
+            title = "QQ 交流群",
+            description = "群号 ${AppLinks.QQ_GROUP}（点击加入群聊，长按复制群号）",
+            // 优先拉起 QQ 群卡片；设备上没装 QQ 时退回复制群号，保证入口永远可用
+            onClick = {
+                if (!AppLinks.openQQGroup(context)) {
+                    copyToClipboard(context, AppLinks.QQ_GROUP)
+                    SnackbarController.show("未安装 QQ，群号已复制：${AppLinks.QQ_GROUP}")
+                }
+            },
+            onLongClick = {
+                copyToClipboard(context, AppLinks.QQ_GROUP)
+                SnackbarController.show("群号已复制：${AppLinks.QQ_GROUP}")
+            }
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+        SettingsItem(
+            icon = Icons.Outlined.Code,
+            shape = listGroupShape(ListGroupPos.LAST),
+            title = "GitHub 仓库",
+            description = "${AppLinks.GITHUB_REPO_DISPLAY} · 查看源码与反馈问题",
+            onClick = { openUrl(context, AppLinks.GITHUB_REPO) }
         )
     }
 
