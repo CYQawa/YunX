@@ -1,0 +1,6 @@
+v1.2.6
+- Added bookmarks for cloud-drive links
+- Fixed a main-thread ANR caused by frequent download-progress database writes
+- Fixed dropped frames when refreshing the drive page; smoother credential import / export feedback
+- Security hardening for credential storage, download boundaries and WebView origin checks
+- Added GitHub Actions CI

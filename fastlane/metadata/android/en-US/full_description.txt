@@ -1,0 +1,27 @@
+YunX (云析) is an open-source share-link parser and high-speed downloader for Android cloud drives: paste a share link and download it right away.
+
+Features
+- Share-link parsing for Quark, UC, Xunlei, Baidu, 139 and 123, with automatic passcode matching
+- High-speed downloads: concurrent HTTP Range chunks with resume support, up to 32 parallel connections
+- Temporary-save cleanup: Baidu and Xunlei transfers are cleaned up right after the direct link is fetched; Quark keeps them until the download finishes or the task is deleted
+- Multi-provider login: WebView cookies for Quark/UC/Baidu/139, password or SMS for Xunlei, account+JWT for 123
+- Credential backup: cookies and JWTs exported as AES-GCM encrypted files, keyed by a user passphrase
+- Clipboard detection: copy a share link and the app offers one-tap parsing when you return to it
+
+Supported providers
+Quark Drive, UC Drive, Xunlei Drive, Baidu Netdisk, 123 Cloud Drive, 139 Drive (HeCaiYun)
+
+How to use
+1. Sign in to the cloud drive account you need on the "Drives" page
+2. Paste a share link (with or without passcode) on the "Parse" page
+3. Browse the shared files and tap a file to resolve its direct download link
+4. Track progress on the "Downloads" page; pause / resume / delete / open as you like
+
+Requirements
+Android 7.0 (API 24) or newer.
+
+Ads and privacy
+No ads and no analytics SDKs. Direct links, cookies and JWTs stay on your device; credential backups are encrypted with a key derived from your passphrase.
+
+Note
+Using Baidu Netdisk may trigger account risk control. YunX is free and open source forever — any paid copy is a repackaged scam and is unrelated to this project.
