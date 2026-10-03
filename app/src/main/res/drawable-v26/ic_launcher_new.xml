@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    桌面图标「新图标」资源（API 26+）：走自适应图标，形状交给系统遮罩。
+    为什么必须这样做：icon2.png 是「图形占中心 80%、四周是自带留白的白卡片」的一整张位图，
+    旧式位图图标会被系统整体缩进 66/108 安全区，于是卡片内那圈留白变成可见的双重留白
+    ⇒ 在 Android 15/16（桌面 / 开屏 / 最近任务）看起来明显偏小、四周空。
+    这里拆成两层：白底 background 铺满遮罩，图形 foreground 只占 66/108 安全区，
+    与其他应用图标的观感尺寸一致（前景层由 icon2.png 中的图形按安全区重排生成）。
+
+    注意：此文件不要命名为 icon2，否则会覆盖位图版 icon2.png，而主题与外观页的图标预览
+    走 painterResource(R.drawable.icon2)——它只支持矢量/位图，遇到 <adaptive-icon> 会抛异常。
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/white" />
+    <foreground android:drawable="@drawable/ic_launcher_new_foreground" />
+</adaptive-icon>

@@ -56,12 +56,15 @@
             </intent-filter>
         </activity>
 
-        <!-- 桌面图标动态切换（新图标 icon2）：默认禁用，主题与外观页切换后经 setComponentEnabledSetting 启用 -->
+        <!-- 桌面图标动态切换（新图标）：默认禁用，主题与外观页切换后经 setComponentEnabledSetting 启用。
+             图标走 @drawable/ic_launcher_new：API 26+ 为自适应图标（drawable-v26），API 24-25 为位图回退。
+             roundIcon 必须一并声明：部分启动器优先取 roundIcon，缺省会回落到 application 的经典图标。 -->
         <activity-alias
             android:name=".MainActivityIcon2"
             android:enabled="false"
             android:exported="true"
-            android:icon="@drawable/icon2"
+            android:icon="@drawable/ic_launcher_new"
+            android:roundIcon="@drawable/ic_launcher_new"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter>
