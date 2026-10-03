@@ -51,13 +51,16 @@ data class ShareFile(
 
 /**
  * 分享信息（云盘功能：创建分享后查询得到的链接与提取码）。
+ * @param warning 非致命提示：分享已创建但某个后续设置没生效（如 115 改有效期失败）。
+ *   界面在弹分享结果的同时用 Snackbar 展示；为空表示一切正常。
  */
 data class ShareInfo(
     val shareUrl: String,
     val passcode: String,
     val pwdId: String,
     val title: String,
-    val expiredType: Int
+    val expiredType: Int,
+    val warning: String? = null
 )
 
 /**

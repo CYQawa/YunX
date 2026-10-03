@@ -98,9 +98,40 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
         onFailure = { Result.failure(it) }
     )
 
-    /** 115 分享无需转存（直链接口直接对分享文件下发 CDN 地址），保留失败实现避免误用 */
-    override suspend fun ensureTempDir(cookie: String): Result<String> =
-        Result.failure(UnsupportedOperationException("115 分享无需转存"))
+    /**
+     * 确保「YunX临时转存」下的**唯一子目录**存在，返回子目录 cid。
+     *
+     * 只在分享直链被 115 拒发（大文件 `50029`）时用到：转存进去 → 用电脑端接口取链 →
+     * 下载完成后由 [cleanupTempDir] 连目录带文件一起删掉。
+     */
+    override suspend fun ensureTempDir(cookie: String): Result<String> = runCatching {
+        if (!Pan115Constants.hasLoginCookie(cookie)) {
+            throw IllegalStateException("请先登录115网盘")
+        }
+        val root = api.listFiles(Pan115Constants.ROOT_CID, cookie, offset = 0)
+        val tempRoot = root.files
+            .firstOrNull { it.isdir && it.fname == Pan115Constants.TEMP_DIR_NAME }?.fid
+            ?: api.createDir(Pan115Constants.ROOT_CID, Pan115Constants.TEMP_DIR_NAME, cookie)
+            ?: throw IllegalStateException("创建115临时目录失败")
+        val subName = "${Pan115Constants.TEMP_SUBDIR_PREFIX}${System.nanoTime()}"
+        api.createDir(tempRoot, subName, cookie)
+            ?: throw IllegalStateException("创建115临时转存目录失败")
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { Result.failure(it) }
+    )
+
+    /** 下载完成（或用户取消）后清理：删掉本次转存的唯一子目录，里面的转存文件一并进回收站 */
+    override suspend fun cleanupTempDir(dirFid: String, cookie: String) {
+        if (dirFid.isBlank() || !Pan115Constants.hasLoginCookie(cookie)) return
+        runCatching {
+            val root = api.listFiles(Pan115Constants.ROOT_CID, cookie, offset = 0)
+            val tempRoot = root.files
+                .firstOrNull { it.isdir && it.fname == Pan115Constants.TEMP_DIR_NAME }?.fid
+                ?: return
+            api.delete(listOf(dirFid), tempRoot, cookie)
+        }
+    }
 
     /**
      * 转存到自己的网盘：`POST /share/receive`。
@@ -126,8 +157,8 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
         onFailure = { Result.failure(it) }
     )
 
-    /** 转存后列表有延迟，最多重试 5 次、每次间隔 500ms，按文件名找回新 fid */
-    private suspend fun waitNewFid(cid: String, name: String, cookie: String): String? {
+    /** 转存后列表有延迟，最多重试 5 次、每次间隔 500ms，按文件名找回新文件 */
+    private suspend fun waitNewFile(cid: String, name: String, cookie: String): ShareFile? {
         val base = name.substringBeforeLast('.', name)
         val ext = name.substringAfterLast('.', "")
         repeat(5) { index ->
@@ -136,10 +167,13 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
                 api.listFiles(cid, cookie, offset = 0, limit = Pan115Constants.PAGE_LIMIT)
             }.getOrNull() ?: return@repeat
             val hit = page.files.firstOrNull { item -> item.fname.matchesName(name, base, ext) }
-            if (hit != null) return hit.fid
+            if (hit != null) return hit
         }
         return null
     }
+
+    private suspend fun waitNewFid(cid: String, name: String, cookie: String): String? =
+        waitNewFile(cid, name, cookie)?.fid
 
     /** 文件名是否为「原名」或重名后的「原名(序号).后缀」 */
     private fun String.matchesName(name: String, base: String, ext: String): Boolean {
@@ -151,23 +185,104 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> =
         Result.failure(UnsupportedOperationException("115 分享请使用 getShareDownloadLink"))
 
+    /**
+     * 分享直链。
+     *
+     * 先走网页端 `share/downurl`（小文件够用）。115 对大文件不向网页端下发直链
+     * （实测 `50029 当前版本过低，请升级到最新版本下载`，抓包 `/storage/emulated/0/抓包/bug/115/2/`），
+     * 因此登录态下退回「转存到临时目录 + 电脑端加密接口取链」，下载完成后自动清理临时目录。
+     */
     override suspend fun getShareDownloadLink(
         session: ShareSession,
         file: ShareFile,
         cookie: String
     ): Result<DownloadLink> = runCatching {
         val (receiveCode, userId) = Pan115Constants.decodeShareToken(session.stoken)
-        val link = api.getShareDownloadLink(
-            shareCode = session.shareId,
-            receiveCode = receiveCode,
-            userId = userId,
-            file = file,
-            cookie = cookie
-        ) ?: throw IllegalStateException("获取下载链接失败")
+        val webResult = runCatching {
+            api.getShareDownloadLink(
+                shareCode = session.shareId,
+                receiveCode = receiveCode,
+                userId = userId,
+                file = file,
+                cookie = cookie
+            )
+        }
+        val link = webResult.getOrNull()
+            ?: if (Pan115Constants.hasLoginCookie(cookie)) {
+                downloadViaTempTransfer(session, file, receiveCode, cookie)
+            } else {
+                // 未登录只能走网页端，原样抛出 115 的提示（比如 50029）
+                throw webResult.exceptionOrNull() ?: IllegalStateException("获取下载链接失败")
+            }
         // 文件名以列表为准（downurl 的 fn 偶发为空，会 fallback 成 file_id）
         link.copy(filename = file.fname.ifBlank { link.filename })
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
     )
+
+    /**
+     * 分享文件的「电脑端」通道：转存到临时子目录 → 按文件名认领新文件（拿到 pickcode）→
+     * 电脑端接口取链，并把子目录 cid 放进 [DownloadLink.cleanupDirFid] 交给下载完成后清理。
+     */
+    private suspend fun downloadViaTempTransfer(
+        session: ShareSession,
+        file: ShareFile,
+        receiveCode: String,
+        cookie: String
+    ): DownloadLink {
+        if (!Pan115Constants.hasLoginCookie(cookie)) {
+            throw IllegalStateException("该分享文件需要115电脑端才能下载，请先到「网盘」页登录115网盘")
+        }
+        ensureEnoughSpace(file.fsize, cookie)
+        val tempDir = ensureTempDir(cookie).getOrThrow()
+        api.receiveShare(session.shareId, receiveCode, file.fid, tempDir, cookie)
+        val saved = waitNewFile(tempDir, file.fname, cookie) ?: run {
+            // 转存成功但没认领到文件：别把垃圾留在用户网盘里
+            cleanupTempDir(tempDir, cookie)
+            throw IllegalStateException("分享文件转存后未取到下载链接，请稍后重试")
+        }
+        val link = runCatching { api.getAppDownloadLink(saved.fidToken, cookie) }
+            .getOrNull()
+            ?: run {
+                // 取链也失败：转存进来的文件同样不能留在用户网盘里
+                cleanupTempDir(tempDir, cookie)
+                throw IllegalStateException("该分享文件暂时无法获取电脑端下载链接，请稍后重试")
+            }
+        return link.copy(
+            fid = saved.fid,
+            filename = file.fname.ifBlank { link.filename },
+            size = if (link.size > 0L) link.size else saved.fsize,
+            cleanupDirFid = tempDir
+        )
+    }
+
+    /**
+     * 转存前先核对剩余空间：分享里的文件夹动辄上百 GB，盲目转存只会白等一场（甚至写坏配额）。
+     * 拿不到空间信息时放行，交给服务端判，避免配额接口异常导致彻底无法下载。
+     */
+    private suspend fun ensureEnoughSpace(size: Long, cookie: String) {
+        if (size <= 0L) return
+        val quota = runCatching { api.getQuota(cookie) }.getOrNull() ?: return
+        val free = quota.total - quota.used
+        if (free in 1 until size) {
+            throw IllegalStateException(
+                "网盘剩余空间不足：该分享内容需要 ${readableSize(size)}，可用 ${readableSize(free)}，" +
+                    "请先清理空间或改用其它方式下载"
+            )
+        }
+    }
+
+    /** 体积展示（只用于错误提示，避免数据层依赖 UI 层） */
+    private fun readableSize(bytes: Long): String {
+        if (bytes <= 0L) return "0 B"
+        val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        var value = bytes.toDouble()
+        var i = 0
+        while (value >= 1024 && i < units.size - 1) {
+            value /= 1024
+            i++
+        }
+        return String.format("%.1f %s", value, units[i])
+    }
 }

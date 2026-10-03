@@ -72,8 +72,15 @@ object Pan115Constants {
     /** 删除（进回收站；pid、fid[0]、ignore_warn=1） */
     const val FILE_DELETE_URL = "$API_BASE/rb/delete"
 
-    /** 个人盘直链（pickcode=<列表项的 pc>） */
+    /** 个人盘直链（pickcode=<列表项的 pc>）。仅小文件可用，大文件返回 50028 */
     const val FILE_DOWNLOAD_URL = "$API_BASE/files/download"
+
+    /**
+     * 「电脑端」直链接口（加密协议，见 [Pan115Crypto]）。调用时需拼 `?t=<unix秒>`，
+     * 表单 `data=<加密后的 {"pickcode":…}>`。这是 115 官方客户端下载大文件的通道，
+     * 网页端接口（[FILE_DOWNLOAD_URL]）对大文件一律 50028。
+     */
+    const val APP_DOWNLOAD_URL = "https://proapi.115.com/app/chrome/downurl"
 
     /** 首次分享前的协议确认（action=pubshare） */
     const val ALLOW_PROTOCOL_URL = "$API_BASE/user/allow_protocol"
@@ -114,6 +121,12 @@ object Pan115Constants {
     const val MOVE_POLL_MAX = 20
     const val MOVE_POLL_INTERVAL_MS = 400L
 
+    /** 临时转存根目录名（分享直链被拒时，先转存到这里再用电脑端接口取链，下载完删掉子目录） */
+    const val TEMP_DIR_NAME = "YunX临时转存"
+
+    /** 每次转存用的唯一子目录前缀（同名文件不会互相覆盖） */
+    const val TEMP_SUBDIR_PREFIX = "tr_"
+
     // ---------- 公共请求头 ----------
 
     /**
@@ -125,6 +138,47 @@ object Pan115Constants {
 
     /** 携带 Cookie 时必须声明（文档 §1） */
     const val X_REQUESTED_WITH = "XMLHttpRequest"
+
+    /**
+     * **下载专用客户端 UA 的版本号兜底值**。
+     *
+     * 115 会校验客户端版本：UA 里版本过低时，连取直链都会被拒（`50029 当前版本过低，请升级到最新版本下载。`
+     * 实测来自 alist 默认版本 `27.0.5.7`，2026-10-03 抓包 `/storage/emulated/0/抓包/bug/115/`）。
+     * 所以版本号不写死：`Pan115Api.refreshClientVersion()` 会从 [APP_VERSION_URL] 拉当前版本
+     * （alist `drivers/115/appver.go` 的 `getAppVer()` 同款做法），拉不到时才用这个兜底值。
+     */
+    const val CLIENT_UA_VERSION_FALLBACK = "36.0.1"
+
+    /** 115 客户端版本接口（`data.win.version_code` 即当前 Windows 版 115 浏览器版本，免登录可用） */
+    const val APP_VERSION_URL = "https://appversion.115.com/1/web/1.0/api/chrome"
+
+    /**
+     * **下载专用客户端 UA**（形如 `Mozilla/5.0 115Browser/<版本>`，同 alist `drivers/115/util.go:132`）。
+     *
+     * 115 会按 UA 判定「网页端 / 客户端」：浏览器 UA 连小文件的下载请求都会被差别对待；
+     * 版本号过低则直接 `50029`。因此这里是**可变的进程级缓存** —— 取直链前由
+     * `Pan115Api.refreshClientVersion()` 用 [APP_VERSION_URL] 的最新版本刷新 [applyClientVersion]，
+     * 取链与随后的下载请求都读同一个值，版本更新后无需发版。
+     *
+     * **注意**：UA 只是门票，拿大文件直链仍必须走「电脑端」加密接口 [APP_DOWNLOAD_URL]（见 [Pan115Crypto]）：
+     * 个人盘走 `getAppDownloadLink`，分享走「转存 + 电脑端接口」。
+     */
+    @Volatile
+    var CLIENT_UA: String = clientUa(CLIENT_UA_VERSION_FALLBACK)
+        private set
+
+    /** 拼客户端 UA */
+    fun clientUa(version: String): String = "Mozilla/5.0 115Browser/$version"
+
+    /** 用最新的客户端版本号刷新 [CLIENT_UA]（非法值忽略，失败时保留旧值） */
+    fun applyClientVersion(version: String?) {
+        val value = version?.trim().orEmpty()
+        // 形如 36.0.1 / 36.0.10，过滤掉接口异常时的空值或垃圾串
+        if (value.isEmpty() || !value.first().isDigit() || value.length > 16) return
+        if (!value.all { it.isDigit() || it == '.' }) return
+        if (CLIENT_UA.endsWith("/$value")) return
+        CLIENT_UA = clientUa(value)
+    }
 
     /** 分享链接域名（用于展示/收藏平台识别） */
     const val SHARE_LINK_HOST = "115cdn.com"
@@ -165,6 +219,12 @@ object Pan115Constants {
 
     /** 需要二次确认（删除旧文件等） */
     const val ERRNO_NEED_CONFIRM = 800007
+
+    /** 个人盘下载：文件大小超出网页端限制（`文件大小超出限制，请使用115电脑端下载`） */
+    const val ERRNO_WEB_SIZE_LIMIT = 50028
+
+    /** 分享下载：被判定客户端版本过低（`当前版本过低，请升级到最新版本下载`） */
+    const val ERRNO_CLIENT_TOO_OLD = 50029
 
     // ---------- 工具方法 ----------
 

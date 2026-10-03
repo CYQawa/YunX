@@ -66,6 +66,34 @@ class Pan115Api(
     @Volatile
     private var protocolAllowed = false
 
+    /** 客户端版本号只拉一次（进程级缓存；`Pan115Constants.CLIENT_UA` 由它刷新） */
+    @Volatile
+    private var clientVersionFetched = false
+
+    // ---------- 客户端版本（取直链必需） ----------
+
+    /**
+     * 刷新客户端版本号（进程内只拉一次）。
+     *
+     * 115 取链接口会校验客户端版本，UA 里版本过低直接 `50029 当前版本过低`（alist 默认的
+     * `27.0.5.7` 在 2026-10-03 已被判过低）。这里按 alist `drivers/115/appver.go` 的做法，
+     * 从 [Pan115Constants.APP_VERSION_URL] 取当前 Windows 版版本号刷新 [Pan115Constants.CLIENT_UA]；
+     * 拉取失败就保留兜底值，不影响后续请求。
+     */
+    suspend fun refreshClientVersion() = withContext(Dispatchers.IO) {
+        if (clientVersionFetched) return@withContext
+        clientVersionFetched = true
+        runCatching {
+            val json = getJson(
+                Pan115Constants.APP_VERSION_URL,
+                cookie = "",
+                referer = Pan115Constants.REFERER
+            )
+            val win = json.optJSONObject("data")?.optJSONObject("win") ?: return@runCatching
+            Pan115Constants.applyClientVersion(win.optString("version_code"))
+        }
+    }
+
     // ---------- 用户信息（文档 §1.1） ----------
 
     /**
@@ -120,14 +148,50 @@ class Pan115Api(
         )
     }
 
-    /** 个人盘直链：`GET /files/download?pickcode=<pc>`；响应头下发的 CDN Cookie 放进 guestCookie */
+    /**
+     * 个人盘直链。
+     *
+     * 先走「电脑端」加密接口 [getAppDownloadLink]：网页端接口 `GET /files/download?pickcode=`
+     * 对大文件直接拒发（实测 482MB 就返回 `50028 文件大小超出限制，请使用115电脑端下载`，
+     * 抓包见 `/storage/emulated/0/抓包/bug/115/2/`，换客户端 UA 也无效）。
+     * 电脑端接口失败时再退回网页端接口，小文件仍可用（它的响应头会下发 CDN Cookie）。
+     */
     suspend fun getDownloadLink(file: ShareFile, cookie: String): DownloadLink? =
         withContext(Dispatchers.IO) {
             val pickCode = file.fidToken
             if (pickCode.isBlank()) throw IllegalStateException("缺少 pickcode，无法获取下载链接")
+            refreshClientVersion()
+            runCatching { getAppDownloadLink(pickCode, cookie) }
+                .getOrNull()
+                ?.let { appLink ->
+                    return@withContext appLink.copy(
+                        fid = file.fid,
+                        filename = appLink.filename.ifBlank { file.fname },
+                        size = if (appLink.size > 0L) appLink.size else file.fsize
+                    )
+                }
+            getWebDownloadLink(pickCode, file, cookie)
+        }
+
+    /**
+     * 网页端直链：`GET /files/download?pickcode=<pc>`；响应头下发的 CDN Cookie 放进 guestCookie。
+     * 大文件会被 115 以 `50028` 拒绝，仅作电脑端接口的兜底。
+     */
+    private suspend fun getWebDownloadLink(
+        pickCode: String,
+        file: ShareFile,
+        cookie: String
+    ): DownloadLink? =
+        withContext(Dispatchers.IO) {
+            refreshClientVersion()
             val url = "${Pan115Constants.FILE_DOWNLOAD_URL}?pickcode=${encode(pickCode)}"
             val (json, cdnCookie) = executeJson(
-                baseBuilder(url, cookie, Pan115Constants.DOWNLOAD_REFERER).get().build()
+                baseBuilder(
+                    url,
+                    cookie,
+                    Pan115Constants.DOWNLOAD_REFERER,
+                    Pan115Constants.CLIENT_UA
+                ).get().build()
             )
             checkState(json, "获取下载链接失败")
             val data = json.optJSONObject("data") ?: return@withContext null
@@ -144,6 +208,50 @@ class Pan115Api(
             )
         }
 
+    /**
+     * 「电脑端」直链：`POST https://proapi.115.com/app/chrome/downurl?t=<unix秒>`。
+     *
+     * 请求体加密：`data=<Pan115Crypto.encode(json{"pickcode":…}, key)>`；响应 `data` 是同一个 key
+     * 加密回来的 JSON（file_id → {file_name, file_size, url.url}）。
+     * 这是 115 官方电脑端下载大文件的唯一通道，网页端接口对大文件一律 50028。
+     * 参考实现：`115drive-webdav-main/115/api.go`（APIGetDownloadURL）、
+     * `115-minus-main/src/platform/115/download-api.ts`。
+     */
+    suspend fun getAppDownloadLink(pickCode: String, cookie: String): DownloadLink? =
+        withContext(Dispatchers.IO) {
+            if (pickCode.isBlank()) return@withContext null
+            val key = Pan115Crypto.newKey()
+            val payload = JSONObject().put("pickcode", pickCode).toString()
+            val url = "${Pan115Constants.APP_DOWNLOAD_URL}?t=${System.currentTimeMillis() / 1000}"
+            val (json, cdnCookie) = postFormWithCookie(
+                url,
+                cookie,
+                Pan115Constants.DOWNLOAD_REFERER,
+                form("data" to Pan115Crypto.encode(payload, key)),
+                Pan115Constants.CLIENT_UA
+            )
+            checkState(json, "获取下载链接失败")
+            val encrypted = json.optString("data")
+            if (encrypted.isBlank()) return@withContext null
+            val decoded = JSONObject(Pan115Crypto.decode(encrypted, key))
+            val info = decoded.keys().asSequence()
+                .mapNotNull { decoded.optJSONObject(it) }
+                .firstOrNull { it.optJSONObject("url") != null }
+                ?: return@withContext null
+            val fileUrl = info.optJSONObject("url")?.optString("url").orEmpty()
+            if (fileUrl.isBlank()) return@withContext null
+            DownloadLink(
+                fid = info.optString("pick_code").ifBlank { pickCode },
+                filename = info.optString("file_name"),
+                downloadUrl = fileUrl,
+                size = info.optString("file_size").toLongOrNull() ?: info.optLong("file_size", -1L),
+                cleanupDirFid = null,
+                isHls = false,
+                // 电脑端接口也下发 CDN Cookie（实测缺它直链 403 no cookie value）
+                guestCookie = cdnCookie.orEmpty()
+            )
+        }
+
     /** 新建文件夹：`POST /files/add` → data.cid */
     suspend fun createDir(pid: String, name: String, cookie: String): String? =
         withContext(Dispatchers.IO) {
@@ -154,7 +262,9 @@ class Pan115Api(
                 form("pid" to pid.ifBlank { Pan115Constants.ROOT_CID }, "cname" to name)
             )
             checkState(json, "新建文件夹失败")
-            json.optString("cid").takeIf { it.isNotBlank() }
+            // 有的接口把结果放 data 内层，两层都读
+            json.optString("cid").ifBlank { json.optJSONObject("data")?.optString("cid").orEmpty() }
+                .takeIf { it.isNotBlank() }
         }
 
     /** 重命名：`POST /files/batch_rename`（文档 §3.3） */
@@ -188,7 +298,10 @@ class Pan115Api(
             form(*pairs.toTypedArray())
         )
         checkState(json, "移动失败")
-        val moveId = json.optString("move_proid").takeIf { it.isNotBlank() } ?: return@withContext
+        // 115 的字段层级不稳定（`share/send` 就把信息放在 data 内层，见 createShare 注释），两层都读
+        val moveId = json.optString("move_proid")
+            .ifBlank { json.optJSONObject("data")?.optString("move_proid").orEmpty() }
+            .takeIf { it.isNotBlank() } ?: return@withContext
         repeat(Pan115Constants.MOVE_POLL_MAX) {
             delay(Pan115Constants.MOVE_POLL_INTERVAL_MS)
             val progress = runCatching {
@@ -269,6 +382,7 @@ class Pan115Api(
     /**
      * 分享直链：`GET /share/downurl`（`user_id` 必须是分享者 UID）。
      * 响应头同样会下发 900 秒 CDN Cookie。
+     * **必须用客户端 UA**：浏览器 UA 会被判「版本过低」直接拒发直链（50029），见 [Pan115Constants.CLIENT_UA]。
      */
     suspend fun getShareDownloadLink(
         shareCode: String,
@@ -278,6 +392,7 @@ class Pan115Api(
         cookie: String
     ): DownloadLink? = withContext(Dispatchers.IO) {
         if (userId.isBlank()) throw IllegalStateException("缺少分享者标识，请重新解析分享链接")
+        refreshClientVersion()
         val url = buildString {
             append(Pan115Constants.SHARE_DOWNLOAD_URL)
             append("?dl=1")
@@ -289,11 +404,19 @@ class Pan115Api(
             }
         }
         val (json, cdnCookie) = executeJson(
-            baseBuilder(url, cookie, Pan115Constants.shareReferer(shareCode, receiveCode)).get().build()
+            baseBuilder(
+                url,
+                cookie,
+                Pan115Constants.shareReferer(shareCode, receiveCode),
+                Pan115Constants.CLIENT_UA
+            ).get().build()
         )
         checkState(json, "获取下载链接失败")
         val data = json.optJSONObject("data") ?: return@withContext null
-        val fileUrl = data.optString("file_url_302").ifBlank { data.optString("file_url") }
+        // 网页 JS 取的是 file_url_302 || url.url，这里三种形态都兜住
+        val fileUrl = data.optString("file_url_302")
+            .ifBlank { data.optString("file_url") }
+            .ifBlank { data.optJSONObject("url")?.optString("url").orEmpty() }
         if (fileUrl.isBlank()) return@withContext null
         DownloadLink(
             fid = file.fid,
@@ -363,22 +486,47 @@ class Pan115Api(
                 form("user_id" to userId, "file_ids" to idText, "ignore_warn" to "1")
             )
             checkState(json, "创建分享失败")
-            val shareCode = json.optString("share_code")
+            // 实测（`/storage/emulated/0/抓包/bug/115/2/`）：`share/send` 的分享信息在 data 内层，
+            // 顶层只有 state/error/errno。两层都读，服务端挪字段也不会再炸。
+            val data = json.optJSONObject("data") ?: JSONObject()
+            fun field(name: String): String = data.optString(name).ifBlank { json.optString(name) }
+            val shareCode = field("share_code")
             if (shareCode.isBlank()) throw IllegalStateException("创建分享失败：响应缺少分享编号")
-            val update = postForm(
-                Pan115Constants.SHARE_UPDATE_URL,
-                cookie,
-                Pan115Constants.REFERER,
-                form("share_code" to shareCode, "share_duration" to duration)
-            )
-            checkState(update, "设置分享有效期失败")
+            // 有效期只能建完再改（创建接口没有该字段）。改失败**不能丢掉已建好的分享**：
+            // 回填服务端给的默认档位，并把失败原因放进 ShareInfo.warning 让界面提示（见 Agent.md §3.25 硬规则 4）。
+            val update = runCatching {
+                postForm(
+                    Pan115Constants.SHARE_UPDATE_URL,
+                    cookie,
+                    Pan115Constants.REFERER,
+                    form("share_code" to shareCode, "share_duration" to duration)
+                )
+            }
+            val updateJson = update.getOrNull()
+            val applied = updateJson != null && updateJson.optBoolean("state", false)
+            val expiredType = if (applied) {
+                ShareExpire.pan115CodeOf(duration)
+            } else {
+                ShareExpire.pan115CodeOfText(field("share_ex_duration"))
+            }
+            val warning = if (applied) {
+                null
+            } else {
+                val reason = updateJson?.let { json2 ->
+                    json2.optString("error").ifBlank { json2.optString("msg") }
+                }?.takeIf { it.isNotBlank() }
+                    ?: update.exceptionOrNull()?.message
+                    ?: "未知原因"
+                "分享已创建，但有效期设置未生效（当时按服务端默认档位）：$reason"
+            }
             ShareInfo(
-                shareUrl = json.optString("share_url")
+                shareUrl = field("share_url")
                     .ifBlank { "${Pan115Constants.SHARE_HOST}/s/$shareCode" },
-                passcode = json.optString("receive_code").ifBlank { json.optString("sys_receive_code") },
+                passcode = field("receive_code").ifBlank { field("sys_receive_code") },
                 pwdId = shareCode,
-                title = json.optString("share_title"),
-                expiredType = ShareExpire.UNKNOWN
+                title = field("share_title"),
+                expiredType = expiredType,
+                warning = warning
             )
         }
 
@@ -448,10 +596,15 @@ class Pan115Api(
         return result
     }
 
-    private fun baseBuilder(url: String, cookie: String, referer: String): Request.Builder {
+    private fun baseBuilder(
+        url: String,
+        cookie: String,
+        referer: String,
+        userAgent: String = Pan115Constants.WEB_UA
+    ): Request.Builder {
         val builder = Request.Builder()
             .url(url)
-            .header("User-Agent", Pan115Constants.WEB_UA)
+            .header("User-Agent", userAgent)
             .header("Accept", "application/json, text/plain, */*")
             .header("X-Requested-With", Pan115Constants.X_REQUESTED_WITH)
             .header("Referer", referer)
@@ -462,13 +615,40 @@ class Pan115Api(
     private fun getJson(url: String, cookie: String, referer: String): JSONObject =
         executeJson(baseBuilder(url, cookie, referer).get().build()).first
 
-    private fun postForm(url: String, cookie: String, referer: String, body: String): JSONObject =
+    private fun postForm(
+        url: String,
+        cookie: String,
+        referer: String,
+        body: String,
+        userAgent: String = Pan115Constants.WEB_UA
+    ): JSONObject =
         executeJson(
-            baseBuilder(url, cookie, referer)
-                .header("Content-Type", "application/x-www-form-urlencoded")
+            baseBuilder(url, cookie, referer, userAgent)
+                // 与网页版一致（抓到的是 `application/x-www-form-urlencoded; charset=utf-8`）
+                .header("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
                 .post(body.toRequestBody(formMediaType))
                 .build()
         ).first
+
+    /**
+     * 同 [postForm]，但把响应头里下发的「下载专用 Cookie」一起返回。
+     *
+     * 电脑端取链接口 [Pan115Constants.APP_DOWNLOAD_URL] 也会下发 path 绑定的 CDN Cookie
+     * （实测缺它直链 CDN 返回 403 `no cookie value`，带上就是 206），所以这条路径必须保留 Cookie。
+     */
+    private fun postFormWithCookie(
+        url: String,
+        cookie: String,
+        referer: String,
+        body: String,
+        userAgent: String = Pan115Constants.WEB_UA
+    ): Pair<JSONObject, String?> =
+        executeJson(
+            baseBuilder(url, cookie, referer, userAgent)
+                .header("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+                .post(body.toRequestBody(formMediaType))
+                .build()
+        )
 
     /** 执行请求：返回响应 JSON 与响应头里下发的「下载专用 Cookie」（文档 §4.2） */
     private fun executeJson(request: Request): Pair<JSONObject, String?> {
@@ -485,6 +665,7 @@ class Pan115Api(
 
     /** 从 Set-Cookie 里取第一个 `name=value`（文档 §4.2：32 位 hex 名值、path 绑定 object） */
     private fun downloadCookie(headers: List<String>): String? {
+        var fallback: String? = null
         for (raw in headers) {
             val pair = raw.substringBefore(';').trim()
             val name = pair.substringBefore('=', "")
@@ -492,9 +673,17 @@ class Pan115Api(
             if (name.equals("expires", true) || name.equals("path", true) || name.equals("domain", true)) {
                 continue
             }
-            return pair
+            if (fallback == null) fallback = pair
+            // 直链 CDN 只认 path 绑定的那条（`path=/<对象路径>/`），其余（如 WAF 的 acw_tc）不是它
+            val path = PATH_ATTR_REGEX.find(raw)?.groupValues?.get(1)?.trim()
+            if (!path.isNullOrBlank() && path != "/") return pair
         }
-        return null
+        return fallback
+    }
+
+    private companion object {
+        /** 匹配 Set-Cookie 里的 path 属性 */
+        val PATH_ATTR_REGEX = Regex("""[;\s]path=([^;]+)""", RegexOption.IGNORE_CASE)
     }
 
     private fun errnoOf(json: JSONObject): Int = json.optInt("errno", json.optInt("errNo", 0))
@@ -511,6 +700,12 @@ class Pan115Api(
             Pan115Constants.ERRNO_SHARE_GONE -> "分享链接不存在或已被删除"
             Pan115Constants.ERRNO_EMPTY_FOLDER -> "不允许分享空文件夹"
             Pan115Constants.ERRNO_BUSY -> "上一次操作还没完成，请稍后重试"
+            // 115 按 UA 判定「网页端/客户端」：浏览器 UA 拿不到大文件直链（抓包见 bug/115/），
+            // 正常情况已改用客户端 UA，这里只兜底给出可执行提示
+            Pan115Constants.ERRNO_WEB_SIZE_LIMIT ->
+                "115 拒绝向网页端下发该文件的直链（文件过大），请改用115电脑端/手机客户端下载"
+            Pan115Constants.ERRNO_CLIENT_TOO_OLD ->
+                "115 判定当前标识版本过低、拒绝下发直链，请改用115电脑端/手机客户端下载"
             else -> raw.ifBlank { fallback }
         }
         val suffix = if (errno != 0 && !message.contains(errno.toString())) "（errno=$errno）" else ""

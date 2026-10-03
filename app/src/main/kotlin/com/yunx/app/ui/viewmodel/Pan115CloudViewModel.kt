@@ -260,11 +260,12 @@ class Pan115CloudViewModel(
 
     /**
      * 115 下载请求头：CDN 同时校验登录 Cookie 与取链响应下发的 900 秒 CDN Cookie，
-     * 缺任一直接 403 no cookie value（Agent.md §3.25），因此两份 Cookie 拼接后一起发。
+     * 缺任一直接 403 no cookie value（Agent.md §3.25），因此两份 Cookie 拼接后一起发；
+     * UA 与取链保持一致用客户端串（浏览器 UA 会被判「网页端」，大文件直接 50028，抓包 bug/115/）。
      */
     private fun downloadHeaders(cookie: String, link: DownloadLink): Map<String, String> = mapOf(
         "Cookie" to Pan115Constants.mergeCookies(cookie, link.guestCookie),
-        "User-Agent" to Pan115Constants.WEB_UA,
+        "User-Agent" to Pan115Constants.CLIENT_UA,
         "Referer" to Pan115Constants.DOWNLOAD_REFERER
     )
 
@@ -451,7 +452,10 @@ class Pan115CloudViewModel(
                     duration = ShareExpire.pan115Duration(expiredType),
                     cookie = cookie()
                 )
-                shareResult = info.copy(expiredType = expiredType)
+                // 有效期以接口回填的真实档位为准（改有效期失败时不会谎报用户所选值），
+                // 同时把接口带回的非致命提示（如「已创建但有效期没改成」）用 Snackbar 告知
+                shareResult = info
+                info.warning?.let { cloudMessage = it }
                 actionFile = null
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "分享失败"
@@ -550,7 +554,8 @@ class Pan115CloudViewModel(
                     duration = ShareExpire.pan115Duration(expiredType),
                     cookie = cookie()
                 )
-                shareResult = info.copy(expiredType = expiredType)
+                shareResult = info
+                info.warning?.let { cloudMessage = it }
                 exitMultiSelect()
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "分享失败"

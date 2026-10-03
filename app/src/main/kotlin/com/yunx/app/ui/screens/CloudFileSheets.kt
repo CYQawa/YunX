@@ -846,6 +846,15 @@ internal fun ShareResultDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // 非致命提示（如 115 分享已建但有效期没改成功），不打断分享结果展示
+                info.warning?.takeIf { it.isNotBlank() }?.let { warning ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = warning,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 // Dialog 内提示（AlertDialog 为独立窗口，需自带 Snackbar 宿主）
                 SnackbarHost(hostState = snackbarHostState)
             }

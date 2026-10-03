@@ -1573,12 +1573,12 @@ class ResolveViewModel(
     fun dismissDownloadDialog() {
         val link = downloadLink
         downloadLink = null
-        // 弹窗被关闭（用户点管壁/「关闭」，未开始下载）：清理夸克临时转存，避免云端残留
+        // 弹窗被关闭（用户点关闭，未开始下载）：清理当前平台的云端临时转存，避免残留
         if (link?.cleanupDirFid != null) {
             viewModelScope.launch {
-                val credential = accountRepository.getAccount()?.cookie ?: return@launch
+                val credential = currentCredential() ?: return@launch
                 link.cleanupDirFid?.let { dirFid ->
-                    resolveRepository.cleanupTempDir(dirFid, credential)
+                    currentRepo().cleanupTempDir(dirFid, credential)
                 }
             }
         }
@@ -1631,10 +1631,11 @@ class ResolveViewModel(
             )
             isC139 -> mapOf("User-Agent" to C139Constants.PC_UA)
             // 115：CDN 同时校验登录 Cookie 与取链响应下发的 900 秒 CDN Cookie，
-            // 缺任一直接 403 no cookie value（文档 §4.3），因此两份 Cookie 拼接后一起发
+            // 缺任一直接 403 no cookie value（文档 §4.3），因此两份 Cookie 拼接后一起发；
+            // UA 必须是客户端串（与取链一致），浏览器 UA 会被判「网页端」拒发大文件直链（抓包 bug/115/）
             isPan115 -> mapOf(
                 "Cookie" to Pan115Constants.mergeCookies(effectiveCredential, guestCookie),
-                "User-Agent" to Pan115Constants.WEB_UA,
+                "User-Agent" to Pan115Constants.CLIENT_UA,
                 "Referer" to Pan115Constants.DOWNLOAD_REFERER
             )
             // 123 分享/个人盘直链为 CDN 签名地址，下载必须带 Referer（文档 §5.3.1）
@@ -1674,6 +1675,9 @@ class ResolveViewModel(
         } else {
             link.downloadUrl
         }
+        // 入队前先记住「哪个平台的仓库 + 哪份凭证」：下载完成时用户可能已经切到别的分享页
+        val cleanupRepo = currentRepo()
+        val cleanupCredential = credential
         downloadManager.enqueue(
             url = effectiveUrl,
             fileName = fileName,
@@ -1683,11 +1687,8 @@ class ResolveViewModel(
         ) {
             // 下载完成（master 版通过 onComplete 回调）：清理网盘临时转存目录；失败/取消不触发
             val dirFid = link.cleanupDirFid
-            if (dirFid != null) {
-                val credential = currentCredential()
-                if (!credential.isNullOrBlank()) {
-                    resolveRepository.cleanupTempDir(dirFid, credential)
-                }
+            if (dirFid != null && cleanupCredential.isNotBlank()) {
+                cleanupRepo.cleanupTempDir(dirFid, cleanupCredential)
             }
         }
     }

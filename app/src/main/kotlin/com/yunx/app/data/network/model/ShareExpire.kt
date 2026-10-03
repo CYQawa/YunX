@@ -119,4 +119,30 @@ object ShareExpire {
         PAN115_FIFTEEN_DAYS -> "15"
         else -> throw IllegalArgumentException("未知的分享有效期代码：$expiredType")
     }
+
+    /**
+     * 115 `share_duration` 字符串 → 115 码位（[pan115Duration] 的反向映射）。
+     * 用于「改有效期失败时按服务端返回值回填真实档位」；认不出的值返回 [UNKNOWN]（界面显示「未知」）。
+     * 注意 115 有 `5` 天档而本项目 UI 没有，也会落到 [UNKNOWN]。
+     */
+    fun pan115CodeOf(duration: String): Int = when (duration.trim()) {
+        "-1" -> PAN115_FOREVER
+        "1" -> PAN115_ONE_DAY
+        "3" -> PAN115_THREE_DAYS
+        "7" -> PAN115_SEVEN_DAYS
+        "15" -> PAN115_FIFTEEN_DAYS
+        else -> UNKNOWN
+    }
+
+    /**
+     * 115 返回的有效期文案（创建响应里的 `share_ex_duration`，形如 `15天` / `长期`）→ 115 码位。
+     * 与 [pan115CodeOf] 一样只用于回填显示，认不出返回 [UNKNOWN]。
+     */
+    fun pan115CodeOfText(text: String): Int {
+        val value = text.trim()
+        if (value.isEmpty()) return UNKNOWN
+        if (value.contains("长期") || value.contains("永久")) return PAN115_FOREVER
+        val days = value.takeWhile { it.isDigit() }
+        return if (days.isEmpty()) UNKNOWN else pan115CodeOf(days)
+    }
 }

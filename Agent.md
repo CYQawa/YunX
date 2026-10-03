@@ -599,12 +599,12 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 | 空间 | `GET /files/index_info?count_space_nums=1` → `data.space_info.all_total.size` / `all_use.size` |
 | 分享列目录 | `GET /share/snap?share_code=&receive_code=&cid=&offset=&limit=&format=json` → `data.userinfo` / `data.shareinfo` / `data.list[]` |
 | 分享直链 | `GET /share/downurl?dl=1&user_id=&share_code=&file_id=[&receive_code=]` → `data.file_url_302`（优先）或 `data.file_url` |
-| 个人盘直链 | `GET /files/download?pickcode=` → `data.file_url`（pickcode 就是列表项的 `pc`） |
+| 个人盘直链 | **电脑端接口** `POST https://proapi.115.com/app/chrome/downurl?t=<unix秒>`（表单 `data=<Pan115Crypto 加密的 {"pickcode":…}>`）→ 解密后 `url.url`；兜底 `GET /files/download?pickcode=` → `data.file_url`（pickcode 就是列表项的 `pc`） |
 | 转存 | `POST /share/receive {share_code, receive_code, file_id, cid}`（`cid=0` 为根） |
 | 创建分享 | `POST /user/allow_protocol {action:pubshare}` → `POST /share/send {user_id, file_ids, ignore_warn}` → `POST /share/updateshare {share_code, share_duration}` |
 | 删除 / 重命名 / 移动 | `POST /rb/delete`（回收站，不是 `/files/delete`）/ `POST /files/batch_rename`（**不是** `/files/edit`）/ `POST /files/move` + `GET /files/move_progress?move_proid=` 轮询 |
 
-**四条与其它平台不同的硬规则（改动前必读）**
+**七条与其它平台不同的硬规则（改动前必读）**
 
 1. **分享直链要「分享者」的 `user_id`，不是自己的 UID**，而它只出现在 `share/snap` 的 `data.userinfo.user_id` 里。
    `ShareSession` 只有 `shareId/stoken/title` 三个字段，所以分享者 UID 与提取码被编码进 `stoken`：
@@ -614,13 +614,39 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
    分享列表则用 `fc == 0` 判目录、目录 ID 取 `cid`、文件 ID 取 `fid`。`Pan115Api.parsePersonalFiles/parseShareFiles` 已把
    `ShareFile.fid` 归一成「可直接下发给接口的 ID」（文件夹就是它的 `cid`），因此 `share/send` 的 `file_ids`、`files/move` 的 `fid[0]`、
    `rb/delete` 的 `fid[0]` 都能直接用 `ShareFile.fid`，**不要再按平台分叉判一次目录**。个人盘文件的 `fidToken` 存的是 `pc`（pickcode），分享文件没有 pickcode（`fidToken` 为空串）。
-3. **下载要「双 Cookie」**：`files/download` 与 `share/downurl` 的响应会 `Set-Cookie` 下发一个 **900 秒、path 绑定该 object 的 CDN Cookie**，
+3. **网页端接口的直链要「双 Cookie」**：`files/download` 与 `share/downurl` 的响应会 `Set-Cookie` 下发一个 **900 秒、path 绑定该 object 的 CDN Cookie**，
    下载时必须把「登录 Cookie + 这个 CDN Cookie」一起带上，缺了就 CDN 403 `no cookie value`。
    CDN Cookie 经 `DownloadLink.guestCookie` 一路传到 `ResolveViewModel.enqueueDownload`，在那里 `mergeCookies(credential, guestCookie)`
-   合成 `Cookie` 头，并补 `User-Agent`（桌面 UA）与 `Referer`（`https://115.com/`）。**取链与下载必须紧邻**，CDN Cookie 会过期。
+   合成 `Cookie` 头，并补 `User-Agent`（客户端 UA）与 `Referer`（`https://115.com/`）。**取链与下载必须紧邻**，CDN Cookie 会过期。
+   电脑端接口（见规则 5）**同样下发 CDN Cookie**（2026-10-03 实测：不带它直链 CDN 返回 403 `no cookie value`，带上就是 206 + `Content-Range`），
+   所以 `getAppDownloadLink()` 用 `postFormWithCookie()` 取响应 Cookie 填进 `guestCookie`，下载侧照旧合并登录 Cookie。`downloadCookie()` 会优先挑带非根 `path` 的那条（同一响应里可能还带 WAF 的 `acw_tc`）。
 4. **创建分享的有效期不在创建接口里**：`/share/send` 建完必须再调 `/share/updateshare {share_duration}`，
    否则选了「长期」也会落成**默认 15 天**。`share_duration` 取值 `-1/1/3/5/7/15`（字符串），见 §3.20 的 115 行与专属码位 `101..105`。
    首次创建前还要过 `/user/allow_protocol {action:pubshare}`（进程内 `@Volatile protocolAllowed` 缓存，失败也放行，真创建时服务端会再判）。
+5. **网页端取链接口拿不到大文件直链，必须走「电脑端」加密接口**（2026-10-03 线上两轮抓包 `/storage/emulated/0/抓包/bug/115/` 与 `bug/115/2/` 定位）：
+   浏览器 UA 下 `/files/download` 报 `50028 文件大小超出限制，请使用115电脑端下载`（同账号 23B 小文件正常、1.05GB 被拒），
+   分享 `/share/downurl` 报 `50029 当前版本过低，请升级到最新版本下载`；**换成客户端 UA 后 482MB 仍报 50028、分享仍报 50029 —— 改 UA 无效**。
+   真正的电脑端协议是 `https://proapi.115.com/app/chrome/downurl`：POST 查询串 `?t=<unix秒>`，表单 `data=<Pan115Crypto.encode("{\"pickcode\":…}", key)>`，
+   响应 `{state, data:"<base64>"}` 用**同一个 key** `Pan115Crypto.decode` 解开，取第一个带 `url` 对象的条目的 `file_name / pick_code / url.url`。
+   算法已与两份参考实现逐字节核对一致（`云析分析资料/网盘参考/115drive-webdav-main/115/crypto.go` 的 `Encode/Decode/xorDeriveKey/xorTransform/rsaEncrypt/rsaDecrypt`、
+   `115-minus-main/src/platform/115/download-codec.ts`）：16 随机字节 key（随请求加密给服务端，无需预共享）→ `key‖xor(deriveKey(key,4))‖reverse‖xor(LONG_KEY)` → base64(RSA PKCS1v15，明文分块 117)。
+   代码里 `Pan115Api.getAppDownloadLink()` 优先、网页端 `/files/download` 仅作兜底。
+   **已用抓包里的账号 Cookie 真机联调验证通过**（2026-10-03）：proapi 返回 `state:true` + `data` 密文，`Pan115Crypto.decode` 解出
+   `file_name=ATMOS-碟中谍5（中字）：对白+枪声.m2ts`、`size=482052096`、`url` 前缀 `https://cdnfhn307.115cdn.net/...`（正是网页端报 50028 的那个文件），
+   带登录 Cookie + CDN Cookie 后 `Range: bytes=0-1023` 拿到 `206 Content-Range: bytes 0-1023/482052096`。
+6. **客户端 UA 的版本号必须动态取，不能写死**：115 按版本校验（过低报 `50029`，alist 默认的 `27.0.5.7` 已过旧）。
+   `Pan115Constants.CLIENT_UA` 是 `@Volatile var`（非 const），由 `Pan115Api.refreshClientVersion()`（进程内只拉一次）从
+   `https://appversion.115.com/1/web/1.0/api/chrome` 取 `data.win.version_code`（当前 `36.0.1`）后经 `applyClientVersion()` 刷新；
+   `getDownloadLink` / `getWebDownloadLink` / `getShareDownloadLink` 三处取链前都会调它。拉取失败保留兜底值 `CLIENT_UA_VERSION_FALLBACK`，不影响流程。
+   **注意**：分享 `share/downurl` 的 `50029` 与 UA 版本无关 —— 换 Chrome UA 与 `115Browser/36.0.1` 重放抓包请求都返回同样的 50029，
+   所以分享大文件只能靠规则 7 的「转存 + 电脑端接口」。日后若又报 50028/50029：先核对 `Pan115Crypto.kt` 常量是否仍与参考实现一致，
+   再确认 `appversion` 接口是否改版（`CLIENT_UA` 是否刷新成功）。
+7. **分享大文件要「先转存到自己网盘，再取电脑端直链」**：分享侧没有已验证的 proapi 等价接口，所以
+   `Pan115ResolveRepository.getShareDownloadLink()` 的顺序是「先试 `share/downurl`」→ 失败且**已登录**时走 `downloadViaTempTransfer()`：
+   `ensureTempDir()` 在根目录建 `YunX临时转存/tr_<nanoTime>` → `share/receive` 转存 → 轮询列目录认领新 `fid`（同名会变 `xxx(1).后缀`）
+   → `getAppDownloadLink()` 取链，并把临时目录 cid 放进 `DownloadLink.cleanupDirFid`；下载完成、失败或弹窗关闭时由 `ResolveViewModel`
+   调 `currentRepo().cleanupTempDir()` 删除。未登录时直接抛原始错误（提示先到「网盘」页登录 115）。
+   **这条路径会在用户网盘里留下临时目录，改动时务必保证清理链路不被破坏。**
 
 **其它已收口的坑**：`share/receive` **不回传新文件 id**（只有 `pid` 与文件/目录计数），
 `Pan115ResolveRepository.transferFile` 的做法是「转存 → 重新列目标目录 → 按文件名认领新 `fid`」（同名会变成 `xxx(1).txt`，所以是「新出现的那一项」而不是精确同名）；
@@ -634,6 +660,7 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 | --- | --- |
 | `app/src/main/kotlin/com/yunx/app/data/network/Pan115Constants.kt` | host/端点/UA/错误码/Cookie 工具（`extractCookies`/`isValidCookie`/`mergeCookies`/`encodeShareToken`） |
 | `app/src/main/kotlin/com/yunx/app/data/network/Pan115Api.kt` | 全部 115 接口（列目录/取链/增删改/分享/转存/创建分享） |
+| `app/src/main/kotlin/com/yunx/app/data/network/Pan115Crypto.kt` | 电脑端取链协议的 RSA+XOR 编解码（§3.25 规则 5，改这里前先与参考实现核对） |
 | `app/src/main/kotlin/com/yunx/app/data/repository/Pan115ResolveRepository.kt` | 分享解析：snap 列目录（分页）+ downurl 取链 + **转存后回查新 fid** |
 | `app/src/main/kotlin/com/yunx/app/data/repository/Pan115AccountRepository.kt` | Cookie 落库（`/user/info` 校验并取脱敏手机号当昵称）、退出清 CookieManager/WebStorage |
 | `app/src/main/kotlin/com/yunx/app/data/db/Pan115AccountEntity.kt` / `Pan115AccountDao.kt` | `pan115_account` 表（单行 id=`pan115`，Cookie 加密存，见 `SecureAccountDaos.pan115`） |
