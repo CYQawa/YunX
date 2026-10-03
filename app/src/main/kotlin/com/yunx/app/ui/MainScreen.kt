@@ -542,6 +542,14 @@ fun MainScreen() {
         }
     }
 
+    // 网盘更新无法自动化时，切回「解析」Tab 由用户手动处理
+    LaunchedEffect(resolveViewModel.updateFallbackToResolve) {
+        if (resolveViewModel.updateFallbackToResolve) {
+            currentTab = MainTab.Resolve
+            resolveViewModel.consumeUpdateFallbackToResolve()
+        }
+    }
+
     // ★ 电池优化引导不再在这里弹：统一收到引导页第 3 页（OnboardingPermissionPage 的「后台运行」卡片），
     //   之后只有设置页「锁屏后保持下载」那一项里的手动入口能再次跳系统设置。
 
@@ -1020,11 +1028,11 @@ fun MainScreen() {
                         SnackbarController.show("未找到 APK 下载链接")
                     }
                 },
-                // 网盘更新：Release 说明里的网盘链接直接丢给解析流程（与收藏页的「解析」同一路径）
+                // 网盘更新：优先自动「转存 → 取直链 → 下载」，不适合自动化时回落到解析页
                 onNetdiskUpdate = { link ->
                     showUpdateSheet = false
-                    currentTab = MainTab.Resolve
-                    resolveViewModel.startResolve(link, null)
+                    SnackbarController.show("正在准备更新包…")
+                    resolveViewModel.startUpdateDownload(link)
                 },
                 onLater = { showUpdateSheet = false },
                 onIgnore = {

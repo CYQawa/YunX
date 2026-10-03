@@ -69,6 +69,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
+private const val QUARK_GUEST_MAX_BYTES = 50L * 1024 * 1024
+
 sealed interface ResolveUiState {
     data object Idle : ResolveUiState
     data object Loading : ResolveUiState
@@ -296,6 +298,9 @@ class ResolveViewModel(
 
     /** 下载已入队事件：触发后由 UI 切换到下载页 */
     var downloadStarted by mutableStateOf(false)
+        private set
+
+    var updateFallbackToResolve by mutableStateOf(false)
         private set
 
     // ---------- 长按多选（解析页文件列表） ----------
@@ -631,6 +636,10 @@ class ResolveViewModel(
         downloadStarted = false
     }
 
+    fun consumeUpdateFallbackToResolve() {
+        updateFallbackToResolve = false
+    }
+
     fun consumeDownloadError() {
         downloadError = null
     }
@@ -839,6 +848,81 @@ class ResolveViewModel(
                     )
                 }
         }
+    }
+
+    fun startUpdateDownload(link: String) {
+        updateFallbackToResolve = false
+        viewModelScope.launch {
+            if (GitHubLinkParser.parse(link) != null) {
+                fallbackToResolve(link, null)
+                return@launch
+            }
+            val parsed = ShareLinkParser.parse(link)
+            if (parsed == null) {
+                fallbackToResolve(link, null)
+                return@launch
+            }
+            currentPlatform = parsed.platform
+            val stored = currentCredential().orEmpty()
+            val guestDownloadable =
+                parsed.platform == SharePlatform.QUARK || parsed.platform == SharePlatform.UC
+            if (stored.isBlank() && !guestDownloadable) {
+                fallbackToResolve(link, parsed.pwd)
+                return@launch
+            }
+            val credential = when (parsed.platform) {
+                SharePlatform.QUARK -> accountRepository.getFreshCookie() ?: stored
+                SharePlatform.UC -> ucAccountRepository.getFreshCookie() ?: stored
+                else -> stored
+            }
+            isGuest = credential.isBlank()
+            val repo = currentRepo()
+            val sessionResult = repo.createSession(link, parsed.pwd, credential)
+            val s = sessionResult.getOrNull()
+            if (s == null) {
+                fallbackToResolve(link, parsed.pwd, sessionResult.exceptionOrNull()?.message)
+                return@launch
+            }
+            val collected = mutableListOf<Pair<ShareFile, String>>()
+            collectShareFolder(s, currentDefaultDirFid(), "", credential, collected, 0)
+            val apk = collected
+                .filter { it.first.fname.endsWith(".apk", ignoreCase = true) }
+                .maxByOrNull { it.first.fsize }
+            if (apk == null) {
+                fallbackToResolve(link, parsed.pwd)
+                return@launch
+            }
+            if (isGuest && parsed.platform == SharePlatform.QUARK && apk.first.fsize > QUARK_GUEST_MAX_BYTES) {
+                fallbackToResolve(
+                    link,
+                    parsed.pwd,
+                    "该更新包超出夸克游客下载上限（约 50MB），登录夸克网盘后可直接下载"
+                )
+                return@launch
+            }
+            val linkResult = if (isGuest) {
+                repo.getGuestShareDownloadLink(s, apk.first)
+            } else {
+                repo.getShareDownloadLink(s, apk.first, credential)
+            }
+            val directLink = linkResult.getOrNull()
+            if (directLink == null) {
+                fallbackToResolve(link, parsed.pwd, linkResult.exceptionOrNull()?.message)
+                return@launch
+            }
+            session = s
+            currentDirFid = currentDefaultDirFid()
+            dirStack.clear()
+            pathNames = emptyList()
+            enqueueDownload(directLink, credential)
+            downloadStarted = true
+        }
+    }
+
+    private fun fallbackToResolve(link: String, pwd: String?, error: String? = null) {
+        updateFallbackToResolve = true
+        if (!error.isNullOrBlank()) downloadError = error
+        startResolve(link, pwd)
     }
 
     // ---------- GitHub 平台入口与导航 ----------

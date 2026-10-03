@@ -474,6 +474,29 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 
 ---
 
+### 3.21 「网盘更新」按钮：能自动化就直接下载，不能才回落解析页
+
+检查更新弹窗里的「网盘更新」不再无条件跳解析页：入口是 `app/src/main/kotlin/com/yunx/app/ui/MainScreen.kt` 的
+`onNetdiskUpdate = { link -> ...; resolveViewModel.startUpdateDownload(link) }`，决策逻辑全在
+`app/src/main/kotlin/com/yunx/app/ui/viewmodel/ResolveViewModel.kt` 的 `startUpdateDownload()` 里：
+
+| 情况 | 行为 |
+|---|---|
+| GitHub 链接 / 无法识别的链接 | 回落解析页（`fallbackToResolve()`） |
+| 对应网盘**已登录** | 自动「创建会话 → 列目录（`collectShareFolder`，最多 12 层）→ 取体积最大的 `.apk` → 转存/取直链 → 入队下载」 |
+| **未登录**且是夸克 | 同样自动匿名取直链；`.apk` 超过 `QUARK_GUEST_MAX_BYTES`（`50L * 1024 * 1024`）时回落解析页并提示先登录 |
+| **未登录**且是 UC | 自动匿名取直链下载（UC 无大小限制） |
+| 其他网盘未登录 / 分享需要提取码 / 找不到 `.apk` / 取链失败 | 回落解析页（失败原因写进 `downloadError`，由 `ResolveScreen` 弹 Snackbar） |
+
+- 自动化成功 → `downloadStarted = true`，复用 `MainScreen` 既有的 `LaunchedEffect` 自动切到「下载」Tab；
+  回落 → `updateFallbackToResolve = true`，由新增的 `LaunchedEffect` 切回「解析」Tab（用完调 `consumeUpdateFallbackToResolve()`）。
+- 夸克/UC 已登录时先取 `getFreshCookie()`：会话、列目录、取链、下载四处必须用**同一份** cookie（同 §3.19 的 `__puus` 约束）。
+- 更新包筛选：所有 `.apk`（忽略大小写）里取体积最大的一个；分享里没有 `.apk` 就回落，不会顺手下别的文件。
+- **回退**：把 `onNetdiskUpdate` 改回 `currentTab = MainTab.Resolve; resolveViewModel.startResolve(link, null)` 即可
+  （`startUpdateDownload()` / `fallbackToResolve()` / `updateFallbackToResolve` 可一并删除）。
+
+---
+
 ## 4. 验证
 
 
