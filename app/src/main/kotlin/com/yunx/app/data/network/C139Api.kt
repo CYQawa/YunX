@@ -425,6 +425,29 @@ class C139Api(
         }
     }
 
+    /**
+     * 新建文件夹（个人盘）：`POST /hcy/file/create`（文档 §3.13，靠 `type='folder'` 与上传预创建共用端点）。
+     * `fileRenameMode='force_rename'`：重名由服务端自动改名（文档只列了这个取值，具体后缀格式未写）。
+     *
+     * @param parentFileId 父目录 fileId；本项目的根目录沿用列目录/移动的约定传 `"/"`
+     * @return 新文件夹的 fileId
+     */
+    suspend fun createDir(parentFileId: String, name: String, cookie: String): String =
+        withContext(Dispatchers.IO) {
+            val authorization = C139Constants.extractAuthorization(cookie)
+                ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            val req = JSONObject()
+                .put("parentFileId", parentFileId)
+                .put("name", name)
+                .put("description", "")
+                .put("type", "folder")
+                .put("fileRenameMode", "force_rename")
+            val resp = cloudPost(C139Constants.FILE_CREATE_URL, req.toString(), authorization)
+            checkCloud(resp, "新建文件夹失败")
+            resp.optJSONObject("data")?.optString("fileId")?.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("移动云盘未返回文件夹编号")
+        }
+
     /** 重命名 */
     suspend fun renameFile(fileId: String, newName: String, cookie: String): Boolean = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)

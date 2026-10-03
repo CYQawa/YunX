@@ -158,7 +158,7 @@ speedLimitProvider  = { settings.downloadSpeedLimit }
 
 ### 3.7 Room 迁移：必须写 Migration，禁止破坏性迁移
 
-`AppDatabase.kt` 现为 **version = 13**。新增表/字段的流程：
+`AppDatabase.kt` 现为 **version = 16**（v1.2.5 是 10 → v1.2.6 起 13 → 收藏快捷方式 15 → 115 支持 16）。新增表/字段的流程：
 
 1. `entities` 数组追加 Entity
 2. `version` +1
@@ -167,6 +167,14 @@ speedLimitProvider  = { settings.downloadSpeedLimit }
 5. 注册到 `.addMigrations(...)`
 
 `fallbackToDestructiveMigrationFrom(1..8)` 仅适用于早期开发版；**v9 起必须保留用户凭证与下载任务**。
+
+**已知问题（2026-10-03 线上崩溃，决定暂不修）**：在跑过库版本更高构建的设备上再装回旧 APK，磁盘里的库版本会比 APK 声明的高，
+Room 走 `onDowngrade` → 没有向下的迁移路径 → `IllegalStateException: A migration from 15 to 13 was required but not found`。
+崩溃点在 `app/src/main/kotlin/com/yunx/app/ui/MainScreen.kt:287` 的 `AppDatabase.get()` 首次查询开库处，异常无人捕获 ⇒ **之后每次启动都崩**，
+用户只能清应用数据或装回更高的包。触发前提是「版本名与 versionCode 都相同、只有库版本不同」的两个包互装（那段时间库从 13 涨到 16 而 versionCode 一直是 11），
+普通用户碰不到，只有来回装包的开发/协作者会撞上。**要修的话**：builder 加 `.fallbackToDestructiveMigrationOnDowngrade()`
+（Room 2.6.1 已有该 API，降级时清库重建而非抛异常），再用 `RoomDatabase.Callback.onDestructiveMigration()` 给用户一句提示；
+升级路径不受影响，仍然强制走 Migration。
 
 ### 3.8 平台标识：用 `DownloadPlatform` 常量，不要裸字符串
 
@@ -679,8 +687,49 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 `ResolveViewModel.kt`（平台分派与下载头）、`ResolveScreen.kt` / `ShareDetailScreen.kt` / `DriveScreen.kt` / `MainScreen.kt` /
 `DriveQuotaViewModel.kt` / `SettingsScreen.kt` / `BookmarkScreen.kt` / `AboutScreen.kt` / `OnboardingScreen.kt`（「7 大网盘」）/ `AuthBackupManager.kt`（备份含 115）。
 
-**回退**：删掉上表新增文件，还原 `SharePlatform`/`DownloadPlatform`/`ShareExpire`/`AppDatabase`（版本号别回退，改回 15 会导致已升级设备崩在降级校验上）、
+**回退**：删掉上表新增文件，还原 `SharePlatform`/`DownloadPlatform`/`ShareExpire`/`AppDatabase`（版本号别回退：回退会让磁盘上的库版本比 APK 新，已升级设备会崩在 Room 的降级校验上，见 §3.7）、
 各 `MainScreen`/`DriveScreen` 接线与 `AuthBackupManager` 的 115 参数即可。
+
+---
+
+### 3.26 网盘页「+」新建菜单：创建文件夹（7 家）/ 上传文件（占位）
+
+**入口只有一个**：七家个人盘页顶栏「放大镜」图标**右侧**的 `CloudAddMenu`（`+` → 下拉菜单，两项：创建文件夹 / 上传文件），
+位置在每页 `if (!viewModel.multiSelectMode)` 的顶栏分支里，所以**多选态自动隐藏**；
+**分享浏览页（`ShareDetailScreen`）不挂这个入口**——各家文档都写明建目录/上传只在个人盘模式可用（115/百度/夸克/UC/迅雷/123/139 一致）。
+
+**共享组件都在 `app/src/main/kotlin/com/yunx/app/ui/screens/CloudFileSheets.kt`**：
+`CloudAddMenu(onCreateFolder, onUploadFile)`、`CreateFolderDialog(onDismiss, onConfirm)`、`cloudNameError(name)`（名称校验，唯一实现）。
+七个云盘页（`CloudDriveScreen`/`UCCoudScreen`/`XunleiCloudScreen`/`BaiduCloudScreen`/`C139CloudScreen`/`Pan123CloudScreen`/`Pan115CloudScreen`）
+各插三处：`var showCreateFolder`、顶栏 `CloudAddMenu(...)`、末尾 `if (showCreateFolder) CreateFolderDialog(...)`。
+
+**上传项是占位**：`onUploadFile` 默认 `null`，此时菜单项置灰、文案显示为「上传文件（开发中）」；上传协议落地后把回调传进来即可，不用改组件。
+**别把 `onUploadFile` 传成空 lambda**（那会让菜单项可点但什么都不发生）。
+
+**各平台建目录接口与根目录约定**（根目录取值必须与列目录一致，否则建到别处）：
+
+| 平台 | 调用 | 根目录 | 备注 |
+|---|---|---|---|
+| 夸克 | `QuarkApi.createFolder(name, parentFid, cookie)` | `"0"` | 已有接口，本次才接 UI |
+| UC | `UCApi.createFolder(name, parentFid, cookie)` | `"0"` | 同上 |
+| 迅雷 | `XunleiApi.createFolder(name, parentId, token, deviceId, captcha)` | `""`（空串） | 同上；`kind=drive#folder` |
+| 百度 | `BaiduApi.createDir(绝对路径, cookie)` | `"/"` | **按路径**不是 fid；根目录不能拼成 `//名字` |
+| 115 | `Pan115Api.createDir(pid, name, cookie)` | `Pan115Constants.ROOT_CID`（`"0"`） | 已有接口 |
+| 139 | `C139Api.createDir(parentFileId, name, cookie)` | `"/"` | **本次新增**：`POST /hcy/file/create`，`type='folder'`、`fileRenameMode='force_rename'` |
+| 123 | `Pan123Api.createDir(parentFileId, name, token)` | `"0"` | **本次新增**：复用上传预创建 `POST /b/api/file/upload_request`（`type=1`、`size=0`、`etag=""`、`NotReuse=true`） |
+
+调用点统一在各页 ViewModel 的 `createFolder(name)`：成功 → `cloudMessage` + `reloadCurrent()`，失败 → `cloudMessage`（走既有 Snackbar 通道）；
+创建期间复用各页既有的 `isOperating`「处理中」弹窗，所以 `CreateFolderDialog` 确认后立刻关闭（不做二次 loading 态）。
+
+**名称校验规则**（`cloudNameError`）：非空、不是 `.`/`..`、不含 `/` `\` 与控制字符、≤255 字符。
+这是文档里唯一给出的一套客户端规则（115 `cloudFileName`、123/139 的同类校验）；**服务端长度上限/保留字各家都没写**。
+
+**已知文档缺口（实现时按「服务端报错就提示」处理，别自行兜底）**：各平台建目录都**没有错误码表**（重名是报错、自动改名还是建副本，7 家全未定义——
+139 传了 `force_rename`、123 传了 `duplicate=1`，实际效果都未实测）；建完目录后**是否立即可见**也没有一家给了一致性约定（只有夸克/UC 的重命名有 `_awaitVisible`）。
+123 的 `data.Info.FileId → data.FileId → data.fileId` 与 139 的 `data.fileId` 都取自逆向文档，**首次真机验证要盯这两家**。
+
+**回退**：删掉 `CloudAddMenu`/`CreateFolderDialog`/`cloudNameError` 与七页的接线、七页 ViewModel 的 `createFolder`、
+`C139Api.createDir`/`Pan123Api.createDir` 及其两条 URL 常量即可（无数据库改动）。
 
 ---
 

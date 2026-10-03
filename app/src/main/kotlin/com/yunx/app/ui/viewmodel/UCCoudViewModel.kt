@@ -505,6 +505,30 @@ class UCCoudViewModel(
         }
     }
 
+    /** 新建文件夹（当前目录下） */
+    fun createFolder(name: String) {
+        val newName = name.trim()
+        if (newName.isEmpty()) return
+        val parentFid = (uiState.value as? UCCloudUiState.Loaded)?.dirFid ?: "0"
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val cookie = cookieProvider()
+                if (cookie.isNullOrBlank()) {
+                    cloudMessage = "请先登录 UC 网盘"
+                    return@launch
+                }
+                api.createFolder(newName, parentFid, cookie)
+                cloudMessage = "已创建文件夹「$newName」"
+                reloadCurrent()
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "新建文件夹失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
     /** 移动文件到指定目录 */
     fun moveFile(toDirFid: String) {
         val file = actionFile ?: return

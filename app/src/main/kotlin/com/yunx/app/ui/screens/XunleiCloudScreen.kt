@@ -156,6 +156,8 @@ fun XunleiCloudScreen(
     var showBatchActions by remember { mutableStateOf(false) }
     var batchInitial by remember { mutableStateOf(BatchStep.MENU) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    // 「+」菜单的「创建文件夹」弹窗（「上传文件」项目前是占位，见 CloudAddMenu）
+    var showCreateFolder by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel.cloudMessage) {
         viewModel.cloudMessage?.let {
@@ -293,6 +295,8 @@ fun XunleiCloudScreen(
                                                     }
                                                 )
                                             }
+                                            // 「+」新建菜单（创建文件夹 / 上传文件，Agent.md §3.26）
+                                            CloudAddMenu(onCreateFolder = { showCreateFolder = true })
                                         }
                                     }
                                     if (!viewModel.multiSelectMode) {
@@ -503,6 +507,17 @@ fun XunleiCloudScreen(
                     onBack = onBack,
                     onDone = onDone
                 )
+            }
+        )
+    }
+
+    // 新建文件夹：名称校验在弹窗内完成，创建请求交给各页 ViewModel
+    if (showCreateFolder) {
+        CreateFolderDialog(
+            onDismiss = { showCreateFolder = false },
+            onConfirm = { name ->
+                showCreateFolder = false
+                viewModel.createFolder(name)
             }
         )
     }

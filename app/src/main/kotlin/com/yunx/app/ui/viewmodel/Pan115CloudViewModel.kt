@@ -417,6 +417,24 @@ class Pan115CloudViewModel(
         }
     }
 
+    /** 新建文件夹（当前目录下） */
+    fun createFolder(name: String) {
+        val newName = name.trim()
+        if (newName.isEmpty()) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                api.createDir(currentDirId(), newName, cookie())
+                cloudMessage = "已创建文件夹「$newName」"
+                reloadCurrent()
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "新建文件夹失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
     /** 移动 */
     fun moveFile(toDirId: String) {
         val file = actionFile ?: return

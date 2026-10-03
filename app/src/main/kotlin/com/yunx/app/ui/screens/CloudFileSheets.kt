@@ -48,20 +48,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
@@ -254,6 +259,123 @@ internal fun FileSheetHeader(file: ShareFile) {
             )
         }
     }
+}
+
+/**
+ * 网盘页顶栏的「+」按钮 + 下拉菜单（七个云盘页共用，Agent.md §3.26）。
+ *
+ * 只挂在**个人盘**页面：各家文档都写明「新建目录 / 上传」必须在个人盘模式下可用，
+ * 分享浏览页（`ShareDetailScreen`）不挂这个入口。
+ *
+ * @param onUploadFile 上传协议尚未接入时的占位：传 null（默认）时菜单项置灰并标「开发中」，
+ *   等上传落地后由各页把真实回调接上即可，不用改这个组件。
+ */
+@Composable
+internal fun CloudAddMenu(
+    onCreateFolder: () -> Unit,
+    onUploadFile: (() -> Unit)? = null
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = Icons.Outlined.Add,
+                contentDescription = "新建",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("创建文件夹") },
+                leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onCreateFolder()
+                }
+            )
+            DropdownMenuItem(
+                // 上传未接入前把「开发中」写在文案里：比灰掉一个没有说明的菜单项更容易看懂
+                text = { Text(if (onUploadFile == null) "上传文件（开发中）" else "上传文件") },
+                leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onUploadFile?.invoke()
+                },
+                enabled = onUploadFile != null
+            )
+        }
+    }
+}
+
+/**
+ * 文件夹名校验（各平台文档的建目录小节只给了这套客户端规则）：
+ * 非空、不是 `.` / `..`、不含 `/` `\` 与控制字符；长度上限各家文档都没写，这里只挡 255 防呆。
+ *
+ * @return 不合法的原因（给用户看）；合法返回 null
+ */
+internal fun cloudNameError(raw: String): String? {
+    val name = raw.trim()
+    return when {
+        name.isEmpty() -> "名称不能为空"
+        name == "." || name == ".." -> "名称不能是 . 或 .."
+        name.length > 255 -> "名称最多 255 个字符"
+        name.any { it == '/' || it == '\\' || it.code < 0x20 } -> "名称不能含 / \\ 或控制字符"
+        else -> null
+    }
+}
+
+/**
+ * 新建文件夹弹窗（七个云盘页共用）：只做本地名称校验，创建请求由各页 ViewModel 发出。
+ * 失败与成功提示统一走各页既有的 `cloudMessage` → Snackbar 通道，所以这里确认后立刻关闭。
+ */
+@Composable
+internal fun CreateFolderDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var touched by remember { mutableStateOf(false) }
+    val error = cloudNameError(name)
+    val showError = touched && error != null
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("创建文件夹") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        touched = true
+                    },
+                    label = { Text("文件夹名称") },
+                    singleLine = true,
+                    isError = showError,
+                    supportingText = {
+                        Text(
+                            text = if (showError) error!! else "创建在当前目录下",
+                            color = if (showError) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.trim()) },
+                enabled = error == null
+            ) {
+                Text("创建")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
 
 /** 操作菜单主界面 */

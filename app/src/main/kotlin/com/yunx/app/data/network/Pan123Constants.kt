@@ -60,6 +60,12 @@ object Pan123Constants {
     /** 移动（POST /b/api/file/mod_pid） */
     const val FILE_MOD_PID_URL = "$API_BASE/b/api/file/mod_pid"
 
+    /**
+     * 新建文件夹 / 上传预创建（POST /b/api/file/upload_request）：
+     * 123 没有独立的建目录端点，靠同一个接口的 `type` 区分（1 = 建目录、0 = 文件；文档 §2/§8）。
+     */
+    const val FILE_UPLOAD_REQUEST_URL = "$API_BASE/b/api/file/upload_request"
+
     /** 创建分享（POST /b/api/share/create） */
     const val SHARE_CREATE_URL = "$API_BASE/b/api/share/create"
 

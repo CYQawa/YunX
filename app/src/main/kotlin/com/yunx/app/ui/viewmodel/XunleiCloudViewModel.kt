@@ -411,6 +411,27 @@ class XunleiCloudViewModel(
         }
     }
 
+    /** 新建文件夹（当前目录下） */
+    fun createFolder(name: String) {
+        val newName = name.trim()
+        if (newName.isEmpty()) return
+        // 迅雷根目录用空串（见 loadRoot()），不是 "0"
+        val parentId = (uiState.value as? XunleiCloudUiState.Loaded)?.dirFid ?: ""
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val c = creds() ?: throw IllegalStateException("请先登录迅雷网盘")
+                api.createFolder(newName, parentId, c.first, c.second, c.third)
+                cloudMessage = "已创建文件夹「$newName」"
+                reloadCurrent()
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "新建文件夹失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
     /** 移动 */
     fun moveFile(toDirFid: String) {
         val file = actionFile ?: return

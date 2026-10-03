@@ -399,6 +399,25 @@ class C139CloudViewModel(
         }
     }
 
+    /** 新建文件夹（当前目录下）；139 用 fileId，根目录沿用列目录/移动的 "/" 约定 */
+    fun createFolder(name: String) {
+        val newName = name.trim()
+        if (newName.isEmpty()) return
+        val parentId = (uiState.value as? C139CloudUiState.Loaded)?.dirId ?: "/"
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                api.createDir(parentId, newName, cookie())
+                cloudMessage = "已创建文件夹「$newName」"
+                reloadCurrent()
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "新建文件夹失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
     /** 移动（异步任务 → 轮询） */
     fun moveFile(toDirId: String) {
         val file = actionFile ?: return

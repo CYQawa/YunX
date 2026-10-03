@@ -408,6 +408,30 @@ class BaiduCloudViewModel(
         }
     }
 
+    /** 新建文件夹（当前目录下）；百度按**绝对路径**操作，不是 fid */
+    fun createFolder(name: String) {
+        val newName = name.trim()
+        if (newName.isEmpty()) return
+        val parentPath = (uiState.value as? BaiduCloudUiState.Loaded)?.dirPath ?: "/"
+        // 根目录 "/" 不能拼成 "//名字"
+        val path = parentPath.trimEnd('/') + "/" + newName
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                if (api.createDir(path, cookie())) {
+                    cloudMessage = "已创建文件夹「$newName」"
+                    reloadCurrent()
+                } else {
+                    cloudMessage = "新建文件夹失败"
+                }
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "新建文件夹失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
     /** 移动 */
     fun moveFile(toDirPath: String) {
         val file = actionFile ?: return

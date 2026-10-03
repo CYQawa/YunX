@@ -422,6 +422,41 @@ class Pan123Api(
         checkOk(json, "重命名失败")
     }
 
+    /**
+     * 新建文件夹：复用上传预创建接口（`type=1`），123 没有独立的建目录端点（文档 §2/§8）。
+     * 签名 path 必须与请求 path 逐字一致，所以这里把 `/b/api/file/upload_request` 写死传进 [postAuth]。
+     *
+     * @param parentFileId 父目录 id（根目录 "0"）
+     * @return 新文件夹 id
+     */
+    suspend fun createDir(parentFileId: String, name: String, token: String): String =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("driveId", 0)
+                .put("parentFileId", parentFileId.toLongOrNull() ?: 0L)
+                .put("fileName", name)
+                .put("size", 0)
+                .put("type", 1)
+                .put("etag", "")
+                .put("duplicate", 1)
+                .put("NotReuse", true)
+                .put("RequestSource", JSONObject.NULL)
+            val json = postAuth(
+                Pan123Constants.FILE_UPLOAD_REQUEST_URL,
+                "/b/api/file/upload_request",
+                body.toString(),
+                token
+            )
+            checkOk(json, "新建文件夹失败")
+            val data = json.optJSONObject("data") ?: throw IllegalStateException("123 未返回文件夹编号")
+            // 文档给的取法：data.Info.FileId → data.FileId → data.fileId（大小写三种都出现过）
+            val id = data.optJSONObject("Info")?.optString("FileId").orEmpty()
+                .ifBlank { data.optString("FileId") }
+                .ifBlank { data.optString("fileId") }
+            id.takeIf { it.isNotBlank() && it != "0" }
+                ?: throw IllegalStateException("123 未返回文件夹编号")
+        }
+
     /** 移动：POST /b/api/file/mod_pid */
     suspend fun moveFiles(fileIds: List<String>, toParentFileId: String, token: String) = withContext(Dispatchers.IO) {
         val list = JSONArray()

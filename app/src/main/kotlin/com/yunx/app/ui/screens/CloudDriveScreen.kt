@@ -147,6 +147,8 @@ fun CloudDriveScreen(
     var batchInitial by remember { mutableStateOf(com.yunx.app.ui.screens.BatchStep.MENU) }
     // 批量删除二次确认
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    // 「+」菜单的「创建文件夹」弹窗（「上传文件」项目前是占位，见 CloudAddMenu）
+    var showCreateFolder by remember { mutableStateOf(false) }
 
     // 操作结果 Toast（放在本层：弹窗关闭后仍能正常弹出）
     LaunchedEffect(viewModel.cloudMessage) {
@@ -291,6 +293,8 @@ fun CloudDriveScreen(
                                     }
                                 )
                             }
+                            // 「+」新建菜单（创建文件夹 / 上传文件，Agent.md §3.26）
+                            CloudAddMenu(onCreateFolder = { showCreateFolder = true })
                         }
                     }
                     // 可点击面包屑（多选模式下隐藏）
@@ -513,6 +517,17 @@ fun CloudDriveScreen(
                     onBack = onBack,
                     onDone = onDone
                 )
+            }
+        )
+    }
+
+    // 新建文件夹：名称校验在弹窗内完成，创建请求交给各页 ViewModel
+    if (showCreateFolder) {
+        CreateFolderDialog(
+            onDismiss = { showCreateFolder = false },
+            onConfirm = { name ->
+                showCreateFolder = false
+                viewModel.createFolder(name)
             }
         )
     }
