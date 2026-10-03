@@ -143,6 +143,22 @@ fun UpdateSheet(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
+                        // 预发布版标记：开启「接受预发布版更新」后可能拿到 Pre-release，弹窗里明确标出来
+                        if (release.prerelease) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.tertiaryContainer
+                            ) {
+                                Text(
+                                    text = "预发布",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "当前 $currentVersion",

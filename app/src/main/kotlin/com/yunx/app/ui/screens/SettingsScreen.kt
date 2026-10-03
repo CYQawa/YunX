@@ -484,6 +484,28 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(ListGroupGap))
 
+        SettingsItem(
+            icon = Icons.Outlined.SystemUpdate,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
+            title = "接受预发布版更新",
+            description = if (ThemeController.acceptPrereleaseUpdate) {
+                "检查更新时包含 GitHub Pre-release（可能不稳定）"
+            } else {
+                "只接收正式版更新"
+            },
+            onClick = {
+                ThemeController.setAcceptPrereleaseUpdate(
+                    context,
+                    !ThemeController.acceptPrereleaseUpdate
+                )
+            },
+            trailing = {
+                Switch(checked = ThemeController.acceptPrereleaseUpdate, onCheckedChange = null)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+
         // GitHub 下载镜像：自定义前缀，留空使用内置默认镜像
         SettingsItem(
             icon = Icons.Outlined.Cloud,

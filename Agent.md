@@ -514,6 +514,34 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 
 ---
 
+### 3.23 「接受预发布版更新」开关（检查更新是否包含 GitHub Pre-release）
+
+设置页「通用」组的「检查更新」下面一项即该开关。持久化在
+`app/src/main/kotlin/com/yunx/app/data/prefs/SettingsRepository.kt` 的 `acceptPrereleaseUpdate`
+（键 `accept_prerelease_update`，默认 `false` = 只收正式版），内存态在 `ThemeController.acceptPrereleaseUpdate`。
+
+**两条通道**都在 `app/src/main/kotlin/com/yunx/app/data/update/UpdateChecker.kt`：
+
+| 通道 | 端点 | 说明 |
+| --- | --- | --- |
+| 正式版（默认） | `RELEASES_LATEST_URL` = `/repos/CYQawa/YunX/releases/latest` | GitHub 只会返回最新的**非** Pre-release、**非** Draft 版本 |
+| 预发布（开关打开） | `RELEASES_LIST_URL` = `/repos/CYQawa/YunX/releases` | 返回数组、按发布时间倒序；取第一条 `draft == false` 且 `tag_name` 非空的版本，因此**可能命中 Pre-release** |
+
+- 统一入口 `UpdateChecker.fetchLatestRelease(includePrerelease: Boolean = false)`；`fetchBody()` 负责 HTTP 与错误文案（403/429 限流提示、404「仓库暂无 Release」），`parseRelease()` 负责解析并回填 `Release.prerelease`。
+- 两个调用点都在 `app/src/main/kotlin/com/yunx/app/ui/MainScreen.kt`（启动检查 + 手动检查），都传 `ThemeController.acceptPrereleaseUpdate`；**切换开关后不会自动重查**，下一次手动检查（或重启后的启动检查）才生效。
+- `app/src/main/kotlin/com/yunx/app/ui/screens/UpdateSheet.kt` 在版本号后面加了一枚「预发布」小标签（`release.prerelease == true` 时），避免用户不知情地装上测试包。
+
+**版本比较规则（`UpdateChecker.compareVersions`，改动过，注意别改回去）**：先逐段比数字前缀；数字段完全相同时，
+只有**两边都带后缀**才继续比后缀（先比后缀里的第一段数字，`1.3.0-beta2 > 1.3.0-beta1`，再按字符串比）；
+**只有一边带后缀时视为相等** —— 这是为了保住 fork 构建 `1.2.6-gh1` 不被判成比同号正式版旧的既有约定。
+因此：**预发布版的 `versionName` 必须带上同样的后缀**（例如 `1.3.0-beta1`），否则同一数字段的两个预发布版
+（beta1 → beta2）会被判成「已是最新版本」。
+
+**回退**：删掉设置项与 `acceptPrereleaseUpdate`（`SettingsRepository` / `ThemeController`）、两个调用点的实参、
+`UpdateSheet` 的「预发布」标签，以及 `RELEASES_LIST_URL` / `requestReleaseList()` / `BodyResult`（`fetchLatestRelease` 恢复无参）。
+
+---
+
 ## 4. 验证
 
 

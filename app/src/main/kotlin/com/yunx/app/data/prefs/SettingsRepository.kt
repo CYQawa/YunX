@@ -114,6 +114,13 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("clipboard_suggest_enabled", value).apply()
         }
 
+    /** 接受预发布版更新：检查更新时把 GitHub Pre-release 也算作新版本（默认关闭） */
+    var acceptPrereleaseUpdate: Boolean
+        get() = prefs.getBoolean("accept_prerelease_update", false)
+        set(value) {
+            prefs.edit().putBoolean("accept_prerelease_update", value).apply()
+        }
+
     /** 忽略 SSL 证书校验（抓包调试用，隐藏菜单开启；默认关闭） */
     var ignoreSslCert: Boolean
         get() = prefs.getBoolean("ignore_ssl_cert", false)

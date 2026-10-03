@@ -52,6 +52,10 @@ object ThemeController {
     var clipboardSuggestEnabled by mutableStateOf(true)
         private set
 
+    /** 接受预发布版更新：检查更新时包含 GitHub Pre-release（默认关闭） */
+    var acceptPrereleaseUpdate by mutableStateOf(false)
+        private set
+
     private var initialized = false
 
     /** 从持久化存储加载（幂等；首次调用有效） */
@@ -63,6 +67,7 @@ object ThemeController {
         seedColor = s.themeSeedColor
         fileNameMultiLine = s.fileNameMultiLine
         clipboardSuggestEnabled = s.clipboardSuggestEnabled
+        acceptPrereleaseUpdate = s.acceptPrereleaseUpdate
         initialized = true
     }
 
@@ -98,5 +103,11 @@ object ThemeController {
     fun setClipboardSuggestEnabled(context: Context, value: Boolean) {
         clipboardSuggestEnabled = value
         SettingsRepository(context).clipboardSuggestEnabled = value
+    }
+
+    /** 设置是否接受预发布版更新并持久化 */
+    fun setAcceptPrereleaseUpdate(context: Context, value: Boolean) {
+        acceptPrereleaseUpdate = value
+        SettingsRepository(context).acceptPrereleaseUpdate = value
     }
 }

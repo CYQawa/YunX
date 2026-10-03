@@ -159,6 +159,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.ui.theme.ThemeController
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 
@@ -219,7 +220,7 @@ fun MainScreen() {
     // 最近一次成功拿到的真实 Release：既用于「发现新版本」弹窗，也供设置页的开发调试入口直接预览
     var latestRelease by remember { mutableStateOf<UpdateChecker.Release?>(null) }
     LaunchedEffect(Unit) {
-        when (val result = UpdateChecker.fetchLatestRelease()) {
+        when (val result = UpdateChecker.fetchLatestRelease(ThemeController.acceptPrereleaseUpdate)) {
             is UpdateChecker.CheckResult.Failure -> Unit // 启动检查不打扰用户，失败原因已由 UpdateChecker 打 E 级日志
             is UpdateChecker.CheckResult.Success -> {
                 val release = result.release
@@ -243,7 +244,7 @@ fun MainScreen() {
     val checkForUpdate: () -> Unit = {
         scope.launch {
             SnackbarController.show("正在检查更新…")
-            when (val result = UpdateChecker.fetchLatestRelease()) {
+            when (val result = UpdateChecker.fetchLatestRelease(ThemeController.acceptPrereleaseUpdate)) {
                 is UpdateChecker.CheckResult.Failure -> SnackbarController.show("检查更新失败：${result.reason}")
                 is UpdateChecker.CheckResult.Success -> {
                     val release = result.release
