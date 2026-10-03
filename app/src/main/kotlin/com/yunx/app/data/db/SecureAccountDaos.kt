@@ -87,6 +87,17 @@ internal object SecureAccountDaos {
         override suspend fun clear() = raw.clear()
     }
 
+    fun pan115(raw: Pan115AccountDao, cipher: CredentialCipher): Pan115AccountDao = object : Pan115AccountDao {
+        override fun observeAccount(): Flow<Pan115AccountEntity?> = raw.observeAccount().map { value ->
+            value?.let { decryptPan115(raw, cipher, it) }
+        }
+        override suspend fun upsert(account: Pan115AccountEntity) = withContext(Dispatchers.IO) {
+            raw.upsert(encryptPan115(cipher, account))
+        }
+        override suspend fun getAccount(): Pan115AccountEntity? = raw.getAccount()?.let { decryptPan115(raw, cipher, it) }
+        override suspend fun clear() = raw.clear()
+    }
+
     fun xunlei(raw: XunleiAccountDao, cipher: CredentialCipher): XunleiAccountDao = object : XunleiAccountDao {
         override fun observeAccount(): Flow<XunleiAccountEntity?> = raw.observeAccount().map { value ->
             value?.let { decryptXunlei(raw, cipher, it) }
@@ -148,6 +159,15 @@ internal object SecureAccountDaos {
             }
         }
 
+    private suspend fun decryptPan115(raw: Pan115AccountDao, cipher: CredentialCipher, stored: Pan115AccountEntity): Pan115AccountEntity? =
+        withContext(Dispatchers.IO) {
+            decryptOrClear(raw::clear) {
+                val plain = stored.copy(cookie = cipher.decrypt(stored.cookie, "pan115.cookie"))
+                if (!cipher.isEncrypted(stored.cookie)) raw.upsert(encryptPan115(cipher, plain))
+                plain
+            }
+        }
+
     private suspend fun decryptXunlei(raw: XunleiAccountDao, cipher: CredentialCipher, stored: XunleiAccountEntity): XunleiAccountEntity? =
         withContext(Dispatchers.IO) {
             decryptOrClear(raw::clear) {
@@ -176,6 +196,8 @@ internal object SecureAccountDaos {
     )
     private fun encryptPan123(cipher: CredentialCipher, value: Pan123AccountEntity) =
         value.copy(accessToken = cipher.encrypt(value.accessToken, "pan123.accessToken"))
+    private fun encryptPan115(cipher: CredentialCipher, value: Pan115AccountEntity) =
+        value.copy(cookie = cipher.encrypt(value.cookie, "pan115.cookie"))
     private fun encryptXunlei(cipher: CredentialCipher, value: XunleiAccountEntity) = value.copy(
         accessToken = cipher.encrypt(value.accessToken, "xunlei.accessToken"),
         refreshToken = cipher.encrypt(value.refreshToken, "xunlei.refreshToken"),

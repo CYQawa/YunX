@@ -74,7 +74,8 @@ class SettingsDirectoryPickerTest {
                 database.rawXunleiAccountDao(),
                 database.rawBaiduAccountDao(),
                 database.rawC139AccountDao(),
-                database.rawPan123AccountDao()
+                database.rawPan123AccountDao(),
+                database.rawPan115AccountDao()
             )
             val owner = object : ActivityResultRegistryOwner {
                 override val activityResultRegistry = object : ActivityResultRegistry() {

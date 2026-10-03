@@ -19,7 +19,7 @@
 package com.yunx.app.data.network
 
 /** 网盘平台 */
-enum class SharePlatform { QUARK, UC, XUNLEI, BAIDU, C139, PAN123, GITHUB }
+enum class SharePlatform { QUARK, UC, XUNLEI, BAIDU, C139, PAN123, PAN115, GITHUB }
 
 /**
  * 解析结果：share_id + 提取码 + 平台。
@@ -50,6 +50,13 @@ object ShareLinkParser {
     private val pan123ShareIdRegex = Regex("""123(?:865|pan)\.(?:com|cn)/s/([A-Za-z0-9]+-[A-Za-z0-9]+)""", RegexOption.IGNORE_CASE)
     private val pan123ShareSubRegex = Regex("""share\.123pan\.cn/123pan/([A-Za-z0-9-]+)""", RegexOption.IGNORE_CASE)
     private val pan123SrrRegex = Regex("""api/srr\?sk=([A-Za-z0-9-]+)""", RegexOption.IGNORE_CASE)
+    // 115 网盘分享链接（文档 §1.1）：
+    // - https://115.com/s/<share_code> / https://115cdn.com/s/<share_code> / https://115rc.com/s/<share_code>
+    // - share_code 为 11 位 sw 开头；提取码在 ?password=xxxx 或文案「访问码：xxxx」
+    // - 口令形式 https://115.com/sws8lxs36jf-n307/（code-提取码）
+    private val pan115ShareIdRegex = Regex("""115(?:cdn|rc)?\.com/s/(sw[A-Za-z0-9]+)""", RegexOption.IGNORE_CASE)
+    private val pan115CommandRegex = Regex("""115(?:cdn|rc)?\.com/(sw[A-Za-z0-9]{8,})-([A-Za-z0-9]{4,8})""", RegexOption.IGNORE_CASE)
+    private val pwdIn115UrlRegex = Regex("""[?&]password=([A-Za-z0-9]+)""")
     private val pwdInUrlRegex = Regex("""[?&]pwd=([A-Za-z0-9]+)""")
     private val pwdInTextRegex = Regex("""(?:提取码|访问码|密码)[：:]\s*([A-Za-z0-9]{4,8})""")
 
@@ -104,6 +111,20 @@ object ShareLinkParser {
             val pwd = pwdInUrlRegex.find(url)?.groupValues?.getOrNull(1)
                 ?: pwdInTextRegex.find(text)?.groupValues?.getOrNull(1)
             return ParsedShare(shareId = sid, pwd = pwd, platform = SharePlatform.PAN123)
+        }
+        // 115 网盘链接：提取码可能只在文案的「访问码：xxxx」里（链接不带 password 不代表不需要码）
+        pan115ShareIdRegex.find(url)?.groupValues?.getOrNull(1)?.let { sid ->
+            val pwd = pwdIn115UrlRegex.find(url)?.groupValues?.getOrNull(1)
+                ?: pwdInTextRegex.find(text)?.groupValues?.getOrNull(1)
+            return ParsedShare(shareId = sid, pwd = pwd, platform = SharePlatform.PAN115)
+        }
+        // 115 口令形式：https://115.com/sws8lxs36jf-n307/
+        pan115CommandRegex.find(url)?.let { match ->
+            return ParsedShare(
+                shareId = match.groupValues[1],
+                pwd = match.groupValues[2],
+                platform = SharePlatform.PAN115
+            )
         }
         return null
     }

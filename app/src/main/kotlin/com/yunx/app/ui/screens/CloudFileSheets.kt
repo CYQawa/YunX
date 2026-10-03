@@ -113,8 +113,11 @@ import com.yunx.app.ui.theme.spatialFast
 /** 文件操作菜单类型（FileActionSheet 内切换） */
 private enum class ActionStep { MENU, MOVE, SHARE, RENAME, DELETE }
 
-/** 有效期选项：名称 + UI 中性码（[ShareExpire]；各平台 API 取值不同，由 ViewModel 负责转换，Agent.md §3.20） */
-private val expireOptions = listOf(
+/**
+ * 默认有效期选项：名称 + UI 中性码（[ShareExpire]；各平台 API 取值不同，由 ViewModel 负责转换，Agent.md §3.20）。
+ * 115 的档位与中性码不同（长期/1 天/3 天/7 天/15 天），由 115 云盘页传入 `ShareExpire.PAN115_OPTIONS`。
+ */
+private val defaultExpireOptions = listOf(
     "永久有效" to ShareExpire.FOREVER,
     "1 天" to ShareExpire.ONE_DAY,
     "7 天" to ShareExpire.SEVEN_DAYS,
@@ -135,6 +138,8 @@ internal fun FileActionSheet(
     onDismiss: () -> Unit,
     /** 提取码规则（各平台不同，见 [PasscodeMode]） */
     passcodeMode: PasscodeMode = PasscodeMode.OPTIONAL,
+    /** 有效期档位（默认六平台通用档；115 传 [ShareExpire.PAN115_OPTIONS]） */
+    expireOptions: List<Pair<String, Int>> = defaultExpireOptions,
     moveStep: @Composable (onBack: () -> Unit, onDone: () -> Unit) -> Unit
 ) {
     var step by remember { mutableStateOf(ActionStep.MENU) }
@@ -184,6 +189,7 @@ internal fun FileActionSheet(
                     subtitle = file.fname,
                     operating = operating,
                     passcodeMode = passcodeMode,
+                    expireOptions = expireOptions,
                     onBack = { step = ActionStep.MENU },
                     onCreateShare = onShare
                 )
@@ -491,6 +497,7 @@ private fun ShareStep(
     subtitle: String,
     operating: Boolean,
     passcodeMode: PasscodeMode,
+    expireOptions: List<Pair<String, Int>> = defaultExpireOptions,
     onBack: () -> Unit,
     onCreateShare: (withPassword: Boolean, passcode: String, expiredType: Int) -> Unit
 ) {
@@ -797,13 +804,14 @@ internal fun ShareResultDialog(
     val context = LocalContext.current
     // Dialog 内提示宿主（AlertDialog 为独立窗口）
     val snackbarHostState = rememberGlobalSnackbarHostState()
-    // 拼接分享文案（按平台区分：139 / 123 / UC / 迅雷 / 百度 / 夸克）
+    // 拼接分享文案（按平台区分：139 / 123 / UC / 迅雷 / 百度 / 115 / 夸克）
     val platformName = when {
         info.shareUrl.contains("139.com") -> "139网盘"
         info.shareUrl.contains("123pan") || info.shareUrl.contains("123865") -> "123云盘"
         info.shareUrl.contains("uc.cn") -> "UC网盘"
         info.shareUrl.contains("xunlei.com") -> "迅雷网盘"
         info.shareUrl.contains("baidu.com") -> "百度网盘"
+        info.shareUrl.contains("115") -> "115网盘"
         else -> "夸克网盘"
     }
     val shareText = buildString {
@@ -923,12 +931,17 @@ private fun randomPasscode(): String {
     return (1..4).map { chars.random() }.joinToString("")
 }
 
-/** 中性码 → 展示文案；未知值显示「未知」而不是 fail-open 成「永久有效」 */
+/** 中性码 → 展示文案；未知值显示「未知」而不是 fail-open 成「永久有效」（115 用自己的 101..105 码位） */
 private fun expireLabel(type: Int): String = when (type) {
     ShareExpire.FOREVER -> "永久有效"
     ShareExpire.ONE_DAY -> "1 天"
     ShareExpire.SEVEN_DAYS -> "7 天"
     ShareExpire.THIRTY_DAYS -> "30 天"
+    ShareExpire.PAN115_FOREVER -> "永久有效"
+    ShareExpire.PAN115_ONE_DAY -> "1 天"
+    ShareExpire.PAN115_THREE_DAYS -> "3 天"
+    ShareExpire.PAN115_SEVEN_DAYS -> "7 天"
+    ShareExpire.PAN115_FIFTEEN_DAYS -> "15 天"
     else -> "未知"
 }
 
@@ -951,6 +964,8 @@ internal fun BatchActionSheet(
     onDismiss: () -> Unit,
     /** 提取码规则（各平台不同，见 [PasscodeMode]） */
     passcodeMode: PasscodeMode = PasscodeMode.OPTIONAL,
+    /** 有效期档位（默认六平台通用档；115 传 [ShareExpire.PAN115_OPTIONS]） */
+    expireOptions: List<Pair<String, Int>> = defaultExpireOptions,
     initialStep: BatchStep = BatchStep.MENU,
     moveStep: @Composable (onBack: () -> Unit, onDone: () -> Unit) -> Unit
 ) {
@@ -991,6 +1006,7 @@ internal fun BatchActionSheet(
                     subtitle = "已选 $count 项",
                     operating = operating,
                     passcodeMode = passcodeMode,
+                    expireOptions = expireOptions,
                     onBack = { step = BatchStep.MENU },
                     onCreateShare = onShare
                 )

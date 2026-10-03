@@ -74,6 +74,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.C139AccountEntity
+import com.yunx.app.data.db.Pan115AccountEntity
 import com.yunx.app.data.db.Pan123AccountEntity
 import com.yunx.app.data.db.QuarkAccountEntity
 import com.yunx.app.data.db.UCAccountEntity
@@ -82,6 +83,7 @@ import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.DriveQuotaViewModel
+import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
@@ -119,6 +121,7 @@ fun DriveScreen(
     baiduAccount: BaiduAccountEntity?,
     c139Account: C139AccountEntity?,
     pan123Account: Pan123AccountEntity?,
+    pan115Account: Pan115AccountEntity?,
     /** 夸克云盘浏览 ViewModel（网盘 Tab 内切换展示，非全屏） */
     quarkCloudViewModel: QuarkCloudViewModel,
     /** UC 网盘云盘浏览 ViewModel */
@@ -131,6 +134,8 @@ fun DriveScreen(
     c139CloudViewModel: C139CloudViewModel,
     /** 123 云盘浏览 ViewModel */
     pan123CloudViewModel: Pan123CloudViewModel,
+    /** 115 网盘浏览 ViewModel */
+    pan115CloudViewModel: Pan115CloudViewModel,
     /** 网盘空间详情 ViewModel（顶部空间总览） */
     driveQuotaViewModel: DriveQuotaViewModel,
     onQuarkLogin: () -> Unit,
@@ -147,6 +152,8 @@ fun DriveScreen(
     onC139Logout: () -> Unit,
     onPan123Login: () -> Unit,
     onPan123Logout: () -> Unit,
+    onPan115Login: () -> Unit,
+    onPan115Logout: () -> Unit,
     /** 是否已配置 GitHub Token（控制 GitHub 卡片副标题与登录态样式） */
     githubHasToken: Boolean = false,
     /** 点击 GitHub 卡片：已配置 Token 时进入「我的主页」（账号仓库浏览）；未配置时打开 Token 管理弹窗 */
@@ -163,6 +170,7 @@ fun DriveScreen(
     var showBaiduSheet by remember { mutableStateOf(false) }
     var showC139Sheet by remember { mutableStateOf(false) }
     var showPan123Sheet by remember { mutableStateOf(false) }
+    var showPan115Sheet by remember { mutableStateOf(false) }
     // GitHub 卡片「更多」菜单（浏览主页 / 配置 Token / 清除 Token）
     var showGitHubSheet by remember { mutableStateOf(false) }
     // 夸克云盘浏览：网盘 Tab 内切换（非全屏），切 Tab 再回来仍保留
@@ -177,6 +185,8 @@ fun DriveScreen(
     var showC139Cloud by rememberSaveable { mutableStateOf(false) }
     // 123 云盘浏览：网盘 Tab 内切换（非全屏）
     var showPan123Cloud by rememberSaveable { mutableStateOf(false) }
+    // 115 网盘浏览：网盘 Tab 内切换（非全屏）
+    var showPan115Cloud by rememberSaveable { mutableStateOf(false) }
 
     // 夸克：登录态由数据库驱动；已登录则副标题显示昵称
     val quark = DriveAccount(
@@ -221,6 +231,13 @@ fun DriveScreen(
         avatarText = "123",
         isLoggedIn = pan123Account != null
     )
+    val pan115 = DriveAccount(
+        id = "pan115",
+        name = "115网盘",
+        description = pan115Account?.nickname ?: "点击登录，支持解析下载",
+        avatarText = "115",
+        isLoggedIn = pan115Account != null
+    )
     // GitHub：把 GitHub 当网盘浏览下载；此处仅做 Token 管理（提升 API 限额），浏览入口在解析页
     val github = DriveAccount(
         id = "github",
@@ -249,6 +266,7 @@ fun DriveScreen(
             showBaiduCloud -> 4
             showC139Cloud -> 5
             showPan123Cloud -> 6
+            showPan115Cloud -> 7
             else -> 0
         },
         transitionSpec = {
@@ -292,6 +310,12 @@ fun DriveScreen(
             viewModel = pan123CloudViewModel,
             scrollBehavior = scrollBehavior,
             onExit = { showPan123Cloud = false },
+            onDownloadStarted = onDownloadStarted
+        )
+        7 -> Pan115CloudScreen(
+            viewModel = pan115CloudViewModel,
+            scrollBehavior = scrollBehavior,
+            onExit = { showPan115Cloud = false },
             onDownloadStarted = onDownloadStarted
         )
             else -> PullToRefreshBox(
@@ -410,6 +434,22 @@ fun DriveScreen(
                         }
                     )
                 }
+                item(key = pan115.id) {
+                    DriveAccountCard(
+                        account = pan115,
+                        quota = driveQuotaViewModel.pan115Quota.collectAsState().value,
+                        onClick = if (pan115.isLoggedIn) {
+                            { showPan115Cloud = true }
+                        } else {
+                            onPan115Login
+                        },
+                        onMoreClick = if (pan115.isLoggedIn) {
+                            { showPan115Sheet = true }
+                        } else {
+                            null
+                        }
+                    )
+                }
                 item(key = github.id) {
                     // GitHub：已配置 Token 点击主体进入「我的主页」；未配置打开 Token 弹窗；更多按钮在登录后显示
                     DriveAccountCard(
@@ -495,6 +535,18 @@ fun DriveScreen(
                 showPan123Sheet = false
             },
             onDismiss = { showPan123Sheet = false }
+        )
+    }
+
+    // 已登录 115：点击卡片弹出账号信息底部弹窗
+    if (showPan115Sheet && pan115Account != null) {
+        Pan115AccountSheet(
+            account = pan115Account,
+            onLogout = {
+                onPan115Logout()
+                showPan115Sheet = false
+            },
+            onDismiss = { showPan115Sheet = false }
         )
     }
 

@@ -28,6 +28,8 @@ import com.yunx.app.data.db.BaiduAccountDao
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.C139AccountDao
 import com.yunx.app.data.db.C139AccountEntity
+import com.yunx.app.data.db.Pan115AccountDao
+import com.yunx.app.data.db.Pan115AccountEntity
 import com.yunx.app.data.db.Pan123AccountDao
 import com.yunx.app.data.db.Pan123AccountEntity
 import com.yunx.app.data.db.QuarkAccountDao
@@ -48,7 +50,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 网盘认证信息备份：把已登录的平台（夸克/UC/迅雷/百度/139）凭证打包为 JSON，
+ * 网盘认证信息备份：把已登录的平台（夸克/UC/迅雷/百度/139/123/115）凭证打包为 JSON，
  * 可导出到下载目录并在另一台设备导入恢复。
  */
 class AuthBackupManager(
@@ -57,7 +59,8 @@ class AuthBackupManager(
     private val xunleiDao: XunleiAccountDao,
     private val baiduDao: BaiduAccountDao,
     private val c139Dao: C139AccountDao,
-    private val pan123Dao: Pan123AccountDao
+    private val pan123Dao: Pan123AccountDao,
+    private val pan115Dao: Pan115AccountDao
 ) {
 
     private companion object {
@@ -137,6 +140,15 @@ class AuthBackupManager(
                     .put("platform", "pan123")
                     .put("accessToken", a.accessToken)
                     .put("account", a.account)
+                    .put("nickname", a.nickname)
+                    .put("updatedAt", a.updatedAt)
+            )
+        }
+        pan115Dao.getAccount()?.let { a ->
+            if (!onlyLoggedIn || a.cookie.isNotBlank()) accounts.put(
+                JSONObject()
+                    .put("platform", "pan115")
+                    .put("cookie", a.cookie)
                     .put("nickname", a.nickname)
                     .put("updatedAt", a.updatedAt)
             )
@@ -250,6 +262,18 @@ class AuthBackupManager(
                             Pan123AccountEntity(
                                 id = "pan123", accessToken = t,
                                 account = obj.optString("account"),
+                                nickname = obj.optString("nickname"),
+                                updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                            )
+                        ); count++
+                    }
+                }
+                "pan115" -> {
+                    val c = obj.optString("cookie")
+                    if (c.isNotBlank()) {
+                        pan115Dao.upsert(
+                            Pan115AccountEntity(
+                                id = "pan115", cookie = c,
                                 nickname = obj.optString("nickname"),
                                 updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                             )

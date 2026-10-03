@@ -16,22 +16,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.yunx.app.data.download
+package com.yunx.app.data.db
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
 /**
- * 下载来源平台标识（用于按平台独立设置下载线程数）。
- * 字符串常量而非枚举：便于直接持久化到 Room 字段，也与各 ViewModel 解耦。
+ * 115 网盘登录凭证（115.com cookie 落库，后续 API 请求携带）。
+ *
+ * 115 的登录态完全由 Cookie 表达（UID/CID/SEID/KID 四个键，见 Agent.md §3.25）：
+ * - `UID` 同时也是提取分享时的 `user_id`（`share/snap` 的请求参数），缺它连分享都打不开；
+ * - `CID`/`SEID`/`KID` 是个人盘与转存接口的鉴权串；
+ * - 下载直链还要求请求头带上这份 Cookie（115 CDN 无 Cookie 会 403）。
  */
-object DownloadPlatform {
-    const val QUARK = "quark"
-    const val UC = "uc"
-    const val XUNLEI = "xunlei"
-    const val BAIDU = "baidu"
-    const val C139 = "c139"
-    const val PAN123 = "pan123"
-    const val PAN115 = "pan115"
-    /** GitHub 仓库/Release 下载 */
-    const val GITHUB = "github"
-    /** 通用/未知来源（手动添加、应用更新下载等） */
-    const val GENERIC = "generic"
-}
+@Entity(tableName = "pan115_account")
+data class Pan115AccountEntity(
+    @PrimaryKey
+    val id: String = "pan115",
+    val cookie: String = "",
+    val nickname: String = "",
+    val updatedAt: Long = System.currentTimeMillis()
+)

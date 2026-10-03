@@ -38,6 +38,7 @@ import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.GitHubLinkType
 import com.yunx.app.data.network.GitHubRepo
 import com.yunx.app.data.network.GitHubRelease
+import com.yunx.app.data.network.Pan115Constants
 import com.yunx.app.data.network.Pan123Constants
 import com.yunx.app.data.network.QuarkConstants
 import com.yunx.app.data.network.QuarkCdn
@@ -53,6 +54,8 @@ import com.yunx.app.data.repository.BaiduAccountRepository
 import com.yunx.app.data.repository.BaiduResolveRepository
 import com.yunx.app.data.repository.C139AccountRepository
 import com.yunx.app.data.repository.C139ResolveRepository
+import com.yunx.app.data.repository.Pan115AccountRepository
+import com.yunx.app.data.repository.Pan115ResolveRepository
 import com.yunx.app.data.repository.Pan123AccountRepository
 import com.yunx.app.data.repository.Pan123ResolveRepository
 import com.yunx.app.data.repository.QuarkAccountRepository
@@ -80,7 +83,7 @@ sealed interface ResolveUiState {
 
 /**
  * 解析页 ViewModel：分享解析状态机 + 目录导航 + 下载直链。
- * 支持夸克 / UC / 迅雷，按链接自动路由到对应平台仓库与凭证。
+ * 支持夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115，按链接自动路由到对应平台仓库与凭证。
  */
 class ResolveViewModel(
     private val accountRepository: QuarkAccountRepository,
@@ -95,6 +98,8 @@ class ResolveViewModel(
     private val c139ResolveRepository: C139ResolveRepository,
     private val pan123AccountRepository: Pan123AccountRepository,
     private val pan123ResolveRepository: Pan123ResolveRepository,
+    private val pan115AccountRepository: Pan115AccountRepository,
+    private val pan115ResolveRepository: Pan115ResolveRepository,
     private val downloadManager: DownloadManager,
     private val bookmarkDao: BookmarkDao,
     /** GitHub 解析器实例（null 表示未启用 GitHub 平台） */
@@ -108,7 +113,7 @@ class ResolveViewModel(
 
     /**
      * 游客模式：本次解析没有携带任何登录凭据（列目录可用，下载/转存需登录）。
-     * 6 个网盘的分享**列表**接口都允许匿名（123/139/百度/夸克/UC 直接匿名；迅雷走不带
+     * 7 个网盘的分享**列表**接口都允许匿名（123/139/百度/夸克/UC/115 直接匿名；迅雷走不带
      * Authorization 的分享接口），因此解析不再要求登录；下载/转存仍在各自入口要求登录。
      * 详见 Agent.md §3.19。
      */
@@ -137,14 +142,15 @@ class ResolveViewModel(
     var saveMessage by mutableStateOf<String?>(null)
         private set
 
-    /** 当前分享是否支持转存（夸克 / UC / 迅雷 / 百度 / 139 / 123） */
+    /** 当前分享是否支持转存（夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115） */
     val canSave: Boolean
         get() = currentPlatform == SharePlatform.QUARK ||
             currentPlatform == SharePlatform.UC ||
             currentPlatform == SharePlatform.XUNLEI ||
             currentPlatform == SharePlatform.BAIDU ||
             currentPlatform == SharePlatform.C139 ||
-            currentPlatform == SharePlatform.PAN123
+            currentPlatform == SharePlatform.PAN123 ||
+            currentPlatform == SharePlatform.PAN115
 
     /** 当前分享是否为迅雷（UI 选择迅雷版转存目录选择器） */
     val isSaveXunlei: Boolean
@@ -169,6 +175,10 @@ class ResolveViewModel(
     /** 当前分享是否为 123（UI 选择 123 版转存目录选择器） */
     val isSavePan123: Boolean
         get() = currentPlatform == SharePlatform.PAN123
+
+    /** 当前分享是否为 115（UI 选择 115 版转存目录选择器） */
+    val isSavePan115: Boolean
+        get() = currentPlatform == SharePlatform.PAN115
 
     /** 请求转存：记录目标文件并打开目录选择弹窗 */
     fun requestSave(file: ShareFile) {
@@ -268,6 +278,22 @@ class ResolveViewModel(
                         pan123ResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
                                 saveMessage = "已保存到123云盘"
+                                saveTarget = null
+                            }
+                            .onFailure {
+                                saveMessage = it.message ?: "转存失败"
+                            }
+                    }
+                    SharePlatform.PAN115 -> {
+                        // 115 保存到个人盘：share/receive（不回传新 fid，仓库内部转存后回查）
+                        val credential = currentCredential()
+                        if (credential.isNullOrBlank()) {
+                            saveMessage = "请先登录115网盘"
+                            return@launch
+                        }
+                        pan115ResolveRepository.transferFile(s, file, toDirFid, credential)
+                            .onSuccess {
+                                saveMessage = "已保存到115网盘"
                                 saveTarget = null
                             }
                             .onFailure {
@@ -395,6 +421,10 @@ class ResolveViewModel(
                             SharePlatform.PAN123 -> {
                                 // 123 批量转存到根目录（fileId "0"）
                                 pan123ResolveRepository.transferFile(s, file, "0", credential)
+                            }
+                            SharePlatform.PAN115 -> {
+                                // 115 批量转存到根目录（cid "0"）
+                                pan115ResolveRepository.transferFile(s, file, Pan115Constants.ROOT_CID, credential)
                             }
                             else -> {
                                 resolveRepository.saveToCloud(s, file, QuarkConstants.DEFAULT_PDIR_FID, credential)
@@ -766,13 +796,14 @@ class ResolveViewModel(
     /** README 渲染用：默认分支（用于相对链接补全） */
     val githubDefaultBranch: String? get() = currentGitHubRepo?.defaultBranch
 
-    /** 当前平台凭证（夸克/UC/百度/139 用 cookie，迅雷/123 用 access_token；GitHub 无需凭证） */
+    /** 当前平台凭证（夸克/UC/百度/139/115 用 cookie，迅雷/123 用 access_token；GitHub 无需凭证） */
     private suspend fun currentCredential(): String? = when (currentPlatform) {
         SharePlatform.UC -> ucAccountRepository.getAccount()?.cookie
         SharePlatform.XUNLEI -> xunleiAccountRepository.getAccount()?.accessToken
         SharePlatform.BAIDU -> baiduAccountRepository.getAccount()?.cookie
         SharePlatform.C139 -> c139AccountRepository.getAccount()?.cookie
         SharePlatform.PAN123 -> pan123AccountRepository.getAccount()?.accessToken
+        SharePlatform.PAN115 -> pan115AccountRepository.getAccount()?.cookie
         SharePlatform.GITHUB -> null
         else -> accountRepository.getAccount()?.cookie
     }
@@ -783,6 +814,7 @@ class ResolveViewModel(
         SharePlatform.BAIDU -> baiduResolveRepository
         SharePlatform.C139 -> c139ResolveRepository
         SharePlatform.PAN123 -> pan123ResolveRepository
+        SharePlatform.PAN115 -> pan115ResolveRepository
         else -> resolveRepository
     }
 
@@ -792,6 +824,7 @@ class ResolveViewModel(
         SharePlatform.BAIDU -> ""
         SharePlatform.C139 -> "0"
         SharePlatform.PAN123 -> "0"
+        SharePlatform.PAN115 -> Pan115Constants.ROOT_CID
         SharePlatform.GITHUB -> "github:root"
         else -> QuarkConstants.DEFAULT_PDIR_FID
     }
@@ -802,6 +835,7 @@ class ResolveViewModel(
         SharePlatform.BAIDU -> "百度网盘"
         SharePlatform.C139 -> "139 网盘"
         SharePlatform.PAN123 -> "123云盘"
+        SharePlatform.PAN115 -> "115网盘"
         SharePlatform.GITHUB -> "GitHub"
         else -> "夸克网盘"
     }
@@ -827,7 +861,7 @@ class ResolveViewModel(
             }
             currentPlatform = parsed.platform
             isGuest = false
-            // 游客模式：列目录不要求登录（6 个网盘的分享列表接口都允许匿名，详见 Agent.md §3.19）。
+            // 游客模式：列目录不要求登录（7 个网盘的分享列表接口都允许匿名，详见 Agent.md §3.19）。
             // 凭据为空时传空串，是否放行由服务端决定；下载/转存仍在各自入口要求登录。
             val credential = currentCredential().orEmpty()
             isGuest = credential.isBlank()
@@ -1466,7 +1500,7 @@ class ResolveViewModel(
     /**
      * 平台是否支持「未登录下载」：目前只有夸克/UC 的分享直链不要求登录态
      * （夸克仅约 50MB 以内的小文件；UC 实测大文件也放行），且直链要带游客态 __pugs。
-     * 其余平台（含迅雷/百度/139/123）取链或转存中转都依赖账号，仍要求登录。
+     * 其余平台（含迅雷/百度/139/123/115）取链或转存中转都依赖账号，仍要求登录。
      */
     private fun supportsGuestDownload(): Boolean =
         currentPlatform == SharePlatform.QUARK || currentPlatform == SharePlatform.UC
@@ -1564,6 +1598,7 @@ class ResolveViewModel(
         val isBaidu = currentPlatform == SharePlatform.BAIDU
         val isC139 = currentPlatform == SharePlatform.C139
         val isPan123 = currentPlatform == SharePlatform.PAN123
+        val isPan115 = currentPlatform == SharePlatform.PAN115
         val isQuark = currentPlatform == SharePlatform.QUARK
         // 下载来源平台：按平台应用下载线程数设置
         val platform = when {
@@ -1572,6 +1607,7 @@ class ResolveViewModel(
             isBaidu -> DownloadPlatform.BAIDU
             isC139 -> DownloadPlatform.C139
             isPan123 -> DownloadPlatform.PAN123
+            isPan115 -> DownloadPlatform.PAN115
             else -> DownloadPlatform.QUARK
         }
         // 【关键修复】夸克/UC 共用 __puus：取链与下载必须用同一份已刷新 Cookie（AlistGo/alist#830 类缺陷）
@@ -1586,6 +1622,7 @@ class ResolveViewModel(
         val guestCookie = link.guestCookie
         val isGuestLink = guestCookie.isNotBlank()
         // 迅雷直链 URL 自带签名，无需 Cookie；夸克/UC/百度需 Cookie + UA；139 直链为 CDN 签名地址；123 直链需 Referer
+        // 115 直链需「登录 Cookie + 取链响应下发的 900 秒 CDN Cookie」双 Cookie（缺一即 CDN 403 no cookie value）
         val headers = when {
             isXunlei -> mapOf("User-Agent" to XunleiConstants.APP_UA) // 迅雷直链必须用官方 app UA，浏览器 UA 会触发 CDN 降级（200整文件）
             isBaidu -> mapOf(
@@ -1593,6 +1630,13 @@ class ResolveViewModel(
                 "User-Agent" to BaiduConstants.UA_NETDISK
             )
             isC139 -> mapOf("User-Agent" to C139Constants.PC_UA)
+            // 115：CDN 同时校验登录 Cookie 与取链响应下发的 900 秒 CDN Cookie，
+            // 缺任一直接 403 no cookie value（文档 §4.3），因此两份 Cookie 拼接后一起发
+            isPan115 -> mapOf(
+                "Cookie" to Pan115Constants.mergeCookies(effectiveCredential, guestCookie),
+                "User-Agent" to Pan115Constants.WEB_UA,
+                "Referer" to Pan115Constants.DOWNLOAD_REFERER
+            )
             // 123 分享/个人盘直链为 CDN 签名地址，下载必须带 Referer（文档 §5.3.1）
             isPan123 -> mapOf(
                 "User-Agent" to Pan123Constants.WEB_UA,
@@ -1706,6 +1750,8 @@ class ResolveViewModel(
         private val c139ResolveRepository: C139ResolveRepository,
         private val pan123AccountRepository: Pan123AccountRepository,
         private val pan123ResolveRepository: Pan123ResolveRepository,
+        private val pan115AccountRepository: Pan115AccountRepository,
+        private val pan115ResolveRepository: Pan115ResolveRepository,
         private val downloadManager: DownloadManager,
         private val bookmarkDao: BookmarkDao,
         private val githubApi: GitHubApi? = null,
@@ -1721,6 +1767,7 @@ class ResolveViewModel(
                 baiduAccountRepository, baiduResolveRepository,
                 c139AccountRepository, c139ResolveRepository,
                 pan123AccountRepository, pan123ResolveRepository,
+                pan115AccountRepository, pan115ResolveRepository,
                 downloadManager,
                 bookmarkDao,
                 githubApi,

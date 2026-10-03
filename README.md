@@ -6,7 +6,7 @@
 
 **粘贴分享链接，直接高速下载 —— 一个开源的 Android 网盘解析下载应用**
 
-识别夸克 / UC / 迅雷 / 百度 / 139 / 123 分享链接，自动匹配提取码，Range 分片并发 + 断点续传。
+识别夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 分享链接，自动匹配提取码，Range 分片并发 + 断点续传。
 
 [![Release](https://img.shields.io/github/v/release/CYQawa/YunX?style=flat-square&label=release&color=4C8BF5)](https://github.com/CYQawa/YunX/releases/latest)
 [![Stars](https://img.shields.io/github/stars/CYQawa/YunX?style=flat-square&logo=github&color=4C8BF5)](https://github.com/CYQawa/YunX/stargazers)
@@ -40,10 +40,10 @@
 
 ## 功能
 
-- **分享链接解析** —— 识别夸克 / UC / 迅雷 / 百度 / 139 / 123 的分享链接，自动匹配提取码
+- **分享链接解析** —— 识别夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 的分享链接，自动匹配提取码
 - **高速下载** —— Range 分片并发 + 断点续传，任务保存请求头与固定分片规划，并发上限 32
 - **临时转存清理** —— 百度 / 迅雷取链后清理；夸克保留到下载完成或删除任务后清理
-- **多平台登录** —— 夸克 / UC / 百度 / 139 使用 WebView Cookie；迅雷使用密码 / 短信；123 使用账号密码换取 JWT
+- **多平台登录** —— 夸克 / UC / 百度 / 139 / 115 使用 WebView Cookie；迅雷使用密码 / 短信；123 使用账号密码换取 JWT
 - **认证备份** —— 使用用户口令派生密钥，以 AES-GCM 加密 Cookie / JWT 备份文件
 - **剪贴板识别** —— 复制分享链接后回到应用，提示一键粘贴解析
 
@@ -55,6 +55,7 @@
 - 百度网盘
 - 123 云盘
 - 139 网盘（和彩云）
+- 115 网盘
 
 > [!WARNING]
 > **不建议使用百度网盘，可能导致账号被风控！**

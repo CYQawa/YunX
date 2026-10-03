@@ -354,7 +354,7 @@ private fun WelcomePage(context: Context) {
 
         Spacer(modifier = Modifier.height(26.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FactChip("6 大网盘")
+            FactChip("7 大网盘")
             FactChip("分片下载")
             FactChip("完全免费")
         }

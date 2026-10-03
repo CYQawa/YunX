@@ -108,12 +108,14 @@ import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.screens.AddToBookmarkDialog
 import com.yunx.app.ui.screens.BaiduSaveContent
 import com.yunx.app.ui.screens.C139SaveContent
+import com.yunx.app.ui.screens.Pan115SaveContent
 import com.yunx.app.ui.screens.Pan123SaveContent
 import com.yunx.app.ui.screens.SaveToCloudContent
 import com.yunx.app.ui.screens.UCSaveContent
 import com.yunx.app.ui.screens.XunleiSaveContent
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
+import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
 import com.yunx.app.ui.viewmodel.ResolveViewModel
@@ -155,6 +157,8 @@ fun ShareDetailScreen(
     ucCloudViewModel: UCCoudViewModel,
     /** 123 云盘浏览 ViewModel（123 分享转存目录选择用） */
     pan123CloudViewModel: Pan123CloudViewModel,
+    /** 115 网盘浏览 ViewModel（115 分享转存目录选择用） */
+    pan115CloudViewModel: Pan115CloudViewModel,
     scrollBehavior: TopAppBarScrollBehavior,
     /** 文件列表滚动状态（由上层持有，跨目录切换保留） */
     listState: LazyListState,
@@ -582,6 +586,7 @@ fun ShareDetailScreen(
                     viewModel.isSaveC139 -> C139SaveContent(viewModel, c139CloudViewModel, onBack)
                     viewModel.isSaveUC -> UCSaveContent(viewModel, ucCloudViewModel, onBack)
                     viewModel.isSavePan123 -> Pan123SaveContent(viewModel, pan123CloudViewModel, onBack)
+                    viewModel.isSavePan115 -> Pan115SaveContent(viewModel, pan115CloudViewModel, onBack)
                     else -> SaveToCloudContent(viewModel, quarkCloudViewModel, onBack)
                 }
             }
@@ -590,8 +595,8 @@ fun ShareDetailScreen(
 }
 
 /**
- * 游客模式提示条：未登录也能浏览分享列表（6 个网盘的列表接口都允许匿名）。
- * 夸克/UC 还能直接下载（夸克约 50MB 以内的小文件、UC 不限大小），其余平台下载与 6 平台转存都要登录
+ * 游客模式提示条：未登录也能浏览分享列表（7 个网盘的列表接口都允许匿名）。
+ * 夸克/UC 还能直接下载（夸克约 50MB 以内的小文件、UC 不限大小），其余平台下载与 7 平台转存都要登录
  * —— 见 Agent.md §3.19。
  */
 @Composable
@@ -769,7 +774,7 @@ internal fun ShareFileRow(
         )
     ) {
         // ★ 行内容交给 Material 3 的 ListItem（不再手写 Row + Column）：
-        //   行高、内边距、标题/副标题字号层级由组件按 M3 规范给出，六个网盘页与本页共用同一形态。
+        //   行高、内边距、标题/副标题字号层级由组件按 M3 规范给出，七个网盘页与本页共用同一形态。
         //   外层保留 Card 负责圆角、选中底色与涟漪裁剪，故 ListItem 容器设为透明。
         ListItem(
             headlineContent = {

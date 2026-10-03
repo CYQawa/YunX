@@ -32,7 +32,8 @@ class ShareLinkParserTest {
             "https://pan.xunlei.com/s/Abc_123-xy" to (SharePlatform.XUNLEI to "Abc_123-xy"),
             "https://pan.baidu.com/s/1Abc_123-xy?pwd=9xYz" to (SharePlatform.BAIDU to "Abc_123-xy"),
             "https://yun.139.com/shareweb/#/w/i/Abc_123" to (SharePlatform.C139 to "Abc_123"),
-            "https://www.123pan.com/s/2785Vv-T4Ded" to (SharePlatform.PAN123 to "2785Vv-T4Ded")
+            "https://www.123pan.com/s/2785Vv-T4Ded" to (SharePlatform.PAN123 to "2785Vv-T4Ded"),
+            "https://115.com/s/swz54f736y2?password=y118" to (SharePlatform.PAN115 to "swz54f736y2")
         )
 
         cases.forEach { (text, expected) ->
@@ -46,6 +47,20 @@ class ShareLinkParserTest {
     fun explicitTextPasswordIsExtracted() {
         val parsed = ShareLinkParser.parse("链接 https://drive.uc.cn/s/Abc123 提取码：a1B2")!!
         assertEquals("a1B2", parsed.pwd)
+    }
+
+    @Test
+    fun parsesPan115Forms() {
+        // 链接 ?password= 直接带码
+        val withQuery = ShareLinkParser.parse("https://115cdn.com/s/swz54f736y2?password=y118")!!
+        assertEquals(SharePlatform.PAN115, withQuery.platform)
+        assertEquals("swz54f736y2", withQuery.shareId)
+        assertEquals("y118", withQuery.pwd)
+        // 口令形式：/<share_code>-<code>/
+        val command = ShareLinkParser.parse("https://115.com/swz54f736y2-y118/")!!
+        assertEquals(SharePlatform.PAN115, command.platform)
+        assertEquals("swz54f736y2", command.shareId)
+        assertEquals("y118", command.pwd)
     }
 
     @Test

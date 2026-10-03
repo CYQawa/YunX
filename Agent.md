@@ -225,8 +225,8 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 ```
 
 - 默认（`fileNameMultiLine = false`）：单行 + `basicMarquee` 跑马灯，与历史观感一致；`true` 时折行显示（最多 3 行）。
-- 已接入：`ShareFileRow`（解析页 + 六个网盘页 + 转存/移动选择器的**唯一行组件**）、
-  六个 `*SaveSheet`/`SaveToCloudSheet` 的文件名头、`CloudFileSheets` 文件详情头、`DownloadScreen` 的任务行/分组行。
+- 已接入：`ShareFileRow`（解析页 + 七个网盘页 + 转存/移动选择器的**唯一行组件**）、
+  七个 `*SaveSheet`/`SaveToCloudSheet` 的文件名头、`CloudFileSheets` 文件详情头、`DownloadScreen` 的任务行/分组行。
 - 不要在各调用处再写 `maxLines` / `overflow` / `basicMarquee`：写死单行会让该设置失效，写死多行则默认观感被改。
 - 面包屑、对话框标题、分享标题（`BookmarkScreen`）**不**走它：它们不是文件名，横向空间紧张时折行会破坏布局。
 
@@ -385,7 +385,7 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 
 ### 3.19 游客模式：列目录不要求登录；夸克/UC 小文件也能直接下载（**别再往列目录加登录拦截**）
 
-**结论**：解析分享**不再要求登录**。6 个网盘的分享**列表**接口都允许匿名访问（用户实测：浏览器未登录也能列出文件）；
+**结论**：解析分享**不再要求登录**。7 个网盘的分享**列表**接口都允许匿名访问（用户实测：浏览器未登录也能列出文件）；
 **夸克 / UC 的分享直链本身也不校验登录态**，未登录可直接下载（夸克约 50MB 以内、UC 实测 4GB 都放行）；
 其余平台的**取直链/转存**都要账号，所以登录闸门只保留在这些入口。
 
@@ -398,6 +398,7 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 | 百度 | 匿名 | 公共分享（无提取码）时 `sekey=""`、省略 `&sekey=`；仓库层无登录前置检查 |
 | 夸克 / UC | 匿名 | API 层无 cookie 预检；仓库/VM 也不再有闸门。**下载也匿名**（见下节「游客下载」） |
 | 迅雷 | 匿名 | `XunleiApi.getShare` / `getShareDetail` 在 token 为空时**不写 Authorization 头**（带上失效 Bearer 反而被判 `unauthenticated`） |
+| 115 | 匿名 | `Pan115Api.getSharePage`（`/share/snap`）不带 Cookie 也能列目录；但 `/share/downurl` 要分享者 `user_id`，**下载仍要求登录**（`Pan115ResolveRepository` 未覆写 `getGuestShareDownloadLink`，走接口默认失败） |
 | GitHub | —— | 本来就不需要登录 |
 
 **闸门在哪（`ResolveViewModel`）**：
@@ -422,6 +423,9 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 - 大小上限：夸克约 **50MB**（超出报 `23018`，提示「超出游客可获取的大小上限…请先登录」）；UC 实测无此限制（4GB 也放行）。
 - 错误码文案：夸克 `23018`/`31001`；UC `31001`/`23018`/`14001`（分享失效或提取码错）/`41020`（令牌失效）。
 - 转存依旧要登录：游客点「转存」仍走登录闸门（夸克/UC 的转存都要账号态）。
+- **115 复用 `DownloadLink.guestCookie` 装另一种东西**：不是游客 Cookie，而是取链响应 `Set-Cookie` 下发的
+  **900 秒、path 绑定该文件的 CDN 下载 Cookie**（登录态也要带，缺它 CDN 403 `no cookie value`），且必须与登录 Cookie 合并成
+  `Cookie: <登录 Cookie>; <CDN Cookie>`——见 §3.25 硬规则 3。所以「`guestCookie` 非空」在 115 不代表游客。
 
 **UI**：`ShareDetailScreen` 的 `GuestBrowseNotice(viewModel.sharePlatform)`（`isGuest` 时显示在标题/面包屑下方）按平台给文案 ——
 夸克「可直接下载约 50MB 以内的小文件」、UC「可直接下载（不限大小）」、其余「可查看文件列表，下载/转存需先到「网盘」页登录」；
@@ -460,6 +464,12 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 | 123（`Pan123Api.createShare`） | `expiration` | 绝对 ISO 时间串（now + 天数）；永久 = 2099 哨兵 | `ShareExpire.daysOrNull()` 后交给 `expiration()` 拼串 |
 | 迅雷（`XunleiApi.createShare`） | `expiration_days` | **字符串** `"-1"/"1"/"7"/"30"`；`-1` = 永久 | `ShareExpire.xunleiDays()` |
 | 夸克 / UC（`QuarkApi` / `UCApi`） | `expired_type` | 取值恰好等于中性码，原值直传 | 无（`QuarkApi` / `UCApi` KDoc 已注明） |
+| 115（`Pan115Api.createShare`） | `share_duration` | **字符串** `"-1"/"1"/"3"/"7"/"15"`；`-1` = 永久；**有效期只在 `/share/updateshare` 里给**（创建接口没有该字段） | `ShareExpire.pan115Duration()` |
+
+**115 是唯一的例外：它的档位（永久/1/3/7/15 天）与中性码语义冲突**（中性码 `3` 是 7 天，115 的 `3` 是 3 天），所以另开一段专用码位
+`PAN115_FOREVER=101` / `PAN115_ONE_DAY=102` / `PAN115_THREE_DAYS=103` / `PAN115_SEVEN_DAYS=104` / `PAN115_FIFTEEN_DAYS=105`
+与选项表 `ShareExpire.PAN115_OPTIONS`，由 `Pan115CloudScreen` 通过 `FileActionSheet`/`BatchActionSheet` 的 `expireOptions` 参数传入
+（默认值 `defaultExpireOptions` 仍是其它平台的 永久/1/7/30 天）。**别把 115 的档位并回中性码**，那会让「3 天」静默变成「7 天」。
 
 **转换必须在 ViewModel 层完成**，`api.createShare(...)` 只接受平台真实语义（各 API 的 KDoc 都写了「不是 UI 中性码」）。新增平台或改有效期选项时，
 只要走 `ShareExpire` 就不会再错位；`ShareExpire.daysOrNull()` 对未知码**抛异常**（fail-loud），不允许再用 `else -> 永久 / 30 天 / "-1"` 兜底——
@@ -570,6 +580,75 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 - 换群号 / 换仓库地址时**只改 `AppLinks`**（`AboutScreen` 的 GitHub 卡片也已改为引用常量），别再往界面里写死。
 - **回退**：删掉引导页 `QQGroupPill` 与设置页两项即可；只想退回「点击复制」行为的话，把两处 `onClick` 换回
   `copyToClipboard(...)`、删掉 `openQQGroup`/`qqGroupScheme` 即可（`AppLinks` 常量本身没有副作用）。
+
+---
+
+### 3.25 115 网盘接入（Cookie 网页登录 / 分享解析 / 转存 / 创建分享）
+
+115 是第 7 个网盘，**认证方式与夸克/UC/百度/139 同为「网页登录取 Cookie」，但请求契约与字段规则自成一派**，
+接口依据 `/storage/emulated/0/云析分析资料/网盘API文档/115/115_api.md`（个人盘）与 `115_share_api.md`（分享）。
+
+**接口契约（`Pan115Api`）**
+
+| 项 | 值 |
+| --- | --- |
+| 个人盘 host | `https://webapi.115.com`（`Pan115Constants.API_BASE`） |
+| 必备请求头 | 桌面 Chrome UA（`Pan115Constants.WEB_UA`）+ `X-Requested-With: XMLHttpRequest` + `Referer: https://115.com/`；**带 Cookie 时 `X-Requested-With` 不能省** |
+| 成功判定 | 顶层 `state == true`；错误码在 `errno` / `errNo` / `error`，提示文案在 `msg`（`Pan115Constants` 已收口常用码） |
+| 个人盘列目录 | `GET /files?aid=1&cid=&show_dir=1&offset=&limit=` → 顶层 `data[]` + `count` + `path[]` |
+| 空间 | `GET /files/index_info?count_space_nums=1` → `data.space_info.all_total.size` / `all_use.size` |
+| 分享列目录 | `GET /share/snap?share_code=&receive_code=&cid=&offset=&limit=&format=json` → `data.userinfo` / `data.shareinfo` / `data.list[]` |
+| 分享直链 | `GET /share/downurl?dl=1&user_id=&share_code=&file_id=[&receive_code=]` → `data.file_url_302`（优先）或 `data.file_url` |
+| 个人盘直链 | `GET /files/download?pickcode=` → `data.file_url`（pickcode 就是列表项的 `pc`） |
+| 转存 | `POST /share/receive {share_code, receive_code, file_id, cid}`（`cid=0` 为根） |
+| 创建分享 | `POST /user/allow_protocol {action:pubshare}` → `POST /share/send {user_id, file_ids, ignore_warn}` → `POST /share/updateshare {share_code, share_duration}` |
+| 删除 / 重命名 / 移动 | `POST /rb/delete`（回收站，不是 `/files/delete`）/ `POST /files/batch_rename`（**不是** `/files/edit`）/ `POST /files/move` + `GET /files/move_progress?move_proid=` 轮询 |
+
+**四条与其它平台不同的硬规则（改动前必读）**
+
+1. **分享直链要「分享者」的 `user_id`，不是自己的 UID**，而它只出现在 `share/snap` 的 `data.userinfo.user_id` 里。
+   `ShareSession` 只有 `shareId/stoken/title` 三个字段，所以分享者 UID 与提取码被编码进 `stoken`：
+   `Pan115Constants.encodeShareToken(receiveCode, userId) = "<receive_code>|<user_id>"`，用时 `decodeShareToken()` 拆回来。
+   **别往 `ShareSession` 加字段**——它是 7 个平台共用的契约，加字段要动所有仓库。
+2. **列表项的目录判定是「反的」**：文件夹项**没有 `fid`**、自身 ID 在 `cid` 里；文件项 `fid` = 自身 ID、`cid` = 父目录；
+   分享列表则用 `fc == 0` 判目录、目录 ID 取 `cid`、文件 ID 取 `fid`。`Pan115Api.parsePersonalFiles/parseShareFiles` 已把
+   `ShareFile.fid` 归一成「可直接下发给接口的 ID」（文件夹就是它的 `cid`），因此 `share/send` 的 `file_ids`、`files/move` 的 `fid[0]`、
+   `rb/delete` 的 `fid[0]` 都能直接用 `ShareFile.fid`，**不要再按平台分叉判一次目录**。个人盘文件的 `fidToken` 存的是 `pc`（pickcode），分享文件没有 pickcode（`fidToken` 为空串）。
+3. **下载要「双 Cookie」**：`files/download` 与 `share/downurl` 的响应会 `Set-Cookie` 下发一个 **900 秒、path 绑定该 object 的 CDN Cookie**，
+   下载时必须把「登录 Cookie + 这个 CDN Cookie」一起带上，缺了就 CDN 403 `no cookie value`。
+   CDN Cookie 经 `DownloadLink.guestCookie` 一路传到 `ResolveViewModel.enqueueDownload`，在那里 `mergeCookies(credential, guestCookie)`
+   合成 `Cookie` 头，并补 `User-Agent`（桌面 UA）与 `Referer`（`https://115.com/`）。**取链与下载必须紧邻**，CDN Cookie 会过期。
+4. **创建分享的有效期不在创建接口里**：`/share/send` 建完必须再调 `/share/updateshare {share_duration}`，
+   否则选了「长期」也会落成**默认 15 天**。`share_duration` 取值 `-1/1/3/5/7/15`（字符串），见 §3.20 的 115 行与专属码位 `101..105`。
+   首次创建前还要过 `/user/allow_protocol {action:pubshare}`（进程内 `@Volatile protocolAllowed` 缓存，失败也放行，真创建时服务端会再判）。
+
+**其它已收口的坑**：`share/receive` **不回传新文件 id**（只有 `pid` 与文件/目录计数），
+`Pan115ResolveRepository.transferFile` 的做法是「转存 → 重新列目标目录 → 按文件名认领新 `fid`」（同名会变成 `xxx(1).txt`，所以是「新出现的那一项」而不是精确同名）；
+`/rb/delete` 返回 `800007` 表示需要二次确认，`Pan115Api.delete` 会补 `ignore_warn=1` 重试一次，`990009` 表示上一个任务未完成；
+分享访问码**由服务端生成、不可自定义也不可取消**（自定义报 `4100032`、取消报 `4100034`），所以 UI 用 `PasscodeMode.SERVER_GENERATED`，
+结果弹窗展示服务端回的 `receive_code`（与 139 同规则）；`share/snap` 在**未登录**下也能列目录（游客模式可浏览，下载/转存要求登录）。
+
+**文件索引**
+
+| 新增 | 作用 |
+| --- | --- |
+| `app/src/main/kotlin/com/yunx/app/data/network/Pan115Constants.kt` | host/端点/UA/错误码/Cookie 工具（`extractCookies`/`isValidCookie`/`mergeCookies`/`encodeShareToken`） |
+| `app/src/main/kotlin/com/yunx/app/data/network/Pan115Api.kt` | 全部 115 接口（列目录/取链/增删改/分享/转存/创建分享） |
+| `app/src/main/kotlin/com/yunx/app/data/repository/Pan115ResolveRepository.kt` | 分享解析：snap 列目录（分页）+ downurl 取链 + **转存后回查新 fid** |
+| `app/src/main/kotlin/com/yunx/app/data/repository/Pan115AccountRepository.kt` | Cookie 落库（`/user/info` 校验并取脱敏手机号当昵称）、退出清 CookieManager/WebStorage |
+| `app/src/main/kotlin/com/yunx/app/data/db/Pan115AccountEntity.kt` / `Pan115AccountDao.kt` | `pan115_account` 表（单行 id=`pan115`，Cookie 加密存，见 `SecureAccountDaos.pan115`） |
+| `app/src/main/kotlin/com/yunx/app/ui/viewmodel/Pan115CloudViewModel.kt` / `Pan115AccountViewModel.kt` | 个人盘浏览（分页/递归收集/下载/重命名/移动/删除/分享）与账号态 |
+| `app/src/main/kotlin/com/yunx/app/ui/login/Pan115LoginScreen.kt` | WebView 登录 `https://115.com/`，自动检测 Cookie（要求 UID + SEID）或手动粘贴 |
+| `app/src/main/kotlin/com/yunx/app/ui/screens/Pan115CloudScreen.kt` / `Pan115AccountSheet.kt` / `Pan115SaveSheet.kt` | 云盘页（`expireOptions = ShareExpire.PAN115_OPTIONS`、`PasscodeMode.SERVER_GENERATED`）、账号弹窗、转存目录选择 |
+
+改动：`ShareLinkParser.kt`（`SharePlatform.PAN115` + 三条 115 正则：`115cdn?/rc?.com/s/<sw…>`、口令 `<code>-<pwd>`、`?password=`）、
+`DownloadPlatform.kt`（`PAN115`，线程设置自动多一项）、`ShareExpire.kt`（115 专属码位与 `pan115Duration()`）、
+`AppDatabase.kt`（**version 16 + `MIGRATION_15_16`** 建 `pan115_account`）、`CloudFileSheets.kt`（`expireOptions` 参数化 + 新码位文案 + 结果弹窗认 115）、
+`ResolveViewModel.kt`（平台分派与下载头）、`ResolveScreen.kt` / `ShareDetailScreen.kt` / `DriveScreen.kt` / `MainScreen.kt` /
+`DriveQuotaViewModel.kt` / `SettingsScreen.kt` / `BookmarkScreen.kt` / `AboutScreen.kt` / `OnboardingScreen.kt`（「7 大网盘」）/ `AuthBackupManager.kt`（备份含 115）。
+
+**回退**：删掉上表新增文件，还原 `SharePlatform`/`DownloadPlatform`/`ShareExpire`/`AppDatabase`（版本号别回退，改回 15 会导致已升级设备崩在降级校验上）、
+各 `MainScreen`/`DriveScreen` 接线与 `AuthBackupManager` 的 115 参数即可。
 
 ---
 
