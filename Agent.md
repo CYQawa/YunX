@@ -471,6 +471,11 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 与选项表 `ShareExpire.PAN115_OPTIONS`，由 `Pan115CloudScreen` 通过 `FileActionSheet`/`BatchActionSheet` 的 `expireOptions` 参数传入
 （默认值 `defaultExpireOptions` 仍是其它平台的 永久/1/7/30 天）。**别把 115 的档位并回中性码**，那会让「3 天」静默变成「7 天」。
 
+**选择器的两个坑（都在 `CloudFileSheets.kt` 的 `ShareStep` 里，2026-10 修过一次）**：
+① 默认选中项必须取 `expireOptions.firstOrNull()?.second`，**不能写死 `ShareExpire.FOREVER`**——各平台的第一档都是「永久有效」，所以取值等价，
+但 115 的档位码是 101..105，写死中性码 `1` 会让弹窗一打开五个档位一个都没选中。
+② 档位行用 `FlowRow` + 横竖都 `spacedBy(8.dp)`，**不能退回单行 `Row`**——115 的五档一行放不下，`Row` 不会换行、只会把最右边的「15 天」压扁。
+
 **转换必须在 ViewModel 层完成**，`api.createShare(...)` 只接受平台真实语义（各 API 的 KDoc 都写了「不是 UI 中性码」）。新增平台或改有效期选项时，
 只要走 `ShareExpire` 就不会再错位；`ShareExpire.daysOrNull()` 对未知码**抛异常**（fail-loud），不允许再用 `else -> 永久 / 30 天 / "-1"` 兜底——
 那会把「新加了一种有效期但忘了映射」静默变成另一种有效期，比报错更难查。

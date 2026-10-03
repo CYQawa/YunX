@@ -32,6 +32,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -490,7 +492,7 @@ internal fun QuarkMoveStep(
 internal enum class PasscodeMode { OPTIONAL, REQUIRED, REQUIRED_OR_AUTO, SERVER_GENERATED }
 
 /** 分享：提取码 + 有效期设置（六大网盘页共用，提交走 [onCreateShare]） */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ShareStep(
     title: String,
@@ -503,7 +505,10 @@ private fun ShareStep(
 ) {
     var withPassword by remember { mutableStateOf(false) }
     var passcode by remember { mutableStateOf("") }
-    var expiredType by remember { mutableStateOf(ShareExpire.FOREVER) }
+    // 默认选中第一档：各平台的第一档都是「永久有效」，但 115 的档位码是 101..105（不是中性码），
+    // 所以不能写死 ShareExpire.FOREVER，否则 115 弹窗打开时五个档位一个都没选中（2026-10 的 bug）。
+    // 用 remember（不带 key）：列表实例每次组合都可能重建，带 key 会把用户已选的档位重置回第一档。
+    var expiredType by remember { mutableStateOf(expireOptions.firstOrNull()?.second ?: ShareExpire.FOREVER) }
 
     Column(
         modifier = Modifier
@@ -594,7 +599,12 @@ private fun ShareStep(
 
         Text("有效期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // FlowRow 而不是 Row：115 有 5 档（永久/1/3/7/15 天），一行放不下会把最右一档压扁，
+        // 换行后每档都保持自然宽度；其余平台的 4 档也照常一行显示。
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             expireOptions.forEach { (name, value) ->
                 FilterChip(
                     selected = expiredType == value,
