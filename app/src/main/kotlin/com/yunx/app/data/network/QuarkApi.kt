@@ -84,6 +84,15 @@ class QuarkApi(
      */
     var cookieSink: ((String) -> Unit)? = null
 
+    /**
+     * 游客态令牌 `__pugs`（未登录访问分享时由响应 Set-Cookie 下发，约 3 小时有效）。
+     * 夸克游客直链（dl-guest-*）必须回带该令牌，缺了 CDN 直接 412；进程内复用，
+     * 登录态路径完全不受影响（该字段只在 [getGuestShareDownloadLink] 里读写）。
+     */
+    @Volatile
+    var guestPugs: String = ""
+        private set
+
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     // ---------- 账号 ----------
@@ -435,6 +444,85 @@ class QuarkApi(
             size = item.optLong("size")
         )
     }
+
+    /**
+     * 6.1b 游客分享取链（未登录直链，实测仅约 50MB 以内的小文件可用）。
+     *
+     * 与 [getDownloadLink] 打的是同一个端点，差别只在请求语义：body 带上分享参数
+     * （pwd_id / stoken / fids_token），不需要任何登录 Cookie。其中 `token` 是「社交转存令牌」，
+     * 游客取不到（取它本身要登录），官方前端同样是 catch 之后传空串
+     * （LinkSwift 分享页链路：`getSocialToken().catch(() => "")`）。
+     *
+     * 响应 Set-Cookie 会下发游客态 `__pugs`：它就是后续下载直链要带的 Cookie
+     * （缺失则 CDN 412），这里捕获后写进 [DownloadLink.guestCookie]，同时缓存到 [guestPugs]
+     * 供同批次的后续文件复用。
+     *
+     * @throws QuarkApiException 频控/需登录（31001）、超出游客大小上限（23018）等
+     */
+    suspend fun getGuestShareDownloadLink(
+        fid: String,
+        fidToken: String,
+        shareId: String,
+        stoken: String
+    ): DownloadLink? = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("fids", JSONArray().put(fid))
+            .put("fids_token", JSONArray().put(fidToken))
+            .put("pwd_id", shareId)
+            .put("stoken", stoken)
+            .put("speedup_session", "")
+            .put("token", "")
+            .toString()
+        val request = postJsonGuest(QuarkConstants.DOWNLOAD_URL, guestPugs, body)
+        val response = client.newCall(request).execute()
+        // 先取本次响应的 __pugs（与本次直链同响应绑定，不能用别的响应/上一次的值）
+        val responsePugs = pugsFromSetCookies(response.headers("Set-Cookie"))
+        val bodyStr = response.use {
+            it.body?.string() ?: throw QuarkApiException("获取下载链接失败：响应为空")
+        }
+        if (responsePugs != null) guestPugs = responsePugs
+        val json = runCatching { JSONObject(bodyStr) }.getOrElse {
+            // 非 JSON（风控页/HTML 错误页）时带上 HTTP 状态码，便于分辨 401/403 与分享失效
+            throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
+        }
+        val code = json.optInt("code")
+        if (json.optInt("status") != 200 && code != 0) {
+            throw QuarkApiException(guestErrorMessage(code, json.optString("message")), code)
+        }
+        val array = json.optJSONArray("data") ?: throw QuarkApiException("响应缺少 data")
+        if (array.length() == 0) throw QuarkApiException("未返回下载链接")
+        val item = array.optJSONObject(0) ?: throw QuarkApiException("未返回下载链接")
+        DownloadLink(
+            fid = item.optString("fid"),
+            filename = item.optString("file_name").ifEmpty { item.optString("filename") },
+            downloadUrl = item.optString("download_url"),
+            size = item.optLong("size"),
+            guestCookie = responsePugs ?: guestPugs
+        )
+    }
+
+    /** 游客取链的服务端错误码 → 中文提示（23018=超出游客大小上限、31001=需要登录） */
+    private fun guestErrorMessage(code: Int, message: String): String = when (code) {
+        23018 -> "该文件超出游客可获取的大小上限（夸克实测约 50MB），请先登录夸克网盘再下载"
+        31001 -> "该分享需要登录夸克网盘后才能下载"
+        else -> message.ifBlank { "获取下载链接失败" }
+    }
+
+    /** 从响应 Set-Cookie 里取出游客态令牌，返回可直接当 Cookie 头用的 `__pugs=值`；没有则 null */
+    private fun pugsFromSetCookies(setCookies: List<String>): String? =
+        setCookies.asSequence()
+            .map { it.substringBefore(';').trim() }
+            .firstOrNull { it.startsWith("__pugs=") && it.length > "__pugs=".length }
+
+    /** 游客请求构造：Cookie 为空时干脆不发该头（首次取链手上没有任何令牌） */
+    private fun postJsonGuest(url: String, cookie: String, body: String): Request =
+        Request.Builder()
+            .url(url)
+            .apply { if (cookie.isNotBlank()) header("Cookie", cookie) }
+            .header("User-Agent", QuarkConstants.API_USER_AGENT)
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody(jsonMediaType))
+            .build()
 
     /** 6.2 删除文件（取链成功后清理临时转存；对齐抓包：action_type=2 + filelist + exclude_fids）
      *  返回异步 task_id（删除为异步任务，无需轮询；失败返回 null）。

@@ -431,17 +431,21 @@ class ResolveViewModel(
             batchProgress = "正在收集文件…"
             batchCancelRequested = false
             try {
-                val credential = currentCredential()
-                if (credential.isNullOrBlank()) {
-                    // 游客模式只开放列目录：下载需要登录（取直链/转存中转都要账号）
+                // 游客模式：夸克/UC 的小文件直链不要求登录（走游客取链），其余平台必须登录
+                val credential = currentCredential().orEmpty()
+                if (credential.isBlank() && !supportsGuestDownload()) {
                     downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
                     return@launch
                 }
                 // 夸克/UC 共用 __puus：取链与下载必须用同一份已刷新 Cookie（直链签名绑定取链时刻的 __puus）
-                val quarkCred = when (currentPlatform) {
-                    SharePlatform.QUARK -> accountRepository.getFreshCookie() ?: credential
-                    SharePlatform.UC -> ucAccountRepository.getFreshCookie() ?: credential
-                    else -> credential
+                val quarkCred = if (credential.isBlank()) {
+                    ""
+                } else {
+                    when (currentPlatform) {
+                        SharePlatform.QUARK -> accountRepository.getFreshCookie() ?: credential
+                        SharePlatform.UC -> ucAccountRepository.getFreshCookie() ?: credential
+                        else -> credential
+                    }
                 }
                 // 展开待下载项：文件直接加入，文件夹递归收集（相对路径 = 文件夹名/子/...）
                 val tasks = mutableListOf<Pair<ShareFile, String>>()
@@ -469,7 +473,13 @@ class ResolveViewModel(
                     val (file, relPath) = task
                     batchProgress = "${index + 1}/${tasks.size}"
                     runCatching {
-                        currentRepo().getShareDownloadLink(s, file, quarkCred).getOrNull()?.let { link ->
+                        // 游客态（凭据为空）走游客取链：夸克/UC 分享直链不要求账号，带游客 __pugs 即可下载
+                        val linkResult = if (credential.isBlank()) {
+                            currentRepo().getGuestShareDownloadLink(s, file)
+                        } else {
+                            currentRepo().getShareDownloadLink(s, file, quarkCred)
+                        }
+                        linkResult.getOrNull()?.let { link ->
                             // 文件夹内文件用相对路径（保持目录结构）；根目录文件用取链返回的文件名
                             enqueueDownload(link, quarkCred, if (relPath.isBlank()) link.filename else relPath)
                             okCount++
@@ -671,6 +681,9 @@ class ResolveViewModel(
 
     /** 当前解析平台（QUARK / UC / XUNLEI），由链接自动检测 */
     private var currentPlatform: SharePlatform = SharePlatform.QUARK
+
+    /** 当前平台（只读暴露给 UI）：游客提示条等按平台给不同文案 */
+    val sharePlatform: SharePlatform get() = currentPlatform
 
     /** 当前是否为 GitHub 平台（UI 据此渲染 README/forked from/徽章等额外内容） */
     val isGitHubPlatform: Boolean get() = currentPlatform == SharePlatform.GITHUB
@@ -1360,10 +1373,19 @@ class ResolveViewModel(
         }
         val s = session ?: return
         viewModelScope.launch {
-            val credential = currentCredential() ?: return@launch
+            // 游客模式：面包屑回退同样允许匿名列出目录
+            val credential = currentCredential().orEmpty()
             loadFiles(s, currentDirFid, credential, currentRepo())
         }
     }
+
+    /**
+     * 平台是否支持「未登录下载」：目前只有夸克/UC 的分享直链不要求登录态
+     * （夸克仅约 50MB 以内的小文件；UC 实测大文件也放行），且直链要带游客态 __pugs。
+     * 其余平台（含迅雷/百度/139/123）取链或转存中转都依赖账号，仍要求登录。
+     */
+    private fun supportsGuestDownload(): Boolean =
+        currentPlatform == SharePlatform.QUARK || currentPlatform == SharePlatform.UC
 
     /** 获取文件下载直链（各平台实现不同：夸克转存后取 / UC 直接取 / 迅雷转存后取详情直链；GitHub 直接构造 URL） */
     fun fetchDownloadLink(file: ShareFile) {
@@ -1404,8 +1426,15 @@ class ResolveViewModel(
                 }
                 val credential = currentCredential()
                 if (credential.isNullOrBlank()) {
-                    // 游客模式只开放列目录：取直链需要登录
-                    downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
+                    // 游客模式：夸克/UC 的分享直链本身不要求登录（夸克约 50MB 以内，超出报 23018；
+                    // UC 实测 4GB 文件都放行），走各自的游客取链；其余平台必须登录
+                    if (!supportsGuestDownload()) {
+                        downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
+                        return@launch
+                    }
+                    currentRepo().getGuestShareDownloadLink(s, file)
+                        .onSuccess { downloadLink = it }
+                        .onFailure { downloadError = it.message ?: "获取下载链接失败" }
                     return@launch
                 }
                 // 夸克/UC 共用 __puus：取链前确保新鲜（直链签名绑定取链时刻的 Cookie）
@@ -1468,6 +1497,10 @@ class ResolveViewModel(
             SharePlatform.UC -> ucAccountRepository.getFreshCookie() ?: credential
             else -> credential
         }
+        // 游客直链（夸克/UC 小文件）：只有服务端随取链响应下发的游客态 __pugs，没有登录 Cookie。
+        // 夸克缺它 CDN 直接 412；UC 缺它 CDN 403（RequestDeniedByCallback: require login）
+        val guestCookie = link.guestCookie
+        val isGuestLink = guestCookie.isNotBlank()
         // 迅雷直链 URL 自带签名，无需 Cookie；夸克/UC/百度需 Cookie + UA；139 直链为 CDN 签名地址；123 直链需 Referer
         val headers = when {
             isXunlei -> mapOf("User-Agent" to XunleiConstants.APP_UA) // 迅雷直链必须用官方 app UA，浏览器 UA 会触发 CDN 降级（200整文件）
@@ -1483,14 +1516,25 @@ class ResolveViewModel(
             )
             // UC：OSS 直链按 Referer 档位限速（缺 Referer 被 Callback 限到 ~100 KB/s），
             // 补官方 Web 客户端同款 Referer/Origin 即满速
-            isUC -> mapOf(
+            isUC -> if (isGuestLink) mapOf(
+                // 游客链路换 uc-cloud-drive 客户端 UA + Sec-Ch-Ua（参考实现的游客请求同款头），Referer 仍不可少
+                "Cookie" to guestCookie,
+                "User-Agent" to UCConstants.GUEST_UA,
+                "Sec-Ch-Ua" to UCConstants.GUEST_SEC_CH_UA,
+                "Referer" to UCConstants.DOWNLOAD_REFERER,
+                "Origin" to UCConstants.WEB_ORIGIN
+            ) else mapOf(
                 "Cookie" to credential,
                 "User-Agent" to UCConstants.USER_AGENT,
                 "Referer" to UCConstants.DOWNLOAD_REFERER,
                 "Origin" to UCConstants.WEB_ORIGIN
             )
             // 夸克：防盗链需固定 Referer（对齐 AList quark_uc）
-            else -> mapOf(
+            else -> if (isGuestLink) mapOf(
+                "Cookie" to guestCookie,
+                "User-Agent" to QuarkConstants.API_USER_AGENT,
+                "Referer" to QuarkConstants.DOWNLOAD_REFERER
+            ) else mapOf(
                 "Cookie" to effectiveCredential,
                 "User-Agent" to QuarkConstants.API_USER_AGENT,
                 "Referer" to QuarkConstants.DOWNLOAD_REFERER
@@ -1498,7 +1542,7 @@ class ResolveViewModel(
         }
         // 夸克直链：原样使用（关闭节点改写/探测，避免消耗直链额度与节点签名 412）
         val effectiveUrl = if (isQuark) {
-            QuarkCdn.fastest(link.downloadUrl, effectiveCredential)
+            QuarkCdn.fastest(link.downloadUrl, if (isGuestLink) guestCookie else effectiveCredential)
         } else {
             link.downloadUrl
         }
@@ -1539,8 +1583,9 @@ class ResolveViewModel(
                 downloadStarted = true
                 return@launch
             }
-            val credential = currentCredential()
-            if (credential.isNullOrBlank()) {
+            // 游客模式：夸克/UC 的小文件直链不要求登录（link 里已带游客 __pugs）
+            val credential = currentCredential().orEmpty()
+            if (credential.isBlank() && !supportsGuestDownload()) {
                 downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
                 return@launch
             }

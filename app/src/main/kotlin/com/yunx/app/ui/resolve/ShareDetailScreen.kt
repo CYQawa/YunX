@@ -96,6 +96,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import com.yunx.app.data.db.BookmarkEntity
+import com.yunx.app.data.network.SharePlatform
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
 import com.yunx.app.data.prefs.SettingsRepository
@@ -334,10 +335,10 @@ fun ShareDetailScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         header()
                     }
-                    // 游客模式（未登录）：列表可用，但下载/转存需要登录 —— 常驻一行说明，避免点了才报错
+                    // 游客模式（未登录）：列表可用；夸克/UC 可直接下载，其余平台下载/转存需登录 —— 常驻一行说明，避免点了才报错
                     if (viewModel.isGuest) {
                         Spacer(modifier = Modifier.height(10.dp))
-                        GuestBrowseNotice()
+                        GuestBrowseNotice(viewModel.sharePlatform)
                     }
                 }
             }
@@ -589,11 +590,12 @@ fun ShareDetailScreen(
 }
 
 /**
- * 游客模式提示条：未登录也能浏览分享列表（6 个网盘的列表接口都允许匿名），
- * 但下载（取直链）与转存需要登录 —— 见 Agent.md §3.19。
+ * 游客模式提示条：未登录也能浏览分享列表（6 个网盘的列表接口都允许匿名）。
+ * 夸克/UC 还能直接下载（夸克约 50MB 以内的小文件、UC 不限大小），其余平台下载与 6 平台转存都要登录
+ * —— 见 Agent.md §3.19。
  */
 @Composable
-private fun GuestBrowseNotice() {
+private fun GuestBrowseNotice(platform: SharePlatform) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -611,7 +613,14 @@ private fun GuestBrowseNotice() {
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "未登录浏览：可查看文件列表，下载/转存需先到「网盘」页登录",
+                text = when (platform) {
+                    SharePlatform.QUARK ->
+                        "未登录浏览：可直接下载约 50MB 以内的小文件；更大的文件和转存需先到「网盘」页登录"
+                    SharePlatform.UC ->
+                        "未登录浏览：可直接下载（不限大小）；转存需先到「网盘」页登录"
+                    else ->
+                        "未登录浏览：可查看文件列表，下载/转存需先到「网盘」页登录"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

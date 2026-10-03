@@ -49,6 +49,19 @@ interface ShareResolveRepository {
     ): Result<DownloadLink>
 
     /**
+     * 未登录（游客）取分享直链：目前只有夸克/UC 实现。
+     * 返回的 [DownloadLink.guestCookie] 必须带进下载请求（服务端随取链响应下发的游客态 __pugs，
+     * 夸克缺它 412、UC 缺它 403）；不需要也不应该传账号 Cookie。
+     * 其余平台默认失败 —— 它们的取链/转存中转都依赖账号态。
+     */
+    suspend fun getGuestShareDownloadLink(
+        session: ShareSession,
+        file: ShareFile
+    ): Result<DownloadLink> = Result.failure(
+        IllegalStateException("该平台未登录时无法下载，请先登录后再试")
+    )
+
+    /**
      * 下载完成后清理临时转存目录（夸克实现删除 tr_* 子目录；其它平台默认空实现）。
      * @param dirFid DownloadLink.cleanupDirFid 带回的临时目录 fid
      */

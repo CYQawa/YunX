@@ -383,10 +383,11 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 - `.gitignore` 已挡 `*.jks` / `*.keystore` / `keystore.properties`（`!debug.keystore` 例外）。
 - 生成 `KEYSTORE_BASE64`：Linux/macOS `base64 -w 0 你的.jks`（macOS 若报 `-w` 不支持就用 `base64 -i 你的.jks`），Windows PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes("你的.jks"))`。
 
-### 3.19 游客模式：列目录不要求登录，下载/转存仍要求登录（**别再往列目录加登录拦截**）
+### 3.19 游客模式：列目录不要求登录；夸克/UC 小文件也能直接下载（**别再往列目录加登录拦截**）
 
 **结论**：解析分享**不再要求登录**。6 个网盘的分享**列表**接口都允许匿名访问（用户实测：浏览器未登录也能列出文件）；
-但**取直链/转存**基本都要账号，所以登录闸门只保留在下载/转存入口。
+**夸克 / UC 的分享直链本身也不校验登录态**，未登录可直接下载（夸克约 50MB 以内、UC 实测 4GB 都放行）；
+其余平台的**取直链/转存**都要账号，所以登录闸门只保留在这些入口。
 
 **各平台列目录的匿名能力（实测 + 源码核对）**：
 
@@ -395,18 +396,36 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 | 123 | 匿名 | `Pan123Api.getShareFiles`（`/b/api/share/get`）无鉴权头、注释「匿名、无签名」；`fidToken = S3KeyFlag\|Etag\|StorageNode` 已随列表返回 |
 | 139 | 匿名 | `C139Api.getShareFiles` 走 `sharePostAnonymous`，body `account:""`、无 authorization/mcloud-sign |
 | 百度 | 匿名 | 公共分享（无提取码）时 `sekey=""`、省略 `&sekey=`；仓库层无登录前置检查 |
-| 夸克 / UC | 匿名 | API 层无 cookie 预检；仓库/VM 也不再有闸门 |
+| 夸克 / UC | 匿名 | API 层无 cookie 预检；仓库/VM 也不再有闸门。**下载也匿名**（见下节「游客下载」） |
 | 迅雷 | 匿名 | `XunleiApi.getShare` / `getShareDetail` 在 token 为空时**不写 Authorization 头**（带上失效 Bearer 反而被判 `unauthenticated`） |
 | GitHub | —— | 本来就不需要登录 |
 
 **闸门在哪（`ResolveViewModel`）**：
 - `startResolve` / `openFolder` / `goBack`：空凭据**照常下传**，并置 `isGuest = credential.isBlank()`（`backToInput` / `startGitHubResolve` 复位 false）。
   解析失败时给服务端原文 + 一句「当前未登录，可到「网盘」页登录 XX 后重试」。
-- 仍要求登录（不要动）：`fetchDownloadLink`（取直链）、`downloadFiles` / `batchDownload`、`startDownload`、`saveToCloud`、`batchSaveToCloud`、`requestSave`（游客直接提示并 return，不打开目录选择）。
-  提示语统一为「下载/转存需要先登录 X（未登录仅能浏览文件列表）」，走 `downloadError` → Snackbar。
+- 仍要求登录（不要动）：`saveToCloud`、`batchSaveToCloud`、`requestSave`（转存：游客直接提示并 return，不打开目录选择）。
+- 允许游客（仅夸克/UC，判据是 `supportsGuestDownload()`）：`fetchDownloadLink`（走 `getGuestShareDownloadLink`）、`downloadFiles`/`batchDownload`、`startDownload`。
+  其余平台在这三处仍是闸门，提示语统一为「下载/转存需要先登录 X（未登录仅能浏览文件列表）」，走 `downloadError` → Snackbar。
 
-**UI**：`ShareDetailScreen` 的 `GuestBrowseNotice()`（`viewModel.isGuest` 时显示在标题/面包屑下方）说明「可查看文件列表，下载/转存需先到「网盘」页登录」；
-操作弹窗里点「转存」会先关弹窗再弹 Snackbar（否则提示被 `ModalBottomSheet` 挡住）。
+**游客下载（夸克 / UC，2025 实现）**：
+- 取链：`ShareResolveRepository.getGuestShareDownloadLink(session, file)`（接口默认实现=失败，只有夸克/UC 覆写）
+  → `QuarkApi/UCApi.getGuestShareDownloadLink(...)`：**不建临时目录、不转存**，直接打各自的 `file/download` 分享端点，
+  body 带 `fids` / `fids_token`(=`ShareFile.fidToken`) / `pwd_id`(=`session.shareId`) / `stoken`(=`session.stoken`)；
+  夸克还要 `speedup_session:""` + `token:""`（`token` 是社交转存令牌，游客取不到，官方前端同样 catch 后退化成空串）。
+- **关键：`__pugs`**。服务端随取链响应 `Set-Cookie` 下发游客态 `__pugs`（3 小时有效，Domain 分别为 quark.cn / uc.cn），
+  它是**下载直链必须带的 Cookie**：夸克缺它 CDN 412，UC 缺它 403（`RequestDeniedByCallback: require login [auth not found]`）。
+  代码在 `QuarkApi/UCApi` 里用 `pugsFromSetCookies()` 取出**本次响应**的值 → 写进 `DownloadLink.guestCookie`（`DownloadLink` 末尾新增字段，默认空串=登录态）。
+  绑定粒度是响应级：**必须用同一次响应的 `__pugs`**，所以取值先存局部变量再写缓存；`guestPugs` 只是给同批次的后续请求当请求侧 Cookie。
+- 下载头：`enqueueDownload` 判 `link.guestCookie.isNotBlank()` 走游客头 ——
+  UC = `Cookie: __pugs` + `UCConstants.GUEST_UA`（uc-cloud-drive/2.5.20 …）+ `Sec-Ch-Ua` + Referer/Origin；
+  夸克 = `Cookie: __pugs` + `QuarkConstants.API_USER_AGENT` + Referer。夸克直链仍走 `QuarkCdn.fastest(url, guestCookie)`。
+- 大小上限：夸克约 **50MB**（超出报 `23018`，提示「超出游客可获取的大小上限…请先登录」）；UC 实测无此限制（4GB 也放行）。
+- 错误码文案：夸克 `23018`/`31001`；UC `31001`/`23018`/`14001`（分享失效或提取码错）/`41020`（令牌失效）。
+- 转存依旧要登录：游客点「转存」仍走登录闸门（夸克/UC 的转存都要账号态）。
+
+**UI**：`ShareDetailScreen` 的 `GuestBrowseNotice(viewModel.sharePlatform)`（`isGuest` 时显示在标题/面包屑下方）按平台给文案 ——
+夸克「可直接下载约 50MB 以内的小文件」、UC「可直接下载（不限大小）」、其余「可查看文件列表，下载/转存需先到「网盘」页登录」；
+操作弹窗里点「转存」会先关弹窗再弹 Snackbar（否则提示被 `ModalBottomSheet` 挡住）。`ResolveViewModel.sharePlatform` 是 `currentPlatform` 的只读出口。
 
 **迅雷专属实现**（唯一需要改请求构造的平台）：
 - `XunleiApi.panRequest` / `panRequestM`：`accessToken` 为空 ⇒ 不写 `Authorization`（`currentAccessToken` 的旧值不会漏进来）。
@@ -418,6 +437,10 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 - 服务端拒绝时优先看文案里的 `HTTP xxx` / `errno`：百度 `-6` = 未登录或登录态失效（此时提示「需要提取码，或需要登录百度网盘」），夸克/UC 非 JSON 响应会带 `HTTP 401/403`。
 - 游客模式下「某些平台列不出来」不代表协议不行：多数是分享本身需要提取码（先输密码再判断），或风控限速。
 - 回退：把 `startResolve` / `openFolder` / `goBack` 的空凭据下传换回「凭据为空即报错」，并恢复各仓库的 `isNullOrBlank` 校验即可；UI 提示条随 `isGuest` 自动消失。
+- 回退游客**下载**（只想要「游客仅能浏览」）：删掉 `fetchDownloadLink` / `downloadFiles` / `startDownload` 里的 `supportsGuestDownload()` 分支（恢复成「空凭据即报错」），
+  再删 `ShareResolveRepository.getGuestShareDownloadLink` 默认方法与两个仓库覆写、`QuarkApi/UCApi.getGuestShareDownloadLink` 及 `__pugs` 相关私有方法/字段、
+  `DownloadLink.guestCookie`、`UCConstants.GUEST_UA`/`GUEST_SEC_CH_UA`，`enqueueDownload` 恢复成只认登录 Cookie。
+- 游客下载失败先分辨是哪一步：取链阶段失败看错误码文案（23018 大小超限 / 31001 需登录）；取链成功但下载 403/412 说明 `__pugs` 没带上或用了别的响应的值（检查 `DownloadLink.guestCookie` 是否为当次响应值）。
 
 ---
 

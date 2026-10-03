@@ -145,6 +145,25 @@ class QuarkResolveRepository(private val api: QuarkApi) : ShareResolveRepository
         onFailure = { Result.failure(it) }
     )
 
+    /**
+     * 游客取链（未登录）：不碰用户网盘 —— 不建临时目录、不转存，直接按分享参数打 download 接口，
+     * 带回服务端随响应下发的游客态 __pugs。夸克只放行约 50MB 以内的小文件（超出报 23018）。
+     */
+    override suspend fun getGuestShareDownloadLink(
+        session: ShareSession,
+        file: ShareFile
+    ): Result<DownloadLink> = runCatching {
+        api.getGuestShareDownloadLink(
+            fid = file.fid,
+            fidToken = file.fidToken,
+            shareId = session.shareId,
+            stoken = session.stoken
+        ) ?: throw IllegalStateException("获取下载链接失败")
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { Result.failure(it) }
+    )
+
     /** 转存分享文件到用户网盘指定目录（转存功能：不删除，长期保存） */
     suspend fun saveToCloud(
         session: ShareSession,

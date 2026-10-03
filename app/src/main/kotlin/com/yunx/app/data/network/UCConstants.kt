@@ -96,6 +96,19 @@ object UCConstants {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
             "uc-cloud-drive/1.6.1 Chrome/100.0.4896.160 Electron/18.3.5.16-b62cf9c50d Safari/537.36 Channel/ucpan_other_ch"
 
+    /**
+     * 游客（未登录）链路专用 UA：uc-cloud-drive Electron 客户端。
+     * 取链与下字节都用它 —— 依据两个参考实现的一致取值（LinkSwift 分享页匿名链路的
+     * `config.$uc.api.ua.main`、panweb-parser 的 `UC_DOWNLOAD_HEADERS`），游客链路的风控比登录态严。
+     * 登录态仍用 [USER_AGENT]，不动既有链路。
+     */
+    const val GUEST_UA =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "uc-cloud-drive/2.5.20 Chrome/100.0.4896.160 Electron/18.3.5.4-b478491100 Safari/537.36 Channel/pckk_other_ch"
+
+    /** 与 [GUEST_UA] 配套的 Sec-Ch-Ua（LinkSwift 分享页匿名链路同款头） */
+    const val GUEST_SEC_CH_UA = "\"Not=A?Brand\";v=\"99\", \"Chromium\";v=\"100\", \"Google Chrome\";v=\"100\""
+
     /** 云盘下载直链（抓包：?pr=UCBrowser&fr=pc&sys=win32&ve=1.6.1；个人云盘文件用，非 entry=ft 分享通道） */
     const val CLOUD_DOWNLOAD_URL = "$API_BASE/1/clouddrive/file/download"
 
