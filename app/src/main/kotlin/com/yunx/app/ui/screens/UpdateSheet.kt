@@ -60,11 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
-import com.yunx.app.ui.components.GitHubMarkdownImageTransformer
-import com.yunx.app.ui.components.compactMarkdownTypography
-import com.mikepenz.markdown.m3.Markdown
 
 /** Release 说明里没给 html_url 时的兜底跳转地址 */
 private const val RELEASES_PAGE_FALLBACK = "https://github.com/CYQawa/YunX/releases/latest"
@@ -177,25 +173,20 @@ fun UpdateSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(6.dp))
-            // 更新说明：走 Markdown 渲染（可滚动 + 限高，长说明不撑爆弹窗）
+            // 更新说明：纯文本显示（可滚动 + 限高，长说明不撑爆弹窗）
             Surface(
                 shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                // 说明里的图片复用 README 的自研加载器（无 Coil，可走设置的镜像加速）
-                GitHubMarkdownImageTransformer.mirrorPrefix = remember {
-                    SettingsRepository(context).githubMirrorPrefix?.ifBlank { null }
-                }
-                val noteTypography = remember { compactMarkdownTypography() }
-                Markdown(
-                    content = release.body.ifBlank { "暂无更新说明" },
+                Text(
+                    text = release.body.ifBlank { "暂无更新说明" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 220.dp)
                         .verticalScroll(rememberScrollState())
-                        .padding(12.dp),
-                    typography = noteTypography,
-                    imageTransformer = GitHubMarkdownImageTransformer
+                        .padding(12.dp)
                 )
             }
 

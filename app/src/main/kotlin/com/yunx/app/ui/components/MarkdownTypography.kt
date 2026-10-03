@@ -27,8 +27,8 @@ import com.mikepenz.markdown.model.DefaultMarkdownTypography
 /**
  * 紧凑 Markdown 排版：对齐 GitHub 移动端观感（正文 14sp、标题逐级收紧、行距 1.35 倍）。
  *
- * README（ResolveScreen）与检查更新弹窗的更新说明（UpdateSheet）共用同一份排版，
- * 避免两处字号各自漂移；调用方用 `remember { compactMarkdownTypography() }` 包一层即可。
+ * 目前只有 README 预览（ResolveScreen）在用；调用方用 `remember { compactMarkdownTypography() }` 包一层即可。
+ * 检查更新弹窗的更新说明已改为纯文本显示，不再走 Markdown 渲染。
  */
 fun compactMarkdownTypography() = run {
     fun body(size: Int, bold: Boolean = false) = TextStyle(
