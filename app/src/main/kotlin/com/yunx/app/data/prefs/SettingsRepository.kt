@@ -107,6 +107,13 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("file_name_multi_line", value).apply()
         }
 
+    /** 自动识别剪贴板分享链接：关闭后完全不读取剪贴板（默认开启） */
+    var clipboardSuggestEnabled: Boolean
+        get() = prefs.getBoolean("clipboard_suggest_enabled", true)
+        set(value) {
+            prefs.edit().putBoolean("clipboard_suggest_enabled", value).apply()
+        }
+
     /** 忽略 SSL 证书校验（抓包调试用，隐藏菜单开启；默认关闭） */
     var ignoreSslCert: Boolean
         get() = prefs.getBoolean("ignore_ssl_cert", false)

@@ -113,6 +113,7 @@ import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
 import com.yunx.app.ui.components.YunXLoading
+import com.yunx.app.ui.theme.ThemeController
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
@@ -183,33 +184,42 @@ fun ResolveScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    DisposableEffect(lifecycleOwner, clipboard) {
-        // 剪贴板变化立即检测（前台最灵敏，复制即提示）
-        val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
-            maybeSuggestClipboard()
-            // 部分 ROM 剪贴板内容写入有延迟，300ms 后重试一次
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+    // 设置页「自动识别剪贴板」：关闭后不注册监听、不读剪贴板，并立刻收起已有提示
+    val clipboardSuggestEnabled = ThemeController.clipboardSuggestEnabled
+    DisposableEffect(lifecycleOwner, clipboard, clipboardSuggestEnabled) {
+        if (!clipboardSuggestEnabled) {
+            clipboardSuggestion = null
+            onDispose { }
+        } else {
+            // 剪贴板变化立即检测（前台最灵敏，复制即提示）
+            val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
                 maybeSuggestClipboard()
-            }, 300)
-        }
-        clipboard.addPrimaryClipChangedListener(clipListener)
-        // 打开应用 / 从后台切回时检测
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) maybeSuggestClipboard()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        // 冷启动兜底：组合完成立即检测一次（避免 ON_RESUME 早于 observer 注册导致漏检）
-        maybeSuggestClipboard()
-        onDispose {
-            clipboard.removePrimaryClipChangedListener(clipListener)
-            lifecycleOwner.lifecycle.removeObserver(observer)
+                // 部分 ROM 剪贴板内容写入有延迟，300ms 后重试一次
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    maybeSuggestClipboard()
+                }, 300)
+            }
+            clipboard.addPrimaryClipChangedListener(clipListener)
+            // 打开应用 / 从后台切回时检测
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) maybeSuggestClipboard()
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            // 冷启动兜底：组合完成立即检测一次（避免 ON_RESUME 早于 observer 注册导致漏检）
+            maybeSuggestClipboard()
+            onDispose {
+                clipboard.removePrimaryClipChangedListener(clipListener)
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
         }
     }
 
     // Android 11 及以下：轻量轮询兜底（2s 一次）。
     // 部分 ROM（如 vivo）剪贴板监听不触发时仍能识别；Android 12+ 读剪贴板会弹系统提示，不轮询。
+    // 设置页关闭开关后同样不轮询（此时应用完全不读剪贴板）。
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-        LaunchedEffect(Unit) {
+        LaunchedEffect(clipboardSuggestEnabled) {
+            if (!clipboardSuggestEnabled) return@LaunchedEffect
             while (true) {
                 kotlinx.coroutines.delay(2000)
                 maybeSuggestClipboard()

@@ -497,6 +497,23 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 
 ---
 
+### 3.22 「自动识别剪贴板」开关（关掉后应用完全不读剪贴板）
+
+设置页「通用」组第一项是该开关：持久化在 `app/src/main/kotlin/com/yunx/app/data/prefs/SettingsRepository.kt` 的
+`clipboardSuggestEnabled`（键 `clipboard_suggest_enabled`，默认 `true`），内存态在
+`app/src/main/kotlin/com/yunx/app/ui/theme/ThemeController.kt` 的 `clipboardSuggestEnabled`（Compose 可观察，所以关掉即时生效）。
+
+全应用**唯一**读取剪贴板的位置是 `app/src/main/kotlin/com/yunx/app/ui/screens/ResolveScreen.kt` 的 `readClipboardSafely()`，
+它只被 `maybeSuggestClipboard()` 调用，而 `maybeSuggestClipboard()` 只有两个触发点，二者在开关关闭时都不工作：
+- `DisposableEffect(lifecycleOwner, clipboard, clipboardSuggestEnabled)`：关闭时把 `clipboardSuggestion` 置空并 `onDispose {}`，
+  不注册 `OnPrimaryClipChangedListener`、不注册 `ON_RESUME` observer（连冷启动那一次检测也不执行）；
+- Android 11- 的 2 秒轮询 `LaunchedEffect(clipboardSuggestEnabled)`：关闭时直接 `return@LaunchedEffect`。
+
+**新增任何剪贴板读取点前，必须先判断 `ThemeController.clipboardSuggestEnabled`**；
+写入剪贴板（复制直链 / 复制 Cookie）不受该开关影响。
+
+---
+
 ## 4. 验证
 
 
