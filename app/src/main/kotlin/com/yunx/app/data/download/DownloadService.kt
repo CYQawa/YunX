@@ -35,12 +35,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 下载前台服务：下载进行中保持前台运行。
  * 前台服务让系统将应用视为「前台」，避免 Doze/后台省电限速、防止进程被杀，
  * 从而保证切后台后下载速度不受影响。
  * 生命周期由 DownloadManager 驱动：任务开始 → start()，全部结束 → stop()。
+ *
+ * ★ 同一时间只有**一条**前台通知，但保活的来源不止 DownloadManager 一家
+ * （内核包下载 `KernelProvisioner` 也借它，见 Agent.md §3.34）。所以服务的起停必须走
+ * [acquire]/[release] 这对**引用计数**接口：谁先来谁拉起，最后一个走的才关掉。
+ * 直接调 [start]/[stop] 会出现「内核下完把用户正在跑的下载的保活一起关掉」这种事。
  */
 class DownloadService : Service() {
 
@@ -283,6 +289,26 @@ class DownloadService : Service() {
         /** 全部任务结束：停止前台服务（stopService 无后台启动限制，安全） */
         fun stop(context: Context) {
             context.stopService(Intent(context, DownloadService::class.java))
+        }
+
+        /** 引用计数（跨来源共享：内置下载器的任务 + 内核包下载） */
+        private val keepAliveUsers = AtomicInteger(0)
+
+        /**
+         * 申请保活：**第一个**申请者才真正拉起前台服务（后续的只加计数，不动通知）。
+         * 与 [release] 必须配对，调用方自己保证（DownloadManager 用它的任务计数配对，
+         * KernelProvisioner 用自己的 try/finally 配对）。
+         */
+        fun acquire(context: Context, title: String) {
+            if (keepAliveUsers.incrementAndGet() == 1) start(context, title)
+        }
+
+        /** 释放保活：最后一个走的才关掉服务，避免把别人的保活一起关掉 */
+        fun release(context: Context) {
+            if (keepAliveUsers.decrementAndGet() <= 0) {
+                keepAliveUsers.set(0)
+                stop(context)
+            }
         }
     }
 }

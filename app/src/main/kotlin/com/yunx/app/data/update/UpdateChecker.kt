@@ -31,15 +31,20 @@ import org.json.JSONObject
  * GitHub Release 更新检测。
  * 正式版通道（默认）：GET https://api.github.com/repos/CYQawa/YunX/releases/latest
  * 预发布通道（设置页开启「接受预发布版更新」后）：GET https://api.github.com/repos/CYQawa/YunX/releases
+ *
+ * ★ 仓库路径参数化了（[repo]）：内核包下载走的是另一个仓库（`CYQawa/yunx_gopeed_build`，
+ *   见 `KernelProvisioner.KERNEL_REPO`）。Release 的抓取/解析**只此一份实现**，
+ *   不要为了第二个仓库再写一个平行的请求器。
  */
 object UpdateChecker {
 
-    private const val RELEASES_LATEST_URL =
-        "https://api.github.com/repos/CYQawa/YunX/releases/latest"
+    /** 本应用自己的仓库（更新检测默认走它） */
+    const val APP_REPO = "CYQawa/YunX"
+
+    private fun latestUrl(repo: String) = "https://api.github.com/repos/$repo/releases/latest"
 
     /** Release 列表（按发布时间倒序，含 Pre-release）：开启「接受预发布版更新」时用它取最新一条 */
-    private const val RELEASES_LIST_URL =
-        "https://api.github.com/repos/CYQawa/YunX/releases"
+    private fun listUrl(repo: String) = "https://api.github.com/repos/$repo/releases"
 
     /** 更新检测日志标签：失败原因一律 E 级打印，方便直接看 logcat 定位（断网 / 限流 / 无 Release） */
     private const val TAG = "YunX-Update"
@@ -59,7 +64,11 @@ object UpdateChecker {
 
     data class Asset(
         val name: String,
-        val downloadUrl: String
+        val downloadUrl: String,
+        /** 资产大小（GitHub API 的 size，字节）；缺省 0 = 未知（旧调用点不传） */
+        val size: Long = 0L,
+        /** 资产摘要，形如 `sha256:xxxx`；缺省空串 = 未知（GitHub 只在较新的响应里给） */
+        val digest: String = ""
     )
 
     data class Release(
@@ -133,12 +142,15 @@ object UpdateChecker {
      * 任何失败（网络异常 / HTTP 非 2xx / 响应缺字段）都在这里打 E 级日志，并把原因带回调用方，
      * 这样界面能提示「检查更新失败：HTTP 403 ……」而不是统一一句「请检查网络」。
      */
-    suspend fun fetchLatestRelease(includePrerelease: Boolean = false): CheckResult = withContext(Dispatchers.IO) {
+    suspend fun fetchLatestRelease(
+        includePrerelease: Boolean = false,
+        repo: String = APP_REPO
+    ): CheckResult = withContext(Dispatchers.IO) {
         runCatching {
-            if (includePrerelease) requestReleaseList() else requestLatestRelease()
+            if (includePrerelease) requestReleaseList(repo) else requestLatestRelease(repo)
         }
             .onFailure { e ->
-                Log.e(TAG, "获取最新 Release 异常：${e.javaClass.simpleName}: ${e.message}", e)
+                Log.e(TAG, "获取最新 Release 异常（$repo）：${e.javaClass.simpleName}: ${e.message}", e)
             }
             .getOrElse { e ->
                 CheckResult.Failure("${e.javaClass.simpleName}: ${e.message ?: "未知错误"}")
@@ -146,8 +158,8 @@ object UpdateChecker {
     }
 
     /** 正式版通道：GET /releases/latest，GitHub 保证返回最新的非 Pre-release、非 Draft 版本 */
-    private fun requestLatestRelease(): CheckResult {
-        return when (val body = fetchBody(RELEASES_LATEST_URL)) {
+    private fun requestLatestRelease(repo: String): CheckResult {
+        return when (val body = fetchBody(latestUrl(repo))) {
             is BodyResult.Error -> CheckResult.Failure(body.reason)
             is BodyResult.Ok -> {
                 val json = try {
@@ -162,8 +174,8 @@ object UpdateChecker {
     }
 
     /** 预发布通道：GET /releases（数组、按发布时间倒序），取第一条非 Draft 且带 tag_name 的版本 */
-    private fun requestReleaseList(): CheckResult {
-        return when (val body = fetchBody(RELEASES_LIST_URL)) {
+    private fun requestReleaseList(repo: String): CheckResult {
+        return when (val body = fetchBody(listUrl(repo))) {
             is BodyResult.Error -> CheckResult.Failure(body.reason)
             is BodyResult.Ok -> {
                 val array = try {
@@ -225,7 +237,14 @@ object UpdateChecker {
             json.optJSONArray("assets")?.let { arr ->
                 for (i in 0 until arr.length()) {
                     val a = arr.optJSONObject(i) ?: continue
-                    add(Asset(a.optString("name"), a.optString("browser_download_url")))
+                    add(
+                        Asset(
+                            name = a.optString("name"),
+                            downloadUrl = a.optString("browser_download_url"),
+                            size = a.optLong("size"),
+                            digest = a.optString("digest")
+                        )
+                    )
                 }
             }
         }

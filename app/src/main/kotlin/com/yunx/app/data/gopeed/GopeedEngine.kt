@@ -86,6 +86,18 @@ object GopeedEngine {
     var lastError: String? = null
         private set
 
+    /**
+     * 「刚导入的新内核要重启应用才生效」：本进程已经 `System.load` 过旧库（dlopen 进来的库卸载不掉），
+     * 导入只是把文件换掉，真正加载要等下一次冷启动。由 [installFromAar] 按 `loaded` 置位。
+     *
+     * ★ 单独一个字段而**不是复用 [lastError]**：内核更新流程是 `stop()` → 导入 → `start()` 连着走的，
+     *   而 `start()` 开头会把 `lastError` 清空，借它传这条提示会被顺手抹掉（而且 `lastError` 的 setter
+     *   是 private 的，外部连补写都做不到）。进程重启后它自然为 false —— 那时新库才真正被加载。
+     */
+    @Volatile
+    var pendingRestartForNewKernel: Boolean = false
+        private set
+
     /** 引擎 API 端口；apiEnable=false 时无监听器，为 0 */
     @Volatile
     var port: Int = 0
@@ -99,6 +111,27 @@ object GopeedEngine {
     fun soFile(context: Context): File = File(File(context.filesDir, "$DIR_NAME/lib"), SO_NAME)
 
     fun isInstalled(context: Context): Boolean = soFile(context).isFile
+
+    /**
+     * 本机首选 ABI 对应的内核包名：`libgopeed-<abi>.aar`。
+     *
+     * ★ 这是「下载哪个包」与「导入时解哪个目录」之间**唯一的对齐点**，两边必须用同一个值：
+     *   [installFromAar] 是按 `jni/<abi>/libgojni.so` **精确匹配**条目名的，一旦下载时为了
+     *   「有货就下」退到别的架构（比如 arm64 机器下了 v7a 包），导入必然报
+     *   「这个 AAR 里没有 jni/arm64-v8a/libgojni.so」。所以 Release / 网盘分享里缺本机 ABI 的包时
+     *   要直接报错，**绝不静默换架构**。
+     */
+    fun kernelAssetName(): String = "libgopeed-${preferredAbi()}.aar"
+
+    /**
+     * 云端下载内核包的落地目录（应用外部私有目录，`Android/data/<包名>/files/gopeed/kernel`）。
+     *
+     * 刻意**不放公共 Download 目录**：内核包只是导入用的临时物件（导入完就删），
+     * 用户不需要在文件管理器里看到它，也避免为此要求任何存储权限。
+     * `getExternalFilesDir` 在极少数情况下返回 null（外部存储未挂载），退回内部私有目录。
+     */
+    fun kernelTempDir(context: Context): File =
+        File(context.getExternalFilesDir(null) ?: context.filesDir, "$DIR_NAME/kernel")
 
     /**
      * 把内存里的状态与真实文件对齐一次。
@@ -279,8 +312,10 @@ object GopeedEngine {
         if (loaded) {
             // dlopen 进来的库没法卸载，只能提示重启
             lastError = "引擎已在本进程中加载过，新文件需重启应用后才会生效"
+            pendingRestartForNewKernel = true
         } else {
             lastError = null
+            pendingRestartForNewKernel = false
         }
         _state.value = State.INSTALLED
         Log.d(TAG, "导入完成：写出 $written 字节，${describe(so)}")
@@ -488,8 +523,8 @@ object GopeedEngine {
         "path=${so.absolutePath} isFile=${so.isFile} size=${if (so.isFile) so.length() else -1L} " +
             "readable=${so.canRead()} executable=${so.canExecute()} writable=${so.canWrite()}"
 
-    /** 首选 ABI：按系统上报顺序挑第一个 AAR 里可能有的目录名 */
-    private fun preferredAbi(): String =
+    /** 首选 ABI：按系统上报顺序挑第一个 AAR 里可能有的目录名（[kernelAssetName] 也读它，故为 public） */
+    fun preferredAbi(): String =
         Build.SUPPORTED_ABIS.firstOrNull { it in KNOWN_ABIS } ?: "arm64-v8a"
 
     /**

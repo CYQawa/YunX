@@ -32,6 +32,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,18 +50,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -67,6 +76,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -83,11 +93,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yunx.app.data.gopeed.GopeedEngine
+import com.yunx.app.data.gopeed.KernelProvisioner
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.ui.components.YunXWavyLoading
+import com.yunx.app.ui.components.YunXWavyProgress
 import com.yunx.app.ui.resolve.formatSize
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
@@ -122,6 +136,7 @@ import kotlinx.coroutines.withContext
  * 选 Gopeed 且已导入内核时，应用启动会自动加载引擎（见 YunXApp.autoStartGopeedIfSelected）；
  * **删掉内核会自动切回内置下载器**，避免"设置说在用 Gopeed、实际跑的是内置下载器"这种不一致。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     BackHandler { onBack() }
@@ -167,6 +182,17 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val needAllFiles = PermissionState.allFilesAccessRequired() && !allFilesReady
     val needLegacyStorage = PermissionState.engineStoragePermissionPending(context)
     val storageBlocked = needAllFiles || needLegacyStorage
+
+    // ---------- 内核的云端获取 ----------
+    // 阶段状态全在 KernelProvisioner 单例里（下载跑在它自己的 scope 上，切页/退后台都不影响），
+    // 这里只收集它渲染那个**不可关闭**的进度弹窗。
+    val provisionPhase by KernelProvisioner.phase.collectAsState()
+    /** 「导入内核 / 更新内核」的下拉菜单 */
+    var showKernelMenu by remember { mutableStateOf(false) }
+    /** 非 null = 云端下载的底部弹窗正在显示（已拿到 Release 且已按本机 ABI 挑好包） */
+    var cloudRelease by remember { mutableStateOf<KernelProvisioner.KernelRelease?>(null) }
+    /** 「GitHub 下载」的二级菜单：直链 / 镜像站 */
+    var showGithubDialog by remember { mutableStateOf(false) }
 
     fun refreshSoInfo() {
         val so = GopeedEngine.soFile(context)
@@ -246,6 +272,26 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         }
     }
 
+    /**
+     * 点「从云端下载」：先问 GitHub 要内核仓库的最新 Release（这期间进度弹窗显示「正在获取内核版本」），
+     * 拿到并且**本机 ABI 的包在里面**才弹底部弹窗；否则弹窗直接显示失败原因。
+     */
+    fun fetchCloudRelease() {
+        if (provisionPhase !is KernelProvisioner.Phase.Idle) return
+        scope.launch {
+            // 失败原因由 KernelProvisioner 写进 phase（Failed），界面照常弹那个弹窗显示，这里不用再抄一遍
+            KernelProvisioner.loadRelease().onSuccess { cloudRelease = it }
+        }
+    }
+
+    /** 选好来源后开下：下载 + 校验 + 导入 + 清理全程由 KernelProvisioner 推进，界面只跟着 phase 走 */
+    fun startKernelDownload(source: KernelProvisioner.Source) {
+        val release = cloudRelease ?: return
+        cloudRelease = null
+        showGithubDialog = false
+        KernelProvisioner.start(context, release, source)
+    }
+
     // 进页面先把「内核在不在」这条内存状态与真实文件对齐：GopeedEngine.state 只在导入/启动/停止/卸载时
     // 被写过，进程重启后是 NOT_INSTALLED；选内置下载器时启动流程根本不会碰引擎，
     // 不同步的话就会显示成「未导入内核」，而内核明明还在（用户报的 bug）。
@@ -259,6 +305,17 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 withContext(Dispatchers.IO) { GopeedEngine.engineVersion() }
             }.getOrDefault("")
         }
+    }
+
+    // 云端内核导入完成：刷新内核信息/状态，并把「要不要重启应用」带进提示行
+    // （本进程已加载过旧库时 dlopen 卸载不掉，页面留一句说明，别让用户以为新内核已经生效）
+    LaunchedEffect(provisionPhase) {
+        val done = provisionPhase as? KernelProvisioner.Phase.Done ?: return@LaunchedEffect
+        refreshSoInfo()
+        GopeedEngine.syncInstalledState(context)
+        notice = "内核已导入：libgojni.so ${formatSize(done.bytes)}" +
+            (if (GopeedEngine.pendingRestartForNewKernel) "　·　重启应用后生效" else "")
+        failure = GopeedEngine.lastError
     }
 
     Scaffold(
@@ -447,34 +504,87 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 }
                             }
 
-                            EngineActionButton(
-                                selected = engineOn,
-                                icon = when {
-                                    !installed -> Icons.Outlined.Add
-                                    storageBlocked -> Icons.Outlined.FolderOpen
-                                    else -> Icons.Outlined.SwapHoriz
-                                },
-                                label = when {
-                                    !installed -> "导入内核"
-                                    engineOn -> "使用中"
-                                    // 没存储权限就不给切：按钮直接变成权限入口（点它去开权限，而不是切完再报错）
-                                    storageBlocked -> "先授予存储权限"
-                                    else -> "切换到此引擎"
-                                },
-                                enabled = !busy && (!installed || !engineOn),
-                                onClick = {
-                                    when {
-                                        !installed -> importLauncher.launch(
+                            // 没导入内核时这个按钮是「导入内核」，点它弹来源菜单（云端 / 本地 AAR）；
+                            // 菜单要贴着按钮长，所以包一层 Box 当锚点
+                            Box {
+                                EngineActionButton(
+                                    selected = engineOn,
+                                    icon = when {
+                                        !installed -> Icons.Outlined.Add
+                                        storageBlocked -> Icons.Outlined.FolderOpen
+                                        else -> Icons.Outlined.SwapHoriz
+                                    },
+                                    label = when {
+                                        !installed -> "导入内核"
+                                        engineOn -> "使用中"
+                                        // 没存储权限就不给切：按钮直接变成权限入口（点它去开权限，而不是切完再报错）
+                                        storageBlocked -> "先授予存储权限"
+                                        else -> "切换到此引擎"
+                                    },
+                                    enabled = !busy && (!installed || !engineOn),
+                                    onClick = {
+                                        when {
+                                            !installed -> showKernelMenu = true
+                                            storageBlocked -> requestStoragePermission()
+                                            else -> chooseEngine(SettingsRepository.ENGINE_GOPEED)
+                                        }
+                                    }
+                                )
+                                KernelSourceMenu(
+                                    expanded = showKernelMenu,
+                                    onDismiss = { showKernelMenu = false },
+                                    onCloud = {
+                                        showKernelMenu = false
+                                        fetchCloudRelease()
+                                    },
+                                    onLocal = {
+                                        showKernelMenu = false
+                                        importLauncher.launch(
                                             arrayOf("application/octet-stream", "application/zip", "*/*")
                                         )
-                                        storageBlocked -> requestStoragePermission()
-                                        else -> chooseEngine(SettingsRepository.ENGINE_GOPEED)
                                     }
-                                }
-                            )
+                                )
+                            }
 
                             if (installed) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                // 三个文字按钮（更新内核 / 重启引擎 / 删除内核）在窄屏上放不下一行，
+                                // 所以用 FlowRow 让它们自己折行，别硬挤成溢出
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    // 已导入时主按钮变成「使用中/切换到此引擎」，导入入口就没了 ——
+                                    // 换内核（升级/重新下载）要有地方去，所以在这里补一个「更新内核」，
+                                    // 弹的是同一个来源菜单。
+                                    Box {
+                                        TextButton(onClick = { showKernelMenu = true }) {
+                                            Icon(
+                                                Icons.Outlined.Cloud,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("更新内核")
+                                        }
+                                        KernelSourceMenu(
+                                            expanded = showKernelMenu,
+                                            onDismiss = { showKernelMenu = false },
+                                            onCloud = {
+                                                showKernelMenu = false
+                                                fetchCloudRelease()
+                                            },
+                                            onLocal = {
+                                                showKernelMenu = false
+                                                importLauncher.launch(
+                                                    arrayOf(
+                                                        "application/octet-stream",
+                                                        "application/zip",
+                                                        "*/*"
+                                                    )
+                                                )
+                                            }
+                                        )
+                                    }
                                     // 引擎操作只在「正在用 Gopeed」时给：内置下载器模式下引擎本来就不该在跑，
                                     // 更不该让用户去启动/停止它（用户反馈：没切到 Gopeed 却能点「启动引擎」）。
                                     // 而且只留「重启」——都切到 Gopeed 了，单独「停止引擎」这个动作没有意义；
@@ -566,6 +676,395 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             }
         }
     }
+
+    // ---------- 云端内核：底部弹窗（选来源）+ GitHub 二级菜单 + 不可关闭的进度弹窗 ----------
+
+    // ① 底部弹窗：只在「已拿到 Release」时显示；说明里命中网盘链接才有「网盘自动下载」
+    cloudRelease?.let { release ->
+        KernelCloudSheet(
+            release = release,
+            onPan = { startKernelDownload(KernelProvisioner.Source.PAN) },
+            onGithub = { showGithubDialog = true },
+            onDismiss = { cloudRelease = null }
+        )
+    }
+
+    // ② GitHub 二级菜单：直链 / 镜像站（镜像站失败会自动回退直链）
+    if (showGithubDialog) {
+        KernelGithubDialog(
+            onDirect = { startKernelDownload(KernelProvisioner.Source.GITHUB) },
+            onMirror = { startKernelDownload(KernelProvisioner.Source.GITHUB_MIRROR) },
+            onDismiss = { showGithubDialog = false }
+        )
+    }
+
+    // ③ 进度弹窗：网上取包到导入完成的全过程都在这里，**点空白/返回键都关不掉**
+    //（只有「取消」和终态的「关闭」能走），免得用户手滑把 25MB 的下载甩掉
+    KernelProgressDialog(
+        phase = provisionPhase,
+        onCancel = { KernelProvisioner.cancel() },
+        onDismiss = { KernelProvisioner.reset() }
+    )
+}
+
+/**
+ * 「导入内核 / 更新内核」的来源菜单：从云端下载（GitHub Release，按本机 ABI 自动挑包）或本地 AAR。
+ * 两个入口（未导入时的主按钮、已导入时的「更新内核」）共用这一份菜单，别再各写一遍。
+ */
+@Composable
+private fun KernelSourceMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onCloud: () -> Unit,
+    onLocal: () -> Unit
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text("从云端下载") },
+            leadingIcon = { Icon(Icons.Outlined.Cloud, contentDescription = null) },
+            onClick = onCloud
+        )
+        DropdownMenuItem(
+            text = { Text("导入本地 AAR") },
+            leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+            onClick = onLocal
+        )
+    }
+}
+
+/**
+ * 云端内核的底部弹窗（层级对齐「发现新版本」那个 UpdateSheet）：
+ * 主按钮「网盘自动下载」**只在 Release 说明里命中网盘链接时**出现，否则只有 GitHub 一条路。
+ * 两个通道都会按本机 ABI 自动挑包（`libgopeed-<abi>.aar`），下载完自动导入。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun KernelCloudSheet(
+    release: KernelProvisioner.KernelRelease,
+    onPan: () -> Unit,
+    onGithub: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, bottom = 32.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(46.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Outlined.Cloud,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = "下载 Gopeed 内核",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "版本 ${release.tagName}　·　本机 ${GopeedEngine.preferredAbi()}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = release.assetName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (release.assetSize > 0L) {
+                            "大小 ${formatSize(release.assetSize)}"
+                        } else {
+                            "大小未知"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "下载完成后自动解包导入，临时包不落到 Download 目录",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ① 主按钮：说明里有「[网盘下载](…)」才给网盘通道
+            if (release.panUrl != null) {
+                Button(
+                    onClick = onPan,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("网盘自动下载")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // ② 次按钮：GitHub 下载（再选直链 / 镜像站）
+            if (release.panUrl != null) {
+                OutlinedButton(
+                    onClick = onGithub,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Cloud,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("GitHub 下载")
+                }
+            } else {
+                Button(
+                    onClick = onGithub,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Cloud,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("GitHub 下载")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+/** GitHub 通道的二级菜单：直链 / 镜像站（镜像站失效时下载器会自动回退直连） */
+@Composable
+private fun KernelGithubDialog(
+    onDirect: () -> Unit,
+    onMirror: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("GitHub 下载") },
+        text = {
+            Column {
+                Button(onClick = onDirect, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("GitHub 直链下载")
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onMirror, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        imageVector = Icons.Outlined.Cloud,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("GitHub 镜像站下载")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    )
+}
+
+/**
+ * 内核下载的进度弹窗：**故意做成关不掉的**（`dismissOnBackPress`/`dismissOnClickOutside` 全 false）——
+ * 25MB 的下载不该被一次误触甩掉；要中断只能按「取消」，那会清干净地把任务停掉。
+ * 阶段文案跟着 [KernelProvisioner.Phase] 走，终态（完成/失败）给一个「关闭」。
+ */
+@Composable
+private fun KernelProgressDialog(
+    phase: KernelProvisioner.Phase,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (phase is KernelProvisioner.Phase.Idle) return
+
+    val done = phase as? KernelProvisioner.Phase.Done
+    val failed = phase as? KernelProvisioner.Phase.Failed
+    val downloading = phase as? KernelProvisioner.Phase.Downloading
+    val merging = phase as? KernelProvisioner.Phase.Merging
+    val finished = done != null || failed != null
+
+    AlertDialog(
+        onDismissRequest = { /* 故意空着：点空白/返回键都不关，见上面的说明 */ },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+        title = {
+            Text(
+                when {
+                    done != null -> "内核已导入"
+                    failed != null -> "内核下载失败"
+                    else -> "正在获取内核"
+                }
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = when (phase) {
+                        is KernelProvisioner.Phase.FetchingRelease -> "正在获取最新版本…"
+                        is KernelProvisioner.Phase.Resolving -> "正在解析下载地址…"
+                        is KernelProvisioner.Phase.Downloading -> "正在分片下载…"
+                        is KernelProvisioner.Phase.Merging -> "正在合并分片…"
+                        is KernelProvisioner.Phase.Importing -> "正在解包导入…"
+                        is KernelProvisioner.Phase.Done ->
+                            "${phase.fileName} 已解出 libgojni.so ${formatSize(phase.bytes)}"
+                        is KernelProvisioner.Phase.Failed -> phase.message
+                        else -> ""
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (failed != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+
+                when {
+                    downloading != null -> {
+                        // 总大小未知时给不确定进度条，别拿 0% 骗人
+                        val known = downloading.total > 0L
+                        val fraction = if (known) {
+                            (downloading.downloaded.toFloat() / downloading.total).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                        if (known) {
+                            YunXWavyProgress(
+                                progress = { fraction },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            )
+                        } else {
+                            YunXWavyLoading(modifier = Modifier.fillMaxWidth())
+                        }
+                        Text(
+                            text = buildString {
+                                if (known) {
+                                    append("${(fraction * 100).toInt()}%　")
+                                    append("${formatSize(downloading.downloaded)} / ${formatSize(downloading.total)}")
+                                } else {
+                                    append(formatSize(downloading.downloaded))
+                                }
+                                if (downloading.speedBps > 0L) {
+                                    append("　·　${formatSize(downloading.speedBps)}/s")
+                                }
+                                append("　·　${downloading.chunks} 分片")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    merging != null -> {
+                        YunXWavyProgress(
+                            progress = { (merging.percent / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                        Text(
+                            text = "合并中 ${merging.percent}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    phase is KernelProvisioner.Phase.Importing -> {
+                        YunXWavyLoading(modifier = Modifier.fillMaxWidth())
+                    }
+                    !finished -> {
+                        YunXWavyLoading(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+
+                if (done != null) {
+                    Text(
+                        text = if (GopeedEngine.pendingRestartForNewKernel) {
+                            "内核文件已换新，但本进程已经加载过旧内核（dlopen 进来的库卸载不掉），" +
+                                "需要重启应用才会用上新内核。"
+                        } else {
+                            "内核文件已就位，下次启动引擎就会用它。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (finished) {
+                TextButton(onClick = onDismiss) { Text("关闭") }
+            } else {
+                TextButton(onClick = onCancel) {
+                    Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    )
 }
 
 /**

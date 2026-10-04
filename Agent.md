@@ -987,6 +987,11 @@ WakeLock 与通知通道，见 §3.31），一开始误判成"只作用于内置
 | `notifyProgress(id, fileName, new, total)`：2 秒节流 + 从 `_stats` 取速度 | 同步循环里每轮回写进度后调用（**必须写在 `_stats.update` 之后**，否则通知里的速度慢一拍） |
 | `DownloadService.notifyResult(...)`：终态通知（含流体云胶囊） | 完成/失败时调用，`promote = showSpeedProvider()` 与内置下载器一致 |
 
+**★ 前台服务的起停一律走引用计数**：`DownloadService.acquire(context, title)` / `release(context)`
+（§3.34 引入，`onTaskStarted/onTaskFinished` 内部已从 `start()/stop()` 换成这一对）。
+同一时间只有一条前台通知，而保活来源不止 `DownloadManager` 一家（内核包下载也借它），
+直接 `stop()` 会把别人的保活一起关掉。**新增调用方必须成对 acquire/release**。
+
 **★ 配对靠 `engineKeepAliveIds`（`ConcurrentHashMap.newKeySet<Long>()`）**：`add(id)` 返回 true 才拉起保活，
 `remove(id)` 返回 true 才收尾，所以无论从哪条路径终结都**恰好扣一次**（引擎任务不走下载协程，没有
 `finally` 可以依赖，重复扣会让前台服务提前退出、漏扣会让服务一直挂着耗电）。
@@ -1140,6 +1145,79 @@ Gopeed 段里还带着：**引擎状态**（未导入内核 / 已导入，未启
 **运行期行为**：`resolveDownloadDir` 每 700 ms 的同步循环/建任务时都会调，自定义目录**不可写就记日志退回默认目录**
 （SD 卡拔了、权限被撤销时，退回默认比让每个任务都失败好）；引擎页显示的「下载目录」就是这个函数的返回值，
 所以自定义后打开引擎页能看到真实生效的目录。**改目录不影响已存在的任务**（和引擎切换同一口径）。
+
+### 3.34 内核的云端获取（GitHub / 网盘自动下载 → 自动导入）
+
+内核不再只能靠用户手动找 AAR：引擎页的「导入内核」（已导入时是「更新内核」）会弹一个来源菜单
+**「从云端下载 / 导入本地 AAR」**，本地那条就是原来的 `OpenDocument` 流程，一行没动。
+
+**整条链路都在 `data/gopeed/KernelProvisioner.kt` 一个对象里**（取包 → 下载 → 校验 → 导入 → 清理），
+界面（`DownloadEngineScreen`）只收集它的 `phase: StateFlow<Phase>` 渲染弹窗，不持任何下载逻辑。
+**刻意不复用 `DownloadManager.enqueue`**，三个原因：① 内核包落在**应用私有目录**
+（`GopeedEngine.kernelTempDir` = `Android/data/<包名>/files/gopeed/kernel`），不放公共 Download，
+所以也不需要任何存储权限；② 下载过程**不进「下载」页**、不落库、完成即自动导入；
+③ 界面要的是「一个关不掉的进度弹窗」，不是任务列表里的一行。
+复用的是底层零件：`ChunkDownloader`（Range 分片 + 断点续传 + 严格字节校验）、
+`UpdateChecker`（Release 抓取，仓库参数化）、`QuarkResolveRepository`（网盘解析）、
+`GopeedEngine.installFromAar`（导入）。
+
+**已核实的硬事实（改之前先信这几条，别再猜）**：
+- 内核仓库 `CYQawa/yunx_gopeed_build` 的 Release：tag `1`（name `Gopeed AAR`），
+  资产是 **4 个按架构分包** `libgopeed-{arm64-v8a, armeabi-v7a, x86_64, x86}.aar` + `SHA256SUMS.txt`；
+  body 里正好是 `[网盘下载](https://pan.quark.cn/s/fe29d0d39745)`，被现有的
+  `UpdateChecker.netdiskDownloadUrl()` 直接命中（那个正则本来就是给更新弹窗写的，一份两用）。
+- **网盘分享就是 GitHub 资产的同名镜像**：同样 4 个包名、大小逐一对应（合计 102,390,074 B）。
+  所以网盘侧挑包的**唯一键是文件名**，不需要猜大小或顺序。
+- **匿名（未登录）能下**：分享 token 不需要登录，游客取链返回 `dl-guest-*` 直链（要回带 `__pugs`），
+  Range 可用（实测 `206` + `Content-Range`）。四个包 24.8–26.3 MB **全部低于夸克游客约 50MB 的上限**，
+  所以「没登录也能自动下」是常态，「超上限」才是兜底提示。
+- **ABI 只有一个对齐点**：`GopeedEngine.kernelAssetName()` = `libgopeed-${preferredAbi()}.aar`，
+  下载挑包与 `installFromAar` 里「精确匹配 `jni/<abi>/libgojni.so`」必须同源；
+  **Release / 分享里缺本机架构的包要直接报错，绝不静默换个架构下**（那样导入必然失败，还会被当成包坏了）。
+  为此 `preferredAbi()` 从 private 改成 public。
+
+**取链口径（用户指定）**：已登录夸克 → **转存优先**（`getShareDownloadLink`，会在用户网盘里建临时目录，
+用完必须 `cleanupTempDir` 删掉），转存失败才回退**免转存**（`getShareDownloadLinkWithoutSave`）；
+未登录 → 游客取链（`getGuestShareDownloadLink`）。直链请求头与「网盘下载」完全一致
+（`Cookie` + `QuarkConstants.API_USER_AGENT` + `DownloadReferer`；游客态必须用 `link.guestCookie` 顶掉 Cookie，
+缺了 CDN 412）。**转存临时目录的清理放在 `finally` 里且包了 `NonCancellable`** ——
+协程被取消后普通挂起调用会立刻抛异常，不包就正好在「用户点取消」这条路径上泄漏用户网盘里的垃圾。
+
+**下载**：能探到大小就 `min(设置里的下载线程数, 16, 总大小/1MB)` 个分片并发（网盘通道按夸克档取线程数、
+GitHub 通道按 GitHub 档），探不到就退回单流 `downloadFull`；服务器忽略 Range 时**清掉分片重来走单流**
+（绝不按分片写整文件）。断点续传：分片文件留在私有目录里，下次下载按 `partFile.length()` 接着写。
+镜像站下载会把直链作为 `fallbackUrl`，主地址失败自动回退（与「网盘更新」的 APK 同一口径）。
+GitHub 通道额外做 **sha256 校验**（用 Release 资产自带的 `digest`，网盘通道拿不到摘要就跳过），
+校验不过直接丢弃、绝不拿去导入。
+**保活借的是内置下载器那条前台服务**（`DownloadService`）。★ 服务的起停**必须走引用计数版的
+`DownloadService.acquire(context, title)` / `release(context)`**（本次为它新加的两个静态方法，
+`DownloadManager.onTaskStarted/onTaskFinished` 也已从 `start/stop` 换成这两个）：
+同一时间只有一条前台通知，而保活的来源不止一家（内置任务 + 内核包下载），
+直接 `stop()` 会出现「内核下完把用户正在跑的下载的保活一起关掉」。
+调用方自己配对：`DownloadManager` 用它的 `activeTaskCount`，`KernelProvisioner` 用自己的
+`keepAliveAcquired` 标志 —— **一次都没 acquire 过就 release 会把计数打成负数，同样会误关别人的保活**。
+内核侧的进度走通知栏（2 秒节流，与内置下载器同口径），收工（完成/失败/取消）在 `finally` 里 release。
+
+**导入前后两件事**（都容易踩）：
+1. 导入前**必须先 `GopeedEngine.stop()`**（`installFromAar` 不允许在 RUNNING 时覆盖 .so），
+   导入后如果它原来就在跑，**立刻 `start()` 拉回来**，别因为更新内核把正在下载的任务晾着。
+2. 新 `.so` **只有全新进程才 dlopen 得进来**（已加载的库卸载不掉），所以导入成功后页面提示
+   「需要重启应用才会用上新内核」——这是 `installFromAar` 的既有语义，不是 bug。
+   ★ 这条状态用 `GopeedEngine.pendingRestartForNewKernel`（本次新增的 `private set` 只读属性，
+   由 `installFromAar` 按 `loaded` 置位）承载，**不要借 `lastError` 传**：内核更新流程是
+   `stop()` → 导入 → `start()` 连着走的，而 `start()` 开头就会把 `lastError` 清空，提示会被顺手抹掉；
+   何况 `lastError` 的 setter 是 `private`，外部连补写都做不到
+   （第一版正是这么写的，CI 直接报 `Cannot access 'lastError': it is private in GopeedEngine`）。
+
+**弹窗是故意关不掉的**：`AlertDialog(properties = DialogProperties(dismissOnBackPress = false,
+dismissOnClickOutside = false))`，25MB 的下载不该被一次误触甩掉；要中断只能按「取消」
+（`KernelProvisioner.cancel()` → 取消 OkHttp Call + 取消协程，分片保留可续传）。终态（完成/失败）才给「关闭」。
+阶段文案跟着 `Phase` 走：获取版本 → 解析地址 → 分片下载（百分比 + 速度 + 分片数）→ 合并 → 导入。
+
+**落点**：`data/gopeed/KernelProvisioner.kt`（新增，全链路）、`GopeedEngine.kt`（`preferredAbi()` 提 public、
+新增 `kernelAssetName()` / `kernelTempDir()`）、`data/update/UpdateChecker.kt`
+（`fetchLatestRelease(includePrerelease, repo)` + `Asset.size/digest`）、
+`ui/screens/DownloadEngineScreen.kt`（菜单 + 底部弹窗 + 进度弹窗）。
 
 ---
 

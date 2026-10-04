@@ -802,7 +802,8 @@ class DownloadManager(
     private suspend fun onTaskStarted(id: Long) {
         if (activeTaskCount.getAndIncrement() == 0) {
             val name = runCatching { dao.get(id)?.fileName }.getOrNull() ?: "下载任务"
-            DownloadService.start(context, name)
+            // 走引用计数版：内核包下载（KernelProvisioner）也在用同一条前台服务，谁都不能直接停
+            DownloadService.acquire(context, name)
         }
         // 锁屏保持下载：开启时获取 PARTIAL_WAKE_LOCK（息屏维持 CPU/网络）
         acquireWakeLockIfNeeded()
@@ -811,7 +812,7 @@ class DownloadManager(
     private fun onTaskFinished() {
         if (activeTaskCount.decrementAndGet() <= 0) {
             activeTaskCount.set(0)
-            DownloadService.stop(context)
+            DownloadService.release(context)
             releaseWakeLock()
         }
     }
