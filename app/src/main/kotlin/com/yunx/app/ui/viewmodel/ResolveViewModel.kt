@@ -46,6 +46,7 @@ import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.SharePlatform
 import com.yunx.app.data.network.UCConstants
 import com.yunx.app.data.network.XunleiConstants
+import com.yunx.app.data.network.XunleiKouling
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
@@ -861,11 +862,27 @@ class ResolveViewModel(
         }
         viewModelScope.launch {
             uiState = ResolveUiState.Loading
-            val parsed = ShareLinkParser.parse(link)
+            // 迅雷中文口令（如「张三丰资源」）：不是分享链接的短中文文本 → 先用 shoulei 跳转接口
+            // 换成带提取码的分享链接，再按普通分享链接继续解析。口令是迅雷专有的输入形态，
+            // 其它平台没有对应形式，所以只在「不像任何分享链接」时尝试一次。
+            val koulingUrl = if (ShareLinkParser.parse(link) == null && XunleiKouling.looksLikeKouling(link)) {
+                val r = xunleiResolveRepository.resolveKouling(XunleiKouling.normalize(link))
+                r.exceptionOrNull()?.let { e ->
+                    uiState = ResolveUiState.Error(e.message ?: "口令解析失败")
+                    return@launch
+                }
+                r.getOrNull()
+            } else {
+                null
+            }
+            val effectiveLink = koulingUrl ?: link
+            val parsed = ShareLinkParser.parse(effectiveLink)
             if (parsed == null) {
                 uiState = ResolveUiState.Error("无法识别分享链接")
                 return@launch
             }
+            // 口令已换成真实分享链接：收藏 / 复制 / 重新解析都用它，而不是原始口令
+            currentLink = effectiveLink
             currentPlatform = parsed.platform
             isGuest = false
             // 游客模式：列目录不要求登录（7 个网盘的分享列表接口都允许匿名，详见 Agent.md §3.19）。
@@ -873,7 +890,7 @@ class ResolveViewModel(
             val credential = currentCredential().orEmpty()
             isGuest = credential.isBlank()
             val repo = currentRepo()
-            repo.createSession(link, pwd, credential)
+            repo.createSession(effectiveLink, pwd, credential)
                 .onSuccess { s ->
                     session = s
                     currentDirFid = currentDefaultDirFid()

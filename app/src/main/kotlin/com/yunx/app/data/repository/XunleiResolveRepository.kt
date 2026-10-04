@@ -84,6 +84,13 @@ class XunleiResolveRepository(
 
     private suspend fun captcha(): String = captchaProvider() ?: ""
 
+    /**
+     * 迅雷中文口令（如「张三丰资源」）→ 带提取码的分享链接（`https://pan.xunlei.com/s/xxx?pwd=xxxx`）。
+     * 免登录：shoulei 跳转接口不校验账号；拿到链接后按普通分享链接交给 [createSession]。
+     */
+    suspend fun resolveKouling(keyword: String): Result<String> =
+        runCatching { api.parseKouling(keyword) }
+
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> =
         runCatching {
             val shareId = ShareLinkParser.parse(link)?.shareId

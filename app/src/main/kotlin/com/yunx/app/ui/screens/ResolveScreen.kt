@@ -507,7 +507,7 @@ private fun ResolveInputContent(
             value = link,
             onValueChange = onLinkChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("例如：https://pan.quark.cn/s/xxxx") },
+            placeholder = { Text("例如：https://pan.quark.cn/s/xxxx 或 迅雷口令") },
             leadingIcon = { Icon(Icons.Outlined.Link, contentDescription = null) },
             trailingIcon = {
                 if (link.isNotEmpty()) {
