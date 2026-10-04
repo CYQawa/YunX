@@ -49,6 +49,19 @@ interface ShareResolveRepository {
     ): Result<DownloadLink>
 
     /**
+     * 免转存取链（登录态）：不把分享文件转存到用户网盘，直接用分享凭证换下载直链 ——
+     * 少一次「建目录 → 转存 → 轮询」，不在用户网盘留临时目录，也不会撞夸克的转存去重。
+     *
+     * 默认实现回退到 [getShareDownloadLink]，行为与改动前完全一致：UC 本来就直接取链不转存，
+     * 其余平台的取链语义各自独立，不需要走这条路；目前只有夸克覆写。
+     */
+    suspend fun getShareDownloadLinkWithoutSave(
+        session: ShareSession,
+        file: ShareFile,
+        cookie: String
+    ): Result<DownloadLink> = getShareDownloadLink(session, file, cookie)
+
+    /**
      * 未登录（游客）取分享直链：目前只有夸克/UC 实现。
      * 返回的 [DownloadLink.guestCookie] 必须带进下载请求（服务端随取链响应下发的游客态 __pugs，
      * 夸克缺它 412、UC 缺它 403）；不需要也不应该传账号 Cookie。

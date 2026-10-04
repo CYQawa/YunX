@@ -524,6 +524,69 @@ class QuarkApi(
             .post(body.toRequestBody(jsonMediaType))
             .build()
 
+    /**
+     * 6.1c 免转存分享取链（登录态）
+     *
+     * 不把分享文件转存到自己的网盘，直接把**分享凭证**交给 download 接口换直链：
+     * body 与游客取链同构（`fids` / `fids_token` / `pwd_id` / `stoken` + 两个空占位），
+     * 区别只在 Cookie 用账号态 —— 因此不受游客态「约 50MB」限制，也不会在用户网盘里留临时目录。
+     *
+     * `fidToken` = 分享列表返回的 `share_fid_token`（[ShareFile.fidToken]）、
+     * `shareId` = 分享短码（pwd_id）、`stoken` = 分享访问凭证（[ShareSession.stoken]）。
+     * 响应 Set-Cookie 的 __puus/__pus 照常合并回会话：直链签名绑定取链时刻的 Cookie
+     * （与 [getDownloadLink] 同一要求）。
+     *
+     * @throws QuarkApiException 登录态失效（31001）、分享失效、风控频控等
+     */
+    suspend fun getShareDownloadLinkWithoutSave(
+        fid: String,
+        fidToken: String,
+        shareId: String,
+        stoken: String,
+        cookie: String
+    ): DownloadLink? = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("fids", JSONArray().put(fid))
+            .put("fids_token", JSONArray().put(fidToken))
+            .put("pwd_id", shareId)
+            .put("stoken", stoken)
+            // 与游客取链打的是同一个端点：speedup_session / token 留空即可
+            // （token 是社交转存令牌，游客取不到，官方前端同样 catch 之后传空串）
+            .put("speedup_session", "")
+            .put("token", "")
+            .toString()
+        val request = postJson(QuarkConstants.DOWNLOAD_URL, cookie, body)
+        val response = client.newCall(request).execute()
+        val bodyStr = response.use {
+            mergeCookieFromResponse(request, it)
+            it.body?.string() ?: throw QuarkApiException("获取下载链接失败：响应为空")
+        }
+        val json = runCatching { JSONObject(bodyStr) }.getOrElse {
+            // 非 JSON（风控页/HTML 错误页）时带上 HTTP 状态码，便于分辨 401/403 与分享失效
+            throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
+        }
+        val code = json.optInt("code")
+        if (json.optInt("status") != 200 && code != 0) {
+            throw QuarkApiException(noSaveErrorMessage(code, json.optString("message")), code)
+        }
+        val array = json.optJSONArray("data") ?: throw QuarkApiException("响应缺少 data")
+        if (array.length() == 0) throw QuarkApiException("未返回下载链接")
+        val item = array.optJSONObject(0) ?: throw QuarkApiException("未返回下载链接")
+        DownloadLink(
+            fid = item.optString("fid"),
+            filename = item.optString("file_name").ifEmpty { item.optString("filename") },
+            downloadUrl = item.optString("download_url"),
+            size = item.optLong("size")
+        )
+    }
+
+    /** 免转存取链的服务端错误码 → 中文提示（31001=登录态失效；23018=服务端仍按游客大小限制放行） */
+    private fun noSaveErrorMessage(code: Int, message: String): String = when (code) {
+        31001 -> "夸克登录态已失效，请到「网盘」页重新登录后再试"
+        23018 -> "服务端按游客限制拒绝了该文件（夸克约 50MB 上限）"
+        else -> message.ifBlank { "获取下载链接失败" }
+    }
+
     /** 6.2 删除文件（取链成功后清理临时转存；对齐抓包：action_type=2 + filelist + exclude_fids）
      *  返回异步 task_id（删除为异步任务，无需轮询；失败返回 null）。
      */

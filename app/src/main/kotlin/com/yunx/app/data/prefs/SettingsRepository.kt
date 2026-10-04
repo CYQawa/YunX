@@ -93,6 +93,13 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("notification_show_speed", value).apply()
         }
 
+    /** 夸克取链方式：true=免转存（直接换下载直链，不写入网盘，默认）；false=先转存到临时目录再取链 */
+    var quarkNoSaveDownload: Boolean
+        get() = prefs.getBoolean("quark_no_save_download", true)
+        set(value) {
+            prefs.edit().putBoolean("quark_no_save_download", value).apply()
+        }
+
     /** 桌面图标样式：0=经典图标(icon)，1=新图标(icon2)；切换经 activity-alias 动态生效 */
     var appIconVariant: Int
         get() = prefs.getInt("app_icon_variant", 0)

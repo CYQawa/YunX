@@ -67,6 +67,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolunteerActivism
@@ -228,6 +229,8 @@ fun SettingsScreen(
     var maxConcurrent by remember { mutableStateOf(settingsRepo.maxConcurrentDownloads) }
     var speedLimitBps by remember { mutableStateOf(settingsRepo.downloadSpeedLimit) }
     var retryCount by remember { mutableStateOf(settingsRepo.downloadRetryCount) }
+    // 夸克取链方式：免转存（默认，不写入网盘）↔ 转存（先存临时目录再取链）
+    var quarkNoSave by remember { mutableStateOf(settingsRepo.quarkNoSaveDownload) }
     var showConcurrencyDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRetryDialog by remember { mutableStateOf(false) }
@@ -405,6 +408,26 @@ fun SettingsScreen(
             title = "失败自动重试",
             description = if (retryCount == 0) "失败后不自动重试" else "失败后自动重试 $retryCount 次（断点续传）",
             onClick = { showRetryDialog = true }
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+
+        // 取链方式：免转存（默认）↔ 转存。只影响夸克 —— 其分享文件可以「用分享凭证直接换直链」，
+        // 不必先转存进用户网盘；关掉后回到「转存到 YunX临时转存 再取链」的老流程。
+        SettingsItem(
+            icon = Icons.Outlined.SwapHoriz,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
+            title = "免转存下载",
+            description = if (quarkNoSave) {
+                "夸克：解析出直链后直接下载，不把文件转存到自己的网盘"
+            } else {
+                "夸克：先转存到临时目录再取链（下载完成后自动清理）"
+            },
+            onClick = {
+                quarkNoSave = !quarkNoSave
+                settingsRepo.quarkNoSaveDownload = quarkNoSave
+            },
+            trailing = { Switch(checked = quarkNoSave, onCheckedChange = null) }
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))

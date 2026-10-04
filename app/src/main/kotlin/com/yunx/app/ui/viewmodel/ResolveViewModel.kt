@@ -105,7 +105,13 @@ class ResolveViewModel(
     /** GitHub 解析器实例（null 表示未启用 GitHub 平台） */
     private val githubApi: GitHubApi? = null,
     /** GitHub 下载镜像前缀提供者（由上层从 SettingsRepository 注入用户配置） */
-    private val mirrorPrefixProvider: () -> String = { UpdateChecker.MIRROR_PREFIX }
+    private val mirrorPrefixProvider: () -> String = { UpdateChecker.MIRROR_PREFIX },
+    /**
+     * 取链方式提供者（由上层从 SettingsRepository 注入）：
+     * true = 夸克免转存（直接换直链，不写入网盘，默认）；false = 先转存到临时目录再取链。
+     * 用 lambda 而不是构造时取值，设置页改了立即生效。
+     */
+    private val noSaveDownloadProvider: () -> Boolean = { true }
 ) : ViewModel() {
 
     var uiState by mutableStateOf<ResolveUiState>(ResolveUiState.Idle)
@@ -508,11 +514,12 @@ class ResolveViewModel(
                     val (file, relPath) = task
                     batchProgress = "${index + 1}/${tasks.size}"
                     runCatching {
-                        // 游客态（凭据为空）走游客取链：夸克/UC 分享直链不要求账号，带游客 __pugs 即可下载
+                        // 游客态（凭据为空）走游客取链：夸克/UC 分享直链不要求账号，带游客 __pugs 即可下载；
+                        // 登录态优先免转存，夸克失败时自动回退到转存取链
                         val linkResult = if (credential.isBlank()) {
                             currentRepo().getGuestShareDownloadLink(s, file)
                         } else {
-                            currentRepo().getShareDownloadLink(s, file, quarkCred)
+                            resolveShareLink(currentRepo(), s, file, quarkCred)
                         }
                         linkResult.getOrNull()?.let { link ->
                             // 文件夹内文件用相对路径（保持目录结构）；根目录文件用取链返回的文件名
@@ -934,10 +941,11 @@ class ResolveViewModel(
                 )
                 return@launch
             }
+            // 登录态优先免转存（不往用户网盘里留临时转存），夸克失败时自动回退到转存取链
             val linkResult = if (isGuest) {
                 repo.getGuestShareDownloadLink(s, apk.first)
             } else {
-                repo.getShareDownloadLink(s, apk.first, credential)
+                resolveShareLink(repo, s, apk.first, credential)
             }
             val directLink = linkResult.getOrNull()
             if (directLink == null) {
@@ -1505,7 +1513,28 @@ class ResolveViewModel(
     private fun supportsGuestDownload(): Boolean =
         currentPlatform == SharePlatform.QUARK || currentPlatform == SharePlatform.UC
 
-    /** 获取文件下载直链（各平台实现不同：夸克转存后取 / UC 直接取 / 迅雷转存后取详情直链；GitHub 直接构造 URL） */
+    /**
+     * 登录态取分享直链：默认优先「免转存」——把分享凭证直接交给 file/download 换直链，
+     * 不建临时目录、不转存（统一入口见 [ShareResolveRepository.getShareDownloadLinkWithoutSave]）。
+     *
+     * 两条退路：
+     * - 用户在设置里关掉「免转存下载」（[noSaveDownloadProvider]）⇒ 直接走原来的转存流程；
+     * - 开着免转存但夸克个别分享类型服务端仍要求「先转存再取链」⇒ 失败后自动回退转存。
+     * 其余平台的默认实现就是原有取链，不存在第二条链路，不重复请求。
+     */
+    private suspend fun resolveShareLink(
+        repo: ShareResolveRepository,
+        session: ShareSession,
+        file: ShareFile,
+        credential: String
+    ): Result<DownloadLink> {
+        if (!noSaveDownloadProvider()) return repo.getShareDownloadLink(session, file, credential)
+        val noSave = repo.getShareDownloadLinkWithoutSave(session, file, credential)
+        if (noSave.isSuccess || currentPlatform != SharePlatform.QUARK) return noSave
+        return repo.getShareDownloadLink(session, file, credential)
+    }
+
+    /** 获取文件下载直链（各平台实现不同：夸克免转存优先（失败回退转存）/ UC 直接取 / 迅雷转存后取详情直链；GitHub 直接构造 URL） */
     fun fetchDownloadLink(file: ShareFile) {
         // GitHub 分支：无需 API 取链，按 fid 直接构造下载 URL 弹确认弹窗
         if (currentPlatform == SharePlatform.GITHUB) {
@@ -1561,7 +1590,8 @@ class ResolveViewModel(
                     SharePlatform.UC -> ucAccountRepository.getFreshCookie() ?: credential
                     else -> credential
                 }
-                currentRepo().getShareDownloadLink(s, file, quarkCred)
+                // 优先免转存（不往用户网盘里转存）：夸克失败时自动回退到转存取链
+                resolveShareLink(currentRepo(), s, file, quarkCred)
                     .onSuccess { downloadLink = it }
                     .onFailure { downloadError = it.message ?: "获取下载链接失败" }
             } finally {
@@ -1756,7 +1786,8 @@ class ResolveViewModel(
         private val downloadManager: DownloadManager,
         private val bookmarkDao: BookmarkDao,
         private val githubApi: GitHubApi? = null,
-        private val mirrorPrefixProvider: () -> String = { UpdateChecker.MIRROR_PREFIX }
+        private val mirrorPrefixProvider: () -> String = { UpdateChecker.MIRROR_PREFIX },
+        private val noSaveDownloadProvider: () -> Boolean = { true }
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1772,7 +1803,8 @@ class ResolveViewModel(
                 downloadManager,
                 bookmarkDao,
                 githubApi,
-                mirrorPrefixProvider
+                mirrorPrefixProvider,
+                noSaveDownloadProvider
             ) as T
         }
     }

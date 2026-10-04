@@ -550,7 +550,9 @@ fun MainScreen() {
             pan115ResolveRepository,
             downloadManager,
             db.bookmarkDao(),
-            githubApi
+            githubApi,
+            // 取链方式开关：设置页「免转存下载」实时生效
+            noSaveDownloadProvider = { settings.quarkNoSaveDownload }
         )
     )
     val downloadViewModel: DownloadViewModel = viewModel(
