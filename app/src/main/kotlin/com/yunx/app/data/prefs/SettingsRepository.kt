@@ -58,6 +58,19 @@ class SettingsRepository(context: Context) {
             prefs.edit().putString("download_dir_uri", value).apply()
         }
 
+    /**
+     * Gopeed 引擎的下载目录（**真实文件系统路径**，如 `/storage/emulated/0/Download/YunX`）；
+     * 空 = 默认目录（公共 `Download` 根目录，与内置下载器同一口径，见 `StorageDirs`）。
+     *
+     * 为什么不复用 [downloadDirUri]：引擎是原生核心，写不了 SAF 的 `content://` 目录，只能拿真实路径。
+     * 用户在设置里选目录时走 SAF（从 tree Uri 反解真实路径），反解不到才让他手输，见 Agent.md §3.33。
+     */
+    var engineDownloadDir: String
+        get() = prefs.getString("engine_download_dir", "") ?: ""
+        set(value) {
+            prefs.edit().putString("engine_download_dir", value.trim()).apply()
+        }
+
     /** 最大同时下载任务数（默认 1：前台任务吃满带宽，其余排队；参考 IDM 默认单任务满速） */
     var maxConcurrentDownloads: Int
         get() = prefs.getInt("max_concurrent_downloads", DEFAULT_MAX_CONCURRENT_DOWNLOADS)

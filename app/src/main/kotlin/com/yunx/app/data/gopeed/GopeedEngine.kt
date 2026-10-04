@@ -22,11 +22,14 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.util.Log
 import com.gopeed.libgopeed.InvokeResultListener
 import com.gopeed.libgopeed.Libgopeed
+import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.util.LogRedactor
 import com.yunx.app.util.PermissionState
+import com.yunx.app.util.StorageDirs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,8 +66,8 @@ object GopeedEngine {
     private const val DIR_NAME = "gopeed"
     private const val SO_NAME = "libgojni.so"
 
-    /** 公共下载目录下的子目录名（即 Download/YunX）；UI 显示目录名时引用它，别再写死一份 */
-    const val PUBLIC_DIR_NAME = "YunX"
+    /** 系统「外部存储」provider 的 authority：只有它给的 SAF tree Uri 才能反解出真实路径 */
+    private const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
 
     /** logcat 过滤用：adb logcat -s GopeedEngine（导入/加载/启动/调用 全链路打点） */
     private const val TAG = "GopeedEngine"
@@ -116,19 +119,28 @@ object GopeedEngine {
     /**
      * 引擎的下载目录（必须是真实文件系统路径——Gopeed 写不了 SAF 的 `content://` 目录）。
      *
-     * 优先公共的 `Download/YunX`（文件管理器里直接可见）：Android 11+ 需要「所有文件访问」，
-     * Android 9- 需要 `WRITE_EXTERNAL_STORAGE`，Android 10 由 manifest 的
-     * `requestLegacyExternalStorage` 回到旧模式 + 同一运行时权限。
-     * 权限不到位或目录建不出来时退回应用外部私有目录（免权限，但 Android 11+ 用户自己也看不到）。
+     * 优先级：**用户自定义目录**（`SettingsRepository.engineDownloadDir`，设置页里 SAF 反解或手输，
+     * 见 Agent.md §3.33）→ 公共 `Download/`（`StorageDirs.defaultDownloadDir()`，与内置下载器同一默认口径：
+     * Android 11+ 需要「所有文件访问」，Android 9- 需要 `WRITE_EXTERNAL_STORAGE`，Android 10 由 manifest 的
+     * `requestLegacyExternalStorage` 回到旧模式 + 同一运行时权限）→ 应用外部私有目录（免权限，
+     * 但 Android 11+ 用户自己也看不到）。
      *
      * 可写性用「试写探针」判断，不按系统版本推断权限：各 ROM 对 legacy / 分区存储的处理并不一致。
+     * 自定义目录不可写时（SD 卡拔了、权限被撤销）**记日志并退回默认目录**：每个任务都失败比换个目录更糟。
      */
-    @Suppress("DEPRECATION")
     fun resolveDownloadDir(context: Context): File {
-        val publicDir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            PUBLIC_DIR_NAME
-        )
+        val custom = SettingsRepository(context).engineDownloadDir.trim()
+        if (custom.isNotEmpty()) {
+            val dir = File(custom)
+            if (canWrite(dir)) return dir
+            Log.e(
+                TAG,
+                "自定义下载目录不可写，退回默认目录：custom=$custom " +
+                    "allFilesAccess=${PermissionState.allFilesAccessGranted()} " +
+                    "→ default=${StorageDirs.defaultDownloadPath()}"
+            )
+        }
+        val publicDir = StorageDirs.defaultDownloadDir()
         if (canWrite(publicDir)) return publicDir
         val privateDir = File(context.getExternalFilesDir(null) ?: context.filesDir, DIR_NAME)
         Log.e(
@@ -139,6 +151,58 @@ object GopeedEngine {
         )
         return privateDir
     }
+
+    /**
+     * 把用户给的目录路径准备成「引擎真的能写」的目录：建目录 + 试写探针。
+     *
+     * 失败抛 `IllegalArgumentException`，**消息直接给用户看**（引擎页与设置页都原样提示）。
+     * 只接受绝对路径：引擎写不了 `content://`，也写不了相对路径。
+     */
+    fun prepareDownloadDir(path: String): File {
+        val trimmed = path.trim()
+        require(trimmed.startsWith("/")) { "请输入绝对路径（以 / 开头）" }
+        val dir = File(trimmed)
+        if (!dir.isDirectory && !dir.mkdirs()) {
+            throw IllegalArgumentException("建不出这个目录：${dir.absolutePath}（检查路径是否正确、上级目录在不在）")
+        }
+        if (!canWrite(dir)) {
+            val needAllFiles =
+                PermissionState.allFilesAccessRequired() && !PermissionState.allFilesAccessGranted()
+            val hint = if (needAllFiles) "（先去授予「所有文件访问」）" else ""
+            throw IllegalArgumentException("这个目录不可写：${dir.absolutePath}$hint")
+        }
+        Log.d(TAG, "自定义下载目录可用：${dir.absolutePath} ${describeDir(dir)}")
+        return dir
+    }
+
+    /**
+     * 从 SAF 选的 tree Uri 反解真实文件系统路径（拿不到返回 null）。
+     *
+     * 只有系统「文件」应用里代表**本机存储**的位置才能反解：它们的 documentId 形如
+     * `primary:Download/YunX`（主存储 → `/storage/emulated/0/Download/YunX`）或
+     * `1A2B-3C4D:xxx`（SD 卡 / OTG，卷名就是那个 UUID → `/storage/1A2B-3C4D/xxx`）。
+     * 第三方 provider（网盘、Google Drive 之类）的 documentId 不对应任何真实路径，一律返回 null ——
+     * 调用方要退到手输路径，别把拿到的字符串当路径用。
+     */
+    @Suppress("DEPRECATION")
+    fun realPathFromTreeUri(uri: Uri): File? {
+        if (uri.authority != EXTERNAL_STORAGE_AUTHORITY) return null
+        val docId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull() ?: return null
+        val index = docId.indexOf(':')
+        if (index <= 0) return null
+        val volume = docId.substring(0, index)
+        val relative = docId.substring(index + 1).trim('/')
+        val root = if (volume.equals("primary", ignoreCase = true)) {
+            Environment.getExternalStorageDirectory()
+        } else {
+            File("/storage/$volume")
+        }
+        return if (relative.isEmpty()) root else File(root, relative)
+    }
+
+    /** 目录可写性说明（进日志用：排查"为什么退回了私有目录"时一眼能看出缺哪个权限） */
+    private fun describeDir(dir: File): String =
+        "exists=${dir.isDirectory} canWrite=${runCatching { dir.canWrite() }.getOrDefault(false)}"
 
     /** 这个目录现在是否真的能写：建目录 + 写一个探针文件再删掉 */
     private fun canWrite(dir: File): Boolean {

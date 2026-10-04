@@ -346,8 +346,8 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             )
                             Text(
                                 "内置 gomobile 核心：多连接分片且自带断点续传；" +
-                                    "它是原生核心，只能按真实文件路径落盘（公共 Download/" +
-                                    "${GopeedEngine.PUBLIC_DIR_NAME}）。",
+                                    "它是原生核心，只能按真实文件路径落盘（默认公共 Download 目录，" +
+                                    "可在设置 →「下载保存目录」里自定义）。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -418,8 +418,7 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                             needLegacyStorage ->
                                                 "存储权限：还没授予存储权限，现在只能下到应用私有目录"
                                             else ->
-                                                "存储权限：已就绪，下载直接落到公共 Download/" +
-                                                    GopeedEngine.PUBLIC_DIR_NAME
+                                                "存储权限：已就绪，引擎可直接写进上面的真实目录"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (storageBlocked) {

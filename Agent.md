@@ -884,10 +884,11 @@ Android 10+ 原本那套「保存到公共目录」走 MediaStore/SAF，**不需
 （引导页 `OnboardingScreen` 只在 Android 9- 申请 `WRITE_EXTERNAL_STORAGE`，所以 **Android 10 上大概率还没授权**，
 引擎页必须自己补申请入口。）
 
-**目录解析**（`GopeedEngine.resolveDownloadDir(context)`）：优先 `Environment.getExternalStoragePublicDirectory(DIRECTORY_DOWNLOADS)/YunX`
-（子目录名是公开常量 `GopeedEngine.PUBLIC_DIR_NAME`，UI 别再写死一份）；**可写性用「试写探针」判断**——
-建目录 + 写一个 `.yunx_write_probe` 再删掉，成功才用公共目录，否则退回 `Android/data/<包名>/files/gopeed` 并 `Log.e`。
-不按系统版本推断权限是因为各 ROM 对 legacy / 分区存储的处理并不一致。
+**目录解析**（`GopeedEngine.resolveDownloadDir(context)`）：**自定义目录**（`SettingsRepository.engineDownloadDir`，
+见 §3.33）→ `StorageDirs.defaultDownloadDir()`（公共 `Download` 根目录，与内置下载器同一默认口径）→
+`Android/data/<包名>/files/gopeed`；**可写性用「试写探针」判断**——建目录 + 写一个 `.yunx_write_probe` 再删掉，
+成功才用该目录，否则 `Log.e` 后退回下一档。不按系统版本推断权限是因为各 ROM 对 legacy / 分区存储的处理并不一致。
+（**§3.33 起默认目录不再是 `Download/YunX`**：`PUBLIC_DIR_NAME` 已删除，默认就是 `Download` 根目录。）
 
 **UI**（`GopeedScreen`）：状态卡显示当前生效的下载目录 + 存储权限三态提示（未授权/已就绪）+ 一个按钮
 （Android 11+ 跳「所有文件访问」页；10- 弹运行时授权框）；`LocalLifecycleOwner` + ON_RESUME 刷新，
@@ -1083,6 +1084,62 @@ Gopeed 段里还带着：**引擎状态**（未导入内核 / 已导入，未启
 把引擎加载起来（首次要 `System.load` 56 MB 的 .so 并初始化 Go runtime，提前加载能让第一个任务不必等）。
 **任何失败只 `Log.e`**：引擎起不来不能影响应用启动，真正的下载会按失败任务落库并提示。
 设置读取用 `SettingsRepository`（别自己拼 prefs 键名）。
+
+---
+
+### 3.33 下载目录统一口径 + Gopeed 自定义下载目录（SAF 反解 / 手输兜底）
+
+**默认目录统一**（用户要求「默认的下载目录统一为 `/storage/emulated/0/Download/`」）：
+新增 `app/src/main/kotlin/com/yunx/app/util/StorageDirs.kt` —— 两套下载器的**默认目录唯一来源**，
+`defaultDownloadDir(): File` = `Environment.getExternalStoragePublicDirectory(DIRECTORY_DOWNLOADS)`，
+`defaultDownloadPath(): String` 给 UI 展示。内置分片下载器本来就走 MediaStore 的 `RELATIVE_PATH = Download`
+（`DownloadSaver.mediaStoreDestination`，无子目录时就是它），所以这里只是**把引擎的默认从 `Download/YunX`
+改成 `Download` 根目录**：`GopeedEngine.PUBLIC_DIR_NAME` **已删除**，UI 里两处引用一并改掉（别再写死 "YunX"）。
+
+**自定义目录为什么不能直接复用内置那套**：内置下载器存的是 `SettingsRepository.downloadDirUri`
+（SAF `content://` tree Uri），而 Gopeed 是原生 Go 核心，`opts.path` **只认真实文件系统路径**，
+给它 `content://` 直接失败。所以引擎另存一份 `SettingsRepository.engineDownloadDir`（`String`，空 = 默认目录）——
+**同一个设置行，两种表示**：设置页「下载保存目录」这一行在两种引擎下都显示，只是存的东西不同。
+
+**SAF → 真实路径（可行性结论：主存储可以，第三方 provider 不行）**：
+`GopeedEngine.realPathFromTreeUri(uri: Uri): File?` —— 只认 authority `com.android.externalstorage.documents`
+（系统「文件」应用里代表本机存储的那些位置），取 `DocumentsContract.getTreeDocumentId()` 得到
+`primary:Download/YunX` 或 `1A2B-3C4D:xxx`，按 `:` 切开：`primary` → `Environment.getExternalStorageDirectory()`
+（即 `/storage/emulated/0`），其余当卷名 → `/storage/<卷名>`，再拼上相对路径。
+**第三方 provider（网盘 / Google Drive 之类）的 documentId 不对应任何真实路径，一律返回 null** ——
+那里的调用方必须退到手输，**绝不能把 content:// 或它的 docId 当路径交给引擎**。
+（`DownloadSaver.safDirDisplay` 早就在做类似的反解，但那条只取 `substringAfterLast(':')` 用于**显示**，
+不能拿来当路径用。）
+
+**落盘前的校验**：`GopeedEngine.prepareDownloadDir(path: String): File` —— 必须以 `/` 开头的绝对路径，
+`mkdirs()` 建目录 + `canWrite()` 试写探针，失败抛 `IllegalArgumentException`，**消息直接给用户看**
+（用 `require`/`throw` 的文案写清楚是"路径不对""建不出目录"还是"不可写"；不可写且缺「所有文件访问」时附带提示）。
+设置页的 SAF 流程与手输弹窗都走它，口径一致。
+
+**设置页交互**（`SettingsScreen` 的「下载保存目录」行，从 `AnimatedVisibility(!engineOn)` 里**移出来**常驻）：
+- **行圆角固定在 `ListGroupPos.MIDDLE`，不要按引擎改成 LAST**。第一版按"引擎模式下它是可见分组的末行"
+  改成了 LAST，被用户一眼看出不对：折叠掉的只是"只对内置有意义"的那几项，**组并没有结束**——
+  这一行后面还有「免转存下载 / 锁屏后保持下载 / 通知栏下载进度」，整个「下载」组一直到最后的通知栏那行
+  才收尾（那里才是 `LAST`）。改成 LAST 就成了"底边圆了却还接着下一行"。
+- **组内 3dp 发丝缝（`ListGroupGap`）必须放在 `AnimatedVisibility` 外面**。第一版把补的 gap 放在了折叠块
+  **开头**（为了内置模式行距不变），结果引擎模式一折叠间距就跟着消失 → 这一行与「免转存下载」贴在一起，
+  也就是用户说的"边距错误"。正确做法：`Spacer(ListGroupGap)` 放在这一行**之后、AnimatedVisibility 之前**，
+  块内只留原有的那几个 gap —— 两种模式行距都对，内置模式观感与改动前完全一致。
+  （教训：`AnimatedVisibility` 折叠的是内部**全部**高度，包括里面的 Spacer；跨模式的间距不能藏在里面。）
+- `onClick`：两种模式都先 `dirLauncher.launch(null)`（SAF）；
+  **引擎模式**拿到 uri 后 `realPathFromTreeUri` → `prepareDownloadDir` → 写 `engineDownloadDir`；
+  反解失败或不可写 → **弹手输弹窗**（`showEngineDirDialog`）；`ActivityNotFoundException`（选择器被卸载 #90）
+  在引擎模式下也直接弹手输弹窗（内置模式维持原来的 Snackbar 提示）。
+- `trailing`「恢复默认」：按当前引擎清对应的那一项（`engineDownloadDir = ""` / `downloadDirUri = null`）。
+- 副标题：引擎模式空 = `Gopeed 默认 /storage/emulated/0/Download（点击自定义）`，非空 = `Gopeed：<路径>`。
+- **不单独给「手动输入」按钮**（刻意的）：正常情况下 SAF 就能选到本机目录并反解出路径，
+  手输只是兜底，硬塞进 trailing 会把这一行挤爆；触发路径就是"选了拿不到真实路径的位置"。
+  以后若要暴露，priority 放在同一行的 trailing 里加第二个 `TextButton`，别做成独立入口。
+- **`val engineOn` 必须声明在 `dirLauncher` 之前**（回调里要用它）；它原来声明在布局中间，已上移。
+
+**运行期行为**：`resolveDownloadDir` 每 700 ms 的同步循环/建任务时都会调，自定义目录**不可写就记日志退回默认目录**
+（SD 卡拔了、权限被撤销时，退回默认比让每个任务都失败好）；引擎页显示的「下载目录」就是这个函数的返回值，
+所以自定义后打开引擎页能看到真实生效的目录。**改目录不影响已存在的任务**（和引擎切换同一口径）。
 
 ---
 
