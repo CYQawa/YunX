@@ -19,6 +19,12 @@
 -keepnames class com.yunx.app.ui.login.XunleiVerifyWebViewScreen*
 -keepnames class com.yunx.app.ui.login.XunleiLoginScreen*
 
+# Gopeed（gomobile 桥接）：libgojni.so 内部用 FindClass 按「类名 + 方法名」反查这些类
+# （go/Seq、go/Universe$proxyerror、com/gopeed/libgopeed/*），R8 改名或裁剪会让 .so
+# dlopen 之后找不到类而崩溃。规则与 AAR 自带 proguard.txt 一致。
+-keep class go.** { *; }
+-keep class com.gopeed.** { *; }
+
 # Room：保留 @Entity / @Dao / @Database 类及成员（KSP 实现依赖反射读字段名）
 -keep class * extends androidx.room.RoomDatabase
 -keep @androidx.room.Entity class *

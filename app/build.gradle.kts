@@ -124,6 +124,12 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(libs.material)   // 原 libs.material.color.utilities -> 改为官方 Material 主库（含 color.utilities 包）
 
+    // Gopeed 内置下载引擎：gomobile 生成的 Java 桥接类（com/gopeed/libgopeed + go，合计 12 KB），
+    // 只为编译期拿到 Libgopeed / InvokeResultListener 等类型定义；真正的引擎
+    // libgojni.so（56 MB）不进仓库、不进 APK，由设置页导入 AAR 后运行时解出并 System.load。
+    // 来源：libgopeed-arm64-v8a.aar 内的 classes.jar（原样拷贝，未做任何修改）。
+    implementation(files("libs/gopeed-classes.jar"))
+
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)          // 提供协程扩展，如 Flow、suspend
     ksp(libs.room.compiler)

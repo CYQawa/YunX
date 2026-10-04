@@ -63,6 +63,7 @@ app/src/main/kotlin/com/yunx/app/
 │   │   ├── DownloadSaver.kt / DownloadService.kt（前台服务）
 │   │   └── DownloadPlatform.kt  # ★ 平台标识字符串常量
 │   ├── security/CredentialCipher.kt    # ★ Android Keystore 凭证加解密
+│   ├── gopeed/GopeedEngine.kt          # ★ Gopeed 进程内引擎（导入 AAR / 加载 .so / 进程内 REST，见 §3.27、§3.28）
 │   ├── backup/                  # 认证备份（口令派生密钥 + AES-GCM）
 │   ├── update/UpdateChecker.kt
 │   └── prefs/SettingsRepository.kt     # ★ 所有设置项的唯一入口
@@ -77,6 +78,11 @@ app/src/main/kotlin/com/yunx/app/
     ├── components/ items/       # 可复用小组件
     └── theme/                   # Color / Type / Theme / ThemeController
 ```
+
+另有两个不在 `app/src/main/kotlin` 下的关键路径：
+
+- `app/libs/gopeed-classes.jar` —— Gopeed 的 gomobile Java 桥接（**已打字节码补丁**，见 §3.28，勿用官方原版覆盖）；
+- `tools/patch-gopeed-classes.py` —— 生成上面那个 jar 的补丁脚本（**换新 AAR 时必须重跑**，见 §3.28）。
 
 ---
 
@@ -733,6 +739,129 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 
 ---
 
+### 3.27 内置 Gopeed 下载引擎（导入 AAR · 进程内嵌 · 验证入口）
+
+**这一批只做可行性验证**：设置页多一行入口 → 导入 AAR → 加载 .so → 启动引擎 → 建一个测试任务 → 看进度 / 暂停 / 继续 / 删除。
+**现有 `DownloadManager` / `DownloadService` / 下载页链路一行没动**（§5 的机制全部照旧），验证通过再谈让 Gopeed 接管。
+
+**为什么是「一半编译期 + 一半运行时」**：AAR 里的 Java 桥接 `classes.jar` 只有 12 KB，作为**编译期依赖**进仓库
+（`app/libs/gopeed-classes.jar`，由 `tools/patch-gopeed-classes.py` 从官方 AAR 生成并打了 1 处字节码补丁，见 §3.28；
+`app/build.gradle.kts` 里 `implementation(files("libs/gopeed-classes.jar"))`），
+这样 gomobile 生成的类型签名保持原版；而 `jni/arm64-v8a/libgojni.so` 有 **56 MB**（静态链接整个 Go 运行时），
+**不进仓库也不进 APK**，由用户在设置页导入 AAR 后运行时解出并 `System.load`。
+**不做 DexClassLoader / 运行时 dex**（省掉类加载器命名空间问题）。
+
+**AAR 事实**（`libgopeed-arm64-v8a.aar`，24.9 MB）：package `go.libgopeed.gojni`，minSdk 21，只有
+`AndroidManifest.xml` + `classes.jar` + `jni/arm64-v8a/libgojni.so` + `proguard.txt`（内容恰为下面两条 keep）+ 空 R.txt/res。
+ELF 的 4 个 LOAD 段 `p_align=0x1000`(4096) ⇒ **不满足 16 KB 页对齐**，将来 Android 15+ 的 16 KB 页设备要重新用
+gomobile 编（`-ldflags="-extldflags=-Wl,-z,max-page-size=16384"`）；本机是 4096，不受影响。
+只带 arm64-v8a：其它 ABI 导入时会报「这个 AAR 里没有 jni/&lt;abi&gt;/libgojni.so」。
+
+**★ 加载顺序是硬约束**：必须**先 `System.load(<绝对路径>)` 成功，再触碰任何 `go.*` / `com.gopeed.*` 类**。
+桥接类的静态初始化一旦抛错，JVM 会把**该类的初始化失败永久记住**：同一进程里再点只会得到
+`NoClassDefFoundError`（真机第 2 次点击的报错就是这个），只能杀进程重开。
+`GopeedEngine.loadLibrary()` 先 `System.load(绝对路径)`，仅当它失败才回退 `System.loadLibrary("gojni")`
+（回退用于「.so 打进 jniLibs」那条兜底路线），两条原始错误文本都会保留并 `Log.e`。
+**兜底方案**：把 .so 放进 `app/src/main/jniLibs/arm64-v8a/`（AGP 会自动打进 APK，无需改 gradle），
+即可走系统 nativeLibraryDir 正常加载。补丁与真机失败的完整因果见 §3.28。
+
+**R8 必须保留**（`app/proguard-rules.pro`，与 AAR 自带 proguard.txt 一字不差）：
+`-keep class go.** { *; }` 与 `-keep class com.gopeed.** { *; }`——.so 是用 `FindClass` 反查这些类名的，
+release 混淆后名字一变就崩。
+
+**引擎调用方式**：`Libgopeed.start(cfgJson)` 返回端口（Go 侧出错时 native 抛 `go.Universe$proxyerror`，
+`getMessage()` 就是 Go 的 error 文本）；`Libgopeed.invokeAsync(method, path, query, body, requestID, listener)`
+走 **`rest.Dispatch` 进程内路由**，等价于 Gopeed 的 HTTP API 但**不开 TCP 端口**（配置里 `apiEnable=false` ⇒
+不监听、也不需要 apiToken）；`stop()` 内部上限 3 秒，超时未完成的任务以错误回调收尾。
+本批**没用** `subscribeTaskEvents`（进度用 1 秒轮询，够验证用）。
+
+**用到的路由 / 报文**（信封统一 `{code,msg,data}`，`CodeOk=0`）：`POST /api/v1/tasks`（建任务，body
+`{"req":{"url":"…"},"opts":{"path":"…"}}`，`data` = 任务 id）、`PUT /api/v1/tasks/{id}/pause`、
+`PUT /api/v1/tasks/{id}/continue`、`DELETE /api/v1/tasks/{id}`、`GET /api/v1/tasks/{id}/status`、
+`GET /api/v1/info`（`data.version`）。任务状态词：`ready/running/wait/pause/error/done`。
+
+**启动配置**（`GopeedEngine.buildConfig`，字段名对照 `pkg/rest/model/server.go`）：`storage="bolt"`、
+`storageDir`/`tempDir` 在 `filesDir/gopeed/{store,tmp}/`（目录要以分隔符结尾）、`apiEnable=false`、
+`refreshInterval=500`、`downloadConfig{downloadDir, maxRunning=1, autoStartTasks=false}`。
+注意 `autoStartTasks` 只管「启动时是否恢复未完成任务」，**新建任务照常立即开始**。
+
+**下载目录固定用应用外部私有目录** `Android/data/<包名>/files/Gopeed`：Gopeed 是原生核心，**写不了 SAF 的
+`content://` 目录**，所以设置页那套 SAF 下载目录设置对引擎不适用（需要改目录得另做真实路径选择器，未做）。
+
+**文件与接线**：`app/src/main/kotlin/com/yunx/app/data/gopeed/GopeedEngine.kt`（`object`，`State{NOT_INSTALLED,
+INSTALLED,RUNNING}`、`installFromAar`/`uninstall`/`start`/`stop`/`invoke`/`taskStatus`/`createTask`/`pauseTask`/
+`continueTask`/`deleteTask`/`engineVersion`）、`app/src/main/kotlin/com/yunx/app/ui/screens/GopeedScreen.kt`（验证页：
+状态卡 / 测试下载卡 / 当前任务卡 / **下载目录真实文件列表**——最后一卡是用文件系统交叉验证"确实落盘了"）；
+入口 = `SettingsScreen` 新增参数 `onGopeedClick` + 「下载引擎」分组一行，`MainScreen` 新增
+`OVERLAY_KEY_GOPEED` / `showGopeed` / 路由（普通淡入，不做共享元素形变）。
+页面里所有引擎调用都在 `Dispatchers.IO`（引擎方法会阻塞），UI 侧统一走 `action{}` 抢 `busy` 并把异常原文显示出来。
+
+**验证期已知边界**（都不是 bug）：引擎不随退后台保活（没做前台服务）；引擎任务**只在这个页面**可见，
+不会进 YunX 下载页（两套任务库不互通）；`System.load` 解出的 .so 占 56 MB 内部存储；重复导入同一个 .so
+在本进程内不会重新加载（提示需重启应用）。
+
+**回退**：删 `data/gopeed/GopeedEngine.kt` 与 `ui/screens/GopeedScreen.kt`、`app/libs/gopeed-classes.jar`
+及 build.gradle 里那行 `implementation(files(...))`、proguard 里那两条 keep、`SettingsScreen` 的
+`onGopeedClick` 参数与「下载引擎」分组、`MainScreen` 的 `OVERLAY_KEY_GOPEED`/`showGopeed`/路由/传参即可（无数据库改动）。
+
+---
+
+### 3.28 Gopeed 启动失败根因：`libgojni.so` 没有 DT_SONAME（**别把这条 loadLibrary 补丁回退掉**）
+
+**真机现象**（用户第一次点「启动引擎」，Android 10 / arm64-v8a）：
+
+```
+第 1 次：dalvik.system.PathClassLoader[DexPathList[[zip file "/data/app/com.yunx.app-…/base.apk"],
+        nativeLibraryDirectories=[…/lib/arm64, …/base.apk!/lib/arm64-v8a, /system/lib64, /system/product/lib64]]]
+        couldn't find "libgojni.so"
+第 2 次：com.gopeed.libgopeed.Libgopeed        （即 NoClassDefFoundError 的 message）
+```
+
+**根因（已坐实，不是权限问题也不是路径问题）**：AAR 里的 `libgojni.so` **没有 `DT_SONAME`**——实测其 dynamic 段
+只有 `DT_NEEDED = ['liblog.so','libandroid.so','libm.so','libdl.so','libc.so']`，`DT_SONAME` **缺失**。
+Android linker 只按 soname 认「已经加载过的库」，所以：
+
+1. `GopeedEngine.start()` 里的 `System.load(绝对路径)` **其实成功了**（⇒ 从应用私有目录 `filesDir` dlopen 这条路是通的）；
+2. 紧接着 `Libgopeed` 类初始化 → gomobile 生成的 `go.Seq.<clinit>` 里写死 `System.loadLibrary("gojni")`；
+   linker 既无 soname 可匹配、APK 的 `lib/arm64` 里也没有这个文件 ⇒ 抛 `UnsatisfiedLinkError`，
+   报错前缀就是那句 `PathClassLoader[DexPathList[…]]`（`loadLibrary` 独有的格式，与第 1 条一字不差）；
+3. 该失败发生在**类初始化**里 ⇒ JVM 永久记住 ⇒ 第 2 次点击变成 `NoClassDefFoundError`。
+
+**修复 = 5 字节字节码补丁**：`go/Seq.class` 的 `<clinit>` 里那条 `ldc "gojni"`(2 B) + `invokestatic
+java/lang/System.loadLibrary`(3 B) 原地写成 **5 个 `0x00`(nop)**。字节码总长度不变 ⇒ 所有偏移、异常表、
+StackMapTable 都不受影响（`max_stack` 只会变小，仍合法）。引擎库改由 `GopeedEngine.loadLibrary()` 在触碰
+任何 `go.*` / `com.gopeed.*` 类之前 `System.load(绝对路径)` 加载（加载顺序见 §3.27 的硬约束）。
+全 jar（18 个 class）扫描确认**只有 `go/Seq.class` 这一处** `System.loadLibrary`。
+
+**生成方式（可复现，仓库内自带脚本）**：
+
+```bash
+python3 tools/patch-gopeed-classes.py <libgopeed-<abi>.aar | classes.jar> app/libs/gopeed-classes.jar
+```
+
+`tools/patch-gopeed-classes.py` 是自包含脚本（只用标准库）：输入 AAR 时自动取其中的 `classes.jar`，
+只改 `go/Seq.class` 一个条目，**要求恰好命中 1 处**否则报错退出，改完还会重新反汇编复核残留为 0；
+实测输出：位置 = class 文件偏移 2190、原字节 `12 5C B8 00 5E`、实际变化 4 字节（第 4 字节本来就是 `0x00`）。
+**换新的 AAR（重新用 gomobile 打包）时必须重新跑一遍这个脚本并提交新的 jar。**
+
+**已否决的方案**（别再试，理由都在这里）：① 重写整个 `go/Seq.java` 源码替换（成员含 native 方法，签名差一点就崩）；
+② 自定义 `PathClassLoader(librarySearchPath=…)`（无 soname ⇒ 会把 56 MB 的 Go runtime 再加载一份）；
+③ 给 .so 补 `DT_SONAME`（`.dynamic` 里没有空槽、`dynstr` 偏移脆弱）；④ 把 .so 打进 `jniLibs`（可行但 APK 涨 56 MB，
+只作兜底）。
+
+**日志（用户要求，已加）**：`GopeedEngine` 全链路 `Log.d`/`Log.e` 打点——导入（abi、目标路径、AAR 条目列表）、
+加载（`System.load` 成功/失败原文、`loadLibrary` 回退结果）、启动（启动配置 JSON、`Libgopeed.start` 结果）、
+停止、`invoke`（方法/路径/body、超时、引擎返回原文）。抓取：`adb logcat -s GopeedEngine`。
+**日志里的 URL / body 必须经 `util/LogRedactor`（`url()` / `line()`）脱敏后再打**（§2 的脱敏规范），别直接打原始 URL。
+失败路径统一附带 `LOAD_HINT`（① `couldn't find "libgojni.so"` ⇒ jar 不是打过补丁的版本；② `NoClassDefFoundError`
+⇒ 桥接类在本进程已初始化失败，必须杀掉应用重开）。验证页也据此显示「杀掉应用重开」的提示，报错文本用
+`SelectionContainer` 包住方便整段复制。
+
+**真机操作提醒**：桥接类初始化失败后，**必须杀掉应用（最近任务划掉 / 强行停止）再重开**，否则同一进程里再点
+只会一直得到 `NoClassDefFoundError`。
+
+---
+
 ## 4. 验证
 
 
@@ -753,6 +882,7 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 | `FlowRow` / `FilterChip` | 需 `@OptIn(ExperimentalLayoutApi::class)` / `ExperimentalMaterial3Api` |
 | `combinedClickable` | 需 `@OptIn(ExperimentalFoundationApi::class)` |
 | 图标找不到 | 已引入 `material-icons-extended`，确认图标名与 `Outlined`/`Filled` 命名空间 |
+| `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
 | Room 编译报 schema 错 | 检查 `version` 是否 +1、Migration 是否注册 |
 
 ---

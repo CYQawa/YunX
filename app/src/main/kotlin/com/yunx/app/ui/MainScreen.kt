@@ -135,6 +135,7 @@ import com.yunx.app.ui.screens.AboutScreen
 import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
+import com.yunx.app.ui.screens.GopeedScreen
 import com.yunx.app.ui.screens.OnboardingScreen
 import com.yunx.app.ui.screens.ResolveScreen
 import com.yunx.app.ui.screens.SettingsScreen
@@ -180,6 +181,9 @@ internal const val OVERLAY_KEY_THEME = "overlay-theme"
 /** 收藏页从顶栏图标进入，没有"被点的那一项"，不做共享元素形变（普通淡入即可） */
 internal const val OVERLAY_KEY_BOOKMARKS = "overlay-bookmarks"
 
+/** Gopeed 引擎页从设置页那一行进入，同样没有共享元素形变（普通淡入即可） */
+internal const val OVERLAY_KEY_GOPEED = "overlay-gopeed"
+
 /**
  * 主页框架：
  * - 顶部可折叠标题（MediumFlexibleTopAppBar，Expressive 柔性顶栏），切换 Tab 时标题文字随 Tab 变化，折叠状态不受影响；
@@ -209,6 +213,7 @@ fun MainScreen() {
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
+    var showGopeed by rememberSaveable { mutableStateOf(false) }
     val saveableStateHolder = rememberSaveableStateHolder()
 
     val context = LocalContext.current
@@ -709,6 +714,7 @@ fun MainScreen() {
         showSupport -> OVERLAY_KEY_SUPPORT
         showTheme -> OVERLAY_KEY_THEME
         showBookmarks -> OVERLAY_KEY_BOOKMARKS
+        showGopeed -> OVERLAY_KEY_GOPEED
         else -> null
     }
     // 正在展示的叠加页路由：打开时更新，关闭时**保留**（退出动画要用它渲染那个页面）
@@ -900,6 +906,7 @@ fun MainScreen() {
                                     onThemeClick = { showTheme = true },
                                     onAboutClick = { showAbout = true },
                                     onSupportClick = { showSupport = true },
+                                    onGopeedClick = { showGopeed = true },
                                     backupManager = backupManager,
                                     // 手动检查更新与开发调试预览都复用 MainScreen 的更新弹窗状态
                                     onCheckUpdate = checkForUpdate,
@@ -1010,6 +1017,7 @@ fun MainScreen() {
                             )
                             OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
                             OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
+                            OVERLAY_KEY_GOPEED -> GopeedScreen(onBack = { showGopeed = false })
                             else -> BookmarkScreen(
                                 viewModel = bookmarkViewModel,
                                 onBack = { showBookmarks = false },

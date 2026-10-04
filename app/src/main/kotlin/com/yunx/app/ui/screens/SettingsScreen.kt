@@ -56,6 +56,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Info
@@ -199,6 +200,8 @@ fun SettingsScreen(
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
+    /** 打开内置 Gopeed 下载引擎页（导入 AAR、启停引擎、试下载；验证阶段的独立入口） */
+    onGopeedClick: () -> Unit,
     backupManager: AuthBackupManager,
     /** 手动检查更新（弹窗与下载逻辑都由 MainScreen 统一持有，设置页不再自己实现一份） */
     onCheckUpdate: () -> Unit,
@@ -604,6 +607,16 @@ fun SettingsScreen(
             title = "导入网盘认证",
             description = "选择加密或明文的认证备份文件，恢复网盘登录",
             onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        SectionLabel("下载引擎")
+        SettingsItem(
+            icon = Icons.Outlined.Download,
+            title = "Gopeed 下载引擎",
+            description = "导入 AAR 启用内置 Gopeed 核心，验证内置下载是否可用",
+            onClick = onGopeedClick
         )
 
         Spacer(modifier = Modifier.height(24.dp))
