@@ -1012,12 +1012,39 @@ WakeLock 与通知通道，见 §3.31），一开始误判成"只作用于内置
 
 | 段 | 主按钮 | 点击行为 |
 |---|---|---|
-| 内置分片下载器 | 当前引擎 → tonal 按钮「使用中」（带对勾、不可点）；否则描边按钮「切换到此引擎」 | 写 `downloadEngine = ENGINE_BUILTIN` |
-| Gopeed 引擎 | **没导入内核 → 描边按钮「导入内核」**（走 SAF 选 AAR）；已导入且未选中 →「切换到此引擎」；已选中 → tonal「使用中」 | 导入内核 / 切换引擎 |
+| 内置分片下载器 | 当前引擎 → tonal 按钮「使用中」（带对勾、不可点）；否则描边按钮「切换到此引擎」 | 写 `downloadEngine = ENGINE_BUILTIN`（**不动**在跑的引擎任务） |
+| Gopeed 引擎 | **没导入内核 → 描边按钮「导入内核」**（走 SAF 选 AAR）；已导入但没存储权限 →「先授予存储权限」（点它去授权）；已导入且未选中 →「切换到此引擎」；已选中 → tonal「使用中」 | 导入内核 / 授权 / 切换引擎 |
 
-Gopeed 段里还带着：**引擎状态**（未导入内核 / 已导入，未启动 / 运行中）、内核大小与核心版本、
-下载目录、存储权限引导按钮，以及「启动引擎 / 停止引擎」「删除内核」两个 `TextButton`。
+Gopeed 段里还带着：**引擎状态**（未导入内核 / 已导入，未启动 / 运行中）、内核大小与核心版本、下载目录、
+存储权限状态与授权按钮，以及**只在已切到 Gopeed 时**出现的「重启引擎」和常驻的「删除内核」两个 `TextButton`。
 **切换成 Gopeed 时若内核已导入且引擎没在跑，顺手把它启动起来**（`chooseEngine` 里做），省得用户再点一次。
+
+**三条交互口径**（用户逐条反馈后定的，改之前先读这里）：
+
+1. **没有存储权限就不给切到 Gopeed**（用户："要切换到 Gopeed 引擎时，必须要给存储权限，没给不给切换"）。
+   判断用 `PermissionState`：`allFilesAccessRequired() && !allFilesAccessGranted()` 或
+   `engineStoragePermissionPending(context)`，合成一个 `storageBlocked`（**提到 composable 顶部算**，
+   因为 `chooseEngine` 的硬拦截也要用）。缺权限时主按钮文案/图标/行为都换成权限入口
+   （「先授予存储权限」+ `FolderOpen` → `requestStoragePermission()`），**不是**切完再报错；
+   `chooseEngine(ENGINE_GOPEED)` 里另有一道硬拦截：`notice = "还没有存储权限，不能切换到 Gopeed 引擎"` 后 `return`。
+   理由：引擎写不了 SAF，没权限就只能落私有目录（11+ 用户在文件管理器里根本看不到），切过去等于白切。
+2. **不提供「启动引擎 / 停止引擎」，只提供「重启引擎」**（用户："没切换到 Gopeed 却能点击启动引擎……
+   我们不提供停止引擎的功能和启动引擎的功能，给他改成重启引擎"）。所以：
+   - 引擎操作整行只在 `installed && engineOn` 时给（内置下载器模式下引擎不该在跑，删掉"启动"入口）；
+   - 「重启引擎」= `GopeedEngine.stop()` + `start()`（`stop` 幂等、`start` 在 RUNNING 时直接返回端口，
+     所以两者顺序不能反），重启后补一次 `engineVersion`；
+   - **切回内置不停引擎**：切换只决定"新任务由谁执行"，页面顶部就写着"已存在的任务不受影响"，
+     在跑的引擎任务被 stop 掉就自相矛盾了。引擎空转着直到进程结束或用户点「重启引擎」——可接受。
+     **不要**在 `chooseEngine(ENGINE_BUILTIN)` 里加 `stop()`（我加过又删了）；
+   - 「删除内核」不再要求用户先手动停止：它自己先 `stop()` 再 `uninstall()`（`uninstall` 在 RUNNING 时会抛
+     「请先停止引擎」，旧 UI 有停止按钮时尚可自救，现在没按钮了就必须自己停）。
+3. **内核状态要进页面先与真实文件对齐**（用户："选择内置下载器时（有导入内核），重启应用后引擎状态却显示未导入内核"）。
+   根因：`GopeedEngine._state` 是进程内单例、初值 `NOT_INSTALLED`，只在导入/启动/停止/卸载时被写过；
+   选内置下载器时 `YunXApp` 的启动流程**根本不会碰引擎**，于是状态永远停在"未导入"。
+   修法：新增 `GopeedEngine.syncInstalledState(context)`（`RUNNING` 不动，其余按 `soFile().isFile` 写回
+   `INSTALLED`/`NOT_INSTALLED`，只做一次 stat），在 `YunXApp.autoStartGopeedIfSelected` 开头
+   （**在"选没选 Gopeed"的 return 之前**）和引擎页 `LaunchedEffect(Unit)` 里各调一次。
+   `DownloadManager` 那两处 `state.value != RUNNING` 的判断只看"在不在跑"，不受这个同步影响。
 
 **动效**（规格一律取自 `ui/theme/Motion.kt`，别另写时长；**透明度/颜色用 `effects*`、位移/尺寸用 `spatial*`**）：
 **本页没有自己的入场动画**——它是由设置页「下载引擎」那一行做**容器变换**「长」出来的，
@@ -1039,6 +1066,8 @@ Gopeed 段里还带着：**引擎状态**（未导入内核 / 已导入，未启
 `YunXApp.autoStartGopeedIfSelected` 里也做了同样的**自愈**（启动时若设置是 Gopeed 但内核不存在 → 写回内置）。
 两道一起做的原因：`DownloadManager.shouldUseEngine()` 本来就会因内核缺失回退到内置下载器，
 不修的话会出现「设置界面说在用引擎、实际跑的是内置下载器」的错位。
+**删之前自己先 `stop()`**：`GopeedEngine.uninstall` 在 RUNNING 时抛「请先停止引擎」，旧 UI 有停止按钮时
+用户可以自救，现在（口径 2）没有停止按钮了，必须由删除动作自己停。
 
 **验证期那些测试功能全部去掉**：URL 输入建任务、当前任务进度/暂停/继续/删除、下载目录文件列表——
 它们只是用来验证引擎能不能跑通，正式入口是解析页/网盘页/下载页的正常下载流程。
@@ -1049,9 +1078,11 @@ Gopeed 段里还带着：**引擎状态**（未导入内核 / 已导入，未启
 （只是内部标识，指向的已经是新页面）。
 
 **启动自动加载**：`YunXApp.autoStartGopeedIfSelected(ctx)`（在 `onCreate` 末尾调用）——
-设置选了 Gopeed **且**已导入内核时，起一个后台 `Thread` 把引擎加载起来（首次要 `System.load` 56 MB 的 .so
-并初始化 Go runtime，提前加载能让第一个任务不必等）。**任何失败只 `Log.e`**：引擎起不来不能影响应用启动，
-真正的下载会按失败任务落库并提示。设置读取用 `SettingsRepository`（别自己拼 prefs 键名）。
+**第一件事是 `engine.syncInstalledState(ctx)`**（必须放在"设置里选的是不是 Gopeed"那个 `return` 之前，
+否则选内置下载器时根本走不到，见口径 3）；然后设置选了 Gopeed **且**已导入内核时，起一个后台 `Thread`
+把引擎加载起来（首次要 `System.load` 56 MB 的 .so 并初始化 Go runtime，提前加载能让第一个任务不必等）。
+**任何失败只 `Log.e`**：引擎起不来不能影响应用启动，真正的下载会按失败任务落库并提示。
+设置读取用 `SettingsRepository`（别自己拼 prefs 键名）。
 
 ---
 

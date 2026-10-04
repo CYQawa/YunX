@@ -125,10 +125,14 @@ private fun purgeDownloadLeftovers(ctx: Context) {
  *
  * 引擎是进程内单例，首次加载要 System.load 56 MB 的 .so 并初始化 Go runtime，提前加载能让第一个
  * 下载任务不必等它；**任何失败都只记日志** —— 引擎起不来不能影响应用启动，下载侧会按失败任务处理。
+ *
+ * 另外无论选的是哪个下载器，都在这里把引擎的内存状态与真实文件对齐一次（`syncInstalledState`）：
+ * 选内置下载器时下面会直接 return、整条启动流程都不会碰引擎，不对齐的话引擎页会以为「未导入内核」。
  */
 private fun autoStartGopeedIfSelected(ctx: Context) {
     val engine = com.yunx.app.data.gopeed.GopeedEngine
     val settingsRepo = com.yunx.app.data.prefs.SettingsRepository(ctx)
+    engine.syncInstalledState(ctx)
     if (settingsRepo.downloadEngine != com.yunx.app.data.prefs.SettingsRepository.ENGINE_GOPEED) return
     if (!engine.isInstalled(ctx)) {
         // 内核被删了（或从没导入过）但设置还停在 Gopeed：自愈回内置下载器，避免"设置说在用引擎、

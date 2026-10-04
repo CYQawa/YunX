@@ -98,6 +98,22 @@ object GopeedEngine {
     fun isInstalled(context: Context): Boolean = soFile(context).isFile
 
     /**
+     * 把内存里的状态与真实文件对齐一次。
+     *
+     * `_state` 只在导入 / 启动 / 停止 / 卸载时被写过，进程重启后它一律是 `NOT_INSTALLED`；
+     * 而**选内置下载器时启动流程根本不会去碰引擎**（见 YunXApp），于是内核明明还在、界面却显示
+     * 「未导入内核」。`state` 的读者都要先调一次这个（引擎页进页面时、应用启动时）。
+     * 运行中的状态不动；只做一次 `stat`，很轻。
+     */
+    fun syncInstalledState(context: Context) {
+        if (_state.value == State.RUNNING) return
+        val next = if (isInstalled(context)) State.INSTALLED else State.NOT_INSTALLED
+        if (_state.value == next) return
+        Log.d(TAG, "状态同步：${_state.value} → $next")
+        _state.value = next
+    }
+
+    /**
      * 引擎的下载目录（必须是真实文件系统路径——Gopeed 写不了 SAF 的 `content://` 目录）。
      *
      * 优先公共的 `Download/YunX`（文件管理器里直接可见）：Android 11+ 需要「所有文件访问」，

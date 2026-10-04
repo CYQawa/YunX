@@ -51,8 +51,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Power
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -106,8 +105,18 @@ import kotlinx.coroutines.withContext
  * "长"出来的（源侧 sharedBounds 见 MainScreen，目标侧见 OverlayPage），再叠一层淡入/位移会和形变打架。
  *
  * - 内置分片下载器：项目自带（分片并发 + 断点续传，落盘走 SAF/MediaStore）；
- * - Gopeed 引擎：内置 gomobile 核心，**必须按真实文件路径落盘**，所以这一段还带着内核导入、引擎启停、
- *   内核状态、下载目录与「所有文件访问」权限的引导；**没导入内核时主按钮直接就是「导入内核」**。
+ * - Gopeed 引擎：内置 gomobile 核心，**必须按真实文件路径落盘**，所以这一段还带着内核导入、内核状态、
+ *   下载目录与存储权限的引导；**没导入内核时主按钮直接就是「导入内核」**。
+ *
+ * **三条交互口径**（都是用户反馈后定的，改之前先读这里）：
+ * 1. **没有存储权限就不给切到 Gopeed**：11+ 要有「所有文件访问」、10- 要有运行时存储权限；
+ *    缺权限时主按钮变成「先授予存储权限」（点它去授权，而不是切完再报错），`chooseEngine` 里还有一道硬拦截。
+ * 2. **不提供「启动引擎 / 停止引擎」**：只在**已切到 Gopeed**时给一个「重启引擎」（stop + start，stop 幂等）；
+ *    内置下载器模式下引擎本来就不该在跑，也就不给任何引擎操作（只剩「删除内核」）。
+ *    **切回内置不停引擎**：切换只决定"新任务由谁执行"，在跑的引擎任务不受影响（与本页顶部那句说明一致）；
+ *    唯一还需要停一下的地方是「删除内核」（`uninstall` 不允许运行中删），那里自己会停。
+ * 3. **内核状态进页面先与文件对齐**：`GopeedEngine.syncInstalledState`（`state` 只在导入/启动/停止/卸载时
+ *    被写过，进程重启后是 NOT_INSTALLED，选内置下载器时启动流程不会碰引擎）。
  *
  * 切换结果写进 `SettingsRepository.downloadEngine`，`DownloadManager.enqueue` 按它分流（见 Agent.md §3.30）；
  * 选 Gopeed 且已导入内核时，应用启动会自动加载引擎（见 YunXApp.autoStartGopeedIfSelected）；
@@ -152,6 +161,13 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val installed = soBytes > 0L
     val running = engineState == GopeedEngine.State.RUNNING
 
+    // 引擎只能按真实文件路径落盘 → 「切到 Gopeed」必须先拿到存储权限（Android 11+ 是系统设置里的
+    // 「所有文件访问」，Android 10- 是运行时存储权限）。三个值提到这里算，是因为 chooseEngine() 的
+    // 硬拦截、主按钮的文案/行为都要用，不能只留在 Gopeed 段内部。
+    val needAllFiles = PermissionState.allFilesAccessRequired() && !allFilesReady
+    val needLegacyStorage = PermissionState.engineStoragePermissionPending(context)
+    val storageBlocked = needAllFiles || needLegacyStorage
+
     fun refreshSoInfo() {
         val so = GopeedEngine.soFile(context)
         soBytes = if (so.isFile) so.length() else 0L
@@ -175,20 +191,31 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
     /** 切换下载引擎：选 Gopeed 且内核已导入时顺手把引擎拉起来，省得用户再点一次 */
     fun chooseEngine(value: String) {
+        if (value == SettingsRepository.ENGINE_GOPEED && storageBlocked) {
+            // 硬拦截：引擎只能按真实路径落盘，存储权限没到位就不给切。
+            // （主按钮那边已经把它导成「先授予存储权限」，正常点不到这里；这里是防漏网）
+            notice = "还没有存储权限，不能切换到 Gopeed 引擎"
+            return
+        }
         settings.downloadEngine = value
         engineChoice = value
-        notice = if (value == SettingsRepository.ENGINE_GOPEED) {
-            "已切换到 Gopeed 引擎"
-        } else {
-            "已切换到内置分片下载器"
-        }
-        if (value == SettingsRepository.ENGINE_GOPEED && installed && !running) {
-            action {
-                withContext(Dispatchers.IO) { GopeedEngine.start(context, downloadDir) }
-                engineVersion = withContext(Dispatchers.IO) {
-                    runCatching { GopeedEngine.engineVersion() }.getOrDefault("")
+        if (value == SettingsRepository.ENGINE_GOPEED) {
+            notice = "已切换到 Gopeed 引擎"
+            if (installed && !running) {
+                action {
+                    withContext(Dispatchers.IO) { GopeedEngine.start(context, downloadDir) }
+                    engineVersion = withContext(Dispatchers.IO) {
+                        runCatching { GopeedEngine.engineVersion() }.getOrDefault("")
+                    }
+                    failure = GopeedEngine.lastError
                 }
             }
+        } else {
+            // 切回内置**不**停引擎：切换只决定"新任务由谁执行"，已经在跑的引擎任务不受影响
+            // （页面顶部就是这么写的）。它们跑完后引擎会空转着，直到进程结束或用户点「重启引擎」。
+            // 这也是 UI 里不再有「启动/停止引擎」的原因：唯一还需要停一下的地方是「删除内核」
+            // （uninstall 不允许在运行中删），那里自己会把引擎停掉。
+            notice = "已切换到内置分片下载器"
         }
     }
 
@@ -210,7 +237,21 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         legacyStorageReady = !PermissionState.engineStoragePermissionPending(context)
     }
 
-    // 进页面确认内核在不在；引擎跑起来后补一次核心版本
+    /** 申请引擎落盘需要的存储权限：11+ 去系统设置开「所有文件访问」，10- 弹运行时权限 */
+    fun requestStoragePermission() {
+        if (needAllFiles) {
+            PermissionState.openAllFilesAccessSettings(context)
+        } else {
+            storagePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
+
+    // 进页面先把「内核在不在」这条内存状态与真实文件对齐：GopeedEngine.state 只在导入/启动/停止/卸载时
+    // 被写过，进程重启后是 NOT_INSTALLED；选内置下载器时启动流程根本不会碰引擎，
+    // 不同步的话就会显示成「未导入内核」，而内核明明还在（用户报的 bug）。
+    LaunchedEffect(Unit) { GopeedEngine.syncInstalledState(context) }
+
+    // 内核文件大小；引擎跑起来后补一次核心版本
     LaunchedEffect(engineState, soBytes) {
         refreshSoInfo()
         if (engineState == GopeedEngine.State.RUNNING && engineVersion.isBlank()) {
@@ -304,7 +345,7 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 highlighted = engineOn
                             )
                             Text(
-                                "内置 gomobile 核心：HTTP / HLS / BT / 磁力 / ed2k，多连接分片且自带断点续传；" +
+                                "内置 gomobile 核心：多连接分片且自带断点续传；" +
                                     "它是原生核心，只能按真实文件路径落盘（公共 Download/" +
                                     "${GopeedEngine.PUBLIC_DIR_NAME}）。",
                                 style = MaterialTheme.typography.bodySmall,
@@ -357,7 +398,7 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            // 内核就绪后才出现的细节：下载目录 / 存储权限 / 引擎启停
+                            // 内核就绪后才出现的细节：下载目录 + 存储权限
                             AnimatedVisibility(
                                 visible = installed,
                                 enter = fadeIn(effectsDefault()),
@@ -369,11 +410,6 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    // 引擎写公共目录需要的权限：11+ 是「所有文件访问」，10- 是运行时存储权限
-                                    val needAllFiles =
-                                        PermissionState.allFilesAccessRequired() && !allFilesReady
-                                    val needLegacyStorage =
-                                        PermissionState.engineStoragePermissionPending(context)
                                     Text(
                                         when {
                                             needAllFiles ->
@@ -386,22 +422,14 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                                     GopeedEngine.PUBLIC_DIR_NAME
                                         },
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (needAllFiles || needLegacyStorage) {
+                                        color = if (storageBlocked) {
                                             MaterialTheme.colorScheme.error
                                         } else {
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         }
                                     )
-                                    if (needAllFiles || needLegacyStorage) {
-                                        TextButton(onClick = {
-                                            if (needAllFiles) {
-                                                PermissionState.openAllFilesAccessSettings(context)
-                                            } else {
-                                                storagePermLauncher.launch(
-                                                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                                                )
-                                            }
-                                        }) {
+                                    if (storageBlocked) {
+                                        TextButton(onClick = { requestStoragePermission() }) {
                                             Icon(
                                                 Icons.Outlined.FolderOpen,
                                                 contentDescription = null,
@@ -422,55 +450,67 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
                             EngineActionButton(
                                 selected = engineOn,
-                                icon = if (installed) Icons.Outlined.SwapHoriz else Icons.Outlined.Add,
+                                icon = when {
+                                    !installed -> Icons.Outlined.Add
+                                    storageBlocked -> Icons.Outlined.FolderOpen
+                                    else -> Icons.Outlined.SwapHoriz
+                                },
                                 label = when {
                                     !installed -> "导入内核"
                                     engineOn -> "使用中"
+                                    // 没存储权限就不给切：按钮直接变成权限入口（点它去开权限，而不是切完再报错）
+                                    storageBlocked -> "先授予存储权限"
                                     else -> "切换到此引擎"
                                 },
                                 enabled = !busy && (!installed || !engineOn),
                                 onClick = {
-                                    if (!installed) {
-                                        importLauncher.launch(
+                                    when {
+                                        !installed -> importLauncher.launch(
                                             arrayOf("application/octet-stream", "application/zip", "*/*")
                                         )
-                                    } else {
-                                        chooseEngine(SettingsRepository.ENGINE_GOPEED)
+                                        storageBlocked -> requestStoragePermission()
+                                        else -> chooseEngine(SettingsRepository.ENGINE_GOPEED)
                                     }
                                 }
                             )
 
                             if (installed) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    TextButton(onClick = {
-                                        action {
-                                            if (running) {
-                                                withContext(Dispatchers.IO) { GopeedEngine.stop() }
-                                                notice = "引擎已停止"
-                                            } else {
+                                    // 引擎操作只在「正在用 Gopeed」时给：内置下载器模式下引擎本来就不该在跑，
+                                    // 更不该让用户去启动/停止它（用户反馈：没切到 Gopeed 却能点「启动引擎」）。
+                                    // 而且只留「重启」——都切到 Gopeed 了，单独「停止引擎」这个动作没有意义；
+                                    // 引擎卡住时能自救的才是重启（停止 + 再启动，stop 是幂等的）。
+                                    if (engineOn) {
+                                        TextButton(onClick = {
+                                            action {
                                                 withContext(Dispatchers.IO) {
+                                                    GopeedEngine.stop()
                                                     GopeedEngine.start(context, downloadDir)
                                                 }
                                                 engineVersion = withContext(Dispatchers.IO) {
                                                     runCatching { GopeedEngine.engineVersion() }
                                                         .getOrDefault("")
                                                 }
-                                                notice = "引擎已启动"
+                                                notice = "引擎已重启"
+                                                failure = GopeedEngine.lastError
                                             }
-                                            failure = GopeedEngine.lastError
+                                        }) {
+                                            Icon(
+                                                Icons.Outlined.Refresh,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("重启引擎")
                                         }
-                                    }) {
-                                        Icon(
-                                            if (running) Icons.Outlined.Power else Icons.Outlined.PlayArrow,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(if (running) "停止引擎" else "启动引擎")
                                     }
                                     TextButton(onClick = {
                                         action {
-                                            withContext(Dispatchers.IO) { GopeedEngine.uninstall(context) }
+                                            withContext(Dispatchers.IO) {
+                                                // uninstall 不允许在运行中删（Go core 还占着 .so），先停掉
+                                                GopeedEngine.stop()
+                                                GopeedEngine.uninstall(context)
+                                            }
                                             refreshSoInfo()
                                             // 内核没了就不能再用引擎下载：顺手切回内置，避免"设置说在用引擎、
                                             // 实际跑的是内置下载器"的错位（DownloadManager 也会因内核缺失回退）
