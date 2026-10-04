@@ -950,8 +950,21 @@ if (shouldUseEngine(platform)) startViaEngine(...) else start(id, headers)
 `taskEngineIds` 是内存索引（`ConcurrentHashMap<Long, String>`），同步循环每轮从 DB 补齐；
 `pause/remove` 里先用 `remove(id)` 取值（拿不到就说明不是引擎任务，行为与以前完全一致）。
 
-**已知边界（都是有意为之，不是 bug）**：引擎任务**没有实时速度**（`_stats` 只有内置下载器在写，
-下载页那条任务速度显示为 0，进度条/已下载走 DB 正常）；引擎**不支持限速**，所以「速度限制」设置对引擎任务无效；
+**速度显示（引擎任务也有）**：同步循环把引擎 `TaskRuntimeStatus.speed` 写进 `_stats`，剩余时间按
+`(total - downloaded) / speed` 自己算，分片数用 `threadProvider(platform)`（就是提交任务时给引擎的 connections），
+所以下载页的实时速度、剩余时间、线程数与内置下载器**显示口径一致**；完成后 `dao.complete` 的 avgSpeed
+按「引擎给出的总大小 ÷ 本段运行时长」算（`taskStartTimes` 在创建/继续时重置，与内置下载器同口径）。
+暂停/失败/完成时都会把该任务从 `_stats` 移除，避免残留速度。
+
+**设置页 UI（本批调整）**：下载引擎两项（`下载引擎选择` + `Gopeed 下载引擎` 入口）已挪到**「下载」分组最前**，
+原来的「下载引擎」分组已删除。选 Gopeed 时，用两段 `AnimatedVisibility(expandVertically/shrinkVertically)`
+隐藏**只对内置分片下载器有意义**的 6 项：下载保存目录（引擎写 `Download/YunX`）、最大同时下载任务数、
+下载速度限制、失败自动重试、锁屏后保持下载、通知栏下载进度。
+保留「下载线程数」（映射到引擎 `opts.extra.connections`）与「免转存下载」（那是夸克取链方式，跟下载器无关）。
+被隐藏项的 `shape` 是中间段圆角，隐藏后不影响分组首尾；只有「免转存下载」既是保留项又可能变成末行，
+所以它的圆角按 `engineOn` 动态取 `LAST/MIDDLE`（**改动分组可见项时记得一起看圆角**）。
+
+**已知边界（都是有意为之，不是 bug）**：引擎**不支持限速**，所以「速度限制」设置对引擎任务无效（已隐藏）；
 引擎任务退后台是否继续取决于进程是否存活（前台服务还没做，见 §3.29 的后续清单）；
 内置下载器的分片/重试设置对引擎任务无意义（引擎有自己的连接与重试）。
 

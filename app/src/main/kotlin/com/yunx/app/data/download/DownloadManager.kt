@@ -558,6 +558,8 @@ class DownloadManager(
         }
         Log.d(TAG, "引擎任务已创建：yunxId=$id engineId=$engineTaskId")
         taskEngineIds[id] = engineTaskId
+        // 记录本段运行起点：完成时用它算平均速度
+        taskStartTimes[id] = System.currentTimeMillis()
         dao.updateEngineTaskId(id, engineTaskId)
         dao.updateStatus(id, DownloadTaskEntity.STATUS_DOWNLOADING)
         startEngineSync()
@@ -594,16 +596,36 @@ class DownloadManager(
                             Log.e(TAG, "引擎任务失败：yunxId=${task.id} engineId=${task.engineTaskId}")
                             dao.updateStatus(task.id, DownloadTaskEntity.STATUS_FAILED)
                             dao.updateError(task.id, "Gopeed 引擎下载失败")
+                            _stats.update { it - task.id }
                             taskEngineIds.remove(task.id)
+                            taskStartTimes.remove(task.id)
                             releaseEngineTaskMemory(task.id)
                         }
-                        "pause" -> dao.updateStatus(task.id, DownloadTaskEntity.STATUS_PAUSED)
-                        else -> dao.updateProgress(
-                            task.id,
-                            DownloadTaskEntity.STATUS_DOWNLOADING,
-                            status.downloaded,
-                            if (status.total > 0L) status.total else task.totalSize
-                        )
+                        "pause" -> {
+                            dao.updateStatus(task.id, DownloadTaskEntity.STATUS_PAUSED)
+                            _stats.update { it - task.id }
+                        }
+                        else -> {
+                            val total = if (status.total > 0L) status.total else task.totalSize
+                            dao.updateProgress(
+                                task.id,
+                                DownloadTaskEntity.STATUS_DOWNLOADING,
+                                status.downloaded,
+                                total
+                            )
+                            // 实时速度直接取引擎给的（TaskRuntimeStatus.speed），剩余时间自己算
+                            _stats.update {
+                                it + (task.id to DownloadStats(
+                                    speed = status.speed,
+                                    remainMillis = if (status.speed > 0L && total > status.downloaded) {
+                                        (total - status.downloaded) * 1000L / status.speed
+                                    } else {
+                                        -1L
+                                    },
+                                    chunkCount = threadProvider(task.platform).coerceAtLeast(1)
+                                ))
+                            }
+                        }
                     }
                 }
                 delay(engineSyncIntervalMs)
@@ -611,12 +633,20 @@ class DownloadManager(
         }
     }
 
-    /** 引擎任务完成：状态/保存路径落库 + 触发清理回调（语义与内置下载器的完成路径一致） */
+    /** 引擎任务完成：状态/保存路径/平均速度落库 + 触发清理回调（语义与内置下载器的完成路径一致） */
     private suspend fun completeEngineTask(task: DownloadTaskEntity, size: Long) {
         val savedPath = File(GopeedEngine.resolveDownloadDir(context), task.fileName).absolutePath
-        dao.complete(task.id, DownloadTaskEntity.STATUS_COMPLETED, savedPath, 0L)
+        // 平均速度 = 引擎给出的总大小 ÷ 本段运行时长（暂停/继续会重置起点，与内置下载器口径一致）
+        val startedAt = taskStartTimes.remove(task.id) ?: 0L
+        val avgSpeed = if (startedAt > 0L && size > 0L) {
+            val elapsed = (System.currentTimeMillis() - startedAt).coerceAtLeast(1L)
+            size * 1000L / elapsed
+        } else {
+            0L
+        }
+        dao.complete(task.id, DownloadTaskEntity.STATUS_COMPLETED, savedPath, avgSpeed)
         _stats.update { it - task.id }
-        Log.d(TAG, "引擎任务完成：yunxId=${task.id} engineId=${task.engineTaskId} path=$savedPath size=$size")
+        Log.d(TAG, "引擎任务完成：yunxId=${task.id} engineId=${task.engineTaskId} path=$savedPath size=$size avg=$avgSpeed")
         taskEngineIds.remove(task.id)
         releaseEngineTaskMemory(task.id)
         taskCallbacks.remove(task.id)?.let { cb -> runCatching { cb() } }
@@ -643,6 +673,8 @@ class DownloadManager(
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { GopeedEngine.continueTask(engineId) } }
                 .onFailure { Log.e(TAG, "引擎继续失败：id=$id ${it.message}", it) }
+            // 本段运行起点重置：平均速度口径与内置下载器一致（最近一段运行）
+            taskStartTimes[id] = System.currentTimeMillis()
             dao.updateStatus(id, DownloadTaskEntity.STATUS_DOWNLOADING)
             startEngineSync()
         }

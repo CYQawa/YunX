@@ -26,6 +26,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
@@ -327,6 +330,9 @@ fun SettingsScreen(
         }
     }
 
+    // 引擎模式下会隐藏若干「只对内置分片下载器有意义」的设置项，分组的行数与圆角要跟着变
+    val engineOn = engineChoice == SettingsRepository.ENGINE_GOPEED
+
     // 列表组：同一分组内的行首尾相接（只留 1dp 发丝缝，圆角由 listGroupShape 按首/中/末分段给），
     // 分组之间仍用 24dp 间距隔开。
     Column(
@@ -337,9 +343,32 @@ fun SettingsScreen(
             .padding(16.dp)
     ) {
         SectionLabel("下载")
+        // 下载引擎两项放在下载分组最前（切换 UI 后续还会调整）：选哪个引擎一眼可见
+        SettingsItem(
+            icon = Icons.Outlined.SwapHoriz,
+            shape = listGroupShape(ListGroupPos.FIRST),
+            title = "下载引擎选择",
+            description = if (engineChoice == SettingsRepository.ENGINE_GOPEED) {
+                "Gopeed 引擎（内置 gomobile 核心，按真实路径落盘）"
+            } else {
+                "内置分片下载器（默认，走 SAF/MediaStore 保存）"
+            },
+            onClick = { showEngineDialog = true }
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+        SettingsItem(
+            icon = Icons.Outlined.Download,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
+            title = "Gopeed 下载引擎",
+            description = "导入 AAR、启停引擎、查看引擎任务",
+            onClick = onGopeedClick
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.Tune,
-            shape = listGroupShape(ListGroupPos.FIRST),
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "下载线程数",
             description = "按网盘分别设置分片并发数（默认 32，最高 512）",
             onClick = { showThreadsDialog = true }
@@ -347,6 +376,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(ListGroupGap))
 
+        // 引擎模式下隐藏「只对内置分片下载器有意义」的设置（引擎只认自己的目录/并发/重试，也不支持限速）
+        AnimatedVisibility(visible = !engineOn, enter = expandVertically(), exit = shrinkVertically()) {
+            Column {
         // 下载保存目录：系统文件夹选择器（SAF，适配各 Android 版本分区存储）；
         // 已自定义时卡片右侧内嵌「恢复默认」操作（不单独外露按钮）。
         // 系统选择器被卸载或禁用时 launch 抛 ActivityNotFoundException（#90）：
@@ -417,13 +449,20 @@ fun SettingsScreen(
             onClick = { showRetryDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(ListGroupGap))
+            Spacer(modifier = Modifier.height(ListGroupGap))
+            }
+        }
 
         // 取链方式：免转存（默认）↔ 转存。只影响夸克 —— 其分享文件可以「用分享凭证直接换直链」，
         // 不必先转存进用户网盘；关掉后回到「转存到 YunX临时转存 再取链」的老流程。
         SettingsItem(
             icon = Icons.Outlined.SwapHoriz,
-            shape = listGroupShape(ListGroupPos.MIDDLE),
+            // 引擎模式下它前面的项都被隐藏了，它就是分组最后一行，圆角要跟着变
+            shape = if (engineOn) {
+                listGroupShape(ListGroupPos.LAST)
+            } else {
+                listGroupShape(ListGroupPos.MIDDLE)
+            },
             title = "免转存下载",
             description = if (quarkNoSave) {
                 "夸克：解析出直链后直接下载，不把文件转存到自己的网盘"
@@ -439,7 +478,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(ListGroupGap))
 
-        // 用户体验与系统适配：锁屏保持下载 / 通知栏进度样式
+        // 用户体验与系统适配：锁屏保持下载 / 通知栏进度样式（都只作用于内置下载器的前台服务与通知）
+        AnimatedVisibility(visible = !engineOn, enter = expandVertically(), exit = shrinkVertically()) {
+            Column {
         SettingsItem(
             icon = Icons.Outlined.Power,
             shape = listGroupShape(ListGroupPos.MIDDLE),
@@ -488,6 +529,8 @@ fun SettingsScreen(
             },
             trailing = { Switch(checked = showSpeed, onCheckedChange = null) }
         )
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -611,30 +654,6 @@ fun SettingsScreen(
             title = "导入网盘认证",
             description = "选择加密或明文的认证备份文件，恢复网盘登录",
             onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) }
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        SectionLabel("下载引擎")
-        SettingsItem(
-            icon = Icons.Outlined.SwapHoriz,
-            shape = listGroupShape(ListGroupPos.FIRST),
-            title = "下载引擎选择",
-            description = if (engineChoice == SettingsRepository.ENGINE_GOPEED) {
-                "Gopeed 引擎（内置 gomobile 核心，按真实路径落盘）"
-            } else {
-                "内置分片下载器（默认，走 SAF/MediaStore 保存）"
-            },
-            onClick = { showEngineDialog = true }
-        )
-
-        Spacer(modifier = Modifier.height(ListGroupGap))
-        SettingsItem(
-            icon = Icons.Outlined.Download,
-            shape = listGroupShape(ListGroupPos.LAST),
-            title = "Gopeed 下载引擎",
-            description = "导入 AAR、启停引擎、查看引擎任务",
-            onClick = onGopeedClick
         )
 
         Spacer(modifier = Modifier.height(24.dp))
