@@ -93,6 +93,21 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("notification_show_speed", value).apply()
         }
 
+    /**
+     * 下载引擎：`ENGINE_BUILTIN`（默认，项目自带的 Kotlin 分片下载器）
+     * 或 `ENGINE_GOPEED`（内置 Gopeed 引擎，需先在「下载引擎」页导入 AAR）。
+     *
+     * 取值非法（手改 prefs 等）时按内置下载器处理；引擎没就绪时 DownloadManager 也会自动回退，
+     * 不会因为设置项把下载功能弄坏。
+     */
+    var downloadEngine: String
+        get() = prefs.getString("download_engine", ENGINE_BUILTIN)?.takeIf {
+            it == ENGINE_BUILTIN || it == ENGINE_GOPEED
+        } ?: ENGINE_BUILTIN
+        set(value) {
+            prefs.edit().putString("download_engine", value).apply()
+        }
+
     /** 夸克取链方式：true=免转存（直接换下载直链，不写入网盘，默认）；false=先转存到临时目录再取链 */
     var quarkNoSaveDownload: Boolean
         get() = prefs.getBoolean("quark_no_save_download", true)
@@ -196,6 +211,12 @@ class SettingsRepository(context: Context) {
 
     companion object {
         const val DEFAULT_DOWNLOAD_THREADS = 32
+
+        /** 下载引擎标识（[downloadEngine] 的取值）：内置 Kotlin 分片下载器 */
+        const val ENGINE_BUILTIN = "builtin"
+
+        /** 下载引擎标识：内置 Gopeed 引擎（gomobile 核心，需用户导入 AAR） */
+        const val ENGINE_GOPEED = "gopeed"
         /**
          * 线程数上限 = 512（与设置页档位一致）。
          * 真正同时在飞的请求数另由 `DownloadManager.MAX_INFLIGHT_CHUNKS`（按最大堆预算推导、同样封顶 512）

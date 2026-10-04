@@ -910,6 +910,57 @@ F-Droid 侧也可能触发审核（本项目已有 fastlane 元数据）；如�
 
 ---
 
+### 3.30 两套下载器并存：设置项切换 + Gopeed 任务映射进本地库（DB v17）
+
+**开关**：`SettingsRepository.downloadEngine`（`ENGINE_BUILTIN` 默认 / `ENGINE_GOPEED`），设置页「下载引擎」分组第一行可切；
+取值非法时按内置处理。**默认永远偏向内置下载器**——引擎是可选增强，设置项本身不能把下载功能弄坏。
+
+**分流点只有一个**：`DownloadManager.enqueue()` 末尾的 `start(id, headers)` 之前。
+任务登记（`dao.insert`）、请求头保存、`taskCallbacks`、`taskSizes` 两条路完全一致，只是「谁来执行」不同：
+
+```
+if (shouldUseEngine(platform)) startViaEngine(...) else start(id, headers)
+```
+
+`shouldUseEngine()` = 平台不是 GitHub（GitHub 走镜像回退，引擎不支持）**且** 设置选了引擎 **且** `GopeedEngine.isInstalled()`。
+放这里的好处是**全部 20+ 个调用点（解析页 / 网盘页 / 下载页手动添加）自动生效，一行都不用改**。
+⚠️ 走到引擎分支时若建任务失败，**按失败任务落库、errorMsg 写引擎原文，不静默回退内置下载器**——
+用户明确选了引擎，悄悄换下载器比报错更难排查。
+
+**引擎任务 ID 进本地库（DB v17）**：`DownloadTaskEntity.engineTaskId`（空串 = 内置下载器），
+`MIGRATION_16_17` 就是一句 `ALTER TABLE download_task ADD COLUMN engineTaskId TEXT NOT NULL DEFAULT ''`。
+**留一列而不是另建表**，是为了让下载页、暂停/继续/删除、完成清理全部复用现有逻辑，UI 零改动。
+（v17 是升版本，装新包会走迁移；但**别把旧 APK 装回已升到 17 的设备**，会撞 Room 降级校验，见 §3.7。）
+
+**进度同步**（`startEngineSync`，`init{}` 里就会拉起一次）：每 700ms 拉一次 `dao.listSyncableEngineTasks()`
+（`engineTaskId != ''` 且状态不是完成/失败），逐个调 `GopeedEngine.taskStatus()` 回写本地记录：
+`done` → `dao.complete` + 触发 `taskCallbacks`（夸克转存清理等回调照常）；`error` → 失败落库；
+`pause` → 已暂停；其余 → `updateProgress`。没有可同步任务时协程自己 `return`，下次建引擎任务再拉起。
+引擎调用走的是 `invokeAsync` **进程内分发**（不是 HTTP），所以 700ms 的频率没有网络开销。
+每轮开头会确保引擎在运行：进程重启后引擎 bolt 里可能还有任务，它们通常是 pause 状态，被回写成「已暂停」由用户决定是否继续。
+
+**操作转发**（关键：`start` 必须拦截，否则内置下载器会用同一个 URL 重复下载）：
+
+| 操作 | 处理 |
+|---|---|
+| `start(id)` | 命中 `taskEngineIds` 就**提前 return**，改为转发 `continueTask` |
+| `pause(id)` | **不提前 return**：转发引擎暂停后继续走原逻辑（本地状态置「已暂停」、没有分片文件所以清理是空操作） |
+| `remove(id)` | 同上：额外转发 `deleteTask`，本地删记录/删文件的逻辑完全复用 |
+
+`taskEngineIds` 是内存索引（`ConcurrentHashMap<Long, String>`），同步循环每轮从 DB 补齐；
+`pause/remove` 里先用 `remove(id)` 取值（拿不到就说明不是引擎任务，行为与以前完全一致）。
+
+**已知边界（都是有意为之，不是 bug）**：引擎任务**没有实时速度**（`_stats` 只有内置下载器在写，
+下载页那条任务速度显示为 0，进度条/已下载走 DB 正常）；引擎**不支持限速**，所以「速度限制」设置对引擎任务无效；
+引擎任务退后台是否继续取决于进程是否存活（前台服务还没做，见 §3.29 的后续清单）；
+内置下载器的分片/重试设置对引擎任务无意义（引擎有自己的连接与重试）。
+
+**回退**：设置里切回「内置分片下载器」即可让新任务全部回到老下载器（引擎任务仍在，可手动删）；
+要彻底拆掉就删 `engineTaskId` 列相关代码 + `startViaEngine`/`startEngineSync`/`pauseEngineTask`/`resumeEngineTask`
+以及 enqueue/start/pause/remove 里的四个分支（DB 版本号别回退，理由同上）。
+
+---
+
 ## 4. 验证
 
 

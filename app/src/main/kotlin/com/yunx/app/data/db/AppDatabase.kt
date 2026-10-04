@@ -29,7 +29,7 @@ import com.yunx.app.data.security.CredentialCipher
 
 @Database(
     entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, BookmarkEntity::class],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -80,7 +80,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_12_13,
                         MIGRATION_13_14,
                         MIGRATION_14_15,
-                        MIGRATION_15_16
+                        MIGRATION_15_16,
+                        MIGRATION_16_17
                     )
                     // 早期开发版（1-8）无可靠 schema；从 v9 起必须保留凭证和下载任务
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8)
@@ -151,6 +152,15 @@ abstract class AppDatabase : RoomDatabase() {
                         "`nickname` TEXT NOT NULL, " +
                         "`updatedAt` INTEGER NOT NULL, " +
                         "PRIMARY KEY(`id`))"
+                )
+            }
+        }
+
+        /** v17：下载任务记录 Gopeed 引擎任务 ID（空串 = 内置分片下载器） */
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `download_task` ADD COLUMN `engineTaskId` TEXT NOT NULL DEFAULT ''"
                 )
             }
         }

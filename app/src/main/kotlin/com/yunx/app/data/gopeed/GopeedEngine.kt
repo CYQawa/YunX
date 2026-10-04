@@ -332,10 +332,37 @@ object GopeedEngine {
         )
     }
 
-    /** 建任务（POST /api/v1/tasks），返回任务 ID */
-    fun createTask(url: String, saveDir: File): String {
-        val req = JSONObject().apply { put("url", url) }
-        val opts = JSONObject().apply { put("path", saveDir.absolutePath) }
+    /**
+     * 建任务（POST /api/v1/tasks），返回引擎任务 ID。
+     *
+     * @param headers 自定义请求头（字段名对照 Gopeed 的 `pkg/protocol/http.ReqExtra` 的 `header`）：
+     *        网盘直链基本都要 UA / Referer / Cookie，缺了就 403
+     * @param connections 分片并发连接数（`OptsExtra.connections`）；<=0 时用引擎默认值
+     * @param name 文件名（`Options.name`）；空串时引擎自己从 URL 推导
+     * @param labels 自定义标签（`Request.Labels`），可塞 YunX 侧任务 id 做反查
+     */
+    fun createTask(
+        url: String,
+        saveDir: File,
+        headers: Map<String, String> = emptyMap(),
+        connections: Int = 0,
+        name: String = "",
+        labels: Map<String, String> = emptyMap()
+    ): String {
+        val req = JSONObject().apply {
+            put("url", url)
+            if (headers.isNotEmpty()) {
+                put("extra", JSONObject().apply { put("header", JSONObject(headers)) })
+            }
+            if (labels.isNotEmpty()) put("labels", JSONObject(labels))
+        }
+        val opts = JSONObject().apply {
+            put("path", saveDir.absolutePath)
+            if (name.isNotBlank()) put("name", name)
+            if (connections > 0) {
+                put("extra", JSONObject().apply { put("connections", connections) })
+            }
+        }
         val body = JSONObject().apply {
             put("req", req)
             put("opts", opts)
