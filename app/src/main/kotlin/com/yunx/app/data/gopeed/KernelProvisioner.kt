@@ -88,11 +88,20 @@ object KernelProvisioner {
     /** 分片下载用的合成任务 id（只给 ChunkDownloader 的取消登记表用） */
     private const val TASK_ID = -20261004L
 
-    /** 分片数上限：内核包才 25MB，再多的分片只会把单块切得太碎 */
-    private const val MAX_CHUNKS = 16
+    /**
+     * 网盘通道的分片数：**固定 64**（用户口径，不看设置页那个夸克档）。
+     *
+     * 夸克 CDN 是**按连接限速**的，连接数越多越接近满速；内核包只有 24.8–26.3 MB，
+     * 64 片每片约 390 KB 仍然远大于一个 TCP 窗口，不会因为切太碎而掉速。
+     * （这也是 [MIN_CHUNK_BYTES] 定在 256KB 的原因：按 1MB 收敛的话 25MB 最多只能切出 25 片，到不了 64。）
+     */
+    private const val PAN_CHUNKS = 64
 
-    /** 单块下限：分片数按「总大小 / 这个值」收敛，避免 25MB 被切成 32 份 700KB 的小块 */
-    private const val MIN_CHUNK_BYTES = 1L * 1024 * 1024
+    /** 分片数上限：兜住设置里更大的值（GitHub 通道按设置走，最高也就是这个数） */
+    private const val MAX_CHUNKS = 64
+
+    /** 单块下限：分片数按「总大小 / 这个值」收敛，避免小文件被切成一堆碎块 */
+    private const val MIN_CHUNK_BYTES = 256L * 1024
 
     /** 进度上报节流：分片回调非常密（每 64KB 一次），不节流会把 StateFlow 刷爆 */
     private const val PROGRESS_INTERVAL_MS = 250L
@@ -544,13 +553,13 @@ object KernelProvisioner {
         target: File,
         chunkDir: File
     ): Long {
-        // 分片数按来源平台取设置页那个「下载线程数」：网盘通道用夸克档，GitHub 通道用 GitHub 档
-        val platform = if (plan.cleanupCookie.isNotBlank() || plan.repo != null) {
-            DownloadPlatform.QUARK
+        // 分片数：网盘通道**固定 [PAN_CHUNKS] 片**（不看设置里的夸克档，见常量注释）；
+        // GitHub 通道仍按设置页的「下载线程数」（GitHub 档）。
+        val threads = if (plan.cleanupCookie.isNotBlank() || plan.repo != null) {
+            PAN_CHUNKS
         } else {
-            DownloadPlatform.GITHUB
+            SettingsRepository(context).downloadThreadsFor(DownloadPlatform.GITHUB)
         }
-        val threads = SettingsRepository(context).downloadThreadsFor(platform)
         val total = if (plan.size > 0L) plan.size else (engine.getTotalSize(url, plan.headers) ?: -1L)
         lastReportAt = 0L
         lastReportBytes = 0L
@@ -568,7 +577,13 @@ object KernelProvisioner {
             return target.length()
         }
 
-        val count = minOf(threads.coerceAtLeast(1), MAX_CHUNKS, ((total + MIN_CHUNK_BYTES - 1) / MIN_CHUNK_BYTES).toInt().coerceAtLeast(1))
+        // 实际片数 = min(目标片数, 上限, 总大小/单块下限)
+        // 例：25MB 的包走网盘通道 → min(64, 64, ceil(24885043/262144)=95) = 64 片，每片约 389KB
+        val count = minOf(
+            threads.coerceAtLeast(1),
+            MAX_CHUNKS,
+            ((total + MIN_CHUNK_BYTES - 1) / MIN_CHUNK_BYTES).toInt().coerceAtLeast(1)
+        )
         val block = (total + count - 1) / count
         val parts = (0 until count).mapNotNull { i ->
             val start = i.toLong() * block

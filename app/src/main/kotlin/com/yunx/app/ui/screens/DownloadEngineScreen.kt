@@ -187,7 +187,7 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     // 阶段状态全在 KernelProvisioner 单例里（下载跑在它自己的 scope 上，切页/退后台都不影响），
     // 这里只收集它渲染那个**不可关闭**的进度弹窗。
     val provisionPhase by KernelProvisioner.phase.collectAsState()
-    /** 「导入内核 / 更新内核」的下拉菜单 */
+    /** 「导入内核」按钮的下拉菜单（来源：云端 / 本地 AAR） */
     var showKernelMenu by remember { mutableStateOf(false) }
     /** 非 null = 云端下载的底部弹窗正在显示（已拿到 Release 且已按本机 ABI 挑好包） */
     var cloudRelease by remember { mutableStateOf<KernelProvisioner.KernelRelease?>(null) }
@@ -547,44 +547,15 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             }
 
                             if (installed) {
-                                // 三个文字按钮（更新内核 / 重启引擎 / 删除内核）在窄屏上放不下一行，
-                                // 所以用 FlowRow 让它们自己折行，别硬挤成溢出
+                                // 引擎操作行：重启引擎（仅 Gopeed 模式）/ 删除内核。
+                                // 用 FlowRow 而不是 Row：窄屏上两个带图标的文字按钮也可能贴边，
+                                // 让它自己折行，别硬挤成溢出。
+                                // ★ 这里**没有**「更新内核」入口（用户要求去掉）：已导入状态下要换内核，
+                                //   得先「删除内核」再回到主按钮的「导入内核」走来源菜单。
                                 FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
-                                    // 已导入时主按钮变成「使用中/切换到此引擎」，导入入口就没了 ——
-                                    // 换内核（升级/重新下载）要有地方去，所以在这里补一个「更新内核」，
-                                    // 弹的是同一个来源菜单。
-                                    Box {
-                                        TextButton(onClick = { showKernelMenu = true }) {
-                                            Icon(
-                                                Icons.Outlined.Cloud,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text("更新内核")
-                                        }
-                                        KernelSourceMenu(
-                                            expanded = showKernelMenu,
-                                            onDismiss = { showKernelMenu = false },
-                                            onCloud = {
-                                                showKernelMenu = false
-                                                fetchCloudRelease()
-                                            },
-                                            onLocal = {
-                                                showKernelMenu = false
-                                                importLauncher.launch(
-                                                    arrayOf(
-                                                        "application/octet-stream",
-                                                        "application/zip",
-                                                        "*/*"
-                                                    )
-                                                )
-                                            }
-                                        )
-                                    }
                                     // 引擎操作只在「正在用 Gopeed」时给：内置下载器模式下引擎本来就不该在跑，
                                     // 更不该让用户去启动/停止它（用户反馈：没切到 Gopeed 却能点「启动引擎」）。
                                     // 而且只留「重启」——都切到 Gopeed 了，单独「停止引擎」这个动作没有意义；
@@ -708,8 +679,9 @@ fun DownloadEngineScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 /**
- * 「导入内核 / 更新内核」的来源菜单：从云端下载（GitHub Release，按本机 ABI 自动挑包）或本地 AAR。
- * 两个入口（未导入时的主按钮、已导入时的「更新内核」）共用这一份菜单，别再各写一遍。
+ * 「导入内核」的来源菜单：从云端下载（GitHub Release，按本机 ABI 自动挑包）或本地 AAR。
+ * 只挂在未导入时的那个主按钮上 —— 已导入状态下**没有**再导入的入口（用户要求去掉「更新内核」），
+ * 要换内核得先「删除内核」再走这里。
  */
 @Composable
 private fun KernelSourceMenu(
