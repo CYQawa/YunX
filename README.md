@@ -121,6 +121,13 @@ git clone https://github.com/CYQawa/YunX.git
 
 本项目基于 [GNU AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) 协议开源，详见根目录 [LICENSE](./LICENSE)。
 
+## 贡献者
+<sub><sup>Contributors</sup></sub>
+
+<a href="https://github.com/CYQawa/YunX/graphs/contributors">
+  <img alt="contributors" src="https://contrib.rocks/image?repo=CYQawa/YunX" />
+</a>
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/chart?repos=CYQawa/YunX&type=date&legend=top-left&sealed_token=hccCg_4ek01_Sz38X79eMbjM11mNpOZti6_hLoztWW4Zdtx-8FScydd7YTdiCBUWvgpsuGDO70RrUKP-bOfbI3Gw8BnME1zIl5EHA9JWsv--_DDwWPjvKbZiAGNDslG3ZTDZ-Ssiapu7j08W4fPT6emGWaIIuawHoIw3Nic_xQu7hUSVO6_YeJRGRoEy)](https://www.star-history.com/?repos=YunX%2FYunX%2CCYQawa%2FYunX&type=date&legend=top-left)
