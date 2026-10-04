@@ -18,7 +18,7 @@
 
 package com.yunx.app.ui.screens
 
-import android.content.Context
+import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +38,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Power
@@ -57,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,14 +71,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yunx.app.data.gopeed.GopeedEngine
 import com.yunx.app.ui.resolve.formatSize
+import com.yunx.app.util.PermissionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /** 测试链接：阿里云镜像上的文件清单压缩包（约 20 MB），用来快速验证引擎能否正常下载 */
 private const val TEST_URL_ALIYUN = "https://mirrors.aliyun.com/ubuntu/ls-lR.gz"
@@ -87,9 +92,13 @@ private const val TEST_URL_CLOUDFLARE = "https://speed.cloudflare.com/__down?byt
 /**
  * Gopeed 内置下载引擎的验证页（设置 → Gopeed 下载引擎）。
  *
- * 这一批只做「可行性验证」：导入 AAR → 加载 .so → 启动引擎 → 建一个测试下载任务 →
- * 看进度 / 暂停 / 继续 / 删除，并列出下载目录里的真实文件做交叉验证。现有的
- * DownloadManager / DownloadService 链路一行没动，等验证通过再谈接管。
+ * 引擎管理页（设置 → Gopeed 下载引擎）。
+ *
+ * 导入 AAR → 加载 .so → 启停引擎 → 建一个测试任务 → 看进度/暂停/继续/删除，并列出下载目录里的
+ * 真实文件做交叉验证；同时负责引导「引擎按真实路径写公共目录」所需的权限
+ * （Android 11+ 的「所有文件访问」、Android 10- 的运行时存储权限，见 §3.29）。
+ *
+ * 现有的 DownloadManager / DownloadService 链路仍然独立运行——两套下载器并存，见 Agent.md §3.29。
  */
 @Composable
 fun GopeedScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -98,7 +107,31 @@ fun GopeedScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val engineState by GopeedEngine.state.collectAsState()
-    val downloadDir = remember { gopeedDownloadDir(context) }
+    // 「所有文件访问」授权状态（只有 Android 11+ 需要）：用户从系统设置返回时要刷新，
+    // 下载目录会跟着在「公共 Download/YunX」和「应用私有目录」之间切换
+    var allFilesReady by remember { mutableStateOf(PermissionState.allFilesAccessGranted()) }
+    // Android 10- 走真实路径还需要运行时 WRITE_EXTERNAL_STORAGE（引导页只为 Android 9- 申请过，
+    // 所以 Android 10 上大概率还没给，必须在这里补一个入口）
+    var legacyStorageReady by remember {
+        mutableStateOf(!PermissionState.engineStoragePermissionPending(context))
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                allFilesReady = PermissionState.allFilesAccessGranted()
+                legacyStorageReady = !PermissionState.engineStoragePermissionPending(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val downloadDir = remember(allFilesReady, legacyStorageReady) { GopeedEngine.resolveDownloadDir(context) }
+    val storagePermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        legacyStorageReady = !PermissionState.engineStoragePermissionPending(context)
+    }
 
     var busy by remember { mutableStateOf(false) }
     var soBytes by remember { mutableStateOf(0L) }
@@ -234,9 +267,45 @@ fun GopeedScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // 引擎写公共目录需要的权限：Android 11+ 是「所有文件访问」，10- 是运行时存储权限
+                    val needAllFiles = PermissionState.allFilesAccessRequired() && !allFilesReady
+                    val needLegacyStorage = PermissionState.engineStoragePermissionPending(context)
                     Text(
-                        "说明：Gopeed 是原生核心，只能写真实文件系统路径（写不了 SAF 的 content:// 目录），" +
-                            "所以验证阶段固定用应用外部私有目录（Android/data 下，免存储权限，文件管理器可见）。",
+                        when {
+                            needAllFiles ->
+                                "存储权限：「所有文件访问」未授权，现在只能下到应用私有目录" +
+                                    "（Android 11+ 的文件管理器也看不到那里）"
+                            needLegacyStorage -> "存储权限：还没授予存储权限，现在只能下到应用私有目录"
+                            else -> "存储权限：已就绪，下载直接落到公共 Download/${GopeedEngine.PUBLIC_DIR_NAME}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (needAllFiles || needLegacyStorage) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    if (needAllFiles || needLegacyStorage) {
+                        TextButton(onClick = {
+                            if (needAllFiles) {
+                                PermissionState.openAllFilesAccessSettings(context)
+                            } else {
+                                storagePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                            }
+                        }) {
+                            Icon(
+                                Icons.Outlined.FolderOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.size(6.dp))
+                            Text(if (needAllFiles) "去开启「所有文件访问」" else "授予存储权限")
+                        }
+                    }
+                    Text(
+                        "说明：Gopeed 是原生核心，只能按真实文件系统路径写文件（写不了 SAF 的 content:// 目录）。" +
+                            "公共目录要「所有文件访问」（仅 Android 11+ 需要，且必须用户手动开启）；" +
+                            "拿不到权限时自动退回应用外部私有目录，功能不受影响。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -496,10 +565,4 @@ private fun gopeedTaskLabel(status: String): String = when (status) {
     "error" -> "出错"
     "done" -> "已完成"
     else -> status
-}
-
-/** 引擎下载目录：应用外部私有目录（Android/data/<包名>/files/Gopeed），免存储权限 */
-private fun gopeedDownloadDir(context: Context): File {
-    val base = context.getExternalFilesDir(null) ?: context.filesDir
-    return File(base, "Gopeed")
 }

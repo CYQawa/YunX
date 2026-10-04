@@ -21,10 +21,12 @@ package com.yunx.app.data.gopeed
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.util.Log
 import com.gopeed.libgopeed.InvokeResultListener
 import com.gopeed.libgopeed.Libgopeed
 import com.yunx.app.util.LogRedactor
+import com.yunx.app.util.PermissionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,6 +63,9 @@ object GopeedEngine {
     private const val DIR_NAME = "gopeed"
     private const val SO_NAME = "libgojni.so"
 
+    /** 公共下载目录下的子目录名（即 Download/YunX）；UI 显示目录名时引用它，别再写死一份 */
+    const val PUBLIC_DIR_NAME = "YunX"
+
     /** logcat 过滤用：adb logcat -s GopeedEngine（导入/加载/启动/调用 全链路打点） */
     private const val TAG = "GopeedEngine"
 
@@ -91,6 +96,43 @@ object GopeedEngine {
     fun soFile(context: Context): File = File(File(context.filesDir, "$DIR_NAME/lib"), SO_NAME)
 
     fun isInstalled(context: Context): Boolean = soFile(context).isFile
+
+    /**
+     * 引擎的下载目录（必须是真实文件系统路径——Gopeed 写不了 SAF 的 `content://` 目录）。
+     *
+     * 优先公共的 `Download/YunX`（文件管理器里直接可见）：Android 11+ 需要「所有文件访问」，
+     * Android 9- 需要 `WRITE_EXTERNAL_STORAGE`，Android 10 由 manifest 的
+     * `requestLegacyExternalStorage` 回到旧模式 + 同一运行时权限。
+     * 权限不到位或目录建不出来时退回应用外部私有目录（免权限，但 Android 11+ 用户自己也看不到）。
+     *
+     * 可写性用「试写探针」判断，不按系统版本推断权限：各 ROM 对 legacy / 分区存储的处理并不一致。
+     */
+    @Suppress("DEPRECATION")
+    fun resolveDownloadDir(context: Context): File {
+        val publicDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            PUBLIC_DIR_NAME
+        )
+        if (canWrite(publicDir)) return publicDir
+        val privateDir = File(context.getExternalFilesDir(null) ?: context.filesDir, DIR_NAME)
+        Log.e(
+            TAG,
+            "公共下载目录不可写，退回私有目录：public=${publicDir.absolutePath} " +
+                "allFilesAccess=${PermissionState.allFilesAccessGranted()} " +
+                "allFilesRequired=${PermissionState.allFilesAccessRequired()} → private=${privateDir.absolutePath}"
+        )
+        return privateDir
+    }
+
+    /** 这个目录现在是否真的能写：建目录 + 写一个探针文件再删掉 */
+    private fun canWrite(dir: File): Boolean {
+        if (!dir.isDirectory && !dir.mkdirs()) return false
+        val probe = File(dir, ".yunx_write_probe")
+        return runCatching {
+            probe.writeText("ok")
+            probe.delete()
+        }.isSuccess
+    }
 
     /**
      * 导入 AAR：从 SAF Uri 流式解出本机 ABI 的 libgojni.so。

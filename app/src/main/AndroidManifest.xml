@@ -16,7 +16,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -34,6 +35,14 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
+    <!-- 内置下载引擎（Gopeed）只能按真实文件系统路径写文件：Android 11+ 要写公共 Download 目录
+         就得有「所有文件访问」。低版本不需要（9- 用上面的 WRITE_EXTERNAL_STORAGE，
+         10 由 application 的 requestLegacyExternalStorage 回到旧模式 + 同一运行时权限）。
+         用户需在系统设置里手动开启，PermissionState.allFilesAccessGranted 判断，
+         不给也能用——引擎会自动退到应用外部私有目录（见 Agent.md §3.29）。 -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <application
         android:name=".YunXApp"

@@ -24,6 +24,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
@@ -66,6 +67,50 @@ object PermissionState {
         !storagePermissionRequired() ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
             PackageManager.PERMISSION_GRANTED
+
+    /**
+     * 按**真实文件系统路径**写公共目录是否需要「所有文件访问」（`MANAGE_EXTERNAL_STORAGE`）：只有 Android 11+ 需要。
+     *
+     * 与上面两个方法的分工：`storagePermissionRequired/Granted` 服务于 MediaStore / SAF 路径
+     * （Android 10+ 确实不需要任何存储权限）；这里是内置下载引擎（Gopeed）要用的真实路径判断 ——
+     * Android 9- 靠 `WRITE_EXTERNAL_STORAGE`，Android 10 靠 manifest 的 `requestLegacyExternalStorage`
+     * 回到旧模式 + 同一个运行时权限，Android 11+ 忽略 legacy 标志，只能申请「所有文件访问」，
+     * 而且必须由用户去系统设置里手动开启（没有任何弹窗能直接授予）。
+     */
+    fun allFilesAccessRequired(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+    /** 「所有文件访问」是否已就绪；Android 10 及以下恒为 true（那些版本根本没有这个权限） */
+    fun allFilesAccessGranted(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
+        return Environment.isExternalStorageManager()
+    }
+
+    /**
+     * 内置下载引擎写公共目录时，**运行时存储权限**是否还没授予。
+     *
+     * 注意与 `storageGranted` 的区别：那条服务于 MediaStore / SAF 路径，Android 10+ 恒为 true；
+     * 引擎走的是**真实路径** —— Android 9- 和 Android 10（靠 manifest 的
+     * `requestLegacyExternalStorage` 回到旧模式）都需要 `WRITE_EXTERNAL_STORAGE`，
+     * Android 11+ 由上面的「所有文件访问」覆盖，不需要它。
+     */
+    fun engineStoragePermissionPending(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) return false
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
+    }
+
+    /** 跳「所有文件访问」授权页；部分 ROM 没有应用级页面时依次回退到总列表页、应用详情页 */
+    fun openAllFilesAccessSettings(context: Context) {
+        val packageUri = Uri.parse("package:${context.packageName}")
+        val candidates = listOf(
+            Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).setData(packageUri),
+            Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(packageUri)
+        )
+        for (intent in candidates) {
+            if (runCatching { context.startActivity(intent) }.isSuccess) return
+        }
+    }
 
     /** 是否已加入「忽略电池优化」白名单（查询失败时按"已加入"处理，避免反复打扰用户） */
     fun batteryOptimizationIgnored(context: Context): Boolean {

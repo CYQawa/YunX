@@ -785,8 +785,8 @@ release 混淆后名字一变就崩。
 `refreshInterval=500`、`downloadConfig{downloadDir, maxRunning=1, autoStartTasks=false}`。
 注意 `autoStartTasks` 只管「启动时是否恢复未完成任务」，**新建任务照常立即开始**。
 
-**下载目录固定用应用外部私有目录** `Android/data/<包名>/files/Gopeed`：Gopeed 是原生核心，**写不了 SAF 的
-`content://` 目录**，所以设置页那套 SAF 下载目录设置对引擎不适用（需要改目录得另做真实路径选择器，未做）。
+**下载目录**：引擎只能按**真实文件系统路径**写（写不了 SAF 的 `content://` 目录），现在优先用公共的
+`Download/YunX`，权限不到位时自动退回应用外部私有目录 —— 完整规则、权限矩阵与 B 路线决策见 §3.29。
 
 **文件与接线**：`app/src/main/kotlin/com/yunx/app/data/gopeed/GopeedEngine.kt`（`object`，`State{NOT_INSTALLED,
 INSTALLED,RUNNING}`、`installFromAar`/`uninstall`/`start`/`stop`/`invoke`/`taskStatus`/`createTask`/`pauseTask`/
@@ -859,6 +859,54 @@ python3 tools/patch-gopeed-classes.py <libgopeed-<abi>.aar | classes.jar> app/li
 
 **真机操作提醒**：桥接类初始化失败后，**必须杀掉应用（最近任务划掉 / 强行停止）再重开**，否则同一进程里再点
 只会一直得到 `NoClassDefFoundError`。
+
+---
+
+### 3.29 内置引擎的落盘与权限（B 路线：申请「所有文件访问」）+ 两套下载器并存的决策
+
+**用户拍板的三个方向（2026-10-04，别再自行改回去）**：
+
+1. **落盘走 B 路线**：申请「所有文件访问」（`MANAGE_EXTERNAL_STORAGE`），让引擎直接写**公共目录**；
+2. **内核手动导入**：APK 不打包 56 MB 的 .so，继续由用户在设置页导入 AAR；**后续再做「应用内从 GitHub 下载 AAR」**；
+3. **两套下载器并存**：老的 `DownloadManager` 分片下载器与 Gopeed 引擎同时在仓库里，**应用内可切换**（切换 UI 待做）。
+
+**为什么不是「所有安卓版本都要所有文件访问」**（引擎只能按真实路径写文件，权限按版本分三档）：
+
+| 系统 | 写公共目录要什么 | 代码里怎么判断 |
+|---|---|---|
+| Android 9- | 运行时 `WRITE_EXTERNAL_STORAGE` | `PermissionState.engineStoragePermissionPending()` |
+| Android 10 | 同一个运行时权限 + manifest 的 `requestLegacyExternalStorage="true"` 回到旧模式 | 同上（Q **也要**申请，别以为 10 就不用了） |
+| Android 11+ | `MANAGE_EXTERNAL_STORAGE`（「所有文件访问」），**只能用户去系统设置手动开** | `PermissionState.allFilesAccessRequired()/allFilesAccessGranted()` |
+
+Android 10+ 原本那套「保存到公共目录」走 MediaStore/SAF，**不需要任何存储权限**——
+所以 `PermissionState.storageGranted()` 在 10+ 恒为 true，**那三个方法不要改**，它们是给 MediaStore/SAF 路径用的；
+引擎这条真实路径的判断是新增的 `allFilesAccessRequired/allFilesAccessGranted/engineStoragePermissionPending`。
+（引导页 `OnboardingScreen` 只在 Android 9- 申请 `WRITE_EXTERNAL_STORAGE`，所以 **Android 10 上大概率还没授权**，
+引擎页必须自己补申请入口。）
+
+**目录解析**（`GopeedEngine.resolveDownloadDir(context)`）：优先 `Environment.getExternalStoragePublicDirectory(DIRECTORY_DOWNLOADS)/YunX`
+（子目录名是公开常量 `GopeedEngine.PUBLIC_DIR_NAME`，UI 别再写死一份）；**可写性用「试写探针」判断**——
+建目录 + 写一个 `.yunx_write_probe` 再删掉，成功才用公共目录，否则退回 `Android/data/<包名>/files/gopeed` 并 `Log.e`。
+不按系统版本推断权限是因为各 ROM 对 legacy / 分区存储的处理并不一致。
+
+**UI**（`GopeedScreen`）：状态卡显示当前生效的下载目录 + 存储权限三态提示（未授权/已就绪）+ 一个按钮
+（Android 11+ 跳「所有文件访问」页；10- 弹运行时授权框）；`LocalLifecycleOwner` + ON_RESUME 刷新，
+从系统设置返回后目录会自动切换（`remember(allFilesReady, legacyStorageReady)` 重新解析）。
+**权限是给引擎启动时写进配置的默认目录用的，但每个任务的 `opts.path` 才是真正落盘位置**，
+所以授权后不需要重启引擎，下一个任务就用新目录。
+
+**为什么不用 MediaStore 直写绕开权限**：MediaStore 只支持顺序流式写，而 Gopeed 是多连接随机写（seek + 分片），
+天然不兼容；要零权限就只能「引擎下到私有目录 → 完成后复制到公共目录」，那是 A 路线（已完成评估，未采用）。
+
+**已核实、接管时可以直接用的引擎能力**（读的是 Gopeed 源码 `pkg/protocol/http/model.go`）：
+`req.extra.header`（`map[string]string`，网盘直链要的 UA/Referer/Cookie 都能带）、
+`opts.extra.connections`（分片并发，正好映射现有「按网盘分别设置分片并发数」）、
+`Request.Labels`（可塞 YunX 侧任务 id 做映射）。
+**缺口**：`DownloaderStoreConfig` 里没有限速字段，现有「速度限制」设置项无法平移；重试由引擎自己管。
+
+**风险提示**：`MANAGE_EXTERNAL_STORAGE` 属于特殊权限，Google Play 需要申报用途、
+F-Droid 侧也可能触发审核（本项目已有 fastlane 元数据）；如果哪天因为分发渠道要放弃它，
+退回 A 路线（下到私有目录后复制）即可，代码里只影响 `resolveDownloadDir` 与权限 UI 两处。
 
 ---
 
