@@ -457,12 +457,7 @@ fun SettingsScreen(
         // 不必先转存进用户网盘；关掉后回到「转存到 YunX临时转存 再取链」的老流程。
         SettingsItem(
             icon = Icons.Outlined.SwapHoriz,
-            // 引擎模式下它前面的项都被隐藏了，它就是分组最后一行，圆角要跟着变
-            shape = if (engineOn) {
-                listGroupShape(ListGroupPos.LAST)
-            } else {
-                listGroupShape(ListGroupPos.MIDDLE)
-            },
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "免转存下载",
             description = if (quarkNoSave) {
                 "夸克：解析出直链后直接下载，不把文件转存到自己的网盘"
@@ -478,9 +473,8 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(ListGroupGap))
 
-        // 用户体验与系统适配：锁屏保持下载 / 通知栏进度样式（都只作用于内置下载器的前台服务与通知）
-        AnimatedVisibility(visible = !engineOn, enter = expandVertically(), exit = shrinkVertically()) {
-            Column {
+        // 用户体验与系统适配：锁屏保持下载 / 通知栏进度样式
+        // （这两项对引擎任务同样生效：引擎任务走同一套前台服务、WakeLock 与通知通道，所以不隐藏）
         SettingsItem(
             icon = Icons.Outlined.Power,
             shape = listGroupShape(ListGroupPos.MIDDLE),
@@ -529,8 +523,6 @@ fun SettingsScreen(
             },
             trailing = { Switch(checked = showSpeed, onCheckedChange = null) }
         )
-            }
-        }
 
         Spacer(modifier = Modifier.height(24.dp))
 

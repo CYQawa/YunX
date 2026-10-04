@@ -253,6 +253,15 @@ class DownloadManager(
     /** 引擎任务 ID 的内存索引：DB 的 `engineTaskId` 是持久化真源，这里只给 pause/start/remove 做同步判断 */
     private val taskEngineIds = ConcurrentHashMap<Long, String>()
 
+    /**
+     * 已经计入「前台服务保活」的引擎任务。
+     *
+     * 引擎任务不走 [onTaskStarted]/[onTaskFinished] 的下载协程路径，保活要自己配对：**加入时**才
+     * 拉起前台服务 + WakeLock，**移除时**才允许释放。用集合的 add/remove 返回值去重，
+     * 保证无论从哪条路径终结（完成 / 失败 / 用户暂停 / 用户删除 / 引擎侧自己变 pause）都只扣一次。
+     */
+    private val engineKeepAliveIds = ConcurrentHashMap.newKeySet<Long>()
+
     /** 引擎任务进度同步协程（同一时刻只跑一个；没有可同步任务时自己退出） */
     private var engineSyncJob: Job? = null
 
@@ -560,6 +569,8 @@ class DownloadManager(
         taskEngineIds[id] = engineTaskId
         // 记录本段运行起点：完成时用它算平均速度
         taskStartTimes[id] = System.currentTimeMillis()
+        // 保活：第一个引擎任务拉起前台服务 + WakeLock，锁屏/退后台引擎才不会被系统收掉
+        if (engineKeepAliveIds.add(id)) onTaskStarted(id)
         dao.updateEngineTaskId(id, engineTaskId)
         dao.updateStatus(id, DownloadTaskEntity.STATUS_DOWNLOADING)
         startEngineSync()
@@ -600,10 +611,18 @@ class DownloadManager(
                             taskEngineIds.remove(task.id)
                             taskStartTimes.remove(task.id)
                             releaseEngineTaskMemory(task.id)
+                            if (engineKeepAliveIds.remove(task.id)) onTaskFinished()
+                            DownloadService.notifyResult(
+                                context, task.id, task.fileName,
+                                success = false, error = "Gopeed 引擎下载失败",
+                                promote = showSpeedProvider()
+                            )
                         }
                         "pause" -> {
                             dao.updateStatus(task.id, DownloadTaskEntity.STATUS_PAUSED)
                             _stats.update { it - task.id }
+                            // 引擎侧自己变暂停（进程重启后未续传等）：保活到此为止，用户点继续时会重新拉起
+                            if (engineKeepAliveIds.remove(task.id)) onTaskFinished()
                         }
                         else -> {
                             val total = if (status.total > 0L) status.total else task.totalSize
@@ -625,6 +644,8 @@ class DownloadManager(
                                     chunkCount = threadProvider(task.platform).coerceAtLeast(1)
                                 ))
                             }
+                            // 前台通知：与内置下载器共用同一条 2 秒节流和速度来源（_stats），所以写在 _stats 之后
+                            notifyProgress(task.id, task.fileName, status.downloaded, total)
                         }
                     }
                 }
@@ -649,6 +670,12 @@ class DownloadManager(
         Log.d(TAG, "引擎任务完成：yunxId=${task.id} engineId=${task.engineTaskId} path=$savedPath size=$size avg=$avgSpeed")
         taskEngineIds.remove(task.id)
         releaseEngineTaskMemory(task.id)
+        // 保活收尾 + 结果通知（与内置下载器走同一条前台通知通道）
+        if (engineKeepAliveIds.remove(task.id)) onTaskFinished()
+        DownloadService.notifyResult(
+            context, task.id, task.fileName,
+            success = true, promote = showSpeedProvider()
+        )
         taskCallbacks.remove(task.id)?.let { cb -> runCatching { cb() } }
     }
 
@@ -661,6 +688,8 @@ class DownloadManager(
     /** 引擎任务暂停：异步转发给引擎，状态由同步循环回写 */
     private fun pauseEngineTask(id: Long, engineId: String) {
         _stats.update { it - id }
+        // 用户主动暂停：保活立刻收尾，前台服务/WakeLock 不再为它保持
+        if (engineKeepAliveIds.remove(id)) onTaskFinished()
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { GopeedEngine.pauseTask(engineId) } }
                 .onFailure { Log.e(TAG, "引擎暂停失败：id=$id ${it.message}", it) }
@@ -675,6 +704,8 @@ class DownloadManager(
                 .onFailure { Log.e(TAG, "引擎继续失败：id=$id ${it.message}", it) }
             // 本段运行起点重置：平均速度口径与内置下载器一致（最近一段运行）
             taskStartTimes[id] = System.currentTimeMillis()
+            // 继续下载：重新拉起前台服务保活（暂停时刚刚收尾过）
+            if (engineKeepAliveIds.add(id)) onTaskStarted(id)
             dao.updateStatus(id, DownloadTaskEntity.STATUS_DOWNLOADING)
             startEngineSync()
         }
@@ -842,6 +873,8 @@ class DownloadManager(
         // 引擎任务：额外通知引擎删除；本地清理（DB 记录 + 已下载文件）继续走下面的原逻辑
         taskEngineIds.remove(id)?.let { engineId ->
             releaseEngineTaskMemory(id)
+            // 用户删除：保活收尾（未完成的任务被删掉后，前台服务不该继续挂着）
+            if (engineKeepAliveIds.remove(id)) onTaskFinished()
             scope.launch {
                 runCatching { withContext(Dispatchers.IO) { GopeedEngine.deleteTask(engineId) } }
                     .onFailure { Log.e(TAG, "引擎删除任务失败：id=$id ${it.message}", it) }

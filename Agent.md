@@ -956,21 +956,44 @@ if (shouldUseEngine(platform)) startViaEngine(...) else start(id, headers)
 按「引擎给出的总大小 ÷ 本段运行时长」算（`taskStartTimes` 在创建/继续时重置，与内置下载器同口径）。
 暂停/失败/完成时都会把该任务从 `_stats` 移除，避免残留速度。
 
-**设置页 UI（本批调整）**：下载引擎两项（`下载引擎选择` + `Gopeed 下载引擎` 入口）已挪到**「下载」分组最前**，
-原来的「下载引擎」分组已删除。选 Gopeed 时，用两段 `AnimatedVisibility(expandVertically/shrinkVertically)`
-隐藏**只对内置分片下载器有意义**的 6 项：下载保存目录（引擎写 `Download/YunX`）、最大同时下载任务数、
-下载速度限制、失败自动重试、锁屏后保持下载、通知栏下载进度。
-保留「下载线程数」（映射到引擎 `opts.extra.connections`）与「免转存下载」（那是夸克取链方式，跟下载器无关）。
-被隐藏项的 `shape` 是中间段圆角，隐藏后不影响分组首尾；只有「免转存下载」既是保留项又可能变成末行，
-所以它的圆角按 `engineOn` 动态取 `LAST/MIDDLE`（**改动分组可见项时记得一起看圆角**）。
+**设置页 UI**：下载引擎两项（`下载引擎选择` + `Gopeed 下载引擎` 入口）已挪到**「下载」分组最前**，
+原来的「下载引擎」分组已删除。选 Gopeed 时用一段 `AnimatedVisibility(expandVertically/shrinkVertically)`
+隐藏**确实只对内置分片下载器有意义**的 4 项：下载保存目录（引擎固定写 `Download/YunX`）、
+最大同时下载任务数（引擎侧 `maxRunning` 写死 1）、下载速度限制（引擎不支持）、失败自动重试（引擎自己管）。
+**保留**「下载线程数」（映射到 `opts.extra.connections`，真生效）、「免转存下载」（夸克取链方式，与下载器无关），
+以及「锁屏后保持下载」「通知栏下载进度」——后两项对引擎任务**同样生效**（引擎任务走同一套前台服务、
+WakeLock 与通知通道，见 §3.31），一开始误判成"只作用于内置下载器"藏起来了，已改回。
+隐藏的 4 项都是分组中段的行，折叠后不影响首尾圆角（**以后改分组可见项时记得一起看圆角**）。
 
 **已知边界（都是有意为之，不是 bug）**：引擎**不支持限速**，所以「速度限制」设置对引擎任务无效（已隐藏）；
-引擎任务退后台是否继续取决于进程是否存活（前台服务还没做，见 §3.29 的后续清单）；
 内置下载器的分片/重试设置对引擎任务无意义（引擎有自己的连接与重试）。
 
 **回退**：设置里切回「内置分片下载器」即可让新任务全部回到老下载器（引擎任务仍在，可手动删）；
 要彻底拆掉就删 `engineTaskId` 列相关代码 + `startViaEngine`/`startEngineSync`/`pauseEngineTask`/`resumeEngineTask`
 以及 enqueue/start/pause/remove 里的四个分支（DB 版本号别回退，理由同上）。
+
+---
+
+### 3.31 引擎任务的前台保活（复用内置下载器那一套，别另起一套）
+
+**结论**：引擎跑在进程内（`GopeedEngine` 是 object 单例），**只要进程活着引擎就活着**，所以保活要做的只有一件事——
+让「有引擎任务在跑」也算作「有下载在跑」，从而复用现有前台服务：
+
+| 现有机制（都在 `DownloadManager`） | 引擎任务怎么接 |
+|---|---|
+| `onTaskStarted(id)`：第一个任务 → `DownloadService.start()` + `acquireWakeLockIfNeeded()` | 建任务成功、用户点继续时调用 |
+| `onTaskFinished()`：最后一个任务 → `DownloadService.stop()` + `releaseWakeLock()` | 完成/失败/用户暂停/用户删除/引擎侧自己变 pause 时调用 |
+| `notifyProgress(id, fileName, new, total)`：2 秒节流 + 从 `_stats` 取速度 | 同步循环里每轮回写进度后调用（**必须写在 `_stats.update` 之后**，否则通知里的速度慢一拍） |
+| `DownloadService.notifyResult(...)`：终态通知（含流体云胶囊） | 完成/失败时调用，`promote = showSpeedProvider()` 与内置下载器一致 |
+
+**★ 配对靠 `engineKeepAliveIds`（`ConcurrentHashMap.newKeySet<Long>()`）**：`add(id)` 返回 true 才拉起保活，
+`remove(id)` 返回 true 才收尾，所以无论从哪条路径终结都**恰好扣一次**（引擎任务不走下载协程，没有
+`finally` 可以依赖，重复扣会让前台服务提前退出、漏扣会让服务一直挂着耗电）。
+新增"任务终结路径"时**必须**补一个 `if (engineKeepAliveIds.remove(id)) onTaskFinished()`。
+
+**进程重启后**：`markInterruptedAsPaused()` 会把引擎任务标成「已暂停」，保活集合是空的、不会误拉服务；
+用户点继续时 `resumeEngineTask` 重新 `add` 并拉起。**进程被系统杀掉时引擎随之停止**，前台服务的作用是
+大幅降低被杀概率，不是绝对保活（这也是没有把引擎做成独立进程的原因：独立进程要跨进程通信，成本远大于收益）。
 
 ---
 
