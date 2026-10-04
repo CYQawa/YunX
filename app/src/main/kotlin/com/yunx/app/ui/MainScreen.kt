@@ -135,7 +135,7 @@ import com.yunx.app.ui.screens.AboutScreen
 import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
-import com.yunx.app.ui.screens.GopeedScreen
+import com.yunx.app.ui.screens.DownloadEngineScreen
 import com.yunx.app.ui.screens.OnboardingScreen
 import com.yunx.app.ui.screens.ResolveScreen
 import com.yunx.app.ui.screens.SettingsScreen
@@ -757,9 +757,9 @@ fun MainScreen() {
                 enter = fadeIn(effectsDefault()),
                 exit = fadeOut(effectsFast())
             ) {
-                // 源侧共享元素修饰符：设置页那三行各自对应一个 key（见 SettingsScreen）。
+                // 源侧共享元素修饰符：设置页里能进入独立页面的那几行各自对应一个 key（见 SettingsScreen）。
                 // ★ rememberSharedContentState 是 @Composable，必须在 composable 作用域里直接调用，
-                //   不能包在普通 lambda 里延迟构造 —— 所以这里一次性建好三个传下去。
+                //   不能包在普通 lambda 里延迟构造 —— 所以这里一次性建好再传下去。
                 val sourceScope = this
                 val themeRowModifier = Modifier.sharedBounds(
                     rememberSharedContentState(OVERLAY_KEY_THEME),
@@ -771,6 +771,11 @@ fun MainScreen() {
                 )
                 val supportRowModifier = Modifier.sharedBounds(
                     rememberSharedContentState(OVERLAY_KEY_SUPPORT),
+                    animatedVisibilityScope = sourceScope
+                )
+                // 「下载引擎」行 → 下载引擎页：和上面三行同样走容器变换（整行长成整页）
+                val engineRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_GOPEED),
                     animatedVisibilityScope = sourceScope
                 )
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -903,6 +908,7 @@ fun MainScreen() {
                                     themeRowModifier = themeRowModifier,
                                     aboutRowModifier = aboutRowModifier,
                                     supportRowModifier = supportRowModifier,
+                                    engineRowModifier = engineRowModifier,
                                     onThemeClick = { showTheme = true },
                                     onAboutClick = { showAbout = true },
                                     onSupportClick = { showSupport = true },
@@ -1017,7 +1023,7 @@ fun MainScreen() {
                             )
                             OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
                             OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
-                            OVERLAY_KEY_GOPEED -> GopeedScreen(onBack = { showGopeed = false })
+                            OVERLAY_KEY_GOPEED -> DownloadEngineScreen(onBack = { showGopeed = false })
                             else -> BookmarkScreen(
                                 viewModel = bookmarkViewModel,
                                 onBack = { showBookmarks = false },

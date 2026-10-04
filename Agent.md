@@ -997,6 +997,64 @@ WakeLock 与通知通道，见 §3.31），一开始误判成"只作用于内置
 
 ---
 
+### 3.32 下载引擎页（替换掉验证期的 Gopeed 测试页）+ 启动自动加载
+
+**页面形态**：设置 → 「下载引擎」→ `app/src/main/kotlin/com/yunx/app/ui/screens/DownloadEngineScreen.kt`
+（验证期的 `GopeedScreen.kt` **已删除**）。**一张卡片（圆角 20dp / 段内边距 16dp）里上下两段，
+中间一条 `outlineVariant` 细线**：每段 = 圆角图标块（40dp / 12dp 圆角，选中段用 `primaryContainer` 高亮）
++ 标题（`titleMedium` + Medium）+ 可选小标签（「实验性」用 `Surface(primaryContainer)` 小圆角块，`labelSmall`）
++ 说明（`bodySmall` / `onSurfaceVariant`）+ **整宽按钮**（44dp 高 / 14dp 圆角 / `labelLarge`）：
+
+**尺寸口径（用户反馈「字体布局那些有点太大了、不够现代美观」后整体压了一档）**：整页只允许标题 `titleMedium`、
+说明与元信息 `bodySmall`、按钮文字 `labelLarge`、徽标 `labelSmall`——与设置页 `SettingsItem`
+（`titleMedium` + `bodyMedium`）同一档；**别再往 `titleLarge` / 52dp 按钮 / 28dp 圆角 / 20dp 段内边距上加**。
+间距：卡外 12dp、段内 12dp、元信息块（下载目录 / 权限）内 6dp。
+
+| 段 | 主按钮 | 点击行为 |
+|---|---|---|
+| 内置分片下载器 | 当前引擎 → tonal 按钮「使用中」（带对勾、不可点）；否则描边按钮「切换到此引擎」 | 写 `downloadEngine = ENGINE_BUILTIN` |
+| Gopeed 引擎 | **没导入内核 → 描边按钮「导入内核」**（走 SAF 选 AAR）；已导入且未选中 →「切换到此引擎」；已选中 → tonal「使用中」 | 导入内核 / 切换引擎 |
+
+Gopeed 段里还带着：**引擎状态**（未导入内核 / 已导入，未启动 / 运行中）、内核大小与核心版本、
+下载目录、存储权限引导按钮，以及「启动引擎 / 停止引擎」「删除内核」两个 `TextButton`。
+**切换成 Gopeed 时若内核已导入且引擎没在跑，顺手把它启动起来**（`chooseEngine` 里做），省得用户再点一次。
+
+**动效**（规格一律取自 `ui/theme/Motion.kt`，别另写时长；**透明度/颜色用 `effects*`、位移/尺寸用 `spatial*`**）：
+**本页没有自己的入场动画**——它是由设置页「下载引擎」那一行做**容器变换**「长」出来的，
+再叠一层淡入/上移会和形变打架（第一版写了 `fadeIn + slideInVertically`，已删）；
+**引擎状态文字用 `AnimatedContent`** 淡入淡出（`effectsFast`）；图标块的底色/图标色走 `animateColorAsState`
+（`effectsDefault`，与 `OnboardingScreen.kt` 里指示点颜色同一口径），切换引擎时「选中态」是渐变过去的而不是硬切；
+内核就绪后才出现的下载目录/权限那一段用 `AnimatedVisibility` 淡入淡出。
+
+**容器变换（Container Transform）接线**（和「主题与外观 / 关于云析 / 支持开发」三行完全同款，用户点名要这效果）：
+源侧 = `MainScreen.kt` 在 `SharedTransitionLayout` 作用域里构造
+`Modifier.sharedBounds(rememberSharedContentState(OVERLAY_KEY_GOPEED), animatedVisibilityScope = sourceScope)`，
+作为 `engineRowModifier` 传给 `SettingsScreen`，再挂到那一行的 `SettingsItem(modifier = engineRowModifier)`；
+目标侧 = `OverlayPage` 已按 `overlayKeyFor(...)` 用同一个 `OVERLAY_KEY_GOPEED` 做了 `sharedBounds`，**不用改**。
+（`MainScreen` 里这几个源侧修饰符必须在 composable 作用域一次性建好再传下去：`rememberSharedContentState`
+是 `@Composable`，不能包在普通 lambda 里延迟构造。）
+
+**删内核必须顺手切回内置**（用户报的 bug：选了 Gopeed 再删内核，设置项还停在 Gopeed）：
+页面里删完内核后若当前引擎是 Gopeed 就写回 `ENGINE_BUILTIN` 并提示「内核已删除，已自动切回内置分片下载器」；
+`YunXApp.autoStartGopeedIfSelected` 里也做了同样的**自愈**（启动时若设置是 Gopeed 但内核不存在 → 写回内置）。
+两道一起做的原因：`DownloadManager.shouldUseEngine()` 本来就会因内核缺失回退到内置下载器，
+不修的话会出现「设置界面说在用引擎、实际跑的是内置下载器」的错位。
+
+**验证期那些测试功能全部去掉**：URL 输入建任务、当前任务进度/暂停/继续/删除、下载目录文件列表——
+它们只是用来验证引擎能不能跑通，正式入口是解析页/网盘页/下载页的正常下载流程。
+
+**设置页只留一行**：原来「下载引擎选择」+「Gopeed 下载引擎」两行合并成一行「下载引擎」（副标题显示当前引擎），
+点击进独立页面；那个切换弹窗已删除。副标题靠 `ON_RESUME` 重新读 `settingsRepo.downloadEngine` 同步
+（引擎在独立页面里改，返回设置页必须刷新）。`MainScreen` 那边沿用 `OVERLAY_KEY_GOPEED` / `showGopeed` 两个名字
+（只是内部标识，指向的已经是新页面）。
+
+**启动自动加载**：`YunXApp.autoStartGopeedIfSelected(ctx)`（在 `onCreate` 末尾调用）——
+设置选了 Gopeed **且**已导入内核时，起一个后台 `Thread` 把引擎加载起来（首次要 `System.load` 56 MB 的 .so
+并初始化 Go runtime，提前加载能让第一个任务不必等）。**任何失败只 `Log.e`**：引擎起不来不能影响应用启动，
+真正的下载会按失败任务落库并提示。设置读取用 `SettingsRepository`（别自己拼 prefs 键名）。
+
+---
+
 ## 4. 验证
 
 
@@ -1018,6 +1076,7 @@ WakeLock 与通知通道，见 §3.31），一开始误判成"只作用于内置
 | `combinedClickable` | 需 `@OptIn(ExperimentalFoundationApi::class)` |
 | 图标找不到 | 已引入 `material-icons-extended`，确认图标名与 `Outlined`/`Filled` 命名空间 |
 | `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
+| `animateColorAsState` 报 `Unresolved reference` | 包是 `androidx.compose.animation.animateColorAsState`（**不是** `androidx.compose.animation.core`）。判断依据：`.animation` 放的是**进出场/内容切换**（`AnimatedVisibility`/`AnimatedContent`/`fadeIn`/`fadeOut`/`slideInVertically`/`togetherWith`/`animateColorAsState`），`.animation.core` 放的是**时间曲线与动画值**（`tween`/`spring`/`Animatable`/`animateFloatAsState`/`animateDpAsState`）。写错包会连带一片 `Cannot infer type for this parameter`（`by` 委托推不出类型） |
 | Room 编译报 schema 错 | 检查 `version` 是否 +1、Migration 是否注册 |
 
 ---

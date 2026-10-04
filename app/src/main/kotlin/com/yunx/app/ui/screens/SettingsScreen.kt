@@ -59,7 +59,6 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentPaste
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Info
@@ -117,7 +116,6 @@ import com.yunx.app.data.backup.AuthCrypto
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSaver
 import com.yunx.app.data.network.HttpClients
-import com.yunx.app.data.gopeed.GopeedEngine
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
@@ -196,15 +194,16 @@ fun SettingsScreen(
     scrollBehavior: TopAppBarScrollBehavior,
     /**
      * 容器变换（Container Transform）源侧修饰符：由 MainScreen 在 SharedTransitionLayout 作用域内构造
-     * （设置页自己拿不到那个作用域），分别挂到「主题与外观 / 关于云析 / 支持开发」三行上。
+     * （设置页自己拿不到那个作用域），分别挂到「主题与外观 / 关于云析 / 支持开发 / 下载引擎」这四行上。
      */
     themeRowModifier: Modifier = Modifier,
     aboutRowModifier: Modifier = Modifier,
     supportRowModifier: Modifier = Modifier,
+    engineRowModifier: Modifier = Modifier,
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
-    /** 打开内置 Gopeed 下载引擎页（导入 AAR、启停引擎、试下载；验证阶段的独立入口） */
+    /** 打开下载引擎页（两套下载器切换、导入内核、引擎启停与状态） */
     onGopeedClick: () -> Unit,
     backupManager: AuthBackupManager,
     /** 手动检查更新（弹窗与下载逻辑都由 MainScreen 统一持有，设置页不再自己实现一份） */
@@ -232,9 +231,8 @@ fun SettingsScreen(
     val settingsRepo = remember { SettingsRepository(context) }
     var downloadDirUri by remember { mutableStateOf(settingsRepo.downloadDirUri) }
     var showDevMenu by remember { mutableStateOf(false) }
-    // 下载引擎（内置分片下载器 / Gopeed 引擎）：本地状态驱动副标题，写入走 SettingsRepository
+    // 下载引擎（内置分片下载器 / Gopeed 引擎）：本身在独立页面里改，这里只读来渲染副标题
     var engineChoice by remember { mutableStateOf(settingsRepo.downloadEngine) }
-    var showEngineDialog by remember { mutableStateOf(false) }
     // 网络与下载策略（本地状态驱动 UI，同时同步 SharedPreferences）
     var maxConcurrent by remember { mutableStateOf(settingsRepo.maxConcurrentDownloads) }
     var speedLimitBps by remember { mutableStateOf(settingsRepo.downloadSpeedLimit) }
@@ -266,6 +264,8 @@ fun SettingsScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+                // 下载引擎在独立页面里切换，返回设置页时同步副标题
+                engineChoice = settingsRepo.downloadEngine
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -343,25 +343,17 @@ fun SettingsScreen(
             .padding(16.dp)
     ) {
         SectionLabel("下载")
-        // 下载引擎两项放在下载分组最前（切换 UI 后续还会调整）：选哪个引擎一眼可见
+        // 引擎切换在独立页面里做（那里上下两段各一个按钮），这里只显示当前用的是哪个
         SettingsItem(
             icon = Icons.Outlined.SwapHoriz,
             shape = listGroupShape(ListGroupPos.FIRST),
-            title = "下载引擎选择",
-            description = if (engineChoice == SettingsRepository.ENGINE_GOPEED) {
+            title = "下载引擎",
+            description = if (engineOn) {
                 "Gopeed 引擎（内置 gomobile 核心，按真实路径落盘）"
             } else {
                 "内置分片下载器（默认，走 SAF/MediaStore 保存）"
             },
-            onClick = { showEngineDialog = true }
-        )
-
-        Spacer(modifier = Modifier.height(ListGroupGap))
-        SettingsItem(
-            icon = Icons.Outlined.Download,
-            shape = listGroupShape(ListGroupPos.MIDDLE),
-            title = "Gopeed 下载引擎",
-            description = "导入 AAR、启停引擎、查看引擎任务",
+            modifier = engineRowModifier,
             onClick = onGopeedClick
         )
 
@@ -697,50 +689,6 @@ fun SettingsScreen(
             title = "GitHub 仓库",
             description = "${AppLinks.GITHUB_REPO_DISPLAY} · 查看源码与反馈问题",
             onClick = { openUrl(context, AppLinks.GITHUB_REPO) }
-        )
-    }
-
-    // 下载引擎选择弹窗（内置分片下载器 / Gopeed 引擎）
-    if (showEngineDialog) {
-        AlertDialog(
-            onDismissRequest = { showEngineDialog = false },
-            title = { Text("下载引擎") },
-            text = {
-                Column {
-                    Text(
-                        "选 Gopeed 引擎后，新建的下载任务交给内置的 Gopeed 核心执行（需先在「Gopeed 下载引擎」页导入 AAR，" +
-                            "且它只能按真实路径落盘）；内置分片下载器是项目自带的下载器。已存在的任务不受影响。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    listOf(
-                        SettingsRepository.ENGINE_BUILTIN to "内置分片下载器",
-                        SettingsRepository.ENGINE_GOPEED to "Gopeed 引擎"
-                    ).forEach { (value, label) ->
-                        TextButton(onClick = {
-                            settingsRepo.downloadEngine = value
-                            engineChoice = value
-                            showEngineDialog = false
-                            SnackbarController.show(
-                                if (value == SettingsRepository.ENGINE_GOPEED &&
-                                    !GopeedEngine.isInstalled(context)
-                                ) {
-                                    // 引擎没导入时新任务仍会走内置下载器，这里必须说清楚，否则用户会以为切换没生效
-                                    "已选择 Gopeed 引擎，但还没导入内核：请先到「Gopeed 下载引擎」页导入 AAR"
-                                } else {
-                                    "下载引擎已切换：$label"
-                                }
-                            )
-                        }) {
-                            Text(if (value == engineChoice) "✓ $label" else label)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showEngineDialog = false }) { Text("取消") }
-            }
         )
     }
 

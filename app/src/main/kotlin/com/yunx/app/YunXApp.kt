@@ -95,6 +95,8 @@ class YunXApp : Application() {
             }
         }
         purgeDownloadLeftovers(this)
+        // 选了 Gopeed 引擎且已导入内核：启动就把它加载起来（失败只记日志，绝不影响应用启动）
+        autoStartGopeedIfSelected(this)
     }
 
     /**
@@ -115,6 +117,31 @@ class YunXApp : Application() {
 private fun purgeDownloadLeftovers(ctx: Context) {
     Thread {
         runCatching { com.yunx.app.data.download.DownloadSaver.purgeOwnPendingFiles(ctx) }
+    }.start()
+}
+
+/**
+ * 选了 Gopeed 引擎时，应用启动就把引擎加载起来（只有导入过内核才做，见 Agent.md §3.32）。
+ *
+ * 引擎是进程内单例，首次加载要 System.load 56 MB 的 .so 并初始化 Go runtime，提前加载能让第一个
+ * 下载任务不必等它；**任何失败都只记日志** —— 引擎起不来不能影响应用启动，下载侧会按失败任务处理。
+ */
+private fun autoStartGopeedIfSelected(ctx: Context) {
+    val engine = com.yunx.app.data.gopeed.GopeedEngine
+    val settingsRepo = com.yunx.app.data.prefs.SettingsRepository(ctx)
+    if (settingsRepo.downloadEngine != com.yunx.app.data.prefs.SettingsRepository.ENGINE_GOPEED) return
+    if (!engine.isInstalled(ctx)) {
+        // 内核被删了（或从没导入过）但设置还停在 Gopeed：自愈回内置下载器，避免"设置说在用引擎、
+        // 实际跑的是内置下载器"的错位（与下载引擎页删内核时的处理一致）。
+        settingsRepo.downloadEngine = com.yunx.app.data.prefs.SettingsRepository.ENGINE_BUILTIN
+        return
+    }
+    Thread {
+        runCatching {
+            engine.start(ctx, engine.resolveDownloadDir(ctx))
+        }.onFailure {
+            android.util.Log.e("YunX", "启动时自动加载 Gopeed 引擎失败：${it.message}", it)
+        }
     }.start()
 }
 
