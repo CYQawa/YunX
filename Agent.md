@@ -1386,6 +1386,11 @@ desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` �
 
 写完代码后逐项自查，然后交付：
 
+0. **先跑两个脚本**（本地没有编译器，这两个能挡住大部分 CI 往返）：
+   - `python3 ~/.yunx-bal/ktcheck.py <改动的 .kt ...>`：词法检查（注释嵌套 / 字符串闭合 / 括号配对）；
+   - `python3 ~/.yunx-bal/impcheck.py`：**必须整项目跑**（无参数），找「用了但没 import」的符号 ——
+     它靠"别处 import 过这个名字"当证据，只扫单文件会漏报。已用它验证过：故意删掉
+     `pointerInput` 的 import，它会直接报出与 CI 完全相同的行号。
 1. **import 是否齐全**：新用到的 Composable、动画 API、图标、协程 API 都有对应 import。
 2. **实验性 API 注解**：见下方「常见编译坑」表。
 3. **符号一致性**：改了函数签名后，`grep` 一遍旧签名/旧调用点，确认无残留。
@@ -1400,6 +1405,7 @@ desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` �
 |---|---|
 | `FlowRow` / `FilterChip` | 需 `@OptIn(ExperimentalLayoutApi::class)` / `ExperimentalMaterial3Api` |
 | `combinedClickable` | 需 `@OptIn(ExperimentalFoundationApi::class)` |
+| `Unresolved reference 'pointerInput'` + 同 lambda 里 `detectTransformGestures` / `size` / `detectTapGestures` 全报 `Cannot infer type for this parameter` | **一个 import 缺失、级联一片**，别一个个改它们。`pointerInput` 在 `androidx.compose.ui.input.pointer`，而手势检测器（`detectTapGestures` / `detectTransformGestures` / `detectDragGestures`）在 `androidx.compose.foundation.gestures` —— 两个包容易记混。pointerInput 解析不出来 ⇒ lambda 收不到 `PointerInputScope` 接收者 ⇒ 里面的成员/扩展全跟着报错。已踩过一次（全屏看图的双指缩放）。用 `impcheck.py` 先定位真正缺的那一个 |
 | 图标找不到 | 已引入 `material-icons-extended`，确认图标名与 `Outlined`/`Filled` 命名空间 |
 | `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
 | `animateColorAsState` 报 `Unresolved reference` | 包是 `androidx.compose.animation.animateColorAsState`（**不是** `androidx.compose.animation.core`）。判断依据：`.animation` 放的是**进出场/内容切换**（`AnimatedVisibility`/`AnimatedContent`/`fadeIn`/`fadeOut`/`slideInVertically`/`togetherWith`/`animateColorAsState`），`.animation.core` 放的是**时间曲线与动画值**（`tween`/`spring`/`Animatable`/`animateFloatAsState`/`animateDpAsState`）。写错包会连带一片 `Cannot infer type for this parameter`（`by` 委托推不出类型） |
