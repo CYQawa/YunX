@@ -18,9 +18,12 @@
 
 package com.yunx.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +45,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,6 +78,7 @@ import com.yunx.app.ui.components.RemoteImage
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.components.compactMarkdownTypography
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
+import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.viewmodel.AnnouncementViewModel
 
 /**
@@ -88,17 +93,20 @@ import com.yunx.app.ui.viewmodel.AnnouncementViewModel
  * ★ 封面不再单独压在正文上面：它和图集里的正文图片合成同一条横向列表，封面排第一并打「封面」标签
  *   （见 [announcementGallery]），列表项点开是全屏看图（共享元素在 AnnouncementScreen 里注册）。
  *
- * 详情接口会让 viewCount +1，所以 ViewModel 里按 id 缓存，本页重组 / 返回再进都不会重复请求。
+ * 详情接口会让 viewCount +1，所以 ViewModel 里按 id 缓存，本页重组 / 返回再进都不会重复请求；
+ * 右上角刷新（[onRefresh]）与列表页刷新都会让那份缓存作废重拉，见 `AnnouncementViewModel.reloadCurrentDetail`。
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AnnouncementDetailPage(
     state: AnnouncementViewModel.DetailUiState,
     sharedScope: SharedTransitionScope,
-    /** 详情页所在的 AnimatedVisibility 作用域：缩略图的共享元素以它为"可见性来源" */
-    pageAnimatedScope: AnimatedVisibilityScope,
+    /** 正在全屏查看的图集下标（-1 = 没在看）：缩略图要让位，见 [AnnouncementGalleryImage] */
+    openImageIndex: Int,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    /** 右上角刷新：强制重拉这一条（会让 viewCount +1，但用户点刷新就是要最新数据） */
+    onRefresh: () -> Unit,
     /** 点第几张图（下标对 [announcementGallery] 的顺序而言）→ 宿主打开全屏看图 */
     onImageClick: (Int) -> Unit,
     modifier: Modifier = Modifier
@@ -117,6 +125,14 @@ fun AnnouncementDetailPage(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
+                actions = {
+                    // 只有真的拿到内容才给刷新：加载中/失败态下重试按钮已经在页面中间了
+                    if (state is AnnouncementViewModel.DetailUiState.Loaded) {
+                        IconButton(onClick = onRefresh) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新公告")
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -132,7 +148,7 @@ fun AnnouncementDetailPage(
                 is AnnouncementViewModel.DetailUiState.Loaded -> AnnouncementDetailContent(
                     item = state.item,
                     sharedScope = sharedScope,
-                    pageAnimatedScope = pageAnimatedScope,
+                    openImageIndex = openImageIndex,
                     onImageClick = onImageClick
                 )
                 is AnnouncementViewModel.DetailUiState.Failed -> AnnouncementDetailError(
@@ -152,7 +168,7 @@ fun AnnouncementDetailPage(
 private fun AnnouncementDetailContent(
     item: AnnouncementApi.Announcement,
     sharedScope: SharedTransitionScope,
-    pageAnimatedScope: AnimatedVisibilityScope,
+    openImageIndex: Int,
     onImageClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -280,8 +296,8 @@ private fun AnnouncementDetailContent(
                             index = 0,
                             image = gallery[0],
                             hero = true,
+                            open = openImageIndex == 0,
                             sharedScope = sharedScope,
-                            animatedScope = pageAnimatedScope,
                             onClick = { onImageClick(0) },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -314,9 +330,9 @@ private fun AnnouncementDetailContent(
                                     index = index,
                                     image = image,
                                     hero = false,
+                                    open = openImageIndex == index,
                                     sharedScope = sharedScope,
-                                    animatedScope = pageAnimatedScope,
-                                    onClick = { onImageClick(index) },
+                                            onClick = { onImageClick(index) },
                                     modifier = Modifier.size(GalleryThumbSize)
                                 )
                             }
@@ -396,6 +412,15 @@ private val GalleryThumbSize: Dp = 132.dp
  * - `hero = true`：**单图**，`modifier` 传 `fillMaxWidth()`，按原图比例铺满宽度、不裁切；
  * - `hero = false`：**横向列表里的缩略图**，`modifier` 传 `Modifier.size(132.dp)`，正方形 `Crop`。
  *
+ * ★★ 源侧**必须跟着一起进/退场**（[open] 为 true 时让缩略图淡出）—— 这是这套动画能不能生效的关键：
+ *   共享元素的边界动画只认「**一个 outgoing + 一个 incoming**」（`BoundsAnimation.target`
+ *   取的是 `AnimatedVisibility.transition.targetState`）。缩略图若一直安静地留在树里，
+ *   两个 entry 的 target 都是 true：状态机 `fastFirstOrNull { it.target }` 会挑到**先注册的缩略图**
+ *   当目标边界，而缩略图的边界永远不变 ⇒ 实际表现就是「过渡根本没生效」（已踩过）。
+ *   让缩略图的 AnimatedVisibility 跟着退出后，点开时：缩略图 outgoing（提供初始边界）、
+ *   全屏图 incoming（提供目标边界）；关回来时角色互换，两个方向都对。
+ *   AnimatedVisibility 的退出时长同样要 ≥ 300ms（形变一结束内容就被移除，动画会被截断）。
+ *
  * ★ 两层 Box 的分工（`RemeasureToBounds` 的硬要求，写错了动画不跟手）：
  * - **外层**给尺寸（定尺寸 / 定宽）：共享元素"尺寸由约束决定" —— [SharedTransitionScope.sharedBounds]
  *   在形变时会用**动画中的尺寸**重新测量内容，内容写死尺寸就不会跟着放大；
@@ -414,48 +439,59 @@ private fun AnnouncementGalleryImage(
     image: AnnouncementImage,
     /** true = 单图大图（铺满宽度、不裁切），false = 横向列表里的方形缩略图 */
     hero: Boolean,
+    /** 这一张正在全屏查看：缩略图让位（同时把共享元素补齐成 outgoing 一侧，见上面说明） */
+    open: Boolean,
     sharedScope: SharedTransitionScope,
-    animatedScope: AnimatedVisibilityScope,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = if (hero) MaterialTheme.shapes.large else MaterialTheme.shapes.medium
-    val boundsModifier = with(sharedScope) {
-        Modifier.sharedBounds(
-            rememberSharedContentState(announcementImageSharedKey(announcementId, index)),
-            animatedVisibilityScope = animatedScope,
-            // 源侧是窄条 / 小方框、目标是整屏，必须按目标尺寸重新测量（默认的 ScaleToBounds 会拉伸内容）
-            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds
-        )
-    }
     Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .then(if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
-                .then(boundsModifier)
-                .clip(shape)
-                .clickable(onClick = onClick)
+        AnimatedVisibility(
+            visible = !open,
+            enter = fadeIn(effectsDefault()),
+            exit = fadeOut(tween(durationMillis = 300)),
+            modifier = if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
         ) {
-            RemoteImage(
-                url = image.url,
-                contentDescription = if (image.isCover) "封面图片" else "公告图片",
-                shape = shape,
-                // 横向列表里的缩略图统一 Crop 成方块（原图比例差异很大，Fit 会让行高参差不齐）；
-                // 单图（hero）铺满宽度、按原始比例完整显示
-                contentScale = if (hero) ContentScale.Fit else ContentScale.Crop,
-                autoHeight = hero,
-                modifier = if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
-            )
-            if (image.isCover) {
-                AnnouncementChip(
-                    text = "封面",
-                    // 标签压在图片上：用实心 primary 而不是容器色，保证任何底图上都看得清
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(if (hero) 8.dp else 6.dp)
+            // ★ 共享元素的"可见性来源"必须是这个 AnimatedVisibility 自己的 scope（不是详情页那个），
+            //   它一变 false，系统才会把这个 entry 判成 outgoing。
+            val thumbScope = this
+            val boundsModifier = with(sharedScope) {
+                Modifier.sharedBounds(
+                    rememberSharedContentState(announcementImageSharedKey(announcementId, index)),
+                    animatedVisibilityScope = thumbScope,
+                    // 源侧是窄条 / 小方框、目标是整屏，必须按目标尺寸重新测量（默认的 ScaleToBounds 会拉伸内容）
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds
                 )
+            }
+            Box(
+                modifier = Modifier
+                    .then(if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
+                    .then(boundsModifier)
+                    .clip(shape)
+                    .clickable(onClick = onClick)
+            ) {
+                RemoteImage(
+                    url = image.url,
+                    contentDescription = if (image.isCover) "封面图片" else "公告图片",
+                    shape = shape,
+                    // 横向列表里的缩略图统一 Crop 成方块（原图比例差异很大，Fit 会让行高参差不齐）；
+                    // 单图（hero）铺满宽度、按原始比例完整显示
+                    contentScale = if (hero) ContentScale.Fit else ContentScale.Crop,
+                    autoHeight = hero,
+                    modifier = if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+                )
+                if (image.isCover) {
+                    AnnouncementChip(
+                        text = "封面",
+                        // 标签压在图片上：用实心 primary 而不是容器色，保证任何底图上都看得清
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(if (hero) 8.dp else 6.dp)
+                    )
+                }
             }
         }
     }

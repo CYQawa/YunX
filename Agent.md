@@ -1254,6 +1254,11 @@ security policy`，表现是公告**永远加载失败**（启动弹窗与未读
    调用点只有两处：启动检查一次、用户在列表页手动刷新 / 翻页；
 3. 详情接口会让 `viewCount` +1（预期行为）⇒ `AnnouncementViewModel` 里按 id **缓存详情**，
    同一会话同一条公告只请求一次（进详情、返回、再进都不会重复 +1）。
+   ★ 但**刷新必须让缓存作废**，否则「服务端改了正文 → 刷新 → 再进详情」看到的还是旧内容
+   （已踩过）：列表刷新 `refresh()` 先 `detailCache.clear()`；详情页右上角的刷新走
+   `reloadCurrentDetail()` —— 刻意**不复用 `openDetail`**（那条路会把状态切成 `Loading`，页面闪一下加载态），
+   保留旧内容、拿到新数据再整体替换，失败只弹 Snackbar 不把已有内容换成错误页。
+   两处的代价都是 `viewCount` 再 +1，属用户主动刷新的预期行为。
 
 **列表页大小固定 100（接口上限）**：启动检查就一次取满，于是「未读角标」与「启动弹窗候选」的口径
 = **全部公告**而不是前 20 条；只有公告总数超过 100 条时列表页底部才会出现「加载更多」（同一 pageSize
@@ -1300,8 +1305,21 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
   （不必再套一层 layout）。可见性/退出同上面②：`viewerIndex` 管开关、`shownViewerIndex` 只管渲染哪一张，
   进入时两个状态一起写。第三层叠在详情页之上（同一个 `SharedTransitionLayout` 里**后写的 AnimatedVisibility**），
   黑底必须**不透明**：形变结束后缩略图那一份其实也被同步放大到整屏，不透明底把它盖住，否则透出重影。
+  ★★ **源侧也必须跟着进/退场**（缩略图包一层 `AnimatedVisibility(visible = !正在看这一张)`），
+    否则动画完全不生效：边界动画只认「**一个 outgoing + 一个 incoming**」——`BoundsAnimation.target`
+    取的就是 `AnimatedVisibility.transition.targetState`，安静留在树里的缩略图 target 也是 true，
+    于是状态机 `enabledEntries.fastFirstOrNull { it.target }` 会挑到**先注册的缩略图**当目标边界
+    （而它的边界永远不变）⇒ 实测表现就是"过渡根本没生效"（已踩过）。
+    让缩略图淡出后：点开时缩略图 outgoing（初始边界）、全屏图 incoming（目标边界）；关回来时角色互换，
+    两个方向都对。缩略图的 AnimatedVisibility 放在**定尺寸外框里面**，布局尺寸因此不变、列表不抖。
   ★ 全屏看图**刻意不做左右滑动翻页**：翻页会让「当前这张」的 key 每滑一次就换一个，
   源/目标在下标之间反复重新匹配，最容易抖/串图；「一次看一张、关掉再点下一张」时源和目标全程是同一条。
+  ★ 全屏看图的**缩放/平移只能加在共享元素内部**（`sharedBounds.fillMaxSize().graphicsLayer(...)`）：
+    共享元素的形变本身就是靠 layer 位移 + 缩放实现的，加在外面会跟它打架。手势自研、不引第三方库：
+    `detectTransformGestures`（双指缩放 + 单指拖动；以双指中心为锚点缩放
+    `o' = (g-c) - (g-c-o) * (s'/s) + pan`，因为 `graphicsLayer` 是绕**中心**缩放的）与
+    `detectTapGestures`（未放大时单击=关闭、放大时单击=复位、双击在 1x ↔ 2.5x 之间切换）两个
+    `pointerInput` 并存；平移量按容器边界夹住，图不会被拖出黑边；换图（url 变）时缩放状态归零。
 
 **图片：不加新依赖，复用 README 那一套**。`GitHubMarkdownImageTransformer` 里的加载逻辑已抽成
 `RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），

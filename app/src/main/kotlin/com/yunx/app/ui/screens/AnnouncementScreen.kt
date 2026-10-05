@@ -23,12 +23,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -52,16 +53,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yunx.app.data.announcement.AnnouncementApi
@@ -69,6 +76,7 @@ import com.yunx.app.data.announcement.relativeTime
 import com.yunx.app.ui.components.RemoteImage
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.viewmodel.AnnouncementViewModel
+import kotlinx.coroutines.launch
 
 /** 公告的共享元素 key：列表项（源）与详情页容器（目标）必须用同一个 key，形变才会发生 */
 internal fun announcementSharedKey(id: String): String = "announcement-item-$id"
@@ -195,9 +203,13 @@ fun AnnouncementScreen(
                 AnnouncementDetailPage(
                     state = detailState,
                     sharedScope = innerScope,
-                    pageAnimatedScope = detailScope,
+                    // ★ 给真实状态 viewerIndex（不是 shownViewerIndex）：缩略图的进出场要跟着"开关"走，
+                    //   它一变 false，共享元素系统才会把缩略图判成 outgoing 一侧（见 AnnouncementGalleryImage）
+                    openImageIndex = viewerIndex,
                     onBack = { detailId = null },
                     onRetry = { viewModel.retryDetail() },
+                    // 详情页右上角刷新：强制重拉这一条（缓存一并作废）
+                    onRefresh = { viewModel.reloadCurrentDetail() },
                     // ★ 两个状态一起写：viewerIndex 决定"去看图"，shownViewerIndex 决定"看哪一张"。
                     //   和详情页同理 —— 只靠 LaunchedEffect 会晚一帧，第一帧就没有形变目标。
                     onImageClick = { index ->
@@ -246,13 +258,22 @@ fun AnnouncementScreen(
 /**
  * 全屏看图页（共享元素的**目标**侧：从被点的缩略图长成整张图）。
  *
- * 黑底不透明 + 图片按比例 Fit 居中；点画面任意处、点左上角关闭都能退出（返回键由宿主的 BackHandler 管）。
+ * 黑底不透明 + 图片按比例 Fit 居中；**双指缩放 / 拖动 / 双击放大**都支持（自研手势，不引第三方库，
+ * 见下面的推导注释）；点左上角关闭、返回键关闭（返回键由宿主的 BackHandler 管）。
+ *
+ * 手势口径（和主流看图页一致，避免"点了没反应"）：
+ * - 未放大时单击 = 关闭；已放大时单击 = 复位（再点一次才关）；
+ * - 双击在 1x 与 [ViewerDoubleTapScale] 之间切换（带动画）；
+ * - 双指缩放以**双指中心**为锚点，范围 [MinViewerScale] ~ [MaxViewerScale]；
+ *   放大后单指拖动平移，平移量按容器边界夹住，图不会被拖出屏幕。
  *
  * ★ 刻意不做左右滑动翻页：翻页会让"当前这张"的共享元素 key 每滑一次就换一个，
  *   源（缩略图）和目标在多个下标之间反复重新匹配，最容易抖/串图；
  *   这里保持"一次看一张、关掉再点下一张"，整个进出过程源和目标始终是同一条，动画最稳。
  * ★ 黑底必须是**不透明**的：[boundsModifier] 让形变结束后缩略图那一份其实也被放大到整屏
  *   （共享元素两边会互相同步边界），不透明底把它彻底盖住，否则会透出重影。
+ * ★ 缩放/平移只能加在共享元素**内部**（`boundsModifier.fillMaxSize().graphicsLayer(...)`）：
+ *   加在外面会和共享元素自己的形变打架（形变本来就是靠 layer 位移+缩放实现的）。
  */
 @Composable
 private fun AnnouncementImageViewerPage(
@@ -264,18 +285,66 @@ private fun AnnouncementImageViewerPage(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 全屏点击 = 关闭：用 indication = null 的 clickable，既不想要糊在整张图上的水波纹，
-    // 又能把点击"吃掉"（否则手势会穿透到下面的详情页去滚动）
-    val interactionSource = remember { MutableInteractionSource() }
+    // 缩放 / 平移状态：换图（url 变）时归零，避免上一张的缩放带到下一张
+    var scale by remember(url) { mutableFloatStateOf(MinViewerScale) }
+    var offset by remember(url) { mutableStateOf(Offset.Zero) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    val scope = rememberCoroutineScope()
+
+    /** 把平移量夹在容器边界内（放大后图始终铺满可视区，不会拖出黑边） */
+    fun clamp(newOffset: Offset, newScale: Float): Offset {
+        val maxX = (containerSize.width * (newScale - 1f)) / 2f
+        val maxY = (containerSize.height * (newScale - 1f)) / 2f
+        return Offset(
+            x = newOffset.x.coerceIn(-maxX, maxX),
+            y = newOffset.y.coerceIn(-maxY, maxY)
+        )
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClose
-            ),
+            .onSizeChanged { containerSize = it }
+            // 双指缩放 + 拖动。
+            // ★ 以双指中心为锚点缩放：graphicsLayer 是**绕中心**缩放的（transformOrigin 默认 Center），
+            //   设 c = 容器中心、g = 双指中心、o = 当前平移量，则屏幕点 g 对应的内容点在缩放前后要重合：
+            //      缩放前内容点 x* = c + (g - c - o) / s
+            //      要求     g  = c + (x* - c) * s' + o'
+            //   ⇒ o' = (g - c) - (g - c - o) * (s' / s)，再加上这一次的 pan（屏幕像素，不受缩放影响）
+            .pointerInput(Unit) {
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    val oldScale = scale
+                    val newScale = (oldScale * zoom).coerceIn(MinViewerScale, MaxViewerScale)
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val anchored = (centroid - center) - (centroid - center - offset) * (newScale / oldScale)
+                    scale = newScale
+                    offset = if (newScale <= MinViewerScale) Offset.Zero else clamp(anchored + pan, newScale)
+                }
+            }
+            // 单击 / 双击。★ 两个 pointerInput 可以共存：变换手势负责缩放拖动，点击手势负责轻点，
+            // 各自 consume 自己的事件（拖动结束时 pointer input 已消费，不会误触发"单击关闭"）
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        if (scale > MinViewerScale) {
+                            scale = MinViewerScale
+                            offset = Offset.Zero
+                        } else {
+                            onClose()
+                        }
+                    },
+                    onDoubleTap = {
+                        val target = if (scale > MinViewerScale) MinViewerScale else ViewerDoubleTapScale
+                        scope.launch {
+                            animate(scale, target) { value, _ ->
+                                scale = value
+                                offset = if (value <= MinViewerScale) Offset.Zero else clamp(offset, value)
+                            }
+                        }
+                    }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         RemoteImage(
@@ -286,7 +355,14 @@ private fun AnnouncementImageViewerPage(
             placeholderColor = Color.Transparent,
             // ★ fillMaxSize 是 RemeasureToBounds 的前提：内容尺寸 = 当前约束尺寸，
             //   形变过程中每一帧按动画尺寸重新测量，图片始终正好等于形变框，缩放不会跳
-            modifier = boundsModifier.fillMaxSize()
+            modifier = boundsModifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
         )
         IconButton(
             onClick = onClose,
@@ -328,6 +404,15 @@ private fun AnnouncementImageViewerPage(
         }
     }
 }
+
+/** 全屏看图的最小缩放（1x = 完整适配屏幕） */
+private const val MinViewerScale = 1f
+
+/** 全屏看图的最大缩放 */
+private const val MaxViewerScale = 6f
+
+/** 双击放大到的倍数（再双击回到 1x） */
+private const val ViewerDoubleTapScale = 2.5f
 
 /**
  * 顶栏公告入口的未读红点角标（>99 显示 `99+`）。

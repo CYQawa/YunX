@@ -126,8 +126,43 @@ class AnnouncementViewModel(private val readStore: AnnouncementReadStore) : View
         loadFirstPage(refreshing = false)
     }
 
-    /** 手动刷新 / 下拉刷新：重新拉第一页并覆盖列表 */
-    fun refresh() = loadFirstPage(refreshing = true)
+    /**
+     * 手动刷新 / 下拉刷新：重新拉第一页并覆盖列表。
+     * ★ 详情缓存也一起作废：详情是按 id 缓存的（详情接口会让 viewCount +1，所以刻意不重复请求），
+     *   只刷列表的话「服务端改了正文 → 刷新列表 → 再进详情」看到的还是旧内容。
+     *   正在看的那条顺带重拉（列表刷新时它一般不可见，返回详情页时就已经是新数据）。
+     */
+    fun refresh() {
+        detailCache.clear()
+        reloadCurrentDetail()
+        loadFirstPage(refreshing = true)
+    }
+
+    /**
+     * 强制重拉「当前正在看的那条详情」（详情页右上角刷新 / 列表刷新顺带更新）。
+     *
+     * ★ 刻意**不走 [openDetail]**：那条路会把状态切成 `Loading`，页面会闪一下加载态；
+     *   这里保留旧内容，拿到新数据再整体替换；失败只弹 Snackbar，不把已有内容换成错误页
+     *   （用户主动刷新失败时，旧内容仍然是有用的）。
+     *
+     * 注意：详情接口会让 viewCount +1，所以主动刷新的代价是浏览量再 +1 —— 这是预期行为。
+     */
+    fun reloadCurrentDetail() {
+        val id = (_detail.value as? DetailUiState.Loaded)?.item?.id ?: return
+        detailCache.remove(id)
+        viewModelScope.launch {
+            when (val result = AnnouncementApi.fetchDetail(id)) {
+                is AnnouncementApi.Result.Failure ->
+                    SnackbarController.show("公告刷新失败：${result.message}")
+                is AnnouncementApi.Result.Success -> {
+                    val item = result.data
+                    detailCache[id] = item
+                    _detail.value = DetailUiState.Loaded(item)
+                    backfillListItem(id, item)
+                }
+            }
+        }
+    }
 
     private fun loadFirstPage(refreshing: Boolean) {
         val state = _list.value
@@ -207,15 +242,22 @@ class AnnouncementViewModel(private val readStore: AnnouncementReadStore) : View
                     _detail.value = DetailUiState.Loaded(item)
                     // 打开详情即已读（已读口径完全由本地记录维护）
                     readStore.markRead(trimmed)
-                    // 详情返回的是 +1 之后的真实浏览量：回填列表项，返回列表时数字是新的
-                    _list.update { s ->
-                        if (s.items.none { it.id == trimmed }) {
-                            s
-                        } else {
-                            s.copy(items = s.items.map { if (it.id == trimmed) item else it })
-                        }
-                    }
+                    backfillListItem(trimmed, item)
                 }
+            }
+        }
+    }
+
+    /**
+     * 用详情返回的数据回填列表项：详情里的浏览量是 +1 之后的真实值，回填后返回列表时数字是新的。
+     * （列表里没有这条时什么都不做 —— 比如从启动弹窗直接进详情时列表可能还没加载。）
+     */
+    private fun backfillListItem(id: String, item: AnnouncementApi.Announcement) {
+        _list.update { s ->
+            if (s.items.none { it.id == id }) {
+                s
+            } else {
+                s.copy(items = s.items.map { if (it.id == id) item else it })
             }
         }
     }
