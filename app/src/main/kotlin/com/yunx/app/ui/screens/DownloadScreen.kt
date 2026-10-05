@@ -210,7 +210,24 @@ fun DownloadScreen(
             }
         }
 
+        // 添加任务 FAB（手动粘贴直链 / 磁力链接的唯一入口）
+        // ★ 曾经被 c829083「添加关于页」误删（连同 permissionLauncher/hasPermission 变成死代码、
+        //   空状态文案却还在说「点击右下角按钮」）——恢复时注意别再连着删掉。
+        FloatingActionButton(
+            onClick = {
+                if (needLegacyPermission && !hasPermission) {
+                    permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                } else {
+                    showAddDialog = true
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(20.dp)
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "添加下载任务")
         }
+    }
 
     if (showAddDialog) {
         AddDownloadDialog(
