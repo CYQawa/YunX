@@ -26,15 +26,24 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,10 +53,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,14 +74,23 @@ import com.yunx.app.ui.viewmodel.AnnouncementViewModel
 internal fun announcementSharedKey(id: String): String = "announcement-item-$id"
 
 /**
- * 公告页宿主（全屏叠加页）：**列表 ↔ 详情**的容器变换在这里做。
+ * 公告**图集**的共享元素 key：详情页缩略图（源）↔ 全屏看图（目标）。
+ * 用公告 id + 图集下标（口径见 `announcementGallery`），保证同一个 layout 作用域里不撞 key。
+ */
+internal fun announcementImageSharedKey(announcementId: String, index: Int): String =
+    "announcement-image-$announcementId-$index"
+
+/**
+ * 公告页宿主（全屏叠加页）：**列表 ↔ 详情 ↔ 全屏看图**的容器变换都在这里做。
  *
- * 两层共享元素各管一段，互不干扰：
+ * 共享元素分三层，key 前缀各不相同，互不干扰：
  * - 外层（MainScreen）：顶栏公告图标 ↔ 公告整页，key = `OVERLAY_KEY_ANNOUNCEMENTS`；
  * - 内层（本文件）：列表项 ↔ 详情页，key = [announcementSharedKey]，所以这里再套一层
- *   [SharedTransitionLayout] —— 共享元素只在**同一个** layout 作用域内匹配，套一层就天然隔离了。
+ *   [SharedTransitionLayout] —— 共享元素只在**同一个** layout 作用域内匹配，套一层就天然隔离了；
+ * - 再往下（同一个内层作用域里）：详情页缩略图 ↔ 全屏看图，key = [announcementImageSharedKey]。
+ *   源在详情页那个 AnimatedVisibility 里、目标在看图页那个 AnimatedVisibility 里，同作用域即可匹配。
  *
- * 与 MainScreen 同一套「两个 AnimatedVisibility 互斥」写法（不是 AnimatedContent）：
+ * 与 MainScreen 同一套「多个 AnimatedVisibility 互斥」写法（不是 AnimatedContent）：
  * 详情页打开时列表会被真的移出组合，退出时靠 [shownDetailId] 延迟清空，保证回收形变有内容可渲染。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -89,19 +109,33 @@ fun AnnouncementScreen(
     LaunchedEffect(detailId) {
         if (detailId != null) shownDetailId = detailId
     }
+    // 全屏看图：正在看第几张（-1 = 没在看）。shownViewerIndex 同上，退出动画期间保留
+    var viewerIndex by rememberSaveable { mutableStateOf(-1) }
+    var shownViewerIndex by rememberSaveable { mutableStateOf(-1) }
     // 打开页面就有数据：启动检查成功过就直接用那份，不会再请求一次
     LaunchedEffect(Unit) { viewModel.ensureLoaded() }
     // 进入详情页才请求详情（详情接口会让浏览量 +1，ViewModel 里按 id 缓存，同一会话只请求一次）
     LaunchedEffect(detailId) { detailId?.let { viewModel.openDetail(it) } }
 
-    // 返回键：详情页 → 列表页；列表页 → 关闭公告页（交回主界面）
+    // 返回键：全屏看图 → 详情页 → 列表页 → 关闭公告页（交回主界面），从里到外一层层退
     BackHandler {
-        if (detailId != null) detailId = null else onBack()
+        when {
+            viewerIndex >= 0 -> viewerIndex = -1
+            detailId != null -> detailId = null
+            else -> onBack()
+        }
     }
 
     val listState by viewModel.list.collectAsState()
     val detailState by viewModel.detail.collectAsState()
     val readIds by viewModel.readIds.collectAsState()
+
+    // 图集只跟"当前这条详情"有关：详情状态里取，顺序与详情页一致（announcementGallery）
+    val viewerItem = (detailState as? AnnouncementViewModel.DetailUiState.Loaded)?.item
+    val viewerGallery = viewerItem?.let { announcementGallery(it) }.orEmpty()
+    val viewingImage = viewerGallery.getOrNull(shownViewerIndex)
+    // 可见性用真实状态 viewerIndex（同 detailId 的理由：shown 系列永远不清空，不能当 visible）
+    val viewerVisible = viewerIndex in viewerGallery.indices
 
     SharedTransitionLayout(modifier = modifier.fillMaxSize()) {
         val innerScope = this
@@ -160,9 +194,135 @@ fun AnnouncementScreen(
                 }
                 AnnouncementDetailPage(
                     state = detailState,
+                    sharedScope = innerScope,
+                    pageAnimatedScope = detailScope,
                     onBack = { detailId = null },
                     onRetry = { viewModel.retryDetail() },
+                    // ★ 两个状态一起写：viewerIndex 决定"去看图"，shownViewerIndex 决定"看哪一张"。
+                    //   和详情页同理 —— 只靠 LaunchedEffect 会晚一帧，第一帧就没有形变目标。
+                    onImageClick = { index ->
+                        viewerIndex = index
+                        shownViewerIndex = index
+                    },
                     modifier = boundsModifier
+                )
+            }
+        }
+
+        // ★ 第三层共享元素（详情页内）：缩略图 ↔ 全屏看图，key = announcementImageSharedKey(...)
+        //   和上面两层用的是不同 key 前缀，同一个 layout 作用域里不会互相抢匹配；
+        //   整页黑底 + fillMaxSize 让它在最上面，且完全不透明 —— 形变结束后下层那张缩略图被彻底盖住，
+        //   不会出现"缩略图跟着一起动"的重影。
+        AnimatedVisibility(
+            visible = viewerVisible,
+            enter = fadeIn(effectsDefault()),
+            // 同样 ≥ 300ms：退出一结束内容就被移出组合，回收形变会被截断（同列表/详情那一层）
+            exit = fadeOut(tween(durationMillis = 300))
+        ) {
+            val viewerScope = this
+            if (viewingImage != null && viewerItem != null) {
+                val imageBoundsModifier = with(innerScope) {
+                    Modifier.sharedBounds(
+                        rememberSharedContentState(
+                            announcementImageSharedKey(viewerItem.id, shownViewerIndex)
+                        ),
+                        animatedVisibilityScope = viewerScope,
+                        resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds
+                    )
+                }
+                AnnouncementImageViewerPage(
+                    url = viewingImage.url,
+                    isCover = viewingImage.isCover,
+                    index = shownViewerIndex,
+                    total = viewerGallery.size,
+                    boundsModifier = imageBoundsModifier,
+                    onClose = { viewerIndex = -1 }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 全屏看图页（共享元素的**目标**侧：从被点的缩略图长成整张图）。
+ *
+ * 黑底不透明 + 图片按比例 Fit 居中；点画面任意处、点左上角关闭都能退出（返回键由宿主的 BackHandler 管）。
+ *
+ * ★ 刻意不做左右滑动翻页：翻页会让"当前这张"的共享元素 key 每滑一次就换一个，
+ *   源（缩略图）和目标在多个下标之间反复重新匹配，最容易抖/串图；
+ *   这里保持"一次看一张、关掉再点下一张"，整个进出过程源和目标始终是同一条，动画最稳。
+ * ★ 黑底必须是**不透明**的：[boundsModifier] 让形变结束后缩略图那一份其实也被放大到整屏
+ *   （共享元素两边会互相同步边界），不透明底把它彻底盖住，否则会透出重影。
+ */
+@Composable
+private fun AnnouncementImageViewerPage(
+    url: String,
+    isCover: Boolean,
+    index: Int,
+    total: Int,
+    boundsModifier: Modifier,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // 全屏点击 = 关闭：用 indication = null 的 clickable，既不想要糊在整张图上的水波纹，
+    // 又能把点击"吃掉"（否则手势会穿透到下面的详情页去滚动）
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClose
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        RemoteImage(
+            url = url,
+            contentDescription = if (isCover) "封面图片" else "公告图片",
+            contentScale = ContentScale.Fit,
+            // 深色底上不能要浅色占位：透明占位让 Fit 留下的空白直接是黑底
+            placeholderColor = Color.Transparent,
+            // ★ fillMaxSize 是 RemeasureToBounds 的前提：内容尺寸 = 当前约束尺寸，
+            //   形变过程中每一帧按动画尺寸重新测量，图片始终正好等于形变框，缩放不会跳
+            modifier = boundsModifier.fillMaxSize()
+        )
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                // 叠加页是 edge-to-edge 的（MainActivity 开了 enableEdgeToEdge），
+                // 全屏黑底会铺到状态栏下面，按钮要自己躲开状态栏/导航栏
+                .statusBarsPadding()
+                .padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = "关闭",
+                tint = Color.White
+            )
+        }
+        // 底部一行小字：是不是封面 + 第几张（只有一张时不显示序号）
+        val caption = buildString {
+            if (isCover) append("封面")
+            if (isCover && total > 1) append(" · ")
+            if (total > 1) append("${index + 1} / $total")
+        }
+        if (caption.isNotEmpty()) {
+            Surface(
+                color = Color.White.copy(alpha = 0.16f),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 28.dp)
+            ) {
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                 )
             }
         }

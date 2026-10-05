@@ -1280,7 +1280,7 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
 角标只要超出这颗圆就被切掉 —— 实测症状是「红点被切成水滴形」（已踩过）。
 外层 Box 不裁剪、尺寸与 `IconButton` 一致，仍是同一个 48dp 点击区；角标自身没有 pointerInput，
 点在角标上事件照旧落到 `IconButton`，不影响点击。
-共享元素分两层，各管一段、互不干扰：
+共享元素分三层，各管一段、互不干扰：
 - 外层：顶栏公告图标 ↔ 公告整页，key = `OVERLAY_KEY_ANNOUNCEMENTS`（与收藏页同一手法）；
 - 内层：列表项 ↔ 详情页，key = `announcementSharedKey(id)`，在 `AnnouncementScreen` 里**再套一层
   `SharedTransitionLayout`** —— 共享元素只在**同一个** layout 作用域内匹配，套一层就天然隔离了。
@@ -1295,6 +1295,13 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
      ⇒ 动画一结束就闪回详情页；而此时 `detailId` 已经是 null，详情页那个返回按钮再点就是空操作
      ⇒ 观感是「返回按钮点不动了」。进入方向还要在点击处把两个状态**一起写死**，
      否则详情页被打开的首帧没有形变目标（只靠 `LaunchedEffect` 会晚一帧）。
+- 内层再往下：详情页**图集缩略图 ↔ 全屏看图**，key = `announcementImageSharedKey(公告 id, 图集下标)`。
+  源在详情页那个 AnimatedVisibility 里、目标在看图页那个 AnimatedVisibility 里，**同一个作用域**即可匹配
+  （不必再套一层 layout）。可见性/退出同上面②：`viewerIndex` 管开关、`shownViewerIndex` 只管渲染哪一张，
+  进入时两个状态一起写。第三层叠在详情页之上（同一个 `SharedTransitionLayout` 里**后写的 AnimatedVisibility**），
+  黑底必须**不透明**：形变结束后缩略图那一份其实也被同步放大到整屏，不透明底把它盖住，否则透出重影。
+  ★ 全屏看图**刻意不做左右滑动翻页**：翻页会让「当前这张」的 key 每滑一次就换一个，
+  源/目标在下标之间反复重新匹配，最容易抖/串图；「一次看一张、关掉再点下一张」时源和目标全程是同一条。
 
 **图片：不加新依赖，复用 README 那一套**。`GitHubMarkdownImageTransformer` 里的加载逻辑已抽成
 `RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），
@@ -1311,7 +1318,23 @@ Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正�
    判断有界性也别拿 `maxWidth == Dp.Infinity` 比：无界时 `BoxWithConstraints` 给的是一个巨大的**有限** Dp，
    要用 `constraints.hasBoundedWidth/Height`。
 ★ 弹窗里的图**一律走固定高度**（公告弹窗封面 180dp + `Crop`）：弹窗高度必须可预期，
-   按图片原始比例的话一张方图就能把弹窗撑满、把正文挤掉；想看全图点进详情页（那里才用 `autoHeight`）。
+   按图片原始比例的话一张方图就能把弹窗撑满、把正文挤掉；想看全图点进详情页。
+★ 详情页的图**全部收进正文下面的图集**（`announcementGallery` + `AnnouncementGalleryImage`），
+   封面不再单独压在标题下：接口只给「封面 `coverImage`」+「正文图集 `images`」两块，没有统一图片数组
+   ⇒ 「封面也算图集一张」这件事在前端拼：**封面排第 1 位并打「封面」标签**（`AnnouncementChip`，
+   实心 primary 才在任何底图上都看得清），正文图按服务端顺序跟在后面，空串过滤、封面同时出现在
+   `images` 里时**去重**（否则详情页出现两张一样的图）。
+   下标口径只有 `announcementGallery` 一个来源：全屏看图的下标和共享元素 key 的下标都用它的下标，别再各算一套。
+   ★ 排布分两种（`hero` 参数，共享元素与 key 是同一套）：**只有一张**时铺满宽度、按原图比例完整显示
+   （"有封面、没正文图"是最常见的公告，缩成小方块等于白丢信息）；**多张**才横向 `LazyRow`
+   （132dp 正方形 `Crop`，原图比例差异大，`Fit` 会让行高参差不齐）。
+★ 参与共享元素的图片**尺寸必须由约束决定，不能写死 `size`**：`RemeasureToBounds` 形变时会用
+   **动画中的尺寸**去重新测量内容（这是它和 `ScaleToBounds` 的区别），写死尺寸的话内容不会跟着放大。
+   正确写法是两层：外层给尺寸（多图用 `Modifier.size(132.dp)`、单图用 `fillMaxWidth`）把**布局**尺寸钉住
+   （横向列表不会因为某一项"变大"而抖动），内层 `fillMaxSize()` / `fillMaxWidth()` + `then(sharedBounds…)`
+   当共享元素本体；全屏看图侧则直接 `sharedBounds.fillMaxSize()`（配 `Fit`，内容每帧正好等于形变框）。
+★ 全屏看图是**深色底**：`RemoteImage` 的占位底色要传 `placeholderColor = Color.Transparent`，
+   默认的 `surfaceVariant` 会在纯黑上显示成一块灰板（`contentScale = Fit` 的留白处也应当是黑底）。
 ★★ **`produceState(initialValue, key)` 的 `remember` 不带 key ⇒ 绝不要用它加载「会变的 URL」**（已踩过）：
    它的实现就是 `remember { mutableStateOf(initialValue) }`，key 变了状态里仍是**上一张图**；
    加载逻辑若再写成「已有值就跳过加载」，新图就永远不会请求 ⇒ 打开公告 A 再打开公告 B，
@@ -1333,7 +1356,9 @@ desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` �
 
 **落点**：`data/announcement/{AnnouncementApi,AnnouncementReadStore,AnnouncementTime}.kt`、
 `ui/viewmodel/AnnouncementViewModel.kt`、`ui/screens/Announcement{Screen,ListScreen,DetailScreen}.kt`
-（宿主 + 列表页 + 详情页）、`ui/components/{RemoteImageLoader,RemoteImage}.kt`、
+（宿主 + 列表页 + 详情页；宿主里还有**全屏看图页** `AnnouncementImageViewerPage` 这条共享元素链路，
+详情页里有 `announcementGallery` / `AnnouncementGalleryThumbnail` 这套图集口径）、
+`ui/components/{RemoteImageLoader,RemoteImage}.kt`、
 `ui/MainScreen.kt`（图标 + 角标 + 路由 + 启动弹窗）。
 
 ---

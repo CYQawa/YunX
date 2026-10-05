@@ -49,9 +49,12 @@ import androidx.compose.ui.unit.dp
  * （OkHttp + 内存 LRU 128 张 + 最多 4 并发 + 总像素降采样），因此与 Markdown 正文里的图片共享缓存。
  *
  * 三种状态都有明确外观，永远不会抛异常、也不会留一个空洞：
- * - 加载中：只显示 [MaterialTheme.colorScheme.surfaceVariant] 底色（列表里不闪图标，避免噪音）；
+ * - 加载中：只显示 [placeholderColor] 底色（默认 surfaceVariant，列表里不闪图标，避免噪音）；
  * - 成功：铺满容器（[contentScale] 默认 Crop，配合 [shape] 做圆角 / 圆形裁切）；
  * - 失败或地址为空：显示 [fallback] 图标（未指定则保留底色占位）。
+ *
+ * ★ [placeholderColor] 给「全屏看图」这类深色底用：默认的浅色占位在纯黑背景上会是一块灰板，
+ *   传 `Color.Transparent` 就只剩图片本身（`contentScale = Fit` 时留白处直接透出黑底）。
  *
  * 尺寸两种给法：
  * - **固定尺寸**（头像、列表缩略图、弹窗封面）：调用方传 `Modifier.size(...)` / `height(...)`，
@@ -74,7 +77,8 @@ fun RemoteImage(
     fallback: ImageVector? = null,
     fallbackTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     autoHeight: Boolean = false,
-    placeholderRatio: Float = 16f / 9f
+    placeholderRatio: Float = 16f / 9f,
+    placeholderColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val link = url?.trim().orEmpty()
     // ★★ 状态必须用 `remember(link)` 建，**不能用 `produceState(initialValue, link)`**：
@@ -123,6 +127,7 @@ fun RemoteImage(
                 contentScale = contentScale,
                 fallback = fallback,
                 fallbackTint = fallbackTint,
+                placeholderColor = placeholderColor,
                 modifier = Modifier.size(width, height)
             )
         }
@@ -137,6 +142,7 @@ fun RemoteImage(
         contentScale = contentScale,
         fallback = fallback,
         fallbackTint = fallbackTint,
+        placeholderColor = placeholderColor,
         modifier = modifier
     )
 }
@@ -151,12 +157,13 @@ private fun ImageFrame(
     contentScale: ContentScale,
     fallback: ImageVector?,
     fallbackTint: Color,
+    placeholderColor: Color,
     modifier: Modifier
 ) {
     Box(
         modifier = modifier
             .clip(shape)
-            .background(color = MaterialTheme.colorScheme.surfaceVariant, shape = shape),
+            .background(color = placeholderColor, shape = shape),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
