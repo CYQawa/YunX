@@ -83,6 +83,11 @@ class YunXApp : Application() {
         }
         scheduleDeepScan(this)
         com.yunx.app.data.network.XunleiDeviceFingerprint.init(this)
+        // 本机密钥失效自愈：必须在**任何**凭证读写之前装配。改锁屏密码/指纹会让 Android Keystore
+        // 里的密钥被系统永久作废（KeyPermanentlyInvalidatedException / Key not found / Invalid
+        // key blob 三种形态），此时要记下「登录态已失效」的一次性提示，而不是把 Keystore 异常
+        // 抛到主线程把 App 崩掉（1.2.8 的三份崩溃报告）。
+        com.yunx.app.data.security.CredentialStore.installRecovery(this)
         // 启动时恢复用户配置的 HTTP 代理（任何异常都不得影响应用启动）
         runCatching {
             val prefs = getSharedPreferences("yunx_settings", Context.MODE_PRIVATE)

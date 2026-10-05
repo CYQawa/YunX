@@ -18,7 +18,15 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,10 +39,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,12 +58,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import com.yunx.app.data.announcement.AnnouncementApi
@@ -64,6 +78,7 @@ import com.yunx.app.ui.components.RemoteImage
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.components.compactMarkdownTypography
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
+import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.viewmodel.AnnouncementViewModel
 
 /**
@@ -74,14 +89,26 @@ import com.yunx.app.ui.viewmodel.AnnouncementViewModel
  * ★ 刻意**不用 WebView** 渲染：`content` 支持 Markdown/HTML，进 WebView 就必须自己扛 XSS 与 CSP；
  *   走 Compose 渲染则 HTML 标签只是普通文本，不存在脚本执行面（代价是 HTML 片段不解析）。
  *
- * 详情接口会让 viewCount +1，所以 ViewModel 里按 id 缓存，本页重组 / 返回再进都不会重复请求。
+ * 版面顺序：标题/发布者/时间 → **正文** → **横向图集** → 最后更新。
+ * ★ 封面不再单独压在正文上面：它和图集里的正文图片合成同一条横向列表，封面排第一并打「封面」标签
+ *   （见 [announcementGallery]），列表项点开是全屏看图（共享元素在 AnnouncementScreen 里注册）。
+ *
+ * 详情接口会让 viewCount +1，所以 ViewModel 里按 id 缓存，本页重组 / 返回再进都不会重复请求；
+ * 右上角刷新（[onRefresh]）与列表页刷新都会让那份缓存作废重拉，见 `AnnouncementViewModel.reloadCurrentDetail`。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AnnouncementDetailPage(
     state: AnnouncementViewModel.DetailUiState,
+    sharedScope: SharedTransitionScope,
+    /** 正在全屏查看的图集下标（-1 = 没在看）：缩略图要让位，见 [AnnouncementGalleryImage] */
+    openImageIndex: Int,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    /** 右上角刷新：强制重拉这一条（会让 viewCount +1，但用户点刷新就是要最新数据） */
+    onRefresh: () -> Unit,
+    /** 点第几张图（下标对 [announcementGallery] 的顺序而言）→ 宿主打开全屏看图 */
+    onImageClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // 独立全屏覆盖页：自带 Snackbar 宿主（覆盖层会遮挡主页 Scaffold 的 SnackbarHost）
@@ -98,6 +125,14 @@ fun AnnouncementDetailPage(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
+                actions = {
+                    // 只有真的拿到内容才给刷新：加载中/失败态下重试按钮已经在页面中间了
+                    if (state is AnnouncementViewModel.DetailUiState.Loaded) {
+                        IconButton(onClick = onRefresh) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新公告")
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -110,7 +145,12 @@ fun AnnouncementDetailPage(
                 .padding(innerPadding)
         ) {
             when (state) {
-                is AnnouncementViewModel.DetailUiState.Loaded -> AnnouncementDetailContent(item = state.item)
+                is AnnouncementViewModel.DetailUiState.Loaded -> AnnouncementDetailContent(
+                    item = state.item,
+                    sharedScope = sharedScope,
+                    openImageIndex = openImageIndex,
+                    onImageClick = onImageClick
+                )
                 is AnnouncementViewModel.DetailUiState.Failed -> AnnouncementDetailError(
                     message = state.message,
                     onRetry = onRetry,
@@ -123,16 +163,31 @@ fun AnnouncementDetailPage(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun AnnouncementDetailContent(
     item: AnnouncementApi.Announcement,
+    sharedScope: SharedTransitionScope,
+    openImageIndex: Int,
+    onImageClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // 正文排版与 README 预览共用同一份紧凑字号（见 ui/components/MarkdownTypography.kt）
     val typography = remember { compactMarkdownTypography() }
     val publisher = item.publisher.name.ifBlank { item.author }
+    // 图集：封面（若有）在前 + 正文图集，排在正文下面横向展示。纯数据拼装，开销可忽略，不必 remember
+    val gallery = announcementGallery(item)
+
+    // ★ 滚动位置按公告 id 归零：列表页连点两条公告时，详情页的组合槽位会被复用
+    //   （返回动画还没播完就点下一条；命中详情缓存时也不会经过 Loading 分支，整棵 LazyColumn 原地换内容），
+    //   不重置的话新公告会继承上一条的滚动位置，看起来像"内容错位/串了"。
+    val detailListState = rememberLazyListState()
+    LaunchedEffect(item.id) {
+        detailListState.scrollToItem(0)
+    }
 
     LazyColumn(
+        state = detailListState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp)
     ) {
@@ -204,19 +259,6 @@ private fun AnnouncementDetailContent(
                         }
                     }
                 }
-                val cover = item.coverImage
-                if (!cover.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    // 封面按图片自身比例铺满宽度，不做裁切（公告封面常常是长图或截图）
-                    RemoteImage(
-                        url = cover,
-                        contentDescription = null,
-                        shape = MaterialTheme.shapes.large,
-                        contentScale = ContentScale.Fit,
-                        autoHeight = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -224,11 +266,14 @@ private fun AnnouncementDetailContent(
         item(key = "content") {
             val content = item.content
             if (content.isNullOrBlank()) {
-                Text(
-                    text = "（本条公告没有正文）",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // 只有真的一张图都没有时才提示"没有正文"：纯图片公告（正文空、只有图集）不该出现这句话
+                if (gallery.isEmpty()) {
+                    Text(
+                        text = "（本条公告没有正文）",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             } else {
                 Markdown(
                     content = content,
@@ -238,19 +283,62 @@ private fun AnnouncementDetailContent(
             }
         }
 
-        // 正文多图（服务端 images 数组）：作图片集附在正文之后，同样是图床直链、直接加载
-        if (item.images.isNotEmpty()) {
-            items(item.images) { imageUrl ->
-                RemoteImage(
-                    url = imageUrl,
-                    contentDescription = null,
-                    shape = MaterialTheme.shapes.large,
-                    contentScale = ContentScale.Fit,
-                    autoHeight = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                )
+        // 图集（封面 + 服务端 images）：排在正文**下面**，点开全屏看图（共享元素在 AnnouncementScreen 注册）
+        if (gallery.isNotEmpty()) {
+            item(key = "gallery") {
+                Column {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    if (gallery.size == 1) {
+                        // 只有一张（最常见的是「有封面、没有正文图」）：按原图比例铺满宽度、不裁切 ——
+                        // 唯一一张图缩成小方块会白丢信息；点开仍然能全屏看
+                        AnnouncementGalleryImage(
+                            announcementId = item.id,
+                            index = 0,
+                            image = gallery[0],
+                            hero = true,
+                            open = openImageIndex == 0,
+                            sharedScope = sharedScope,
+                            onClick = { onImageClick(0) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "图片",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "${gallery.size} 张",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // 多张才横向排列：封面固定在第一张，左右滑动翻看正文配图
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            itemsIndexed(
+                                items = gallery,
+                                key = { index, image -> "gallery-$index-${image.url}" }
+                            ) { index, image ->
+                                AnnouncementGalleryImage(
+                                    announcementId = item.id,
+                                    index = index,
+                                    image = image,
+                                    hero = false,
+                                    open = openImageIndex == index,
+                                    sharedScope = sharedScope,
+                                            onClick = { onImageClick(index) },
+                                    modifier = Modifier.size(GalleryThumbSize)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -277,6 +365,131 @@ private fun AnnouncementDetailContent(
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 图集里的一张图。[isCover] = 服务端封面（`coverImage`），在列表里固定排第一并打「封面」标签。
+ *
+ * 接口只给了两块图片数据（封面 `coverImage` + 正文图集 `images`），没有统一图片数组，
+ * 所以"封面也算图集的一张"这件事只能在前端拼（见 [announcementGallery]）。
+ */
+internal data class AnnouncementImage(
+    val url: String,
+    val isCover: Boolean = false
+)
+
+/**
+ * 把一条公告的两处图片拼成展示用图集：**封面在前** → 正文图集按服务端顺序；
+ * 空串过滤掉，封面同时出现在 `images` 里时去重（否则详情页会出现两张一模一样的图）。
+ *
+ * 顺序即"第几张"的口径：全屏看图的下标、共享元素 key 的下标都用它的下标，两处必须用同一个函数取。
+ */
+internal fun announcementGallery(item: AnnouncementApi.Announcement): List<AnnouncementImage> {
+    val cover = item.coverImage?.trim().orEmpty()
+    val gallery = ArrayList<AnnouncementImage>(item.images.size + 1)
+    if (cover.isNotEmpty()) {
+        gallery += AnnouncementImage(url = cover, isCover = true)
+    }
+    item.images.forEach { raw ->
+        val url = raw.trim()
+        if (url.isNotEmpty() && url != cover) {
+            gallery += AnnouncementImage(url = url)
+        }
+    }
+    return gallery
+}
+
+/** 图集缩略图边长（正方形裁切，行内高度一致，横向滑动时观感整齐） */
+private val GalleryThumbSize: Dp = 132.dp
+
+/**
+ * 图集里的一张图，两种排布共用同一套共享元素（**源**侧：点开时长成全屏看图那整张图）：
+ * - `hero = true`：**单图**，`modifier` 传 `fillMaxWidth()`，按原图比例铺满宽度、不裁切；
+ * - `hero = false`：**横向列表里的缩略图**，`modifier` 传 `Modifier.size(132.dp)`，正方形 `Crop`。
+ *
+ * ★★ 源侧**必须跟着一起进/退场**（[open] 为 true 时让缩略图淡出）—— 这是这套动画能不能生效的关键：
+ *   共享元素的边界动画只认「**一个 outgoing + 一个 incoming**」（`BoundsAnimation.target`
+ *   取的是 `AnimatedVisibility.transition.targetState`）。缩略图若一直安静地留在树里，
+ *   两个 entry 的 target 都是 true：状态机 `fastFirstOrNull { it.target }` 会挑到**先注册的缩略图**
+ *   当目标边界，而缩略图的边界永远不变 ⇒ 实际表现就是「过渡根本没生效」（已踩过）。
+ *   让缩略图的 AnimatedVisibility 跟着退出后，点开时：缩略图 outgoing（提供初始边界）、
+ *   全屏图 incoming（提供目标边界）；关回来时角色互换，两个方向都对。
+ *   AnimatedVisibility 的退出时长同样要 ≥ 300ms（形变一结束内容就被移除，动画会被截断）。
+ *
+ * ★ 两层 Box 的分工（`RemeasureToBounds` 的硬要求，写错了动画不跟手）：
+ * - **外层**给尺寸（定尺寸 / 定宽）：共享元素"尺寸由约束决定" —— [SharedTransitionScope.sharedBounds]
+ *   在形变时会用**动画中的尺寸**重新测量内容，内容写死尺寸就不会跟着放大；
+ *   同时外层把布局尺寸钉住，形变期间列表不会因为某一项"变大"而抖动（hero 走 `autoHeight`，
+ *   高度由位图比例算，同样随约束走）。
+ * - **内层** `fillMaxSize` / `fillMaxWidth` + 圆角 + 点击：真正参与共享元素的内容，尺寸永远等于当前约束。
+ *
+ * ★ 共享元素修饰符在这里构造（不在调用处）：`rememberSharedContentState` 是 @Composable，
+ *   只能在 composable 作用域里调用；两种排布共用一处，下标口径不会各写一套。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun AnnouncementGalleryImage(
+    announcementId: String,
+    index: Int,
+    image: AnnouncementImage,
+    /** true = 单图大图（铺满宽度、不裁切），false = 横向列表里的方形缩略图 */
+    hero: Boolean,
+    /** 这一张正在全屏查看：缩略图让位（同时把共享元素补齐成 outgoing 一侧，见上面说明） */
+    open: Boolean,
+    sharedScope: SharedTransitionScope,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = if (hero) MaterialTheme.shapes.large else MaterialTheme.shapes.medium
+    Box(modifier = modifier) {
+        AnimatedVisibility(
+            visible = !open,
+            enter = fadeIn(effectsDefault()),
+            exit = fadeOut(tween(durationMillis = 300)),
+            modifier = if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+        ) {
+            // ★ 共享元素的"可见性来源"必须是这个 AnimatedVisibility 自己的 scope（不是详情页那个），
+            //   它一变 false，系统才会把这个 entry 判成 outgoing。
+            val thumbScope = this
+            val boundsModifier = with(sharedScope) {
+                Modifier.sharedBounds(
+                    rememberSharedContentState(announcementImageSharedKey(announcementId, index)),
+                    animatedVisibilityScope = thumbScope,
+                    // 源侧是窄条 / 小方框、目标是整屏，必须按目标尺寸重新测量（默认的 ScaleToBounds 会拉伸内容）
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .then(if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
+                    .then(boundsModifier)
+                    .clip(shape)
+                    .clickable(onClick = onClick)
+            ) {
+                RemoteImage(
+                    url = image.url,
+                    contentDescription = if (image.isCover) "封面图片" else "公告图片",
+                    shape = shape,
+                    // 横向列表里的缩略图统一 Crop 成方块（原图比例差异很大，Fit 会让行高参差不齐）；
+                    // 单图（hero）铺满宽度、按原始比例完整显示
+                    contentScale = if (hero) ContentScale.Fit else ContentScale.Crop,
+                    autoHeight = hero,
+                    modifier = if (hero) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+                )
+                if (image.isCover) {
+                    AnnouncementChip(
+                        text = "封面",
+                        // 标签压在图片上：用实心 primary 而不是容器色，保证任何底图上都看得清
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(if (hero) 8.dp else 6.dp)
                     )
                 }
             }

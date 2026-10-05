@@ -28,9 +28,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,9 +49,12 @@ import androidx.compose.ui.unit.dp
  * （OkHttp + 内存 LRU 128 张 + 最多 4 并发 + 总像素降采样），因此与 Markdown 正文里的图片共享缓存。
  *
  * 三种状态都有明确外观，永远不会抛异常、也不会留一个空洞：
- * - 加载中：只显示 [MaterialTheme.colorScheme.surfaceVariant] 底色（列表里不闪图标，避免噪音）；
+ * - 加载中：只显示 [placeholderColor] 底色（默认 surfaceVariant，列表里不闪图标，避免噪音）；
  * - 成功：铺满容器（[contentScale] 默认 Crop，配合 [shape] 做圆角 / 圆形裁切）；
  * - 失败或地址为空：显示 [fallback] 图标（未指定则保留底色占位）。
+ *
+ * ★ [placeholderColor] 给「全屏看图」这类深色底用：默认的浅色占位在纯黑背景上会是一块灰板，
+ *   传 `Color.Transparent` 就只剩图片本身（`contentScale = Fit` 时留白处直接透出黑底）。
  *
  * 尺寸两种给法：
  * - **固定尺寸**（头像、列表缩略图、弹窗封面）：调用方传 `Modifier.size(...)` / `height(...)`，
@@ -74,26 +77,33 @@ fun RemoteImage(
     fallback: ImageVector? = null,
     fallbackTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     autoHeight: Boolean = false,
-    placeholderRatio: Float = 16f / 9f
+    placeholderRatio: Float = 16f / 9f,
+    placeholderColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val link = url?.trim().orEmpty()
-    var failed by remember(link) { mutableStateOf(false) }
-    // 已缓存过的图直接当初始值：重组 / 回退到本页时不会先闪一下占位色
-    val bitmap by produceState<Bitmap?>(
-        initialValue = if (link.isEmpty()) null else RemoteImageLoader.cached(link),
-        link
-    ) {
-        if (link.isEmpty()) {
-            value = null
-            return@produceState
-        }
-        if (value == null) {
-            val loaded = RemoteImageLoader.load(link)
-            failed = loaded == null
-            value = loaded
-        }
+    // ★★ 状态必须用 `remember(link)` 建，**不能用 `produceState(initialValue, link)`**：
+    //   produceState 内部是 `remember { mutableStateOf(initialValue) }` —— 它的 remember **不带 key**，
+    //   换 URL 后状态里还留着**上一张图**，再配合"已有值就跳过加载"的判断，新图永远不会加载 ⇒
+    //   一直显示上一条公告的封面/头像（实测 bug：打开公告 A 再打开公告 B，B 的图是 A 的；
+    //   文字是直接传参所以正常，只有图片残留，很容易误判成数据串了）。
+    //   `remember(link)` 在 URL 变化时**同步**重建状态：旧图立刻消失、新图先用缓存（没有则占位色），
+    //   连一帧旧图都不会闪。
+    val bitmapState = remember(link) {
+        mutableStateOf<Bitmap?>(if (link.isEmpty()) null else RemoteImageLoader.cached(link))
     }
-    val bmp = bitmap
+    var failed by remember(link) { mutableStateOf(false) }
+    LaunchedEffect(link) {
+        // 空地址、或命中缓存：没什么要加载的
+        if (link.isEmpty() || bitmapState.value != null) return@LaunchedEffect
+        val loaded = RemoteImageLoader.load(link)
+        failed = loaded == null
+        bitmapState.value = loaded
+    }
+    // ★ 这里必须取成局部 val，**不能写成 `by` 委托**（`val bmp by bitmapState`）：
+    //   委托属性的 getter 每次读都可能返回不同的值，编译器不允许对它做非空智能转换，
+    //   CI 报过 `Smart cast to 'android.graphics.Bitmap' is impossible, because 'bmp' is a delegated property`。
+    //   局部 val 只读一次，下面 `bmp != null && bmp.height > 0` 才能智能转换。
+    val bmp = bitmapState.value
 
     if (autoHeight) {
         BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -117,6 +127,7 @@ fun RemoteImage(
                 contentScale = contentScale,
                 fallback = fallback,
                 fallbackTint = fallbackTint,
+                placeholderColor = placeholderColor,
                 modifier = Modifier.size(width, height)
             )
         }
@@ -131,6 +142,7 @@ fun RemoteImage(
         contentScale = contentScale,
         fallback = fallback,
         fallbackTint = fallbackTint,
+        placeholderColor = placeholderColor,
         modifier = modifier
     )
 }
@@ -145,12 +157,13 @@ private fun ImageFrame(
     contentScale: ContentScale,
     fallback: ImageVector?,
     fallbackTint: Color,
+    placeholderColor: Color,
     modifier: Modifier
 ) {
     Box(
         modifier = modifier
             .clip(shape)
-            .background(color = MaterialTheme.colorScheme.surfaceVariant, shape = shape),
+            .background(color = placeholderColor, shape = shape),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {

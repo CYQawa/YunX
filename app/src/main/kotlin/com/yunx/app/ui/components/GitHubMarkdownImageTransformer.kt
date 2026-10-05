@@ -20,7 +20,9 @@ package com.yunx.app.ui.components
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import com.mikepenz.markdown.model.ImageData
@@ -47,10 +49,16 @@ object GitHubMarkdownImageTransformer : ImageTransformer {
 
     @Composable
     override fun transform(link: String): ImageData? {
-        // produceState：协程加载位图，加载完成前返回 null（库显示占位）
-        val bitmap = produceState<Bitmap?>(initialValue = RemoteImageLoader.cached(link), link) {
-            if (value == null) value = RemoteImageLoader.load(link)
-        }.value ?: return null
+        // ★★ 与 RemoteImage 同一个坑（已踩过）：状态必须用 `remember(link)` 建。
+        //   不能用 `produceState(initialValue, link)` —— 它内部的 remember 不带 key，
+        //   Markdown 渲染器复用同一个槽位渲染另一张图（换公告 / 换 README）时，
+        //   状态里还留着上一张图，配合"已有值就跳过加载"就会一直显示旧图。
+        val state = remember(link) { mutableStateOf<Bitmap?>(RemoteImageLoader.cached(link)) }
+        LaunchedEffect(link) {
+            if (state.value == null) state.value = RemoteImageLoader.load(link)
+        }
+        // 加载完成前返回 null（库显示占位）
+        val bitmap = state.value ?: return null
         return ImageData(painter = BitmapPainter(bitmap.asImageBitmap()))
     }
 }

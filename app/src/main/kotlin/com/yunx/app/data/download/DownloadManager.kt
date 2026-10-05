@@ -244,7 +244,11 @@ class DownloadManager(
     /** 通知栏显示下载速度开关（false 时仅显示通知，隐藏速度） */
     private val showSpeedProvider: () -> Boolean = { true }
 ) {
-    private val credentialCipher: CredentialCipher = AndroidKeystoreCredentialCipher()
+    /**
+     * ★ 必须与其他调用方共用同一个 cipher 实例（见 [AndroidKeystoreCredentialCipher.shared]）：
+     *   实例各自缓存密钥、各自持有失钥监听，分开建会在「密钥刚被重建」时判断错位。
+     */
+    private val credentialCipher: CredentialCipher = AndroidKeystoreCredentialCipher.shared
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** 下载引擎开关等设置（DownloadManager 是应用级单例，读一次足够） */

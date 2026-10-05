@@ -1254,6 +1254,11 @@ security policy`，表现是公告**永远加载失败**（启动弹窗与未读
    调用点只有两处：启动检查一次、用户在列表页手动刷新 / 翻页；
 3. 详情接口会让 `viewCount` +1（预期行为）⇒ `AnnouncementViewModel` 里按 id **缓存详情**，
    同一会话同一条公告只请求一次（进详情、返回、再进都不会重复 +1）。
+   ★ 但**刷新必须让缓存作废**，否则「服务端改了正文 → 刷新 → 再进详情」看到的还是旧内容
+   （已踩过）：列表刷新 `refresh()` 先 `detailCache.clear()`；详情页右上角的刷新走
+   `reloadCurrentDetail()` —— 刻意**不复用 `openDetail`**（那条路会把状态切成 `Loading`，页面闪一下加载态），
+   保留旧内容、拿到新数据再整体替换，失败只弹 Snackbar 不把已有内容换成错误页。
+   两处的代价都是 `viewCount` 再 +1，属用户主动刷新的预期行为。
 
 **列表页大小固定 100（接口上限）**：启动检查就一次取满，于是「未读角标」与「启动弹窗候选」的口径
 = **全部公告**而不是前 20 条；只有公告总数超过 100 条时列表页底部才会出现「加载更多」（同一 pageSize
@@ -1280,7 +1285,7 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
 角标只要超出这颗圆就被切掉 —— 实测症状是「红点被切成水滴形」（已踩过）。
 外层 Box 不裁剪、尺寸与 `IconButton` 一致，仍是同一个 48dp 点击区；角标自身没有 pointerInput，
 点在角标上事件照旧落到 `IconButton`，不影响点击。
-共享元素分两层，各管一段、互不干扰：
+共享元素分三层，各管一段、互不干扰：
 - 外层：顶栏公告图标 ↔ 公告整页，key = `OVERLAY_KEY_ANNOUNCEMENTS`（与收藏页同一手法）；
 - 内层：列表项 ↔ 详情页，key = `announcementSharedKey(id)`，在 `AnnouncementScreen` 里**再套一层
   `SharedTransitionLayout`** —— 共享元素只在**同一个** layout 作用域内匹配，套一层就天然隔离了。
@@ -1295,6 +1300,26 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
      ⇒ 动画一结束就闪回详情页；而此时 `detailId` 已经是 null，详情页那个返回按钮再点就是空操作
      ⇒ 观感是「返回按钮点不动了」。进入方向还要在点击处把两个状态**一起写死**，
      否则详情页被打开的首帧没有形变目标（只靠 `LaunchedEffect` 会晚一帧）。
+- 内层再往下：详情页**图集缩略图 ↔ 全屏看图**，key = `announcementImageSharedKey(公告 id, 图集下标)`。
+  源在详情页那个 AnimatedVisibility 里、目标在看图页那个 AnimatedVisibility 里，**同一个作用域**即可匹配
+  （不必再套一层 layout）。可见性/退出同上面②：`viewerIndex` 管开关、`shownViewerIndex` 只管渲染哪一张，
+  进入时两个状态一起写。第三层叠在详情页之上（同一个 `SharedTransitionLayout` 里**后写的 AnimatedVisibility**），
+  黑底必须**不透明**：形变结束后缩略图那一份其实也被同步放大到整屏，不透明底把它盖住，否则透出重影。
+  ★★ **源侧也必须跟着进/退场**（缩略图包一层 `AnimatedVisibility(visible = !正在看这一张)`），
+    否则动画完全不生效：边界动画只认「**一个 outgoing + 一个 incoming**」——`BoundsAnimation.target`
+    取的就是 `AnimatedVisibility.transition.targetState`，安静留在树里的缩略图 target 也是 true，
+    于是状态机 `enabledEntries.fastFirstOrNull { it.target }` 会挑到**先注册的缩略图**当目标边界
+    （而它的边界永远不变）⇒ 实测表现就是"过渡根本没生效"（已踩过）。
+    让缩略图淡出后：点开时缩略图 outgoing（初始边界）、全屏图 incoming（目标边界）；关回来时角色互换，
+    两个方向都对。缩略图的 AnimatedVisibility 放在**定尺寸外框里面**，布局尺寸因此不变、列表不抖。
+  ★ 全屏看图**刻意不做左右滑动翻页**：翻页会让「当前这张」的 key 每滑一次就换一个，
+  源/目标在下标之间反复重新匹配，最容易抖/串图；「一次看一张、关掉再点下一张」时源和目标全程是同一条。
+  ★ 全屏看图的**缩放/平移只能加在共享元素内部**（`sharedBounds.fillMaxSize().graphicsLayer(...)`）：
+    共享元素的形变本身就是靠 layer 位移 + 缩放实现的，加在外面会跟它打架。手势自研、不引第三方库：
+    `detectTransformGestures`（双指缩放 + 单指拖动；以双指中心为锚点缩放
+    `o' = (g-c) - (g-c-o) * (s'/s) + pan`，因为 `graphicsLayer` 是绕**中心**缩放的）与
+    `detectTapGestures`（未放大时单击=关闭、放大时单击=复位、双击在 1x ↔ 2.5x 之间切换）两个
+    `pointerInput` 并存；平移量按容器边界夹住，图不会被拖出黑边；换图（url 变）时缩放状态归零。
 
 **图片：不加新依赖，复用 README 那一套**。`GitHubMarkdownImageTransformer` 里的加载逻辑已抽成
 `RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），
@@ -1311,7 +1336,32 @@ Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正�
    判断有界性也别拿 `maxWidth == Dp.Infinity` 比：无界时 `BoxWithConstraints` 给的是一个巨大的**有限** Dp，
    要用 `constraints.hasBoundedWidth/Height`。
 ★ 弹窗里的图**一律走固定高度**（公告弹窗封面 180dp + `Crop`）：弹窗高度必须可预期，
-   按图片原始比例的话一张方图就能把弹窗撑满、把正文挤掉；想看全图点进详情页（那里才用 `autoHeight`）。
+   按图片原始比例的话一张方图就能把弹窗撑满、把正文挤掉；想看全图点进详情页。
+★ 详情页的图**全部收进正文下面的图集**（`announcementGallery` + `AnnouncementGalleryImage`），
+   封面不再单独压在标题下：接口只给「封面 `coverImage`」+「正文图集 `images`」两块，没有统一图片数组
+   ⇒ 「封面也算图集一张」这件事在前端拼：**封面排第 1 位并打「封面」标签**（`AnnouncementChip`，
+   实心 primary 才在任何底图上都看得清），正文图按服务端顺序跟在后面，空串过滤、封面同时出现在
+   `images` 里时**去重**（否则详情页出现两张一样的图）。
+   下标口径只有 `announcementGallery` 一个来源：全屏看图的下标和共享元素 key 的下标都用它的下标，别再各算一套。
+   ★ 排布分两种（`hero` 参数，共享元素与 key 是同一套）：**只有一张**时铺满宽度、按原图比例完整显示
+   （"有封面、没正文图"是最常见的公告，缩成小方块等于白丢信息）；**多张**才横向 `LazyRow`
+   （132dp 正方形 `Crop`，原图比例差异大，`Fit` 会让行高参差不齐）。
+★ 参与共享元素的图片**尺寸必须由约束决定，不能写死 `size`**：`RemeasureToBounds` 形变时会用
+   **动画中的尺寸**去重新测量内容（这是它和 `ScaleToBounds` 的区别），写死尺寸的话内容不会跟着放大。
+   正确写法是两层：外层给尺寸（多图用 `Modifier.size(132.dp)`、单图用 `fillMaxWidth`）把**布局**尺寸钉住
+   （横向列表不会因为某一项"变大"而抖动），内层 `fillMaxSize()` / `fillMaxWidth()` + `then(sharedBounds…)`
+   当共享元素本体；全屏看图侧则直接 `sharedBounds.fillMaxSize()`（配 `Fit`，内容每帧正好等于形变框）。
+★ 全屏看图是**深色底**：`RemoteImage` 的占位底色要传 `placeholderColor = Color.Transparent`，
+   默认的 `surfaceVariant` 会在纯黑上显示成一块灰板（`contentScale = Fit` 的留白处也应当是黑底）。
+★★ **`produceState(initialValue, key)` 的 `remember` 不带 key ⇒ 绝不要用它加载「会变的 URL」**（已踩过）：
+   它的实现就是 `remember { mutableStateOf(initialValue) }`，key 变了状态里仍是**上一张图**；
+   加载逻辑若再写成「已有值就跳过加载」，新图就永远不会请求 ⇒ 打开公告 A 再打开公告 B，
+   B 的封面 / 头像 / 正文图全是 A 的（**文字是直接传参所以正常**，很容易误判成"数据串了"）。
+   必现路径：详情命中 `detailCache` 时不经过 Loading 分支，详情页整棵 `LazyColumn` 原地换内容。
+   正确写法（`RemoteImage` 与 `GitHubMarkdownImageTransformer` 都已这么改）：
+   `remember(link) { mutableStateOf<Bitmap?>(cached(link)) }` + `LaunchedEffect(link) { … }` ——
+   URL 一变状态就同步重建：旧图立刻消失、缓存命中直接出图、失败只留占位色。
+   同理，详情页的 `LazyListState` 要按公告 id `scrollToItem(0)`，否则复用槽位时会继承上一条的滚动位置。
 
 **正文渲染不用 WebView**：走 mikepenz GFM 渲染器（与 README 预览同一套 + `compactMarkdownTypography()`），
 `content` 里的 HTML 片段只会当普通文本显示。这样**没有脚本执行面**（XSS / CSP 都不用自己扛），
@@ -1324,8 +1374,73 @@ desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` �
 
 **落点**：`data/announcement/{AnnouncementApi,AnnouncementReadStore,AnnouncementTime}.kt`、
 `ui/viewmodel/AnnouncementViewModel.kt`、`ui/screens/Announcement{Screen,ListScreen,DetailScreen}.kt`
-（宿主 + 列表页 + 详情页）、`ui/components/{RemoteImageLoader,RemoteImage}.kt`、
+（宿主 + 列表页 + 详情页；宿主里还有**全屏看图页** `AnnouncementImageViewerPage` 这条共享元素链路，
+详情页里有 `announcementGallery` / `AnnouncementGalleryThumbnail` 这套图集口径）、
+`ui/components/{RemoteImageLoader,RemoteImage}.kt`、
 `ui/MainScreen.kt`（图标 + 角标 + 路由 + 启动弹窗）。
+
+---
+
+### 3.36 凭证密钥失效（改锁屏密码必读）
+
+**症状（1.2.8 线上三份崩溃报告，同一根因三种形态）**：用户在**设置里改了锁屏密码/指纹**、
+或系统/厂商 keystore 升级后，App 冷启动即崩，栈顶落在
+`AndroidKeystoreCredentialCipher` 的 `cipher.init` 上：
+
+```
+java.security.InvalidKeyException: Keystore operation failed
+Caused by: android.security.KeyStoreException: Key not found
+Caused by: android.security.KeyStoreException: Invalid key blob（internal code -33，
+            upgrade_keyblob_if_required_with）
+android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently invalidated
+```
+
+**机制**：密钥建在 `AndroidKeyStore`（别名 `yunx.account.credentials.v1`，AES-GCM，**没有**也不该有
+`setUserAuthenticationRequired(true)`）。但 keyblob 在部分 ROM/系统版本上会随设备凭证变化而
+**永久解不开**——查无此键、blob 无法升级、或被系统直接作废。三种报错都是同一件事：
+**只有这一把密钥能解的密文，全废了**（六个平台账号 + GitHub Token + 下载任务请求头）。
+
+**修复前为什么是「崩」而不是「重新登录」**：两处叠加。
+
+1. `SecureAccountDaos` 里每处都是 `stored?.let { decryptXxx(...) }`，而 `decryptXxx` 是 **suspend
+   函数** —— **接收者表达式先于 `withContext` 求值**，所以 `key()` 抛的 Keystore 异常
+   **根本没进** `withContext` 里的 `try`，直接从 `getAccount()` 冒到调用方协程（主线程）。
+2. 例外异常类型是 `Error` 系（如 `ProviderException`）或 `KeyStoreException` 时，
+   `catch (error: Exception)` 的旧写法也接不住。
+
+**现在的口径（改这块之前先读）**：
+
+- `CredentialKeyException` 分**两种**，上层必须区分（`CredentialStore.isKeyLost`）：
+  - `PermanentlyInvalid`：条目永久失效 ⇒ 密文再也解不开 ⇒ 该清就清 + 提示重登；
+  - `Unavailable`：Keystore **暂时**进不去（设备还锁着等）⇒ **只返回 null，绝不删数据**，
+    删了等于把用户本来还能解开的账号白白作废。
+- `AndroidKeystoreCredentialCipher` 自愈：**条目坏了**才删坏条目 → `generateKey()` 建新密钥 →
+  **整段加解密流程重试一次**。重试必须在 `withRetry` 那一层包住整段，不能只重试 `key()`——
+  部分机型把「初始化失败」推迟到 `doFinal` 才报。
+- **删键前必须先确认 Keystore 可达**（`discardStaleEntry` 里先 `openKeyStore()`）：
+  连 `KeyStore.load` 都进不去时抛 `Unavailable`，不许删。
+- `isKeyProblem` 是**严格白名单**，而且**判断顺序有陷阱**：`AEADBadTagException` 是
+  `GeneralSecurityException` 的子类，**必须先单独排除**，否则「密文被改 / 跨版本残留」会被
+  误判成密钥故障 ⇒ 把**好密钥**删掉 ⇒ 全部账号真的作废。
+- `AndroidKeystoreCredentialCipher.shared` 是**全进程唯一实例**：DAO（`AppDatabase.get`）、
+  `GitHubTokenStore`、`DownloadManager` 三处必须共用。分开 new 会让 `cachedKey` 各缓存一份、
+  `onKeyProvisioned` 只被最后一个注册者收到。
+- `onKeyProvisioned` 只在**真的 `generateKey()`** 时回调（不是「失败过」）：首次启动本来就没键，
+  不能据此判定「旧密文作废」。
+- 提示链路：数据层只写一个 SharedPreferences 标记（`CredentialStore.installRecovery` 在
+  `YunXApp.onCreate` 装配，必须早于任何凭证读写），`MainScreen` 弹一次 `AlertDialog`。
+  标记用 `commit()` 而不是 `apply()` —— 同一线程内先写后读，异步落盘的旧值会让提示不弹。
+
+**自愈路径（各自清各自那条，不做全局清库）**：账号走 `SecureAccountDaos.decryptGuarded`（并给
+`observeAccount()` 挂 `.catch { emit(null) }`，异常击穿的是收集方协程）；GitHub Token 走
+`GitHubTokenStore.getToken` 的失败删除；下载请求头走 `DownloadManager.loadPersistedHeaders` 的
+`runCatching`（重置成空表）。**故意不在失钥回调里无差别清空账号表**——判断稍有偏差就不可恢复，
+宁可让每个平台各自失败一次。
+
+**落点**：`data/security/CredentialCipher.kt`、`data/db/SecureAccountDaos.kt`、
+`data/db/AppDatabase.kt`、`data/network/GitHubTokenStore.kt`、`data/download/DownloadManager.kt`、
+`ui/MainScreen.kt`、`YunXApp.kt`；回归测试 `app/src/test/kotlin/com/yunx/app/data/db/SecureAccountDaosTest.kt`
+（CI 跑 `./gradlew testDebugUnitTest`，三个用例钉住「不崩 / 永久失效清数据 / 暂时不可用保数据」）。
 
 ---
 
@@ -1334,6 +1449,18 @@ desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` �
 
 写完代码后逐项自查，然后交付：
 
+0. **先跑三个脚本**（本地没有编译器，这些能挡住大部分 CI 往返）：
+   - `python3 ~/.yunx-bal/ktcheck.py <改动的 .kt ...>`：词法检查（注释嵌套 / 字符串闭合 / 括号配对）；
+   - `python3 ~/.yunx-bal/impcheck.py`：**必须整项目跑**（无参数），找「用了但没 import」的符号 ——
+     它靠"别处 import 过这个名字"当证据，只扫单文件会漏报。已用它验证过：故意删掉
+     `pointerInput` 的 import，它会直接报出与 CI 完全相同的行号。
+   - `python3 ~/.yunx-bal/vischeck.py`：**必须整项目跑**（无参数），找**跨文件可见性冲突** ——
+     `impcheck` 查不到这类错（符号确实存在、只是访问不到，报的是 `Cannot access ...`）。
+     已知两类：① `private companion object` 里放 public 成员（companion 的可见性会连带锁住
+     自己的成员，别处 `Foo.shared` 就编译不过）；② 文件 B 里写 `private fun Foo.bar()` 却被
+     文件 A 调用。已用它验证过：把 `AndroidKeystoreCredentialCipher` 的 companion 改回
+     `private`，它会报出与 CI 完全相同的三处调用点（`AppDatabase.kt:91`、
+     `DownloadManager.kt:251`、`GitHubTokenStore.kt:40`）。
 1. **import 是否齐全**：新用到的 Composable、动画 API、图标、协程 API 都有对应 import。
 2. **实验性 API 注解**：见下方「常见编译坑」表。
 3. **符号一致性**：改了函数签名后，`grep` 一遍旧签名/旧调用点，确认无残留。
@@ -1348,7 +1475,9 @@ desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` �
 |---|---|
 | `FlowRow` / `FilterChip` | 需 `@OptIn(ExperimentalLayoutApi::class)` / `ExperimentalMaterial3Api` |
 | `combinedClickable` | 需 `@OptIn(ExperimentalFoundationApi::class)` |
+| `Unresolved reference 'pointerInput'` + 同 lambda 里 `detectTransformGestures` / `size` / `detectTapGestures` 全报 `Cannot infer type for this parameter` | **一个 import 缺失、级联一片**，别一个个改它们。`pointerInput` 在 `androidx.compose.ui.input.pointer`，而手势检测器（`detectTapGestures` / `detectTransformGestures` / `detectDragGestures`）在 `androidx.compose.foundation.gestures` —— 两个包容易记混。pointerInput 解析不出来 ⇒ lambda 收不到 `PointerInputScope` 接收者 ⇒ 里面的成员/扩展全跟着报错。已踩过一次（全屏看图的双指缩放）。用 `impcheck.py` 先定位真正缺的那一个 |
 | 图标找不到 | 已引入 `material-icons-extended`，确认图标名与 `Outlined`/`Filled` 命名空间 |
+| `Cannot access 'companion object Companion: it is private in 'Foo'` | **companion 的可见性会连带限制它自己的成员**：`private companion object { val shared ... }` 里那个 `shared` 在别处一律访问不到（哪怕它自己没写 private）。要么把 companion 前的 `private` 去掉，要么把该成员挪出 companion。本项目 `AndroidKeystoreCredentialCipher.shared` 踩过；交付前用 `vischeck.py` 查 |
 | `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
 | `animateColorAsState` 报 `Unresolved reference` | 包是 `androidx.compose.animation.animateColorAsState`（**不是** `androidx.compose.animation.core`）。判断依据：`.animation` 放的是**进出场/内容切换**（`AnimatedVisibility`/`AnimatedContent`/`fadeIn`/`fadeOut`/`slideInVertically`/`togetherWith`/`animateColorAsState`），`.animation.core` 放的是**时间曲线与动画值**（`tween`/`spring`/`Animatable`/`animateFloatAsState`/`animateDpAsState`）。写错包会连带一片 `Cannot infer type for this parameter`（`by` 委托推不出类型） |
 | Room 编译报 schema 错 | 检查 `version` 是否 +1、Migration 是否注册 |

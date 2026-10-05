@@ -20,6 +20,7 @@ package com.yunx.app.data.network
 
 import android.content.Context
 import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
+import com.yunx.app.data.security.CredentialStore
 
 /**
  * GitHub Token 加密存储。
@@ -35,15 +36,30 @@ object GitHubTokenStore {
     private const val KEY_TOKEN = "github_token_encrypted"
     private const val PURPOSE = "github_token"
 
-    private val cipher = AndroidKeystoreCredentialCipher()
+    /** ★ 必须与其他调用方共用同一个 cipher 实例（见 [AndroidKeystoreCredentialCipher.shared]） */
+    private val cipher = AndroidKeystoreCredentialCipher.shared
 
-    /** 读取已加密 Token 并解密；未配置或解密失败返回 null */
+    /**
+     * 读取已加密 Token 并解密；未配置或解密失败返回 null。
+     *
+     * ★ 解密失败时**必须把存的那条删掉**（自愈）：本机密钥可能已被系统作废（改锁屏密码、
+     *   系统升级），此时这条密文再也解不开。不删的话 [hasToken] 会一直返回 true，
+     *   界面显示「已配置 Token」但每次请求都在静默回退匿名限额，用户完全看不出问题。
+     *   顺带把「本机密钥失效」记进一次性提示，让用户知道要重登/重配。
+     */
     fun getToken(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val stored = prefs.getString(KEY_TOKEN, null) ?: return null
-        return runCatching { cipher.decrypt(stored, PURPOSE) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
+        return try {
+            cipher.decrypt(stored, PURPOSE).takeIf { it.isNotBlank() }
+        } catch (error: Throwable) {
+            // 只有「永久失效」才删：Keystore 暂时进不去（设备还锁着）时留着，下次还能读出来
+            if (CredentialStore.isKeyLost(error)) {
+                prefs.edit().remove(KEY_TOKEN).apply()
+                CredentialStore.markKeyLost(context.applicationContext)
+            }
+            null
+        }
     }
 
     /** 设置/更新 Token；传 null 或空串则清除 */
@@ -54,9 +70,15 @@ object GitHubTokenStore {
             prefs.edit().remove(KEY_TOKEN).apply()
             return
         }
-        runCatching {
+        try {
             val encrypted = cipher.encrypt(trimmed, PURPOSE)
             prefs.edit().putString(KEY_TOKEN, encrypted).apply()
+        } catch (error: Throwable) {
+            // 加密都失败说明密钥彻底不可用：别静默吞掉（否则界面会显示「已配置」但其实没存上）
+            if (CredentialStore.isKeyLost(error)) {
+                prefs.edit().remove(KEY_TOKEN).apply()
+                CredentialStore.markKeyLost(context.applicationContext)
+            }
         }
     }
 

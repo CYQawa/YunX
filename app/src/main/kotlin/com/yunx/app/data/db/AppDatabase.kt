@@ -26,6 +26,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
 import com.yunx.app.data.security.CredentialCipher
+import com.yunx.app.data.security.CredentialStore
 
 @Database(
     entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, GuangYaAccountEntity::class, ILanzouAccountEntity::class, LanzouAccountEntity::class, BookmarkEntity::class],
@@ -97,7 +98,14 @@ abstract class AppDatabase : RoomDatabase() {
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8)
                     .build()
                     .also { database ->
-                        database.credentialCipher = AndroidKeystoreCredentialCipher()
+                        database.credentialCipher = AndroidKeystoreCredentialCipher.shared
+                        // 密钥若是「新建」的，说明此前存下的密文必然由另一把（已失效的）密钥加密。
+                        // 这里只**记录**这件事（写一个 SharedPreferences 标记），不删任何数据：
+                        // 各存储路径自己按「解密失败 → 清掉这一条」自愈（DAO 的 decryptGuarded、
+                        // GitHubTokenStore.getToken、DownloadManager.loadPersistedHeaders），
+                        // 在这里无差别清空账号表风险太大——判断稍有偏差就会白白抹掉用户的登录态。
+                        // 主装配点在 YunXApp.onCreate（必须早于任何凭证读写），这里再兜一次。
+                        CredentialStore.installRecovery(context)
                         instance = database
                     }
             }

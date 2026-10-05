@@ -50,9 +50,10 @@ interface ShareResolveRepository {
 
     /**
      * 免转存取链（登录态）：不把分享文件转存到用户网盘，直接用分享凭证换下载直链 ——
-     * 少一次「建目录 → 转存 → 轮询」，不在用户网盘留临时目录。
+     * 少一次「建目录 → 转存 → 轮询」，不在用户网盘留临时目录，也不会撞夸克的转存去重。
      *
-     * 默认实现回退到 [getShareDownloadLink]：UC 本来就直接取链不转存，其余平台的取链语义各自独立。
+     * 默认实现回退到 [getShareDownloadLink]，行为与改动前完全一致：UC 本来就直接取链不转存，
+     * 其余平台的取链语义各自独立，不需要走这条路；目前只有夸克覆写。
      */
     suspend fun getShareDownloadLinkWithoutSave(
         session: ShareSession,

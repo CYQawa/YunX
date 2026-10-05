@@ -36,10 +36,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,6 +94,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.yunx.app.data.announcement.AnnouncementReadStore
 import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.download.ChunkDownloader
 import com.yunx.app.data.download.DownloadManager
@@ -110,6 +114,7 @@ import com.yunx.app.data.network.TokenCheck
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.data.security.CredentialStore
 import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.data.repository.BaiduAccountRepository
 import com.yunx.app.data.repository.BaiduResolveRepository
@@ -144,28 +149,33 @@ import com.yunx.app.ui.login.XunleiLoginScreen
 import com.yunx.app.ui.login.XunleiVerifyWebViewScreen
 import com.yunx.app.ui.navigation.MainTab
 import com.yunx.app.ui.screens.AboutScreen
+import com.yunx.app.ui.screens.AnnouncementPopupDialog
+import com.yunx.app.ui.screens.AnnouncementScreen
+import com.yunx.app.ui.screens.AnnouncementUnreadBadge
 import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
+import com.yunx.app.ui.screens.DownloadEngineScreen
 import com.yunx.app.ui.screens.OnboardingScreen
 import com.yunx.app.ui.screens.ResolveScreen
 import com.yunx.app.ui.screens.SettingsScreen
 import com.yunx.app.ui.screens.SupportScreen
 import com.yunx.app.ui.screens.ThemeScreen
 import com.yunx.app.ui.screens.UpdateSheet
+import com.yunx.app.ui.viewmodel.AnnouncementViewModel
 import com.yunx.app.ui.viewmodel.BaiduAccountViewModel
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.BookmarkViewModel
 import com.yunx.app.ui.viewmodel.C139AccountViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
-import com.yunx.app.ui.viewmodel.DownloadViewModel
-import com.yunx.app.ui.viewmodel.DriveQuotaViewModel
 import com.yunx.app.ui.viewmodel.GuangYaAccountViewModel
 import com.yunx.app.ui.viewmodel.GuangYaCloudViewModel
 import com.yunx.app.ui.viewmodel.ILanzouAccountViewModel
 import com.yunx.app.ui.viewmodel.ILanzouCloudViewModel
 import com.yunx.app.ui.viewmodel.LanzouAccountViewModel
 import com.yunx.app.ui.viewmodel.LanzouCloudViewModel
+import com.yunx.app.ui.viewmodel.DownloadViewModel
+import com.yunx.app.ui.viewmodel.DriveQuotaViewModel
 import com.yunx.app.ui.viewmodel.Pan115AccountViewModel
 import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123AccountViewModel
@@ -197,6 +207,12 @@ internal const val OVERLAY_KEY_THEME = "overlay-theme"
 
 /** 收藏页从顶栏图标进入，没有"被点的那一项"，不做共享元素形变（普通淡入即可） */
 internal const val OVERLAY_KEY_BOOKMARKS = "overlay-bookmarks"
+
+/** Gopeed 引擎页从设置页那一行进入，同样没有共享元素形变（普通淡入即可） */
+internal const val OVERLAY_KEY_GOPEED = "overlay-gopeed"
+
+/** 公告页：源是顶栏那个公告图标（与收藏页同一手法 —— 图标本身当"源"，长成整页） */
+internal const val OVERLAY_KEY_ANNOUNCEMENTS = "overlay-announcements"
 
 /**
  * 主页框架：
@@ -230,6 +246,10 @@ fun MainScreen() {
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
+    var showGopeed by rememberSaveable { mutableStateOf(false) }
+    var showAnnouncements by rememberSaveable { mutableStateOf(false) }
+    /** 启动公告弹窗点「查看详情」时带进去的公告 id（null = 从图标进来先看列表） */
+    var announcementDetailId by rememberSaveable { mutableStateOf<String?>(null) }
     val saveableStateHolder = rememberSaveableStateHolder()
 
     val context = LocalContext.current
@@ -298,6 +318,22 @@ fun MainScreen() {
             SnackbarController.show("暂未获取到 Release 数据，请先联网检查一次更新")
         }
     }
+    /**
+     * 应用内公告：顶栏红点角标 + 启动弹窗。
+     *
+     * 启动检查（[AnnouncementViewModel.checkStartup]）整个会话只跑一次：一次列表请求同时决定
+     * 「角标数字」与「弹窗展示哪一条」—— 有未读的置顶公告就弹它，否则弹最新的一条未读，全读完则不弹。
+     * 失败静默（与上面的更新检查同一口径），用户点进公告页时会再拉一次并把错误显示出来。
+     */
+    val announcementReadStore = remember { AnnouncementReadStore(context) }
+    val announcementViewModel: AnnouncementViewModel = viewModel(
+        factory = AnnouncementViewModel.Factory(announcementReadStore)
+    )
+    val unreadAnnouncementCount by announcementViewModel.unreadCount.collectAsState()
+    val popupAnnouncement by announcementViewModel.popup.collectAsState()
+    LaunchedEffect(Unit) { announcementViewModel.checkStartup() }
+
+
     val api = remember { QuarkApi() }
     val ucApi = remember { UCApi() }
     val xunleiApi = remember { XunleiApi() }
@@ -309,6 +345,17 @@ fun MainScreen() {
     val ilanzouApi = remember { ILanzouApi() }
     val lanzouApi = remember { LanzouApi() }
     val db = remember { AppDatabase.get(context) }
+
+    /**
+     * 本机密钥失效提示（v1.2.9）：改锁屏密码/指纹、系统升级等会让 Android Keystore 里的密钥
+     * 永久作废，此时加密保存的网盘凭证与 GitHub Token 都解不开了。数据层已经把失效的那条清掉，
+     * 这里负责**告诉用户为什么突然要重新登录**（不然就是「账号莫名其妙没了」）。
+     *
+     * ★ 位置必须在 `AppDatabase.get()` **之后**：注册「密钥被重建」监听、以及第一次读账号
+     *   都发生在建库那一步，之前读标记只会读到旧值，导致本次启动不弹、要等下次启动才弹。
+     * ★ 标记写在 SharedPreferences 里，所以进程被杀后重启仍会补弹，直到用户点「知道了」。
+     */
+    var credentialLostNotice by remember { mutableStateOf(CredentialStore.hasKeyLostNotice(context)) }
     val settings = remember { SettingsRepository(context) }
     val repository = remember {
         QuarkAccountRepository(db.quarkAccountDao(), api)
@@ -645,7 +692,9 @@ fun MainScreen() {
             lanzouResolveRepository,
             downloadManager,
             db.bookmarkDao(),
-            githubApi
+            githubApi,
+            // 取链方式开关：设置页「免转存下载」实时生效
+            noSaveDownloadProvider = { settings.quarkNoSaveDownload }
         )
     )
     val downloadViewModel: DownloadViewModel = viewModel(
@@ -819,7 +868,7 @@ fun MainScreen() {
         return
     }
 
-    // 蓝奏云登录页：全屏覆盖（WebView 打开 pc.woozooo.com 登录，提取 Cookie）
+    // 蓝奏云登录页：全屏覆盖（账号密码登录）
     if (showLanzouLogin) {
         LanzouLoginScreen(
             viewModel = lanzouViewModel,
@@ -835,6 +884,8 @@ fun MainScreen() {
         showSupport -> OVERLAY_KEY_SUPPORT
         showTheme -> OVERLAY_KEY_THEME
         showBookmarks -> OVERLAY_KEY_BOOKMARKS
+        showGopeed -> OVERLAY_KEY_GOPEED
+        showAnnouncements -> OVERLAY_KEY_ANNOUNCEMENTS
         else -> null
     }
     // 正在展示的叠加页路由：打开时更新，关闭时**保留**（退出动画要用它渲染那个页面）
@@ -877,9 +928,9 @@ fun MainScreen() {
                 enter = fadeIn(effectsDefault()),
                 exit = fadeOut(effectsFast())
             ) {
-                // 源侧共享元素修饰符：设置页那三行各自对应一个 key（见 SettingsScreen）。
+                // 源侧共享元素修饰符：设置页里能进入独立页面的那几行各自对应一个 key（见 SettingsScreen）。
                 // ★ rememberSharedContentState 是 @Composable，必须在 composable 作用域里直接调用，
-                //   不能包在普通 lambda 里延迟构造 —— 所以这里一次性建好三个传下去。
+                //   不能包在普通 lambda 里延迟构造 —— 所以这里一次性建好再传下去。
                 val sourceScope = this
                 val themeRowModifier = Modifier.sharedBounds(
                     rememberSharedContentState(OVERLAY_KEY_THEME),
@@ -891,6 +942,11 @@ fun MainScreen() {
                 )
                 val supportRowModifier = Modifier.sharedBounds(
                     rememberSharedContentState(OVERLAY_KEY_SUPPORT),
+                    animatedVisibilityScope = sourceScope
+                )
+                // 「下载引擎」行 → 下载引擎页：和上面三行同样走容器变换（整行长成整页）
+                val engineRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_GOPEED),
                     animatedVisibilityScope = sourceScope
                 )
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -905,6 +961,49 @@ fun MainScreen() {
                             Text(text = currentTab.title)
                         },
                         actions = {
+                            // 公告入口：所有 Tab 都显示（收藏只在解析页出现，公告是全局入口），
+                            // 位置在收藏图标左侧 —— 与收藏图标共用"图标当源、长成整页"的容器变换手法。
+                            //
+                            // ★ 角标必须画在 IconButton **外面**（外层再套一个 48dp 的 Box）：
+                            //   material3 的 IconButton 内部带 `.clip(CircleShape)`（那颗 40dp 的圆形
+                            //   水波纹 StateLayer），角标一旦超出这颗圆就被切掉 —— 实测症状是红点被切成
+                            //   水滴形（见用户截图）。外层 Box 与 IconButton 同为 48dp 且不裁剪；
+                            //   Box 仍是同一个 48dp 点击区，而角标自身没有 pointerInput，
+                            //   点在角标上的事件照旧落到 IconButton，不影响点击。
+                            Box(
+                                modifier = Modifier.size(48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        // 从图标进 = 先看列表（清掉上次「查看详情」直接进详情的请求）
+                                        announcementDetailId = null
+                                        showAnnouncements = true
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Campaign,
+                                        contentDescription = if (unreadAnnouncementCount > 0) {
+                                            "公告（$unreadAnnouncementCount 条未读）"
+                                        } else {
+                                            "公告"
+                                        },
+                                        modifier = Modifier.sharedBounds(
+                                            rememberSharedContentState(OVERLAY_KEY_ANNOUNCEMENTS),
+                                            animatedVisibilityScope = sourceScope
+                                        )
+                                    )
+                                }
+                                // 未读红点角标：只有主界面显示（公告页自己开着的时候不显示）
+                                if (unreadAnnouncementCount > 0 && overlayRoute == null) {
+                                    AnnouncementUnreadBadge(
+                                        count = unreadAnnouncementCount,
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = (-6).dp, y = 2.dp)
+                                    )
+                                }
+                            }
                             // 解析页标题右上角：收藏网盘链接入口
                             if (currentTab == MainTab.Resolve) {
                                 IconButton(
@@ -1036,9 +1135,11 @@ fun MainScreen() {
                                     themeRowModifier = themeRowModifier,
                                     aboutRowModifier = aboutRowModifier,
                                     supportRowModifier = supportRowModifier,
+                                    engineRowModifier = engineRowModifier,
                                     onThemeClick = { showTheme = true },
                                     onAboutClick = { showAbout = true },
                                     onSupportClick = { showSupport = true },
+                                    onGopeedClick = { showGopeed = true },
                                     backupManager = backupManager,
                                     // 手动检查更新与开发调试预览都复用 MainScreen 的更新弹窗状态
                                     onCheckUpdate = checkForUpdate,
@@ -1149,6 +1250,13 @@ fun MainScreen() {
                             )
                             OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
                             OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
+                            OVERLAY_KEY_GOPEED -> DownloadEngineScreen(onBack = { showGopeed = false })
+                            OVERLAY_KEY_ANNOUNCEMENTS -> AnnouncementScreen(
+                                viewModel = announcementViewModel,
+                                onBack = { showAnnouncements = false },
+                                // 启动弹窗点了「查看详情」就直接落在详情页（列表 ↔ 详情的共享元素在页面内部）
+                                initialDetailId = announcementDetailId
+                            )
                             else -> BookmarkScreen(
                                 viewModel = bookmarkViewModel,
                                 onBack = { showBookmarks = false },
@@ -1233,6 +1341,34 @@ fun MainScreen() {
                 }
             )
         }
+    }
+
+    // 本机密钥失效提示：只在「真的丢了密钥、凭证已被清空」时弹一次（标记由数据层写入）
+    if (credentialLostNotice) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(CredentialStore.LOST_TITLE) },
+            text = { Text(CredentialStore.LOST_MESSAGE) },
+            confirmButton = {
+                TextButton(onClick = {
+                    CredentialStore.consumeKeyLostNotice(context)
+                    credentialLostNotice = false
+                }) { Text("知道了") }
+            }
+        )
+    }
+
+    // 启动公告弹窗：展示未读的置顶公告（没有则最新未读）。两个出口都算已读，见 AnnouncementViewModel.consumePopup
+    popupAnnouncement?.let { announcement ->
+        AnnouncementPopupDialog(
+            announcement = announcement,
+            onDetail = {
+                announcementDetailId = announcement.id
+                showAnnouncements = true
+                announcementViewModel.consumePopup()
+            },
+            onDismiss = { announcementViewModel.consumePopup() }
+        )
     }
 
     // GitHub Token 配置弹窗（网盘页入口）：Keystore 加密存储，输入用密码可见性切换
