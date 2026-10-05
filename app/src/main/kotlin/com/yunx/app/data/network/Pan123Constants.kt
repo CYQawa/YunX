@@ -33,6 +33,19 @@ object Pan123Constants {
     /** 网页登录页：官网个人盘主页（未登录自动进入登录流程；登录后 localStorage 写入 authorToken） */
     const val WEB_LOGIN_URL = "https://yun.123pan.cn/"
 
+    /**
+     * 账号密码登录（原生接口，与网页登录并列的第二条路）。
+     * 注意域名是 user.123pan.cn，与个人盘 API 的 yun.123pan.cn 不是同一个站。
+     */
+    const val SIGN_IN_URL = "https://user.123pan.cn/api/user/sign_in"
+
+    /** 账号密码登录的 Origin / Referer（缺了会被风控拒绝） */
+    const val SIGN_IN_ORIGIN = "https://user.123pan.cn"
+    const val SIGN_IN_REFERER = "https://user.123pan.cn/"
+
+    /** 账号密码登录专用 app-version（网页端是 3，登录接口要 132，两者不能混用） */
+    const val APP_VERSION_SIGN_IN = "132"
+
     /** 网页登录态在 localStorage 中的键名：值即 Bearer JWT（与旧 sign_in 返回的 data.token 同源同形） */
     const val LOCAL_STORAGE_TOKEN_KEY = "authorToken"
 

@@ -18,15 +18,13 @@
 
 package com.yunx.app.ui.login
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
-import androidx.compose.material3.SnackbarHost
-import com.yunx.app.ui.SnackbarController
-import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,10 +34,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +54,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -57,27 +66,48 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.yunx.app.data.network.Pan123Constants
-import com.yunx.app.ui.viewmodel.Pan123AccountViewModel
+import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.YunXWavyLoading
-import kotlin.coroutines.resume
+import com.yunx.app.ui.rememberGlobalSnackbarHostState
+import com.yunx.app.ui.viewmodel.Pan123AccountViewModel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
+
+/** 登录方式：0=网页登录（WebView 提取 authorToken）、1=账号密码（原生 sign_in 接口） */
+private const val MODE_WEB = 0
+private const val MODE_PASSWORD = 1
 
 /**
- * 123 云盘登录页（网页登录方案，与夸克/百度等一致）：
- * - WebView 打开官网个人盘主页 [Pan123Constants.WEB_LOGIN_URL]，由用户手动登录（验证码/扫码由官网处理）；
- * - 登录成功后网页 SPA 会把 Bearer JWT 写入当前域 localStorage，键名 authorToken（旧账号密码登录的 data.token 同源同形）；
- * - 右上角「保存」/自动登录检测均从 localStorage 提取该值，经 user/info 接口校验后落库。
+ * 读取网页 localStorage 里 authorToken 的 JS（自动检测与「保存」按钮共用）。
+ * 返回值用 encodeURIComponent 包一层，避免 JWT 里的字符破坏 evaluateJavascript 的 JSON 回参解析。
+ */
+private val READ_AUTHOR_TOKEN_JS: String =
+    "(function(){try{var v=localStorage.getItem('" + Pan123Constants.LOCAL_STORAGE_TOKEN_KEY + "');" +
+        "return v===null?'':encodeURIComponent(v)}catch(e){return ''}})()"
+
+/**
+ * 123 云盘登录页，两条路并存：
+ *
+ * - **网页登录**：WebView 打开官网个人盘主页 [Pan123Constants.WEB_LOGIN_URL]，由用户手动登录
+ *   （验证码/扫码由官网处理）。登录成功后网页 SPA 把 Bearer JWT 写入当前域 localStorage
+ *   （键名 authorToken），本页自动轮询提取并经 user/info 校验后落库。
+ * - **账号密码**：直接打 123 的原生登录接口（`user.123pan.cn/api/user/sign_in`），不用开网页。
+ *   触发风控（滑块/验证码）时会提示改走网页登录——那条路不受这套风控限制。
+ *
+ * 两条路拿到的都是同一种 authorToken，落库后行为完全一致。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,59 +126,41 @@ fun Pan123LoginScreen(
     var tokenInput by remember { mutableStateOf("") }
     var isSavingManual by remember { mutableStateOf(false) }
 
+    // 账号密码登录表单状态
+    var mode by rememberSaveable { mutableIntStateOf(MODE_WEB) }
+    var account by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var loginError by remember { mutableStateOf<String?>(null) }
+    var isLoggingIn by remember { mutableStateOf(false) }
+
     // 登录教程弹窗：进入页面即展示一次
     var showTutorial by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { showTutorial = true }
 
-    val webView = remember {
-        WebView(context).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true   // 123 云盘把登录态（authorToken）存在 localStorage，必须开启
-            settings.setSupportZoom(true)
-            settings.builtInZoomControls = true
-            settings.displayZoomControls = false
-            settings.useWideViewPort = true
-            settings.loadWithOverviewMode = true
-            settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
-            setInitialScale(0)
-            // 桌面 UA：yun.123pan.cn 个人盘是桌面 SPA；移动 UA 会跳到不完整的移动版页面
-            settings.userAgentString = Pan123Constants.WEB_UA
-            webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                    isLoading = true
-                }
-
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    isLoading = false
-                    // 强制覆盖页面 viewport：适配屏幕宽度 + 允许双指缩放（桌面版页面无 viewport 或限制缩放时生效）
-                    view?.evaluateJavascript(
-                        "(function(){var m=document.querySelector('meta[name=\"viewport\"]');" +
-                            "var c='width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes';" +
-                            "if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.name='viewport';n.content=c;document.head.appendChild(n);}" +
-                            "window.dispatchEvent(new Event('resize'));})()",
-                        null
-                    )
-                }
-            }
-            webChromeClient = WebChromeClient()
-            loadUrl(Pan123Constants.WEB_LOGIN_URL)
+    // WebView 按需创建：只在「网页登录」这一档里才建，账号密码模式不必白占一个 WebView
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    LaunchedEffect(mode) {
+        if (mode == MODE_WEB && webView == null) {
+            webView = buildWebView(context) { loading -> isLoading = loading }
         }
     }
 
     // 页面销毁时释放 WebView
     DisposableEffect(Unit) {
-        onDispose { webView.destroy() }
+        onDispose { webView?.destroy() }
     }
 
-    // 系统返回键 → 返回主页（保存中禁用）
-    BackHandler(enabled = !isSaving && !isSavingManual) { onBack() }
+    // 系统返回键 → 返回主页（保存/登录中禁用）
+    BackHandler(enabled = !isSaving && !isSavingManual && !isLoggingIn) { onBack() }
 
     // 自动登录检测：网页登录完成（authorToken 写入 localStorage）即自动提取并校验登录，无需手动点「保存」
     rememberWebLoginAutoDetect(
-        sampleCredential = { webView.readLocalStorageValue(Pan123Constants.LOCAL_STORAGE_TOKEN_KEY) },
+        sampleCredential = { webView?.evaluateJsEncoded(READ_AUTHOR_TOKEN_JS) ?: "" },
         isPlausible = { it.isNotBlank() },
         validateAndSave = { viewModel.saveToken(it) },
-        isPaused = { isSaving || isSavingManual || showTokenDialog },
+        // 账号密码模式下暂停检测：用户正在用另一条路登录，别被网页里残留的旧登录态抢先写库
+        isPaused = { mode != MODE_WEB || isSaving || isSavingManual || showTokenDialog },
         onInFlightChange = { isSaving = it },
         onAutoSaved = onSaved
     )
@@ -162,46 +174,49 @@ fun Pan123LoginScreen(
             TopAppBar(
                 title = { Text("123云盘登录", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
-                    IconButton(onClick = { if (!isSaving && !isSavingManual) onBack() }) {
+                    IconButton(onClick = { if (!isSaving && !isSavingManual && !isLoggingIn) onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { if (!isSaving && !isSavingManual) showTokenDialog = true },
-                        enabled = !isSaving && !isSavingManual
-                    ) {
-                        Icon(
-                            Icons.Outlined.ContentPaste,
-                            contentDescription = "手动输入 Token",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                isSaving = true
-                                // 提取网页 localStorage 的 authorToken 作为登录凭证
-                                val token = webView.readLocalStorageValue(Pan123Constants.LOCAL_STORAGE_TOKEN_KEY)
-                                val saved = if (token.isBlank()) false else viewModel.saveToken(token)
-                                isSaving = false
-                                if (saved) {
-                                    SnackbarController.show("登录成功")
-                                    onSaved()
-                                } else {
-                                    SnackbarController.show("未检测到登录态，请先完成登录")
-                                }
-                            }
-                        },
-                        enabled = !isSaving && !isSavingManual
-                    ) {
-                        if (isSaving) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp
+                    // 「保存」与「粘贴」只对网页登录有意义，账号密码模式下不显示，避免误点
+                    if (mode == MODE_WEB) {
+                        IconButton(
+                            onClick = { if (!isSaving && !isSavingManual) showTokenDialog = true },
+                            enabled = !isSaving && !isSavingManual
+                        ) {
+                            Icon(
+                                Icons.Outlined.ContentPaste,
+                                contentDescription = "手动输入 Token",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        } else {
-                            Text("保存")
+                        }
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    isSaving = true
+                                    // 提取网页 localStorage 的 authorToken 作为登录凭证
+                                    val token = webView?.evaluateJsEncoded(READ_AUTHOR_TOKEN_JS).orEmpty()
+                                    val saved = if (token.isBlank()) false else viewModel.saveToken(token)
+                                    isSaving = false
+                                    if (saved) {
+                                        SnackbarController.show("登录成功")
+                                        onSaved()
+                                    } else {
+                                        SnackbarController.show("未检测到登录态，请先完成登录")
+                                    }
+                                }
+                            },
+                            enabled = !isSaving && !isSavingManual
+                        ) {
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("保存")
+                            }
                         }
                     }
                 },
@@ -211,23 +226,67 @@ fun Pan123LoginScreen(
             )
         }
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            AndroidView(
-                factory = { webView },
-                modifier = Modifier.fillMaxSize()
-            )
-            if (isLoading) {
-                YunXWavyLoading(modifier = Modifier.fillMaxWidth())
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    onClick = { mode = MODE_WEB },
+                    selected = mode == MODE_WEB
+                ) { Text("网页登录") }
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    onClick = { mode = MODE_PASSWORD },
+                    selected = mode == MODE_PASSWORD
+                ) { Text("账号密码") }
+            }
+
+            if (mode == MODE_WEB) {
+                // weight(1f)：让网页区域吃掉「除去上方分段控件」剩下的高度。
+                // 用 fillMaxSize 会把分段控件的高度也算进来，Column 不滚动 ⇒ 网页底部被裁掉一条
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    webView?.let { wv ->
+                        AndroidView(factory = { wv }, modifier = Modifier.fillMaxSize())
+                    }
+                    if (isLoading || webView == null) {
+                        YunXWavyLoading(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            } else {
+                AccountPasswordForm(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    account = account,
+                    onAccountChange = { account = it },
+                    password = password,
+                    onPasswordChange = { password = it },
+                    passwordVisible = passwordVisible,
+                    onTogglePasswordVisible = { passwordVisible = !passwordVisible },
+                    error = loginError,
+                    busy = isLoggingIn,
+                    onSubmit = {
+                        scope.launch {
+                            loginError = null
+                            isLoggingIn = true
+                            val error = viewModel.login(account, password)
+                            isLoggingIn = false
+                            if (error == null) {
+                                SnackbarController.show("登录成功")
+                                onSaved()
+                            } else {
+                                loginError = error
+                            }
+                        }
+                    }
+                )
             }
         }
     }
 
-    // 登录教程弹窗
-    if (showTutorial) {
+    // 登录教程弹窗（网页登录的说明；账号密码模式用不到）
+    if (showTutorial && mode == MODE_WEB) {
         AlertDialog(
             onDismissRequest = { showTutorial = false },
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
@@ -325,32 +384,123 @@ fun Pan123LoginScreen(
 }
 
 /**
- * 读取当前 WebView 页面 localStorage 中 [key] 的值（123 云盘登录态存于 authorToken）。
- * ⚠️ 依赖 123 站点私有实现（键名 authorToken / 值为裸 JWT），官网改版可能失效——失效时用户可走「粘贴 Token」兜底。
- * JS 侧用 encodeURIComponent 包一层返回，避免 JWT 特殊字符干扰 evaluateJavascript 的 JSON 返回值解析；
- * 页面未就绪 / 跨域（如还停留在登录跳转中间页）时返回空串，由调用方继续轮询。
+ * 账号密码登录表单（123 原生接口）。
+ * 错误就地展示不弹 Snackbar：登录失败的原因（密码错 / 太频繁 / 要过验证）需要一直看得见，
+ * 用户照着改才有意义，一闪而过的提示反而让人不知道该干什么。
  */
-private suspend fun WebView.readLocalStorageValue(key: String): String =
-    withTimeoutOrNull(2_000) {
-        suspendCancellableCoroutine { cont ->
-            try {
-                evaluateJavascript(
-                    "(function(){try{var v=localStorage.getItem('" + key + "');" +
-                        "return v===null?'':encodeURIComponent(v)}catch(e){return ''}})()"
-                ) { result ->
-                    val raw = result?.trim() ?: ""
-                    val value = when {
-                        raw.isEmpty() || raw == "\"\"" || raw == "null" -> ""
-                        raw.length >= 2 && raw.startsWith("\"") && raw.endsWith("\"") ->
-                            raw.substring(1, raw.length - 1)
-                        else -> raw
-                    }
-                    val decoded = if (value.isBlank()) "" else
-                        runCatching { java.net.URLDecoder.decode(value, "UTF-8") }.getOrDefault("")
-                    if (cont.isActive) cont.resume(decoded)
+@Composable
+private fun AccountPasswordForm(
+    modifier: Modifier = Modifier,
+    account: String,
+    onAccountChange: (String) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    passwordVisible: Boolean,
+    onTogglePasswordVisible: () -> Unit,
+    error: String?,
+    busy: Boolean,
+    onSubmit: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "账号密码登录",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+        )
+        Text(
+            text = "直接使用 123 云盘账号登录，不需要打开网页；若提示需要安全验证，请改用「网页登录」",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        OutlinedTextField(
+            value = account,
+            onValueChange = onAccountChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("手机号 / 邮箱") },
+            leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+            singleLine = true,
+            shape = MaterialTheme.shapes.large
+        )
+        OutlinedTextField(
+            value = password,
+            onValueChange = onPasswordChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("密码") },
+            leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+            trailingIcon = {
+                IconButton(onClick = onTogglePasswordVisible) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                    )
                 }
-            } catch (e: Exception) {
-                if (cont.isActive) cont.resume("")
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password
+            ),
+            singleLine = true,
+            shape = MaterialTheme.shapes.large
+        )
+        if (error != null) {
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        Button(
+            onClick = onSubmit,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            enabled = account.isNotBlank() && password.isNotEmpty() && !busy
+        ) {
+            if (busy) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Text("登录")
             }
         }
-    } ?: ""
+    }
+}
+
+/**
+ * 构造 123 网页登录用的 WebView。
+ * 桌面 UA：yun.123pan.cn 个人盘是桌面 SPA，移动 UA 会跳到不完整的移动版页面。
+ */
+private fun buildWebView(context: Context, onLoadingChange: (Boolean) -> Unit): WebView =
+    WebView(context).apply {
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true   // 123 云盘把登录态（authorToken）存在 localStorage，必须开启
+        settings.setSupportZoom(true)
+        settings.builtInZoomControls = true
+        settings.displayZoomControls = false
+        settings.useWideViewPort = true
+        settings.loadWithOverviewMode = true
+        settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
+        setInitialScale(0)
+        settings.userAgentString = Pan123Constants.WEB_UA
+        webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                onLoadingChange(true)
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                onLoadingChange(false)
+                // 强制覆盖页面 viewport：适配屏幕宽度 + 允许双指缩放（桌面版页面无 viewport 或限制缩放时生效）
+                view?.evaluateJavascript(
+                    "(function(){var m=document.querySelector('meta[name=\"viewport\"]');" +
+                        "var c='width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes';" +
+                        "if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.name='viewport';n.content=c;document.head.appendChild(n);}" +
+                        "window.dispatchEvent(new Event('resize'));})()",
+                    null
+                )
+            }
+        }
+        webChromeClient = WebChromeClient()
+        loadUrl(Pan123Constants.WEB_LOGIN_URL)
+    }

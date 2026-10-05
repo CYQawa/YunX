@@ -83,6 +83,9 @@ class YunXApp : Application() {
         }
         scheduleDeepScan(this)
         com.yunx.app.data.network.XunleiDeviceFingerprint.init(this)
+        // 123 云盘的设备标识（loginuuid）：账号密码登录与所有业务请求都要带，必须跨启动保持稳定，
+        // 否则服务端会把每次启动都当成新设备（登录更容易被要求过验证）
+        com.yunx.app.data.network.Pan123DeviceId.install(this)
         // 本机密钥失效自愈：必须在**任何**凭证读写之前装配。改锁屏密码/指纹会让 Android Keystore
         // 里的密钥被系统永久作废（KeyPermanentlyInvalidatedException / Key not found / Invalid
         // key blob 三种形态），此时要记下「登录态已失效」的一次性提示，而不是把 Keystore 异常

@@ -29,7 +29,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * 123 云盘账号 ViewModel：网页登录 Token（authorToken）校验落库，暴露登录态供主页/登录页/解析页共享。
+ * 123 云盘账号 ViewModel：两条登录路径（网页 authorToken / 原生账号密码）最终都落成同一份
+ * JWT 凭证，这里只暴露登录态与两个入口，供主页/登录页/解析页共享。
  */
 class Pan123AccountViewModel(
     private val repository: Pan123AccountRepository
@@ -44,6 +45,13 @@ class Pan123AccountViewModel(
 
     /** 网页登录凭证（authorToken）校验并落库；返回是否保存成功（登录页「保存」与自动检测共用同一入口） */
     suspend fun saveToken(token: String): Boolean = repository.saveToken(token)
+
+    /**
+     * 账号密码登录（123 原生 sign_in 接口）。
+     * @return null = 登录成功；否则是可直接展示的错误文案
+     */
+    suspend fun login(account: String, password: String): String? =
+        repository.loginWithPassword(account, password)
 
     fun logout() {
         viewModelScope.launch { repository.logout() }

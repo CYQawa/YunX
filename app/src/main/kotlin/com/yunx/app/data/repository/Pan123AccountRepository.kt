@@ -23,12 +23,13 @@ import android.webkit.WebStorage
 import com.yunx.app.data.db.Pan123AccountDao
 import com.yunx.app.data.db.Pan123AccountEntity
 import com.yunx.app.data.network.Pan123Api
+import com.yunx.app.data.network.Pan123LoginResult
 import kotlinx.coroutines.flow.Flow
 
 /**
- * 123 云盘账号仓库：网页登录（yun.123pan.cn 的 localStorage authorToken）→ JWT 落库。
- * 凭证 = authorToken（Bearer JWT，与旧 sign_in 接口返回的 data.token 同源同形，约 90 天过期）；
- * token 失效时重新走网页登录（无 refresh 接口）。
+ * 123 云盘账号仓库：两条登录路径产出同一种凭证（authorToken，Bearer JWT，约 90 天过期）——
+ * ① 网页登录读 yun.123pan.cn 的 localStorage；② 账号密码打原生 sign_in 接口。
+ * 123 没有 refresh 接口，token 失效后只能重新登录（两条路任选）。
  */
 class Pan123AccountRepository(
     private val dao: Pan123AccountDao,
@@ -58,6 +59,34 @@ class Pan123AccountRepository(
         )
         return true
     }
+
+    /**
+     * 账号密码登录（123 原生接口 sign_in）。
+     *
+     * 与网页登录落库的是同一种凭证（authorToken，同源同形），区别只在「token 从哪来」：
+     * 这条不需要 WebView，也不用让用户在网页里手输一次。
+     *
+     * @return 成功返回 null；失败返回可直接展示给用户的原因（已做过错误映射，不回显服务端原文）
+     */
+    suspend fun loginWithPassword(account: String, password: String): String? =
+        when (val result = api.passwordLogin(account, password)) {
+            is Pan123LoginResult.Success -> {
+                // sign_in 只回 token，昵称要另取一次；取不到（网络抖动）不算登录失败——
+                // token 是刚签发的确实可用，昵称退化成账号名展示即可，别把到手的登录态扔掉
+                val nickname = api.fetchNickname(result.token).orEmpty()
+                dao.upsert(
+                    Pan123AccountEntity(
+                        id = "pan123",
+                        accessToken = result.token,
+                        account = account.trim(),
+                        nickname = nickname
+                    )
+                )
+                null
+            }
+
+            is Pan123LoginResult.Failure -> result.message
+        }
 
     /** 校验当前 token 是否仍有效（失败自动清库，下次重新登录） */
     suspend fun validate(): Boolean {
