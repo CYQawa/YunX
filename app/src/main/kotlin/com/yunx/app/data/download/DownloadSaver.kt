@@ -386,7 +386,10 @@ object DownloadSaver {
                     context.contentResolver.delete(uri, null, null) > 0
                 }
             } else {
-                File(savePath).delete()
+                val file = File(savePath)
+                // 目录分支：磁力/多文件种子落盘是**目录**（<下载目录>/<种子名>/...），
+                // File.delete() 对非空目录必然返回 false ⇒ 用户勾了「同时删除本地文件」却什么都没删掉
+                if (file.isDirectory) file.deleteRecursively() else file.delete()
             }
         }.onFailure {
             Log.e(TAG, "删除本地文件失败: ${it.message}")

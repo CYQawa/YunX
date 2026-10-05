@@ -1515,6 +1515,51 @@ JSON 那一层只负责把文本拍平成 `Map`。照抄别人的「直接测 JS
 
 ---
 
+### 3.38 磁力链接（BT）下载：内核本来就带 BT，别去重编内核
+
+**内核不需要任何改动**（这条先记住，省得白折腾一轮）：
+
+- Gopeed 的 `DownloaderConfig.Init()` **无条件**注册四个 fetcher manager：`hls / http / bt / ed2k`；
+  内核构建 workflow（`CYQawa/yunx_gopeed_build` 的 `build-Gopeed-AAR-Release.yml`）只加了
+  `-tags nosqlite`（存储相关，与协议无关）⇒ 现有 AAR 里 **BT/磁力/ed2k 全都在**；
+- 磁力走 `internal/protocol/bt`：`schema == "MAGNET"` → `torrent.TorrentSpecFromMagnetUri(req.URL)`，
+  DHT 默认开启（`DhtStartingNodes = dht.GlobalBootstrapAddrs`、`PeriodicallyAnnounceTorrentsToDht = true`），
+  磁力自带的 `tr=` tracker 也会进 `spec.Trackers`。任务用现有的 `POST /api/v1/tasks` 建即可。
+
+**四个必须知道的机制（照抄会踩）**：
+
+1. **建任务是立即返回的**：`doStart` 里是 `go func(){ … task.fetcher.Start() }()`，而 BT 的
+   `addTorrent` 会 `<-f.torrent.GotInfo()` **阻塞等元数据**（没有超时）。所以磁力没 peer 时不会卡住
+   `invoke`（60 秒超时）——任务照样建出来，状态一直是 `running` 但 `total=0`，直到元数据到手。
+2. **落盘结构是引擎定的**：BT 侧 `TorrentDirMaker` 返回 `opts.path`、`FilePathMaker` 返回
+   `filepath.Join(BestName, parts...)` ⇒ 多文件种子落成 `<下载目录>/<种子名>/...`，单文件种子落成
+   `<下载目录>/<种子名>`。**`opts.name` 不参与落盘**（bt 的 `AutoRename()` 返回 false）。
+   所以完成后必须读一次 `GET /api/v1/tasks/{id}` 的 `meta.res.name` 才是真路径——
+   本地记录里的 `fileName` 是元数据到手前自己起的显示名（`MagnetLink.displayName`）。
+3. **做种必须显式关，而且 `0/0` 不是关**：bt 默认 `seedKeep=false, seedRatio=1.0, seedTime=7200`
+   （下完还要传最长 2 小时）。`seedRatio=0 && seedTime=0 && seedKeep=false` ⇒ `doUpload` 里三个停止
+   条件**都不成立**，循环永不退出 = 永远做种；能立刻停的是 `seedTime=1`（秒）。见
+   `GopeedEngine.applyBtNoSeedConfig()`。
+4. **启动配置里的 `downloadConfig` 只在空库首次生效**：`Downloader.Setup()` 一旦从 bolt 里读到存过的
+   配置就**整个替换**掉启动配置（含我们下发的 bt 段）⇒ 关做种只能在引擎起来之后走
+   `GET /api/v1/config` → 改 `protocolConfig.bt` → `PUT /api/v1/config` 写回去
+   （GET 到的整份配置原样带回，避免把 `downloadDir`/`maxRunning` 一起冲掉）。
+
+**拦截而不是降级**：内置分片下载器是纯 HTTP Range 实现，喂它 `magnet:` 只会抛一个和「该去导入内核」
+毫无关系的协议错误。`DownloadManager.magnetBlockReason()` 在 `enqueue` 里就把磁力拦下来，
+落一条**带原因的失败任务**（没导入内核 / 没切到 Gopeed 两种文案分开）；`AddDownloadDialog`
+允许磁力留空文件名（真名要等元数据），`redownload` 对磁力跳过 HTTP Range 探测。
+
+**其它落点**：`data/download/MagnetLink.kt`（纯字符串解析，**不用 android.net.Uri**，理由见 §4 的
+org.json/Uri 空壳条目）、`DownloadPlatform.MAGNET`、`DownloadManager`（`startViaEngine` 对磁力不传
+连接数/名字、`completeEngineTask` 用 `taskDetail` 修路径并回写种子名）、`GopeedEngine.taskDetail()`、
+`DownloadTaskDao.updateFileName`、`DownloadSaver.delete` 支持目录（多文件种子是**目录**，
+`File.delete()` 对非空目录必然失败）、`DownloadScreen`（对话框提示 + 「正在解析磁力」状态文案）；
+回归测试 `app/src/test/kotlin/com/yunx/app/data/download/MagnetLinkTest.kt`。
+
+
+---
+
 ## 4. 验证
 
 
@@ -1552,7 +1597,7 @@ JSON 那一层只负责把文本拍平成 `Map`。照抄别人的「直接测 JS
 | `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
 | `animateColorAsState` 报 `Unresolved reference` | 包是 `androidx.compose.animation.animateColorAsState`（**不是** `androidx.compose.animation.core`）。判断依据：`.animation` 放的是**进出场/内容切换**（`AnimatedVisibility`/`AnimatedContent`/`fadeIn`/`fadeOut`/`slideInVertically`/`togetherWith`/`animateColorAsState`），`.animation.core` 放的是**时间曲线与动画值**（`tween`/`spring`/`Animatable`/`animateFloatAsState`/`animateDpAsState`）。写错包会连带一片 `Cannot infer type for this parameter`（`by` 委托推不出类型） |
 | Room 编译报 schema 错 | 检查 `version` 是否 +1、Migration 是否注册 |
-| 单测本地跑绿 / CI 红，或单测里 `JSONObject` 解析结果永远是 null | 工程开了 `unitTests.isReturnDefaultValues = true`，JVM 单测里 android.jar 的 `org.json` 是**空壳**（`JSONObject`/`JSONTokener` 只会返回 null，不抛异常）。**任何依赖 JSON 解析的断言都测不了**：把判定逻辑抽成不碰 JSON 的纯函数（收 `Map` / `String`）再测，JSON 那一层只留「把文本拍平成 Map」。已踩过一次（迅雷网页凭据解析） |
+| 单测本地跑绿 / CI 红，或单测里 `JSONObject` 解析结果永远是 null | 工程开了 `unitTests.isReturnDefaultValues = true`，JVM 单测里 android.jar 的 `org.json` 是**空壳**（`JSONObject`/`JSONTokener` 只会返回 null，不抛异常）。**任何依赖 JSON 解析的断言都测不了**：把判定逻辑抽成不碰 JSON 的纯函数（收 `Map` / `String`）再测，JSON 那一层只留「把文本拍平成 Map」。已踩过一次（迅雷网页凭据解析）。**同一个坑适用于 `android.net.Uri`**：它也是空壳（`getQueryParameter` 返回 null、`getPort` 返回 0），所以磁力链接解析写成纯字符串实现（`MagnetLink`），别用 Uri |
 | `Unclosed comment` + 一串「莫名其妙」的语法错（如 `Identifier expected`，行号还指着一段正常代码） | **注释正文里出现了 `/*`** —— Kotlin 的块注释**支持嵌套**，多出来的 `/*` 会一路吞到文件尾，报错行号与真正的位置无关（别顺着行号改）。典型来源：注释里写接口路径 `/api/v1/admin/**`、通配路径、正则片段。已踩过一次：公告客户端 KDoc 里的 `/api/v1/admin/**` 让整个文件被注释掉 ⇒ 搜本次改动文件注释内的 `/*` |
 
 ---

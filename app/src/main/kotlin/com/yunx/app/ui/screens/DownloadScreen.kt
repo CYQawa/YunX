@@ -106,6 +106,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.download.DownloadStats
+import com.yunx.app.data.download.MagnetLink
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.viewmodel.DownloadViewModel
 import com.yunx.app.ui.components.FileNameText
@@ -1039,6 +1040,14 @@ private fun copyToClipboard(context: Context, text: String) {
 }
 
 private fun taskStatusLine(task: DownloadTaskEntity): String {
+    // 磁力任务在引擎拿到元数据之前 totalSize 一直是 0：这时按进度显示会变成「下载中」却没有任何数字，
+    // 看起来像卡死。BT 的元数据要等 DHT/tracker 找到 peer，慢起来是分钟级，明说在解析更诚实。
+    if (task.status == DownloadTaskEntity.STATUS_DOWNLOADING &&
+        task.totalSize <= 0 &&
+        MagnetLink.isMagnet(task.url)
+    ) {
+        return "正在解析磁力（等待元数据，可能需要一两分钟）"
+    }
     val status = DownloadTaskEntity.statusText(task.status)
     return if (task.totalSize > 0) {
         // 显示值钳制到 total（防恢复竞态残留导致显示超总大小）
@@ -1154,6 +1163,7 @@ private fun AddDownloadDialog(
 ) {
     var url by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
+    val isMagnet = MagnetLink.isMagnet(url)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1176,17 +1186,32 @@ private fun AddDownloadDialog(
                     value = url,
                     onValueChange = {
                         url = it
-                        if (name.isBlank()) name = it.substringAfterLast('/').take(80)
+                        // 磁力链接的落盘名字由种子决定（引擎解析出元数据才知道），这里先拿 dn= 里的显示名占位
+                        if (name.isBlank()) {
+                            name = if (MagnetLink.isMagnet(it)) {
+                                MagnetLink.displayName(it)
+                            } else {
+                                it.substringAfterLast('/').take(80)
+                            }
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("文件直链 URL") },
+                    placeholder = { Text("文件直链 URL 或磁力链接") },
                     singleLine = true
                 )
+                if (isMagnet) {
+                    // 磁力只有 Gopeed 内核能下（内置分片下载器是纯 HTTP 实现），提前说清楚省得白等
+                    Text(
+                        text = "磁力链接需要 Gopeed 引擎：内核未导入或未切换时会直接提示，不会被当成普通链接去下载",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("保存文件名") },
+                    placeholder = { Text(if (isMagnet) "显示名称（可留空，完成后会用种子名覆盖）" else "保存文件名") },
                     singleLine = true
                 )
             }
@@ -1194,7 +1219,8 @@ private fun AddDownloadDialog(
         confirmButton = {
             Button(
                 onClick = { onConfirm(url.trim(), name.trim()) },
-                enabled = url.isNotBlank() && name.isNotBlank()
+                // 磁力允许留空文件名：真正的名字要等引擎拿到元数据（DownloadManager 会自己兜底）
+                enabled = url.isNotBlank() && (name.isNotBlank() || isMagnet)
             ) { Text("开始下载") }
         },
         dismissButton = {

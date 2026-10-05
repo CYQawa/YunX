@@ -355,6 +355,9 @@ object GopeedEngine {
             port = Libgopeed.start(cfg).toInt()
             _state.value = State.RUNNING
             Log.d(TAG, "引擎已启动：port=$port")
+            // 关做种是「锦上添花」：失败只记日志，绝不让引擎启动失败（默认配置最多多做种 2 小时）
+            runCatching { applyBtNoSeedConfig() }
+                .onFailure { Log.w(TAG, "下发 BT 不做种配置失败：${it.message}") }
             return port
         } catch (e: Throwable) {
             lastError = e.message ?: e.toString()
@@ -423,6 +426,35 @@ object GopeedEngine {
         return json
     }
 
+    /**
+     * 关掉 BT 做种（每次引擎启动成功后调一次）。
+     *
+     * 为什么必须显式关：Gopeed 的 bt 默认配置是 `seedKeep=false, seedRatio=1.0, seedTime=7200`
+     * —— 下载完还会继续上传，直到分享率达到 1.0 或满 2 小时。手机上（尤其流量）这不可接受。
+     *
+     * ★ 两个坑，改这里之前先看：
+     *   ① `seedRatio=0 && seedTime=0 && seedKeep=false` **不是「关」**：doUpload 里三个停止条件
+     *      都不成立 ⇒ 循环永远不退出，等于**永远做种**。真正能立刻停的是 `seedTime=1`（秒）。
+     *   ② 启动配置里的 `downloadConfig` 只在**空库首次**生效：`Downloader.Setup()` 一旦读到 bolt
+     *      里存过的配置，就整个替换掉启动配置（含我们下发的 bt 段）⇒ 必须在启动后走 REST 写回去。
+     *
+     * 只改做种三个字段、其余字段原样带回：`trackers`/`listenPort` 保留库里已有的值
+     * （GET 到的整份配置原样 PUT 回去，避免把 downloadDir / maxRunning 等一起冲掉）。
+     */
+    fun applyBtNoSeedConfig() {
+        val cfg = invoke("GET", "/api/v1/config").optJSONObject("data")
+            ?: throw IllegalStateException("引擎没有返回配置")
+        val protocols = cfg.optJSONObject("protocolConfig") ?: JSONObject()
+        val bt = protocols.optJSONObject("bt") ?: JSONObject()
+        bt.put("seedKeep", false)
+        bt.put("seedRatio", 0)
+        bt.put("seedTime", 1)
+        protocols.put("bt", bt)
+        cfg.put("protocolConfig", protocols)
+        invoke("PUT", "/api/v1/config", null, cfg.toString())
+        Log.d(TAG, "已下发 BT 不做种配置：$bt")
+    }
+
     /** 列表/详情里的任务对象转成 UI 用的纯数据（字段名对照 Gopeed 的 Task/TaskRuntimeStatus） */
     data class TaskView(
         val id: String,
@@ -444,6 +476,39 @@ object GopeedEngine {
             downloaded = data.optLong("downloaded"),
             total = data.optLong("total"),
             speed = data.optLong("speed")
+        )
+    }
+
+    /**
+     * 引擎任务详情（GET /api/v1/tasks/{id} → `meta.res`）。
+     *
+     * `/status` 只给进度，**不给名字**；而磁力（BT）任务的真实名字是引擎解析出元数据之后才有的，
+     * 落盘位置也随之下发（见 [TaskDetail.folder] 的说明）。所以完成磁力任务时必须补读一次详情。
+     */
+    data class TaskDetail(
+        /** 资源名：磁力就是种子名（单文件种子=文件名，多文件种子=种子的顶级目录名） */
+        val name: String,
+        /** 文件个数（多文件种子 > 1） */
+        val fileCount: Int,
+        /** 落盘是**目录**（`<下载目录>/<种子名>/...`）还是单个文件（`<下载目录>/<种子名>`） */
+        val folder: Boolean
+    )
+
+    fun taskDetail(id: String): TaskDetail {
+        val data = invoke("GET", "/api/v1/tasks/$id").optJSONObject("data")
+            ?: throw IllegalStateException("引擎没有返回任务详情")
+        val res = data.optJSONObject("meta")?.optJSONObject("res")
+        val files = res?.optJSONArray("files")
+        val count = files?.length() ?: 0
+        // 文件带 path ⇒ 种子有自己的根目录（BT 侧 FilePathMaker 返回「种子名/子路径」）；
+        // 只有单个文件且 path 为空时，落盘才是「下载目录/文件名」这一个文件
+        val hasSubPath = (0 until count).any {
+            files?.optJSONObject(it)?.optString("path").orEmpty().isNotBlank()
+        }
+        return TaskDetail(
+            name = res?.optString("name").orEmpty().ifBlank { data.optString("name") },
+            fileCount = count,
+            folder = hasSubPath || count > 1
         )
     }
 

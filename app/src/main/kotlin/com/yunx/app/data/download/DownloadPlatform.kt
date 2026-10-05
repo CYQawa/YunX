@@ -36,6 +36,8 @@ object DownloadPlatform {
     const val ILANZOU = "ilanzou"
     /** 蓝奏云 */
     const val LANZOU = "lanzou"
+    /** 磁力链接（BT）：只能交给 Gopeed 引擎，内置分片下载器不支持 */
+    const val MAGNET = "magnet"
     /** GitHub 仓库/Release 下载 */
     const val GITHUB = "github"
     /** 通用/未知来源（手动添加、应用更新下载等） */
