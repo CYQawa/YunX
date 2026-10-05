@@ -18,10 +18,13 @@
 
 package com.yunx.app.data.repository
 
+import android.webkit.CookieManager
+import android.webkit.WebStorage
 import com.yunx.app.data.db.XunleiAccountDao
 import com.yunx.app.data.db.XunleiAccountEntity
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.XunleiLoginStep
+import com.yunx.app.data.network.XunleiWebCredential
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -107,7 +110,43 @@ class XunleiAccountRepository(
         dao.upsert(acc.copy(accessToken = accessToken, refreshToken = refreshToken))
     }
 
+    /**
+     * 网页登录：解析 pan.xunlei.com localStorage 里的凭据，校验可用后落库。
+     *
+     * 与密码/短信登录的区别只有两点：token 由网页签发，以及刷新时必须换用网页 OAuth 客户端
+     * （因此记下 [XunleiWebCredential.AUTH_TYPE]）。返回值直接决定登录页的自动检测是「登录成功」
+     * 还是「继续等」——校验不通过（含网络异常）一律 false，绝不把中间态当登录成功。
+     */
+    suspend fun saveWebCredential(raw: String): Boolean {
+        val tokens = XunleiWebCredential.parse(raw) ?: return false
+        // 网页凭据不带设备指纹，取不到时用本机指纹兜底（云盘接口需要一个 X-Device-Id）
+        val deviceId = tokens.deviceId.ifBlank { XunleiApi.newDeviceId() }
+        if (!api.verifyAccessToken(tokens.accessToken, deviceId, tokens.captchaToken)) return false
+        dao.upsert(
+            XunleiAccountEntity(
+                id = "xunlei",
+                accessToken = tokens.accessToken,
+                refreshToken = tokens.refreshToken,
+                deviceId = deviceId,
+                captchaToken = tokens.captchaToken,
+                nickname = tokens.nickname.ifBlank { "迅雷用户" },
+                authType = XunleiWebCredential.AUTH_TYPE
+            )
+        )
+        return true
+    }
+
+    /**
+     * 退出登录：清库 + 清理网页登录态（Cookie 与 localStorage）。
+     * 网页登录态留在 WebView 里的话，用户再次打开网页登录页时残留凭据会被自动检测直接登回旧账号，
+     * 「退出登录」就形同虚设。Cookie/存储的清理方法须在有 Looper 的线程调用——本方法由 viewModelScope（Main）执行。
+     */
     suspend fun logout() {
+        runCatching {
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+        }
+        runCatching { WebStorage.getInstance().deleteAllData() }
         dao.clear()
     }
 }

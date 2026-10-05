@@ -28,6 +28,7 @@ import com.yunx.app.data.db.XunleiAccountEntity
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.XunleiLoginStep
 import com.yunx.app.data.repository.XunleiAccountRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -59,6 +60,10 @@ class XunleiAccountViewModel(
     var smsSent by androidx.compose.runtime.mutableStateOf(false)
         private set
 
+    /** 短信发送在途（按钮转圈 + 防止连点造成多条短信） */
+    var sendingSms by androidx.compose.runtime.mutableStateOf(false)
+        private set
+
     /** 最近一次密码登录凭据（WebView 验证成功后自动重试登录用，仅内存，不持久化） */
     private var lastUsername = ""
     private var lastPassword = ""
@@ -75,34 +80,50 @@ class XunleiAccountViewModel(
             loginError = null
             loginStep = null
             smsSent = false
-            val step = repository.loginWithPassword(username.trim(), password)
-            if (step.needSms) {
-                // 触发安全验证：优先用 reviewurl 里的 creditkey（风控响应自带），否则走自有 sendSms
-                val reviewMap = XunleiApi.parseReviewUrl(step.reviewUrl)
-                val creditKey = reviewMap["creditkey"].orEmpty()
-                if (creditKey.isNotBlank()) {
-                    // 直接用响应里的 creditkey/token 进入短信输入步骤（token 可能为空，sendSms 会补）；
-                    // 进入界面不会自动发送验证码，smsSent 保持 false，UI 显示「发送验证码」
-                    loginStep = step.copy(
-                        smsCreditKey = creditKey,
-                        smsToken = reviewMap["token"].orEmpty()
-                    )
-                } else {
-                    val smsStep = repository.sendSms(username.trim())
-                    if (smsStep.smsCreditKey.isNotBlank()) {
-                        smsSent = true
-                        loginStep = smsStep
+            // 登录接口不吞异常（网络断了会抛 IOException）：这里兜住，把它变成一句提示，
+            // 而不是让协程把 App 打崩
+            val step = try {
+                repository.loginWithPassword(username.trim(), password)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loginError = "登录失败，请检查网络后重试"
+                return@launch
+            }
+            try {
+                if (step.needSms) {
+                    // 触发安全验证：优先用 reviewurl 里的 creditkey（风控响应自带），否则走自有 sendSms
+                    val reviewMap = XunleiApi.parseReviewUrl(step.reviewUrl)
+                    val creditKey = reviewMap["creditkey"].orEmpty()
+                    if (creditKey.isNotBlank()) {
+                        // 直接用响应里的 creditkey/token 进入短信输入步骤（token 可能为空，sendSms 会补）；
+                        // 进入界面不会自动发送验证码，smsSent 保持 false，UI 显示「发送验证码」
+                        loginStep = step.copy(
+                            smsCreditKey = creditKey,
+                            smsToken = reviewMap["token"].orEmpty()
+                        )
                     } else {
-                        // 不再丢外部链接：给明确失败提示 + 让用户重试
-                        loginError = smsStep.message.ifBlank { "短信发送失败，请重试或检查网络" }
-                        loginStep = step.copy(message = "短信发送失败")
+                        val smsStep = repository.sendSms(username.trim())
+                        if (smsStep.smsCreditKey.isNotBlank()) {
+                            smsSent = true
+                            loginStep = smsStep
+                        } else {
+                            // 不再丢外部链接：给明确失败提示 + 让用户重试
+                            loginError = smsStep.message.ifBlank { "短信发送失败，请重试或检查网络" }
+                            loginStep = step.copy(message = "短信发送失败")
+                        }
                     }
+                } else if (step.sessionKey.isNotBlank() && step.sessionId.isNotBlank()) {
+                    val ok = repository.finishLogin(step, username.trim())
+                    if (!ok) loginError = "登录失败，无法换取凭证"
+                } else {
+                    loginError = step.message.ifBlank { "登录失败，请检查账号密码" }
                 }
-            } else if (step.sessionKey.isNotBlank() && step.sessionId.isNotBlank()) {
-                val ok = repository.finishLogin(step, username.trim())
-                if (!ok) loginError = "登录失败，无法换取凭证"
-            } else {
-                loginError = step.message.ifBlank { "登录失败，请检查账号密码" }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loginError = "登录失败，请检查网络后重试"
+                loginStep = step.copy(message = "网络异常")
             }
         }
     }
@@ -114,14 +135,25 @@ class XunleiAccountViewModel(
         }
     }
 
-    /** 发送短信验证码（密码登录触发验证后） */
+    /** 发送短信验证码（密码登录触发验证后 / 短信登录第一步，两条流程共用） */
     fun sendSms(mobile: String) {
+        if (sendingSms) return
         viewModelScope.launch {
             loginError = null
-            val step = repository.sendSms(mobile.trim())
-            if (step.smsCreditKey.isNotBlank()) smsSent = true
-            loginStep = step
-            if (step.smsCreditKey.isBlank()) loginError = step.message
+            sendingSms = true
+            try {
+                val step = repository.sendSms(mobile.trim())
+                if (step.smsCreditKey.isNotBlank()) smsSent = true
+                loginStep = step
+                if (step.smsCreditKey.isBlank()) loginError = step.message
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loginError = "短信发送失败，请检查网络后重试"
+            } finally {
+                // 必须放 finally：中途抛异常时按钮上的转圈要能停，否则按钮永远点不动
+                sendingSms = false
+            }
         }
     }
 
@@ -129,9 +161,29 @@ class XunleiAccountViewModel(
     fun loginWithSms(mobile: String, code: String, creditKey: String, smsToken: String) {
         viewModelScope.launch {
             loginError = null
-            val ok = repository.loginWithSms(mobile.trim(), code.trim(), creditKey, smsToken)
+            val ok = try {
+                repository.loginWithSms(mobile.trim(), code.trim(), creditKey, smsToken)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loginError = "登录失败，请检查网络后重试"
+                return@launch
+            }
             if (!ok) loginError = "验证码校验失败"
         }
+    }
+
+    /**
+     * 网页登录（pan.xunlei.com）自动检测/手动保存共用入口：解析 + 校验 + 落库。
+     * 返回 false 表示「还没有真正登录」，登录页据此继续轮询而不是报错。
+     */
+    suspend fun saveWebCredential(raw: String): Boolean = repository.saveWebCredential(raw)
+
+    /** 切换登录方式时清掉上一步的中间态（旧 creditkey/token 不能带到新流程里提交） */
+    fun resetLoginStep() {
+        loginStep = null
+        smsSent = false
+        loginError = null
     }
 
     fun logout() {

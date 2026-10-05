@@ -33,5 +33,11 @@ data class XunleiAccountEntity(
     val deviceId: String = "",
     val captchaToken: String = "",
     val nickname: String = "",
+    /**
+     * 登录方式：空串 = App 通道（账号密码 / 短信，用 App OAuth 客户端刷新）；
+     * [com.yunx.app.data.network.XunleiWebCredential.AUTH_TYPE] = 网页登录，
+     * 刷新必须换成网页 OAuth 客户端（否则刷新必失败，用户会看到「刚登录就过期」）。
+     */
+    val authType: String = "",
     val updatedAt: Long = System.currentTimeMillis()
 )

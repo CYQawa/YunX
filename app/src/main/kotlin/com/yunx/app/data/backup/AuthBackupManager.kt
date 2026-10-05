@@ -112,6 +112,9 @@ class AuthBackupManager(
                     .put("deviceId", a.deviceId)
                     .put("captchaToken", a.captchaToken)
                     .put("nickname", a.nickname)
+                    // 登录方式必须一起备份：网页登录的 token 只能用网页 OAuth 客户端刷新，
+                    // 丢了它恢复后一刷新就失效（老备份没有这个字段，导入时按空串=App 通道处理）
+                    .put("authType", a.authType)
                     .put("updatedAt", a.updatedAt)
             )
         }
@@ -225,6 +228,7 @@ class AuthBackupManager(
                                 deviceId = obj.optString("deviceId"),
                                 captchaToken = obj.optString("captchaToken"),
                                 nickname = obj.optString("nickname"),
+                                authType = obj.optString("authType"),
                                 updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                             )
                         ); count++

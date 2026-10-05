@@ -147,6 +147,7 @@ import com.yunx.app.ui.login.QuarkLoginScreen
 import com.yunx.app.ui.login.UCLoginScreen
 import com.yunx.app.ui.login.XunleiLoginScreen
 import com.yunx.app.ui.login.XunleiVerifyWebViewScreen
+import com.yunx.app.ui.login.XunleiWebLoginScreen
 import com.yunx.app.ui.navigation.MainTab
 import com.yunx.app.ui.screens.AboutScreen
 import com.yunx.app.ui.screens.AnnouncementPopupDialog
@@ -232,6 +233,7 @@ fun MainScreen() {
     var showQuarkLogin by rememberSaveable { mutableStateOf(false) }
     var showUCLogin by rememberSaveable { mutableStateOf(false) }
     var showXunleiLogin by rememberSaveable { mutableStateOf(false) }
+    var showXunleiWebLogin by rememberSaveable { mutableStateOf(false) }
     var showXunleiVerify by rememberSaveable { mutableStateOf(false) }
     var xunleiVerifyUrl by rememberSaveable { mutableStateOf("") }
     var xunleiVerifyDeviceId by rememberSaveable { mutableStateOf("") }
@@ -529,7 +531,7 @@ fun MainScreen() {
     xunleiApi.refreshTokenProvider = { deviceId ->
         val acc = xunleiRepository.getAccount()
         if (acc == null || acc.refreshToken.isBlank()) null
-        else xunleiApi.refreshToken(acc.refreshToken, deviceId)?.also { (at, nrt) ->
+        else xunleiApi.refreshToken(acc.refreshToken, deviceId, acc.authType)?.also { (at, nrt) ->
             xunleiRepository.updateTokens(at, nrt)
         }
     }
@@ -634,7 +636,7 @@ fun MainScreen() {
             refreshProvider = {
                 val acc = xunleiRepository.getAccount()
                 if (acc == null || acc.refreshToken.isBlank()) null
-                else xunleiApi.refreshToken(acc.refreshToken, acc.deviceId)?.also { (at, nrt) ->
+                else xunleiApi.refreshToken(acc.refreshToken, acc.deviceId, acc.authType)?.also { (at, nrt) ->
                     xunleiRepository.updateTokens(at, nrt)
                 }
             }
@@ -767,7 +769,7 @@ fun MainScreen() {
         return
     }
 
-    // 迅雷登录页：全屏覆盖（账号+密码，可能触发短信验证）
+    // 迅雷登录页：全屏覆盖（账号密码 / 短信登录 / 网页登录三个入口）
     if (showXunleiLogin) {
         XunleiLoginScreen(
             viewModel = xunleiViewModel,
@@ -779,7 +781,22 @@ fun MainScreen() {
                 xunleiVerifyDeviceId = deviceId
                 showXunleiLogin = false
                 showXunleiVerify = true
+            },
+            onWebLogin = {
+                // 网页登录：另一套接口，不受 App 通道风控影响，收不到短信时的兜底
+                showXunleiLogin = false
+                showXunleiWebLogin = true
             }
+        )
+        return
+    }
+
+    // 迅雷网页登录页：全屏覆盖（WebView 打开 pan.xunlei.com，提取 localStorage 的网页凭据）
+    if (showXunleiWebLogin) {
+        XunleiWebLoginScreen(
+            viewModel = xunleiViewModel,
+            onBack = { showXunleiWebLogin = false },
+            onSaved = { showXunleiWebLogin = false }
         )
         return
     }
