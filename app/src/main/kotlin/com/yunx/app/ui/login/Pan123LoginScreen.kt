@@ -195,15 +195,19 @@ fun Pan123LoginScreen(
                             onClick = {
                                 scope.launch {
                                     isSaving = true
-                                    // 提取网页 localStorage 的 authorToken 作为登录凭证
-                                    val token = webView?.evaluateJsEncoded(READ_AUTHOR_TOKEN_JS).orEmpty()
-                                    val saved = if (token.isBlank()) false else viewModel.saveToken(token)
-                                    isSaving = false
-                                    if (saved) {
-                                        SnackbarController.show("登录成功")
-                                        onSaved()
-                                    } else {
-                                        SnackbarController.show("未检测到登录态，请先完成登录")
+                                    try {
+                                        // 提取网页 localStorage 的 authorToken 作为登录凭证
+                                        val token = webView?.evaluateJsEncoded(READ_AUTHOR_TOKEN_JS).orEmpty()
+                                        val saved = if (token.isBlank()) false else viewModel.saveToken(token)
+                                        if (saved) {
+                                            SnackbarController.show("登录成功")
+                                            onSaved()
+                                        } else {
+                                            SnackbarController.show("未检测到登录态，请先完成登录")
+                                        }
+                                    } finally {
+                                        // 必须 finally：抛异常时按钮要能恢复可点
+                                        isSaving = false
                                     }
                                 }
                             },
@@ -270,13 +274,16 @@ fun Pan123LoginScreen(
                         scope.launch {
                             loginError = null
                             isLoggingIn = true
-                            val error = viewModel.login(account, password)
-                            isLoggingIn = false
-                            if (error == null) {
-                                SnackbarController.show("登录成功")
-                                onSaved()
-                            } else {
-                                loginError = error
+                            try {
+                                val error = viewModel.login(account, password)
+                                if (error == null) {
+                                    SnackbarController.show("登录成功")
+                                    onSaved()
+                                } else {
+                                    loginError = error
+                                }
+                            } finally {
+                                isLoggingIn = false
                             }
                         }
                     }
@@ -350,14 +357,17 @@ fun Pan123LoginScreen(
                     onClick = {
                         scope.launch {
                             isSavingManual = true
-                            val saved = viewModel.saveToken(tokenInput.trim())
-                            isSavingManual = false
-                            if (saved) {
-                                SnackbarController.show("登录成功")
-                                showTokenDialog = false
-                                onSaved()
-                            } else {
-                                SnackbarController.show("Token 无效，请检查是否为完整的 authorToken")
+                            try {
+                                val saved = viewModel.saveToken(tokenInput.trim())
+                                if (saved) {
+                                    SnackbarController.show("登录成功")
+                                    showTokenDialog = false
+                                    onSaved()
+                                } else {
+                                    SnackbarController.show("Token 无效，请检查是否为完整的 authorToken")
+                                }
+                            } finally {
+                                isSavingManual = false
                             }
                         }
                     },

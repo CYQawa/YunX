@@ -105,19 +105,6 @@ object XunleiWebCredential {
         }catch(e){return ''}})()
     """.trimIndent()
 
-    /** 清空迅雷网页登录态（退出登录时用；仅删本平台相关的键，不动其它站点数据） */
-    val CLEAR_SCRIPT: String = """
-        (function(){try{
-          var prefix='$STORAGE_KEY';
-          var keys=Object.keys(localStorage);
-          for(var i=0;i<keys.length;i++){
-            var k=keys[i];
-            if(k===prefix||k.indexOf(prefix+'@')===0||k==='current_sub'||k==='$CAPTCHA_KEY')localStorage.removeItem(k);
-          }
-          return '1';
-        }catch(e){return '0'}})()
-    """.trimIndent()
-
     /** WebView 是否允许停留在该 URL：仅 https 的 xunlei.com 及其子域、443 端口（about:blank 放行） */
     fun isTrustedUrl(url: String?): Boolean {
         val value = url?.trim().orEmpty()
@@ -125,8 +112,12 @@ object XunleiWebCredential {
         val uri = runCatching { android.net.Uri.parse(value) }.getOrNull() ?: return false
         if (!uri.scheme.equals("https", ignoreCase = true)) return false
         if (uri.userInfo != null) return false
-        // Uri 对已知 scheme 会补默认端口，所以显式比较 443 就够了（:444 之类的会被挡掉）
-        if (uri.port != 443) return false
+        // ⚠️ android.net.Uri 的 port 在 URL **没写端口**时返回 -1，**不会**补 scheme 默认端口
+        // （和 java.net.URL.getDefaultPort() 不是一回事）。所以这里必须把 -1 当成 443 放行，
+        // 否则 `https://pan.xunlei.com/` 这种最常见的地址会被判成不可信 ⇒ WebView 拦掉所有跳转，
+        // 网页登录一步都走不动。
+        val port = uri.port
+        if (port != -1 && port != 443) return false
         val host = uri.host?.lowercase().orEmpty()
         return TRUSTED_HOSTS.any { host == it || host.endsWith(".$it") }
     }
@@ -189,9 +180,9 @@ object XunleiWebCredential {
         )
     }
 
-    /** 去掉 `Bearer ` 前缀与首尾空白（手动粘贴 token 时的常见形态） */
+    /** 去掉 `Bearer ` 前缀与首尾空白（手动粘贴 token 时的常见形态；**必须先 trim**，否则前缀匹配不上） */
     private fun stripBearer(value: String): String =
-        value.replace(Regex("^Bearer\\s+", RegexOption.IGNORE_CASE), "").trim()
+        value.trim().replace(Regex("^Bearer\\s+", RegexOption.IGNORE_CASE), "").trim()
 
     /** 把 JSONObject 拍平成「键 → 字符串值」；非字符串/数字的值直接丢掉（token 一定是字符串） */
     private fun toFieldMap(data: JSONObject): Map<String, String> {

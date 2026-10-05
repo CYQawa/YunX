@@ -34,6 +34,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** 短信重发冷却时长：与官方 App 一致，避免连点把短信打爆 */
+private const val SMS_RESEND_COOLDOWN_MS = 60_000L
+
 /**
  * 迅雷账号 ViewModel：账号+密码登录（可能触发短信验证码）→ 换 token 落库。
  */
@@ -62,6 +65,15 @@ class XunleiAccountViewModel(
 
     /** 短信发送在途（按钮转圈 + 防止连点造成多条短信） */
     var sendingSms by androidx.compose.runtime.mutableStateOf(false)
+        private set
+
+    /**
+     * 验证码重发冷却截止时刻（毫秒时间戳；0 = 可立即发送）。
+     * 放在 ViewModel 而不是登录页的局部状态里，有两个原因：
+     * 1. 只有**真的发出去了**才开始计时（发送失败或请求被丢弃时不该让用户白等一分钟）；
+     * 2. 用的是墙上时钟，切 Tab / 重进页面都不会把倒计时弄丢或算错。
+     */
+    var smsCooldownUntil by androidx.compose.runtime.mutableStateOf(0L)
         private set
 
     /** 最近一次密码登录凭据（WebView 验证成功后自动重试登录用，仅内存，不持久化） */
@@ -143,7 +155,11 @@ class XunleiAccountViewModel(
             sendingSms = true
             try {
                 val step = repository.sendSms(mobile.trim())
-                if (step.smsCreditKey.isNotBlank()) smsSent = true
+                if (step.smsCreditKey.isNotBlank()) {
+                    smsSent = true
+                    // 冷却从「服务端确认发出」开始算，失败则允许立刻重试
+                    smsCooldownUntil = System.currentTimeMillis() + SMS_RESEND_COOLDOWN_MS
+                }
                 loginStep = step
                 if (step.smsCreditKey.isBlank()) loginError = step.message
             } catch (e: CancellationException) {

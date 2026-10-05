@@ -49,9 +49,6 @@ import androidx.compose.ui.unit.dp
 import com.yunx.app.ui.viewmodel.XunleiAccountViewModel
 import kotlinx.coroutines.delay
 
-/** 短信验证码重发冷却秒数（与官方 App 一致，防止连点把短信打爆） */
-private const val SMS_RESEND_COOLDOWN_SECONDS = 60
-
 /** 登录方式：0=账号密码（可能触发安全验证）、1=短信登录（不经过密码）。网页登录是独立页面。 */
 private const val MODE_PASSWORD = 0
 private const val MODE_SMS = 1
@@ -89,7 +86,22 @@ fun XunleiLoginScreen(
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var smsMobile by rememberSaveable { mutableStateOf("") }
     var smsCode by rememberSaveable { mutableStateOf("") }
-    var resendCooldown by rememberSaveable { mutableIntStateOf(0) }
+
+    // 重发倒计时：ViewModel 记的是「冷却截止时刻」（只有真的发出去才开始算），这里只负责每秒刷新显示
+    var resendCooldown by remember { mutableIntStateOf(0) }
+    val cooldownUntil = viewModel.smsCooldownUntil
+    LaunchedEffect(cooldownUntil) {
+        while (true) {
+            val left = ((cooldownUntil - System.currentTimeMillis()) / 1000).toInt()
+            resendCooldown = left.coerceAtLeast(0)
+            if (left <= 0) break
+            delay(1_000)
+        }
+    }
+
+    // 进入页面清掉上一次的中间态：登录页可能在「安全验证」那一步被关掉，重开时那个 creditkey
+    // 早已失效，直接渲染成验证步骤只会让用户提交必然失败的验证码
+    LaunchedEffect(Unit) { viewModel.resetLoginStep() }
 
     // 登录错误提示
     LaunchedEffect(error) {
@@ -101,13 +113,6 @@ fun XunleiLoginScreen(
     // 登录成功后自动关闭登录页（短信/密码/网页任一方式成功，账号非空即关闭）
     LaunchedEffect(account) {
         if (account != null) onSaved()
-    }
-    // 重发冷却倒计时
-    LaunchedEffect(resendCooldown) {
-        if (resendCooldown > 0) {
-            delay(1_000)
-            resendCooldown -= 1
-        }
     }
 
     BackHandler { onBack() }
@@ -213,10 +218,7 @@ fun XunleiLoginScreen(
                         sent = smsSent,
                         sending = sendingSms,
                         cooldown = resendCooldown,
-                        onSend = {
-                            viewModel.sendSms(username)
-                            resendCooldown = SMS_RESEND_COOLDOWN_SECONDS
-                        }
+                        onSend = { viewModel.sendSms(username) }
                     )
                     Text(
                         text = "若始终收不到短信，请确认手机号正确，或稍后重试 / 切换网络",
@@ -290,10 +292,7 @@ fun XunleiLoginScreen(
                         sending = sendingSms,
                         cooldown = resendCooldown,
                         enabled = smsMobile.isNotBlank(),
-                        onSend = {
-                            viewModel.sendSms(smsMobile)
-                            resendCooldown = SMS_RESEND_COOLDOWN_SECONDS
-                        }
+                        onSend = { viewModel.sendSms(smsMobile) }
                     )
                     Text(
                         text = "短信需由你主动发送并填写验证码；未注册的手机号会按迅雷官方流程处理",

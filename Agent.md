@@ -1456,7 +1456,16 @@ android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently in
 
 - 老版本只有「密码登录触发风控后」才会走到短信（`loginStep.needSms`）；现在短信是**一等入口**，
   没设过密码/忘记密码/被风控挡住都不用再绕。两条流程共用 `sendSms` / `loginWithSms`，
-  验证码重发有 **60 秒冷却**（`SMS_RESEND_COOLDOWN_SECONDS`），别去掉——连点就是连发短信。
+  验证码重发冷却 60 秒（`SMS_RESEND_COOLDOWN_MS`，**记在 ViewModel 的墙上时钟里**）：
+  只有服务端确认发出才开始计时（发送失败要能立刻重试），切 Tab / 重进页面也不会把倒计时算丢。
+- 进登录页要 `resetLoginStep()`：登录页可能在「安全验证」那一步被关掉，重开时那个 creditkey 早已失效，
+  直接渲染成验证步骤只会让用户提交必然失败的验证码。
+- ⚠️ **`android.net.Uri.getPort()` 在 URL 没写端口时返回 `-1`，不会补 scheme 默认端口**
+  （与 `java.net.URL.getDefaultPort()` 不是一回事）。域名白名单写成 `if (uri.port != 443) return false`
+  会把 `https://pan.xunlei.com/` 这种最常见的地址判成不可信 ⇒ `shouldOverrideUrlLoading` 拦掉
+  **所有**跳转，网页登录一步都走不动。正确写法：`port != -1 && port != 443` 才拒绝。
+- 剥 `Bearer ` 前缀必须**先 trim 再匹配**（`value.trim().replace(Regex("^Bearer\\s+", ...), "")`）：
+  先跑正则的话 `"  Bearer xxx  "` 匹配不上，剩下的空格又过不了 token 字符集校验，粘贴兜底直接失效。
 - 切换登录方式必须调 `XunleiAccountViewModel.resetLoginStep()`：旧的 `creditkey/token` 属于上一条流程，
   带过去提交只会报「验证已失效」。
 - **网页登录的 token 与 App token 不是同一套 OAuth 客户端**，这是最容易踩的一条：

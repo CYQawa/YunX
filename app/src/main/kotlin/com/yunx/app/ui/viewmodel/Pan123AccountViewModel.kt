@@ -23,6 +23,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.db.Pan123AccountEntity
 import com.yunx.app.data.repository.Pan123AccountRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -51,7 +52,14 @@ class Pan123AccountViewModel(
      * @return null = 登录成功；否则是可直接展示的错误文案
      */
     suspend fun login(account: String, password: String): String? =
-        repository.loginWithPassword(account, password)
+        try {
+            repository.loginWithPassword(account, password)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 登录接口自身已经把网络错误映射成文案了，这里是最后一道兜底（写库等非网络异常）
+            "登录失败，请稍后重试"
+        }
 
     fun logout() {
         viewModelScope.launch { repository.logout() }

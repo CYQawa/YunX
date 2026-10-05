@@ -184,15 +184,19 @@ fun XunleiWebLoginScreen(
                         onClick = {
                             scope.launch {
                                 isSaving = true
-                                // 从网页 localStorage 提取登录凭据并校验落库
-                                val raw = webView.evaluateJsEncoded(XunleiWebCredential.READ_SCRIPT)
-                                val saved = raw.isNotBlank() && viewModel.saveWebCredential(raw)
-                                isSaving = false
-                                if (saved) {
-                                    SnackbarController.show("登录成功")
-                                    onSaved()
-                                } else {
-                                    SnackbarController.show("未检测到登录态，请先在网页中完成登录")
+                                try {
+                                    // 从网页 localStorage 提取登录凭据并校验落库
+                                    val raw = webView.evaluateJsEncoded(XunleiWebCredential.READ_SCRIPT)
+                                    val saved = raw.isNotBlank() && viewModel.saveWebCredential(raw)
+                                    if (saved) {
+                                        SnackbarController.show("登录成功")
+                                        onSaved()
+                                    } else {
+                                        SnackbarController.show("未检测到登录态，请先在网页中完成登录")
+                                    }
+                                } finally {
+                                    // 必须 finally：抛异常时「保存」按钮要能恢复可点，否则这个页面就废了
+                                    isSaving = false
                                 }
                             }
                         },
@@ -281,14 +285,17 @@ fun XunleiWebLoginScreen(
                     onClick = {
                         scope.launch {
                             isSavingManual = true
-                            val saved = viewModel.saveWebCredential(pasteInput.trim())
-                            isSavingManual = false
-                            if (saved) {
-                                SnackbarController.show("登录成功")
-                                showPasteDialog = false
-                                onSaved()
-                            } else {
-                                SnackbarController.show("凭据无效或已过期，请确认复制的是完整内容")
+                            try {
+                                val saved = viewModel.saveWebCredential(pasteInput.trim())
+                                if (saved) {
+                                    SnackbarController.show("登录成功")
+                                    showPasteDialog = false
+                                    onSaved()
+                                } else {
+                                    SnackbarController.show("凭据无效或已过期，请确认复制的是完整内容")
+                                }
+                            } finally {
+                                isSavingManual = false
                             }
                         }
                     },
