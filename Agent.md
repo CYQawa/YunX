@@ -1621,6 +1621,64 @@ org.json/Uri 空壳条目）、`DownloadPlatform.MAGNET`、`DownloadManager`（`
 
 ---
 
+### 3.40 诊断模式（分模块日志）与「导出日志为什么不再按 PID 过滤」
+
+**① 日志导出换成 uid 过滤（改动过，别改回 pid）**
+
+`LogExporter` 以前是 `logcat -d -v time --pid=${Process.myPid()}`。pid 每次启动/闪退重启都会变，
+用户「复现闪退 → 重开 App → 导出日志」时，最该看的那段崩溃日志**正好被过滤掉了**——这就是
+「旧日志找不到 / 导不全」的根因。现在用 `--uid=${Process.myUid()}`：uid 在整个安装期内不变，
+会把本应用**历史所有进程（含崩溃那一次）**的日志都带出来（`--uid` 从 Android 7.0 起支持，minSdk 24 够）。
+PID 只作为**内容字段**留在头部信息里，不参与文件命名/筛选/查找；文件名一直是
+`yunx_log_<yyyyMMdd_HHmmss>.txt`，只按时间命名。
+
+**② 诊断模式开关**：设置 → 「关于云析」长按 → 开发调试 → **诊断模式**（`SettingsRepository.diagnosticMode`，
+键 `diagnostic_mode`，默认关）。`DiagnosticLog.setEnabled` 立刻起/停写线程（关闭前先 flush），
+`YunXApp.onCreate` 里 `DiagnosticLog.install(this)` 读开关并定目录。
+
+**③ 落盘**：`app/src/main/kotlin/com/yunx/app/util/DiagnosticLog.kt`，目录
+`getExternalFilesDir("diagnostic_logs")`（= `Android/data/<包名>/files/diagnostic_logs`），
+返回 null / 建不出来就回退 `filesDir/diagnostic_logs`。按模块分文件：
+`db.log / crypto.log / download.log / webview.log / network.log / operation.log`。
+行格式：`时间戳 | 级别 | 模块 | pid=… | event=… | task=… | status=… | cost=…ms | size=… | code=… | 摘要`。
+
+**④ 六个必须遵守的约束（都写在类注释里了，改之前看一遍）**：
+- **关的时候一行都不写**：`log()` 第一行 `if (!enabled) return`，所以调用点可以随手埋；
+- **绝不阻塞调用方**：主线程只做一次 `queue.offer`（有界队列 2000，满了丢弃并计数），
+  写入在独立守护线程 `yunx-diagnostic-log` 上；
+- **两道限流**：队列丢弃 + 全局 300 行/秒（超了丢，每 5 秒记一条累计丢弃数）。合并进度这类
+  高频回调还要**自己采样**（`percent % 10 == 0` 才记）；
+- **轮转**：单文件 2MB、每个模块最多 5 个（`xxx.log` + `xxx.1.log`…`xxx.4.log`）、目录总量 10MB；
+  超量时按 `lastModified` 从旧到新删（**不能按文件名排序**：`xxx.log` 会排在 `xxx.4.log` 前面）；
+  模块各管各的，一个模块刷爆不会挤掉别的模块的历史；
+- **时间戳在写线程格式化**（`SimpleDateFormat` 非线程安全，别挪到调用方线程）；
+- `dbOp {}` / `db()` 记的是「表名 / 操作 / 耗时 / 影响行数（Room 返回 Int 时）/ 异常」，异常照原样抛。
+
+**⑤ 埋点位置**：db = `AppDatabase` 的 `RoomDatabase.Callback`（建/开库时记版本 + 全部业务表 + 每表行数）
++ `DownloadManager` 的 insert/complete/delete；download = `DownloadManager`（入队、探测大小、分片计划、
+重试、合并开始/10% 采样/完成、引擎任务创建/排队/失败/完成）；network = `HttpClients` 两个客户端上的
+`DiagnosticNetworkInterceptor`；webview = `DiagnosticWebViewClient` + 8 个登录页的
+`onPageStarted/onPageFinished/onReceivedError/onReceivedHttpError` + `WebViewJs.evaluateJsEncoded`；
+crypto = `AndroidKeystoreCredentialCipher.encrypt/decrypt`（**只记用途与长度，绝不记明文/密文**）；
+operation = 入队/暂停/删除等用户关键操作。
+
+**⑥ 请求体/响应体的记录条件是刻意收窄的（用户要求）**：只有**非 200/206**（`peekBody` 不消费原流）
+或**直接抛异常**时才记 body，各截断 1.5KB；正常 200 只记「方法 + 脱敏 URL + 状态码 + 耗时」。
+请求体要在发出去之前复制一份（`TeeRequestBody`），且只复制声明长度 ≤64KB 的。
+
+**⑦ WebView 的坑**：`DiagnosticWebViewClient` 只对**没有被子类覆写**的回调生效——8 个登录页原来
+各自覆写了 `onPageStarted/onPageFinished` 且**不调 `super`**，所以那两处必须在**覆写体里**再插一行
+`DiagnosticLog.webview(...)`；基类留着是为了覆盖 `onReceivedError`/`shouldOverrideUrlLoading` 这类
+多数页面没覆写的回调，以及以后新加的页面。
+
+**⑧ 导出**：`LogExporter.exportDiagnosticZip()` → `DiagnosticLog.exportZip()`，**先 flush 再压**，
+产物 `yunx_diagnostic_logs_yyyyMMdd_HHmmss.zip` 放在 `cacheDir/logs`（`file_paths.xml` 的 `cache_logs`
+已经覆盖，FileProvider 能分享；`share()` 按扩展名给 `application/zip`）。入口两处：开发调试菜单里的
+「导出诊断日志（zip）」，以及「导出日志」弹窗里诊断模式开启时多出来的同款按钮。
+
+
+---
+
 ## 4. 验证
 
 

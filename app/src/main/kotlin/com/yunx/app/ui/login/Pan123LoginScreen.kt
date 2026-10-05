@@ -84,6 +84,7 @@ import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.YunXWavyLoading
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.Pan123AccountViewModel
+import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.launch
 
 /** 登录方式：0=网页登录（WebView 提取 authorToken）、1=账号密码（原生 sign_in 接口） */
@@ -494,12 +495,14 @@ private fun buildWebView(context: Context, onLoadingChange: (Boolean) -> Unit): 
         settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
         setInitialScale(0)
         settings.userAgentString = Pan123Constants.WEB_UA
-        webViewClient = object : WebViewClient() {
+        webViewClient = object : DiagnosticWebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                DiagnosticLog.webview("page_started", url)
                 onLoadingChange(true)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                DiagnosticLog.webview("page_finished", url)
                 onLoadingChange(false)
                 // 强制覆盖页面 viewport：适配屏幕宽度 + 允许双指缩放（桌面版页面无 viewport 或限制缩放时生效）
                 view?.evaluateJavascript(

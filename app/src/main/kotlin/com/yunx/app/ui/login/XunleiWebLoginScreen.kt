@@ -68,6 +68,7 @@ import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.YunXWavyLoading
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.XunleiAccountViewModel
+import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.launch
 
 /**
@@ -115,12 +116,14 @@ fun XunleiWebLoginScreen(
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             // 桌面 UA：网页版登录态（credentials_* 键）只在桌面版页面写入，移动版页面是另一套
             settings.userAgentString = XunleiWebCredential.DESKTOP_UA
-            webViewClient = object : WebViewClient() {
+            webViewClient = object : DiagnosticWebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    DiagnosticLog.webview("page_started", url)
                     isLoading = true
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
+                    DiagnosticLog.webview("page_finished", url)
                     isLoading = false
                     // 强制覆盖页面 viewport：适配屏幕宽度，桌面版页面在手机上才点得动
                     view?.evaluateJavascript(

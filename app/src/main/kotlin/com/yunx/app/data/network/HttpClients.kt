@@ -108,6 +108,8 @@ object HttpClients {
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            // 诊断模式：记方法/脱敏 URL/状态码/耗时，非 200/206 才带 body 摘要（关着时首行短路，零开销）
+            .addInterceptor(DiagnosticNetworkInterceptor())
             .apply {
                 // 配置了有效代理时注入；否则保持默认直连，行为与改动前完全一致
                 currentProxy()?.let { proxy -> proxy(proxy) }
@@ -145,6 +147,8 @@ object HttpClients {
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            // 诊断模式：分片请求也记一行（高频，靠 DiagnosticLog 的每秒行数闸门限流）
+            .addInterceptor(DiagnosticNetworkInterceptor())
             .apply {
                 // 配置了有效代理时注入；否则保持默认直连，行为与改动前完全一致
                 currentProxy()?.let { proxy -> proxy(proxy) }

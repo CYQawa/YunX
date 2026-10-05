@@ -162,6 +162,17 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("accept_prerelease_update", value).apply()
         }
 
+    /**
+     * 诊断模式（设置 → 关于云析 → 长按 → 开发调试）：默认关，开启后把 db / crypto / download /
+     * webview / network / operation 六个模块的详细日志写进私有目录（见 `DiagnosticLog`）。
+     * ★ 这里只存开关值，运行态由 `DiagnosticLog` 自己缓存（改完立刻生效，不必重启）。
+     */
+    var diagnosticMode: Boolean
+        get() = prefs.getBoolean("diagnostic_mode", false)
+        set(value) {
+            prefs.edit().putBoolean("diagnostic_mode", value).apply()
+        }
+
     /** 忽略 SSL 证书校验（抓包调试用，隐藏菜单开启；默认关闭） */
     var ignoreSslCert: Boolean
         get() = prefs.getBoolean("ignore_ssl_cert", false)

@@ -19,6 +19,7 @@
 package com.yunx.app.ui.login
 
 import android.webkit.WebView
+import com.yunx.app.util.DiagnosticLog
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -40,13 +41,20 @@ internal suspend fun WebView.evaluateJsEncoded(script: String): String = withTim
     suspendCancellableCoroutine { cont ->
         try {
             evaluateJavascript(script) { result ->
+                // 诊断日志：JS 桥调用的进出各记一条（脚本只记前 120 字，避免把整段注入脚本写进日志）
+                DiagnosticLog.webview(
+                    "js_call",
+                    url,
+                    summary = "script=${script.replace('\n', ' ').take(120)} resultLen=${result?.length ?: 0}"
+                )
                 if (cont.isActive) cont.resume(decodeJsCallback(result))
             }
         } catch (e: Exception) {
+            DiagnosticLog.webview("js_error", url, code = "JS_EXCEPTION", summary = "err=${e.message}")
             if (cont.isActive) cont.resume("")
         }
     }
-} ?: ""
+} ?: "".also { DiagnosticLog.webview("js_timeout", url, code = "JS_TIMEOUT", summary = "脚本执行超时（${JS_EVAL_TIMEOUT_MS}ms）") }
 
 /** 解析 `evaluateJavascript` 的回调文本：去掉 JSON 引号后做百分号解码 */
 private fun decodeJsCallback(result: String?): String {

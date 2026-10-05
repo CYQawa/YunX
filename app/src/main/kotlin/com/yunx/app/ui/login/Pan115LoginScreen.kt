@@ -70,6 +70,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.yunx.app.data.network.Pan115Constants
 import com.yunx.app.ui.viewmodel.Pan115AccountViewModel
 import com.yunx.app.ui.components.YunXWavyLoading
+import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.launch
 
 /**
@@ -113,7 +114,7 @@ fun Pan115LoginScreen(
             setInitialScale(0)
             // 桌面 UA：115 网页版是桌面站点，且接口请求头也用同一 UA，避免风控
             settings.userAgentString = Pan115Constants.WEB_UA
-            webViewClient = object : WebViewClient() {
+            webViewClient = object : DiagnosticWebViewClient() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?
@@ -124,10 +125,12 @@ fun Pan115LoginScreen(
                 }
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    DiagnosticLog.webview("page_started", url)
                     isLoading = true
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
+                    DiagnosticLog.webview("page_finished", url)
                     isLoading = false
                     // 强制覆盖页面 viewport：适配屏幕宽度 + 允许双指缩放（桌面版页面无 viewport 或限制缩放时生效）
                     view?.evaluateJavascript(

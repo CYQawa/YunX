@@ -27,6 +27,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
 import com.yunx.app.data.security.CredentialCipher
 import com.yunx.app.data.security.CredentialStore
+import com.yunx.app.util.DiagnosticLog
 
 @Database(
     entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, GuangYaAccountEntity::class, ILanzouAccountEntity::class, LanzouAccountEntity::class, BookmarkEntity::class],
@@ -97,6 +98,45 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     // 早期开发版（1-8）无可靠 schema；从 v9 起必须保留凭证和下载任务
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8)
+                    .addCallback(object : RoomDatabase.Callback() {
+                        /** 诊断模式：库建/开时记一条（版本 + 全部业务表），排查「表不存在 / 迁移没跑」最有用 */
+                        override fun onCreate(db: SupportSQLiteDatabase) = logSchema("create", db)
+
+                        override fun onOpen(db: SupportSQLiteDatabase) = logSchema("open", db)
+
+                        private fun logSchema(action: String, db: SupportSQLiteDatabase) {
+                            runCatching {
+                                val tables = mutableListOf<String>()
+                                db.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").use { c ->
+                                    while (c.moveToNext()) {
+                                        val name = c.getString(0) ?: continue
+                                        // sqlite/room 自己的内部表不算业务表
+                                        if (!name.startsWith("sqlite_") && !name.startsWith("android_") && name != "room_master_table") {
+                                            tables.add(name)
+                                        }
+                                    }
+                                }
+                                val version = runCatching { db.version }.getOrDefault(-1)
+                                DiagnosticLog.log(
+                                    DiagnosticLog.DB,
+                                    "db_$action",
+                                    status = "v$version",
+                                    size = tables.size.toLong(),
+                                    summary = "file=yunx.db | tables=${tables.joinToString(",")}"
+                                )
+                                // 顺手把每张表的行数也记一笔（只在诊断模式开启时执行，且只在库打开那一次）
+                                if (DiagnosticLog.isEnabled()) {
+                                    tables.forEach { table ->
+                                        runCatching {
+                                            db.query("SELECT COUNT(*) FROM $table").use { c ->
+                                                if (c.moveToFirst()) DiagnosticLog.db(table, "count", 0L, c.getInt(0))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    })
                     .build()
                     .also { database ->
                         database.credentialCipher = AndroidKeystoreCredentialCipher.shared

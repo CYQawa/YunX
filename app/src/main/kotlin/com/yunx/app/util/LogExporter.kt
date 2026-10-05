@@ -42,8 +42,15 @@ import java.util.Locale
 /**
  * 日志导出工具：
  * 1. 头部写入应用 / 设备信息；
- * 2. `logcat -d -v time --pid=<当前进程>` dump 当前应用的运行日志（按包名进程过滤）；
+ * 2. `logcat -d -v time --uid=<本应用 uid>` dump 本应用的运行日志；
  * 3. 合并写入 cacheDir/logs/ 下文本文件，通过 FileProvider + 系统分享导出。
+ *
+ * ★ 过滤键是 **uid 而不是 pid**（改动过，别改回去）：pid 每次启动/闪退重启都会换，
+ *   用 `--pid=${Process.myPid()}` 只能捞到**当前这一次**进程的日志——用户复现闪退后重开 App 再导出，
+ *   最该看的那段崩溃日志正好被过滤掉了（旧日志「找不到 / 导不全」的根因）。
+ *   uid 在整个应用安装期内不变，`--uid` 会把本应用**历史所有进程**（含崩溃那一次）的日志都带出来。
+ *   PID 只作为**内容字段**保留在头部信息里，绝不参与文件命名、筛选、查找。
+ *   文件名 `yunx_log_<yyyyMMdd_HHmmss>.txt` 也**只按时间**命名，与进程无关。
  */
 object LogExporter {
 
@@ -99,14 +106,13 @@ object LogExporter {
             writer.write("应用版本：${pkg.versionName}（${pkg.versionCode}）\n")
             writer.write("设备：${Build.MANUFACTURER} ${Build.MODEL}\n")
             writer.write("系统：Android ${Build.VERSION.RELEASE}（SDK ${Build.VERSION.SDK_INT}）\n")
+            writer.write("诊断模式：${if (DiagnosticLog.isEnabled()) "已开启" else "关闭"}\n")
             writer.write("\n")
 
-            // ---------- 运行日志：当前应用进程（logcat 按 pid 过滤，只保留本应用） ----------
-            writer.write("========== 运行日志（logcat -d -v time --pid=${Process.myPid()}）==========\n")
-            dumpLogcat(
-                writer,
-                listOf("logcat", "-d", "-v", "time", "--pid=${Process.myPid()}")
-            )
+            // ---------- 运行日志：按 uid 过滤（跨重启、含闪退那一次进程；pid 只在上面的信息里出现） ----------
+            val uid = Process.myUid()
+            writer.write("========== 运行日志（logcat -d -v time --uid=$uid，uid 恒定，含历史进程）==========\n")
+            dumpLogcat(writer, listOf("logcat", "-d", "-v", "time", "--uid=$uid"))
         }
         true
     }.getOrDefault(false)
@@ -116,6 +122,14 @@ object LogExporter {
         ProcessBuilder("logcat", "-c").start().waitFor()
         true
     }.getOrDefault(false)
+
+    /**
+     * 打包全部诊断日志（`yunx_diagnostic_logs_yyyyMMdd_HHmmss.zip`）；诊断模式没开或还没写过返回 null。
+     *
+     * 真正的打包在 [DiagnosticLog.exportZip]（它先 flush 再压，保证最后几行也在包里），
+     * 这里只是把「日志导出」这套对外 API 收在同一个对象里，调用方不用同时认识两个工具。
+     */
+    fun exportDiagnosticZip(context: Context): File? = DiagnosticLog.exportZip(context)
 
     /** 执行 logcat 命令并写入 writer（仅保留最近 MAX_LINES 行） */
     private fun dumpLogcat(writer: OutputStreamWriter, command: List<String>) {
@@ -150,15 +164,16 @@ object LogExporter {
         }
     }
 
-    /** 通过系统分享导出日志文件；成功返回 true */
+    /** 通过系统分享导出日志文件；成功返回 true（zip 走 application/zip，文本走 text/plain） */
     fun share(context: Context, file: File): Boolean = runCatching {
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
             file
         )
+        val mime = if (file.name.endsWith(".zip", true)) "application/zip" else "text/plain"
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
+            type = mime
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_SUBJECT, file.name)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

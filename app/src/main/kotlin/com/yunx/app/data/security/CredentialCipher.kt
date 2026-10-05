@@ -23,6 +23,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
+import com.yunx.app.util.DiagnosticLog
 import java.security.KeyStore
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
@@ -196,6 +197,11 @@ internal class AndroidKeystoreCredentialCipher : CredentialCipher {
     override fun encrypt(plaintext: String, purpose: String): String {
         val aad = purpose.toByteArray(Charsets.UTF_8)
         val plain = plaintext.toByteArray(Charsets.UTF_8)
+        // 诊断日志只记「用途 + 明文长度」，绝不打明文/密文本身
+        DiagnosticLog.log(
+            DiagnosticLog.CRYPTO, "encrypt", size = plain.size.toLong(),
+            summary = "purpose=$purpose"
+        )
         return withRetry {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -211,6 +217,11 @@ internal class AndroidKeystoreCredentialCipher : CredentialCipher {
 
     override fun decrypt(stored: String, purpose: String): String {
         if (!isEncrypted(stored)) return stored
+        // 诊断日志：解密是「密钥失效」类问题的第一现场（只记用途与长度，不记内容）
+        DiagnosticLog.log(
+            DiagnosticLog.CRYPTO, "decrypt", size = stored.length.toLong(),
+            summary = "purpose=$purpose"
+        )
         val parts = stored.split(':', limit = 4)
         require(parts.size == 4 && parts[0] == "yunx" && parts[1] == "v1") {
             "Unsupported encrypted credential format"

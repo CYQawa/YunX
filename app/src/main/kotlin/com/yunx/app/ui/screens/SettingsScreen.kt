@@ -128,6 +128,7 @@ import com.yunx.app.util.AppLinks
 import com.yunx.app.util.LogExporter
 import com.yunx.app.util.StorageDirs
 import com.yunx.app.ui.components.YunXLoading
+import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -239,6 +240,8 @@ fun SettingsScreen(
     var showEngineDirDialog by remember { mutableStateOf(false) }
     var engineDirInput by remember { mutableStateOf("") }
     var showDevMenu by remember { mutableStateOf(false) }
+    // 诊断模式开关（开发调试菜单里）：本地状态驱动 UI，运行态在 DiagnosticLog 里（改完立刻生效）
+    var diagnosticOn by remember { mutableStateOf(settingsRepo.diagnosticMode) }
     // 下载引擎（内置分片下载器 / Gopeed 引擎）：本身在独立页面里改，这里只读来渲染副标题
     var engineChoice by remember { mutableStateOf(settingsRepo.downloadEngine) }
     // 引擎模式下「下载保存目录」这一行的语义/副标题不同，而且会隐藏若干「只对内置分片下载器有意义」的设置项，
@@ -853,6 +856,25 @@ fun SettingsScreen(
                     ) {
                         Text("清空日志缓存（logcat -c）")
                     }
+                    // 诊断模式开着时额外提供 zip：把 diagnostic_logs 下的分模块日志一次带走
+                    if (settingsRepo.diagnosticMode) {
+                        TextButton(
+                            onClick = {
+                                showLogDialog = false
+                                scope.launch {
+                                    val zip = withContext(Dispatchers.IO) { LogExporter.exportDiagnosticZip(context) }
+                                    if (zip != null && LogExporter.share(context, zip)) {
+                                        SnackbarController.show("诊断日志已打包分享（${zip.name}）")
+                                    } else {
+                                        SnackbarController.show("暂时没有可导出的诊断日志")
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("导出诊断日志（zip）")
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -876,6 +898,56 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("显示检查更新弹窗") }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 诊断模式：开启后 db / crypto / download / webview / network / operation 六个模块
+                    // 的详细日志写进私有目录 diagnostic_logs（按模块分文件），关闭时一行都不写。
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("诊断模式", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = if (diagnosticOn) {
+                                    "详细日志写入 Android/data/${context.packageName}/files/diagnostic_logs"
+                                } else {
+                                    "关闭：不写任何诊断日志"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = diagnosticOn,
+                            onCheckedChange = { on ->
+                                diagnosticOn = on
+                                settingsRepo.diagnosticMode = on
+                                // 动态生效：DiagnosticLog.setEnabled 会立刻起/停写线程，关闭时先 flush
+                                DiagnosticLog.setEnabled(context, on)
+                                SnackbarController.show(if (on) "诊断模式已开启" else "诊断模式已关闭")
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 导出入口（zip 名 yunx_diagnostic_logs_yyyyMMdd_HHmmss.zip，导出前会先 flush）
+                    TextButton(
+                        onClick = {
+                            showDevMenu = false
+                            scope.launch {
+                                val zip = withContext(Dispatchers.IO) { LogExporter.exportDiagnosticZip(context) }
+                                if (zip != null && LogExporter.share(context, zip)) {
+                                    SnackbarController.show("诊断日志已打包分享（${zip.name}）")
+                                } else {
+                                    SnackbarController.show("暂时没有可导出的诊断日志")
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("导出诊断日志（zip）") }
                 }
             },
             confirmButton = {
