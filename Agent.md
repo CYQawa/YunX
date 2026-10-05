@@ -63,6 +63,10 @@ app/src/main/kotlin/com/yunx/app/
 │   │   ├── DownloadSaver.kt / DownloadService.kt（前台服务）
 │   │   └── DownloadPlatform.kt  # ★ 平台标识字符串常量
 │   ├── security/CredentialCipher.kt    # ★ Android Keystore 凭证加解密
+│   ├── announcement/            # ★ 应用内公告（远程列表 + 本地已读记录，见 §3.35）
+│   │   ├── AnnouncementApi.kt   # 公开接口客户端（列表 / 详情；列表接口有副作用，勿轮询）
+│   │   ├── AnnouncementReadStore.kt  # 已读口径的唯一真源（服务端没有已读接口）
+│   │   └── AnnouncementTime.kt  # UTC ISO 8601 → 本地时间（**不用 java.time**，minSdk 24）
 │   ├── gopeed/GopeedEngine.kt          # ★ Gopeed 进程内引擎（导入 AAR / 加载 .so / 进程内 REST，见 §3.27、§3.28）
 │   ├── backup/                  # 认证备份（口令派生密钥 + AES-GCM）
 │   ├── update/UpdateChecker.kt
@@ -76,6 +80,7 @@ app/src/main/kotlin/com/yunx/app/
     ├── login/                   # 各平台登录页
     ├── viewmodel/               # 每个功能一个 ViewModel + 内嵌 Factory
     ├── components/ items/       # 可复用小组件
+    │   └── RemoteImageLoader.kt / RemoteImage.kt   # ★ 全项目唯一的网络图片加载器（OkHttp，**不用 Coil**，见 §3.35）
     └── theme/                   # Color / Type / Theme / ThemeController
 ```
 
@@ -1224,6 +1229,86 @@ dismissOnClickOutside = false))`，25MB 的下载不该被一次误触甩掉；�
 
 ---
 
+### 3.35 应用内公告（远程列表 / 启动弹窗 / 未读角标）
+
+后端是一个独立的公告服务（当前是 **PHP + SQLite 虚拟主机版**，域名 `http://yunx.cyqawa.os.kg`；
+接口路径 / 参数 / 响应结构 / 错误码与原 Cloudflare Workers 版**完全一致**，只有域名与协议变了）。
+客户端只用**两个公开接口**：`GET /api/v1/announcements?page=&pageSize=`（列表，**不含正文**）与
+`GET /api/v1/announcements/{id}`（详情，含正文）。管理端 `/api/v1/admin/**` 需要 ADMIN_TOKEN，
+客户端**一律不碰**。
+
+★ **HTTP 明文与「全局禁明文」的冲突（换域名时必须一起动）**：服务端当前是 http，而
+`res/xml/network_security_config.xml` 的 base-config 是 `cleartextTrafficPermitted="false"`
+（全项目策略）—— 不放行的话 OkHttp 直接抛 `CLEARTEXT communication to … not permitted by network
+security policy`，表现是公告**永远加载失败**（启动弹窗与未读角标都不出现，日志里那条 E 级就是它）。
+所以那里为 `yunx.cyqawa.os.kg` 开了一条 `<domain-config cleartextTrafficPermitted="true">` 例外：
+**后端上 HTTPS 后要同时删掉它、并把 `AnnouncementApi.BASE_URL` 改回 https**。
+**绝不要**把 base-config 全局放开明文 —— 网盘 CDN / 更新下载 / 图床都会被降级到 http。
+图床是**另一个域名**：http 图床同样要在那条 domain-config 里加一行（https 图床不用管），
+没放行的 http 图床会加载失败（占位色 + 破图兜底，不崩）。
+
+**三条接口口径（写错就是线上问题）**：
+1. 成功与否看响应体的 `success` 字段，**不要只看 HTTP 状态码**（业务失败与 HTTP 错误码是分离的，
+   非 2xx 也可能带合法 JSON 的失败原因，所以先读 body 再判 `success`）；
+2. ★ **列表接口有副作用**：每次成功调用都会计入服务端当日「客户端启动数」⇒ **禁止轮询**。
+   调用点只有两处：启动检查一次、用户在列表页手动刷新 / 翻页；
+3. 详情接口会让 `viewCount` +1（预期行为）⇒ `AnnouncementViewModel` 里按 id **缓存详情**，
+   同一会话同一条公告只请求一次（进详情、返回、再进都不会重复 +1）。
+
+**列表页大小固定 100（接口上限）**：启动检查就一次取满，于是「未读角标」与「启动弹窗候选」的口径
+= **全部公告**而不是前 20 条；只有公告总数超过 100 条时列表页底部才会出现「加载更多」（同一 pageSize
+翻第二页，分页口径一致）。翻页合并时按 id 去重（翻页期间若有新公告插入，服务端分页可能返回重复项）。
+
+**已读口径完全由客户端维护**（服务端没有已读接口）：`AnnouncementReadStore` 用 SharedPreferences
+存一个 JSON 数组（最新的在前，上限 500 条，超出从最旧的丢；不为它建 Room 表 —— 只是一堆 id，
+没有查询需求）。**打开详情** 或 **关掉启动弹窗** 都算已读。角标数字 = 已加载到的公告里未读的条数。
+
+**启动弹窗候选**（`AnnouncementViewModel.pickPopupCandidate`）：
+1. 有未读的**置顶**公告 → 弹它（服务端已把置顶排在最前，取第一条未读置顶即可）；
+2. 否则弹**最新的一条未读** —— ★ 不能直接拿列表首条：首条可能是「已读的置顶公告」，
+   这时要按生效时间（`publishAt`，为 null 表示立即发布 ⇒ 退回 `createdAt`）取未读里的最大值；
+3. 全部已读 → 不弹。
+启动检查失败**静默**（与更新检查同一口径，只打 `YunX-Announce` 的 E 级日志），
+用户点进公告页时会再拉一次，那时才把错误页显示出来。
+
+**入口与共享元素**：顶栏右上角、收藏图标**左侧**（收藏只在解析页出现，公告是全局入口）。
+未读 > 0 时叠一颗红点角标（>99 显示 `99+`）——★ 角标是 `Surface` + `Text` 手搓的，
+**没有用 `BadgedBox`**：要自己控偏移与最小尺寸，也不想跟着 alpha 版组件 API 走；
+公告页打开期间不显示角标（`overlayRoute == null` 才画）。
+共享元素分两层，各管一段、互不干扰：
+- 外层：顶栏公告图标 ↔ 公告整页，key = `OVERLAY_KEY_ANNOUNCEMENTS`（与收藏页同一手法）；
+- 内层：列表项 ↔ 详情页，key = `announcementSharedKey(id)`，在 `AnnouncementScreen` 里**再套一层
+  `SharedTransitionLayout`** —— 共享元素只在**同一个** layout 作用域内匹配，套一层就天然隔离了。
+  ★ 容器变换必须 `resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds`：
+  列表项很窄、详情页是整屏，默认的 `ScaleToBounds` 会把详情页整体缩放（文字被拉伸）。
+  「列表 ↔ 详情」仍用 MainScreen 那套**两个 AnimatedVisibility 互斥 + `shownDetailId` 延迟清空**的写法
+  （不用 AnimatedContent）：退出时长必须 ≥ 300ms，否则退出动画一结束内容就被移出组合、回收形变被截断。
+
+**图片：不加新依赖，复用 README 那一套**。`GitHubMarkdownImageTransformer` 里的加载逻辑已抽成
+`RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），
+Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正文图集）**共用同一份缓存**；
+`GitHubMarkdownImageTransformer` 现在只是「渲染器适配层」（`mirrorPrefix` 转发给加载器）。
+项目里**没有 Coil**，这是既定选择（见 `RemoteImageLoader` 的文件注释与本节），不要再引第二个图片库。
+★ `RemoteImage` 的高度必须由调用方给（`Modifier.size`），或显式开 `autoHeight = true` 让内部按位图比例
+算 —— 不指定高度的 `Image` 在 LazyColumn 的 `maxHeight = Infinity` 约束下会被量成 0 高或按原始像素高排，
+长图直接糊一屏。
+
+**正文渲染不用 WebView**：走 mikepenz GFM 渲染器（与 README 预览同一套 + `compactMarkdownTypography()`），
+`content` 里的 HTML 片段只会当普通文本显示。这样**没有脚本执行面**（XSS / CSP 都不用自己扛），
+代价是 HTML 不解析 —— 这是刻意的取舍，别为了「支持 HTML」换成 WebView。
+图片的明文口径见本节开头：API 域名已在 network_security_config 放行，图床域名要单独放行（或用 https）。
+
+**时间**：服务端统一 UTC ISO 8601。★ **不用 `java.time`**（minSdk 24 没有，也没开 core library
+desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` 是字面量、必须配
+`timeZone = UTC` 解析，不带引号的 `Z` 才是 RFC822 时区。
+
+**落点**：`data/announcement/{AnnouncementApi,AnnouncementReadStore,AnnouncementTime}.kt`、
+`ui/viewmodel/AnnouncementViewModel.kt`、`ui/screens/Announcement{Screen,ListScreen,DetailScreen}.kt`
+（宿主 + 列表页 + 详情页）、`ui/components/{RemoteImageLoader,RemoteImage}.kt`、
+`ui/MainScreen.kt`（图标 + 角标 + 路由 + 启动弹窗）。
+
+---
+
 ## 4. 验证
 
 
@@ -1247,6 +1332,7 @@ dismissOnClickOutside = false))`，25MB 的下载不该被一次误触甩掉；�
 | `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
 | `animateColorAsState` 报 `Unresolved reference` | 包是 `androidx.compose.animation.animateColorAsState`（**不是** `androidx.compose.animation.core`）。判断依据：`.animation` 放的是**进出场/内容切换**（`AnimatedVisibility`/`AnimatedContent`/`fadeIn`/`fadeOut`/`slideInVertically`/`togetherWith`/`animateColorAsState`），`.animation.core` 放的是**时间曲线与动画值**（`tween`/`spring`/`Animatable`/`animateFloatAsState`/`animateDpAsState`）。写错包会连带一片 `Cannot infer type for this parameter`（`by` 委托推不出类型） |
 | Room 编译报 schema 错 | 检查 `version` 是否 +1、Migration 是否注册 |
+| `Unclosed comment` + 一串「莫名其妙」的语法错（如 `Identifier expected`，行号还指着一段正常代码） | **注释正文里出现了 `/*`** —— Kotlin 的块注释**支持嵌套**，多出来的 `/*` 会一路吞到文件尾，报错行号与真正的位置无关（别顺着行号改）。典型来源：注释里写接口路径 `/api/v1/admin/**`、通配路径、正则片段。已踩过一次：公告客户端 KDoc 里的 `/api/v1/admin/**` 让整个文件被注释掉 ⇒ 搜本次改动文件注释内的 `/*` |
 
 ---
 

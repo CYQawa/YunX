@@ -29,4 +29,26 @@
             <certificates src="user" />
         </trust-anchors>
     </debug-overrides>
+
+    <!--
+        应用内公告服务（data/announcement/AnnouncementApi.kt）当前部署是 **HTTP 明文**
+        （http://yunx.cyqawa.os.kg，见后端接口文档 v1.0.0 第 6 节），而上面的 base-config
+        全局禁止明文 —— 不在这里开例外，OkHttp 会直接抛
+        "CLEARTEXT communication to yunx.cyqawa.os.kg not permitted by network security policy"，
+        表现是公告永远加载失败（启动弹窗与未读角标都不出现）。
+
+        ★ 不要图省事把 base-config 改成 cleartextTrafficPermitted="true"：
+          那等于给**全应用**放开明文（网盘 CDN、更新下载、图床都可能被降级到 http），
+          只放行确有必要的那几个域。
+        ★ **两处必须一起改**：后端切到 HTTPS 后，把这条 <domain-config> 删掉，
+          并把 AnnouncementApi.BASE_URL 改回 https://。
+
+        图床（公告封面 / 头像 / 正文配图）通常是**另一个域名**：如果是 http 图床，同样需要在
+        这个 domain-config 里加一行，例如
+            <domain includeSubdomains="true">img.example.com</domain>
+        https 图床不受这里影响（走系统信任链，无需放行）。
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">yunx.cyqawa.os.kg</domain>
+    </domain-config>
 </network-security-config>

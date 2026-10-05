@@ -36,10 +36,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,6 +93,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.yunx.app.data.announcement.AnnouncementReadStore
 import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.download.ChunkDownloader
 import com.yunx.app.data.download.DownloadManager
@@ -132,6 +135,9 @@ import com.yunx.app.ui.login.XunleiLoginScreen
 import com.yunx.app.ui.login.XunleiVerifyWebViewScreen
 import com.yunx.app.ui.navigation.MainTab
 import com.yunx.app.ui.screens.AboutScreen
+import com.yunx.app.ui.screens.AnnouncementPopupDialog
+import com.yunx.app.ui.screens.AnnouncementScreen
+import com.yunx.app.ui.screens.AnnouncementUnreadBadge
 import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
@@ -142,6 +148,7 @@ import com.yunx.app.ui.screens.SettingsScreen
 import com.yunx.app.ui.screens.SupportScreen
 import com.yunx.app.ui.screens.ThemeScreen
 import com.yunx.app.ui.screens.UpdateSheet
+import com.yunx.app.ui.viewmodel.AnnouncementViewModel
 import com.yunx.app.ui.viewmodel.BaiduAccountViewModel
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.BookmarkViewModel
@@ -184,6 +191,9 @@ internal const val OVERLAY_KEY_BOOKMARKS = "overlay-bookmarks"
 /** Gopeed 引擎页从设置页那一行进入，同样没有共享元素形变（普通淡入即可） */
 internal const val OVERLAY_KEY_GOPEED = "overlay-gopeed"
 
+/** 公告页：源是顶栏那个公告图标（与收藏页同一手法 —— 图标本身当"源"，长成整页） */
+internal const val OVERLAY_KEY_ANNOUNCEMENTS = "overlay-announcements"
+
 /**
  * 主页框架：
  * - 顶部可折叠标题（MediumFlexibleTopAppBar，Expressive 柔性顶栏），切换 Tab 时标题文字随 Tab 变化，折叠状态不受影响；
@@ -214,6 +224,9 @@ fun MainScreen() {
     var showTheme by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
     var showGopeed by rememberSaveable { mutableStateOf(false) }
+    var showAnnouncements by rememberSaveable { mutableStateOf(false) }
+    /** 启动公告弹窗点「查看详情」时带进去的公告 id（null = 从图标进来先看列表） */
+    var announcementDetailId by rememberSaveable { mutableStateOf<String?>(null) }
     val saveableStateHolder = rememberSaveableStateHolder()
 
     val context = LocalContext.current
@@ -282,6 +295,21 @@ fun MainScreen() {
             SnackbarController.show("暂未获取到 Release 数据，请先联网检查一次更新")
         }
     }
+    /**
+     * 应用内公告：顶栏红点角标 + 启动弹窗。
+     *
+     * 启动检查（[AnnouncementViewModel.checkStartup]）整个会话只跑一次：一次列表请求同时决定
+     * 「角标数字」与「弹窗展示哪一条」—— 有未读的置顶公告就弹它，否则弹最新的一条未读，全读完则不弹。
+     * 失败静默（与上面的更新检查同一口径），用户点进公告页时会再拉一次并把错误显示出来。
+     */
+    val announcementReadStore = remember { AnnouncementReadStore(context) }
+    val announcementViewModel: AnnouncementViewModel = viewModel(
+        factory = AnnouncementViewModel.Factory(announcementReadStore)
+    )
+    val unreadAnnouncementCount by announcementViewModel.unreadCount.collectAsState()
+    val popupAnnouncement by announcementViewModel.popup.collectAsState()
+    LaunchedEffect(Unit) { announcementViewModel.checkStartup() }
+
     val api = remember { QuarkApi() }
     val ucApi = remember { UCApi() }
     val xunleiApi = remember { XunleiApi() }
@@ -715,6 +743,7 @@ fun MainScreen() {
         showTheme -> OVERLAY_KEY_THEME
         showBookmarks -> OVERLAY_KEY_BOOKMARKS
         showGopeed -> OVERLAY_KEY_GOPEED
+        showAnnouncements -> OVERLAY_KEY_ANNOUNCEMENTS
         else -> null
     }
     // 正在展示的叠加页路由：打开时更新，关闭时**保留**（退出动画要用它渲染那个页面）
@@ -790,6 +819,39 @@ fun MainScreen() {
                             Text(text = currentTab.title)
                         },
                         actions = {
+                            // 公告入口：所有 Tab 都显示（收藏只在解析页出现，公告是全局入口），
+                            // 位置在收藏图标左侧 —— 与收藏图标共用"图标当源、长成整页"的容器变换手法。
+                            IconButton(
+                                onClick = {
+                                    // 从图标进 = 先看列表（清掉上次「查看详情」直接进详情的请求）
+                                    announcementDetailId = null
+                                    showAnnouncements = true
+                                }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Campaign,
+                                        contentDescription = if (unreadAnnouncementCount > 0) {
+                                            "公告（$unreadAnnouncementCount 条未读）"
+                                        } else {
+                                            "公告"
+                                        },
+                                        modifier = Modifier.sharedBounds(
+                                            rememberSharedContentState(OVERLAY_KEY_ANNOUNCEMENTS),
+                                            animatedVisibilityScope = sourceScope
+                                        )
+                                    )
+                                    // 未读红点角标：只有主界面显示（公告页自己开着的时候不显示）
+                                    if (unreadAnnouncementCount > 0 && overlayRoute == null) {
+                                        AnnouncementUnreadBadge(
+                                            count = unreadAnnouncementCount,
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = 7.dp, y = (-5).dp)
+                                        )
+                                    }
+                                }
+                            }
                             // 解析页标题右上角：收藏网盘链接入口
                             if (currentTab == MainTab.Resolve) {
                                 IconButton(
@@ -1024,6 +1086,12 @@ fun MainScreen() {
                             OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
                             OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
                             OVERLAY_KEY_GOPEED -> DownloadEngineScreen(onBack = { showGopeed = false })
+                            OVERLAY_KEY_ANNOUNCEMENTS -> AnnouncementScreen(
+                                viewModel = announcementViewModel,
+                                onBack = { showAnnouncements = false },
+                                // 启动弹窗点了「查看详情」就直接落在详情页（列表 ↔ 详情的共享元素在页面内部）
+                                initialDetailId = announcementDetailId
+                            )
                             else -> BookmarkScreen(
                                 viewModel = bookmarkViewModel,
                                 onBack = { showBookmarks = false },
@@ -1108,6 +1176,19 @@ fun MainScreen() {
                 }
             )
         }
+    }
+
+    // 启动公告弹窗：展示未读的置顶公告（没有则最新未读）。两个出口都算已读，见 AnnouncementViewModel.consumePopup
+    popupAnnouncement?.let { announcement ->
+        AnnouncementPopupDialog(
+            announcement = announcement,
+            onDetail = {
+                announcementDetailId = announcement.id
+                showAnnouncements = true
+                announcementViewModel.consumePopup()
+            },
+            onDismiss = { announcementViewModel.consumePopup() }
+        )
     }
 
     // GitHub Token 配置弹窗（网盘页入口）：Keystore 加密存储，输入用密码可见性切换
