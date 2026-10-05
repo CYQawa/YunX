@@ -1312,6 +1312,15 @@ Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正�
    要用 `constraints.hasBoundedWidth/Height`。
 ★ 弹窗里的图**一律走固定高度**（公告弹窗封面 180dp + `Crop`）：弹窗高度必须可预期，
    按图片原始比例的话一张方图就能把弹窗撑满、把正文挤掉；想看全图点进详情页（那里才用 `autoHeight`）。
+★★ **`produceState(initialValue, key)` 的 `remember` 不带 key ⇒ 绝不要用它加载「会变的 URL」**（已踩过）：
+   它的实现就是 `remember { mutableStateOf(initialValue) }`，key 变了状态里仍是**上一张图**；
+   加载逻辑若再写成「已有值就跳过加载」，新图就永远不会请求 ⇒ 打开公告 A 再打开公告 B，
+   B 的封面 / 头像 / 正文图全是 A 的（**文字是直接传参所以正常**，很容易误判成"数据串了"）。
+   必现路径：详情命中 `detailCache` 时不经过 Loading 分支，详情页整棵 `LazyColumn` 原地换内容。
+   正确写法（`RemoteImage` 与 `GitHubMarkdownImageTransformer` 都已这么改）：
+   `remember(link) { mutableStateOf<Bitmap?>(cached(link)) }` + `LaunchedEffect(link) { … }` ——
+   URL 一变状态就同步重建：旧图立刻消失、缓存命中直接出图、失败只留占位色。
+   同理，详情页的 `LazyListState` 要按公告 id `scrollToItem(0)`，否则复用槽位时会继承上一条的滚动位置。
 
 **正文渲染不用 WebView**：走 mikepenz GFM 渲染器（与 README 预览同一套 + `compactMarkdownTypography()`），
 `content` 里的 HTML 片段只会当普通文本显示。这样**没有脚本执行面**（XSS / CSP 都不用自己扛），

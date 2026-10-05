@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -47,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -132,7 +134,16 @@ private fun AnnouncementDetailContent(
     val typography = remember { compactMarkdownTypography() }
     val publisher = item.publisher.name.ifBlank { item.author }
 
+    // ★ 滚动位置按公告 id 归零：列表页连点两条公告时，详情页的组合槽位会被复用
+    //   （返回动画还没播完就点下一条；命中详情缓存时也不会经过 Loading 分支，整棵 LazyColumn 原地换内容），
+    //   不重置的话新公告会继承上一条的滚动位置，看起来像"内容错位/串了"。
+    val detailListState = rememberLazyListState()
+    LaunchedEffect(item.id) {
+        detailListState.scrollToItem(0)
+    }
+
     LazyColumn(
+        state = detailListState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp)
     ) {

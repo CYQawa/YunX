@@ -28,9 +28,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,23 +77,29 @@ fun RemoteImage(
     placeholderRatio: Float = 16f / 9f
 ) {
     val link = url?.trim().orEmpty()
-    var failed by remember(link) { mutableStateOf(false) }
-    // 已缓存过的图直接当初始值：重组 / 回退到本页时不会先闪一下占位色
-    val bitmap by produceState<Bitmap?>(
-        initialValue = if (link.isEmpty()) null else RemoteImageLoader.cached(link),
-        link
-    ) {
-        if (link.isEmpty()) {
-            value = null
-            return@produceState
-        }
-        if (value == null) {
-            val loaded = RemoteImageLoader.load(link)
-            failed = loaded == null
-            value = loaded
-        }
+    // ★★ 状态必须用 `remember(link)` 建，**不能用 `produceState(initialValue, link)`**：
+    //   produceState 内部是 `remember { mutableStateOf(initialValue) }` —— 它的 remember **不带 key**，
+    //   换 URL 后状态里还留着**上一张图**，再配合"已有值就跳过加载"的判断，新图永远不会加载 ⇒
+    //   一直显示上一条公告的封面/头像（实测 bug：打开公告 A 再打开公告 B，B 的图是 A 的；
+    //   文字是直接传参所以正常，只有图片残留，很容易误判成数据串了）。
+    //   `remember(link)` 在 URL 变化时**同步**重建状态：旧图立刻消失、新图先用缓存（没有则占位色），
+    //   连一帧旧图都不会闪。
+    val bitmapState = remember(link) {
+        mutableStateOf<Bitmap?>(if (link.isEmpty()) null else RemoteImageLoader.cached(link))
     }
-    val bmp = bitmap
+    var failed by remember(link) { mutableStateOf(false) }
+    LaunchedEffect(link) {
+        // 空地址、或命中缓存：没什么要加载的
+        if (link.isEmpty() || bitmapState.value != null) return@LaunchedEffect
+        val loaded = RemoteImageLoader.load(link)
+        failed = loaded == null
+        bitmapState.value = loaded
+    }
+    // ★ 这里必须取成局部 val，**不能写成 `by` 委托**（`val bmp by bitmapState`）：
+    //   委托属性的 getter 每次读都可能返回不同的值，编译器不允许对它做非空智能转换，
+    //   CI 报过 `Smart cast to 'android.graphics.Bitmap' is impossible, because 'bmp' is a delegated property`。
+    //   局部 val 只读一次，下面 `bmp != null && bmp.height > 0` 才能智能转换。
+    val bmp = bitmapState.value
 
     if (autoHeight) {
         BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
