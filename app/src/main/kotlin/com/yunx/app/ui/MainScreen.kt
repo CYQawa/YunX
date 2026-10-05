@@ -111,6 +111,7 @@ import com.yunx.app.data.network.TokenCheck
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.data.security.CredentialStore
 import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.data.repository.BaiduAccountRepository
 import com.yunx.app.data.repository.BaiduResolveRepository
@@ -311,6 +312,7 @@ fun MainScreen() {
     val popupAnnouncement by announcementViewModel.popup.collectAsState()
     LaunchedEffect(Unit) { announcementViewModel.checkStartup() }
 
+
     val api = remember { QuarkApi() }
     val ucApi = remember { UCApi() }
     val xunleiApi = remember { XunleiApi() }
@@ -319,6 +321,17 @@ fun MainScreen() {
     val pan123Api = remember { Pan123Api() }
     val pan115Api = remember { Pan115Api() }
     val db = remember { AppDatabase.get(context) }
+
+    /**
+     * 本机密钥失效提示（v1.2.9）：改锁屏密码/指纹、系统升级等会让 Android Keystore 里的密钥
+     * 永久作废，此时加密保存的网盘凭证与 GitHub Token 都解不开了。数据层已经把失效的那条清掉，
+     * 这里负责**告诉用户为什么突然要重新登录**（不然就是「账号莫名其妙没了」）。
+     *
+     * ★ 位置必须在 `AppDatabase.get()` **之后**：注册「密钥被重建」监听、以及第一次读账号
+     *   都发生在建库那一步，之前读标记只会读到旧值，导致本次启动不弹、要等下次启动才弹。
+     * ★ 标记写在 SharedPreferences 里，所以进程被杀后重启仍会补弹，直到用户点「知道了」。
+     */
+    var credentialLostNotice by remember { mutableStateOf(CredentialStore.hasKeyLostNotice(context)) }
     val settings = remember { SettingsRepository(context) }
     val repository = remember {
         QuarkAccountRepository(db.quarkAccountDao(), api)
@@ -1187,6 +1200,21 @@ fun MainScreen() {
                 }
             )
         }
+    }
+
+    // 本机密钥失效提示：只在「真的丢了密钥、凭证已被清空」时弹一次（标记由数据层写入）
+    if (credentialLostNotice) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(CredentialStore.LOST_TITLE) },
+            text = { Text(CredentialStore.LOST_MESSAGE) },
+            confirmButton = {
+                TextButton(onClick = {
+                    CredentialStore.consumeKeyLostNotice(context)
+                    credentialLostNotice = false
+                }) { Text("知道了") }
+            }
+        )
     }
 
     // 启动公告弹窗：展示未读的置顶公告（没有则最新未读）。两个出口都算已读，见 AnnouncementViewModel.consumePopup
