@@ -74,6 +74,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.C139AccountEntity
+import com.yunx.app.data.db.GuangYaAccountEntity
+import com.yunx.app.data.db.ILanzouAccountEntity
+import com.yunx.app.data.db.LanzouAccountEntity
 import com.yunx.app.data.db.Pan115AccountEntity
 import com.yunx.app.data.db.Pan123AccountEntity
 import com.yunx.app.data.db.QuarkAccountEntity
@@ -83,6 +86,9 @@ import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.DriveQuotaViewModel
+import com.yunx.app.ui.viewmodel.GuangYaCloudViewModel
+import com.yunx.app.ui.viewmodel.ILanzouCloudViewModel
+import com.yunx.app.ui.viewmodel.LanzouCloudViewModel
 import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
@@ -122,6 +128,9 @@ fun DriveScreen(
     c139Account: C139AccountEntity?,
     pan123Account: Pan123AccountEntity?,
     pan115Account: Pan115AccountEntity?,
+    guangyaAccount: GuangYaAccountEntity?,
+    ilanzouAccount: ILanzouAccountEntity?,
+    lanzouAccount: LanzouAccountEntity?,
     /** 夸克云盘浏览 ViewModel（网盘 Tab 内切换展示，非全屏） */
     quarkCloudViewModel: QuarkCloudViewModel,
     /** UC 网盘云盘浏览 ViewModel */
@@ -136,6 +145,12 @@ fun DriveScreen(
     pan123CloudViewModel: Pan123CloudViewModel,
     /** 115 网盘浏览 ViewModel */
     pan115CloudViewModel: Pan115CloudViewModel,
+    /** 光鸭云盘浏览 ViewModel */
+    guangyaCloudViewModel: GuangYaCloudViewModel,
+    /** 蓝奏云优享版浏览 ViewModel */
+    ilanzouCloudViewModel: ILanzouCloudViewModel,
+    /** 蓝奏云浏览 ViewModel */
+    lanzouCloudViewModel: LanzouCloudViewModel,
     /** 网盘空间详情 ViewModel（顶部空间总览） */
     driveQuotaViewModel: DriveQuotaViewModel,
     onQuarkLogin: () -> Unit,
@@ -154,6 +169,12 @@ fun DriveScreen(
     onPan123Logout: () -> Unit,
     onPan115Login: () -> Unit,
     onPan115Logout: () -> Unit,
+    onGuangYaLogin: () -> Unit,
+    onGuangYaLogout: () -> Unit,
+    onILanzouLogin: () -> Unit,
+    onILanzouLogout: () -> Unit,
+    onLanzouLogin: () -> Unit,
+    onLanzouLogout: () -> Unit,
     /** 是否已配置 GitHub Token（控制 GitHub 卡片副标题与登录态样式） */
     githubHasToken: Boolean = false,
     /** 点击 GitHub 卡片：已配置 Token 时进入「我的主页」（账号仓库浏览）；未配置时打开 Token 管理弹窗 */
@@ -171,6 +192,9 @@ fun DriveScreen(
     var showC139Sheet by remember { mutableStateOf(false) }
     var showPan123Sheet by remember { mutableStateOf(false) }
     var showPan115Sheet by remember { mutableStateOf(false) }
+    var showGuangYaSheet by remember { mutableStateOf(false) }
+    var showILanzouSheet by remember { mutableStateOf(false) }
+    var showLanzouSheet by remember { mutableStateOf(false) }
     // GitHub 卡片「更多」菜单（浏览主页 / 配置 Token / 清除 Token）
     var showGitHubSheet by remember { mutableStateOf(false) }
     // 夸克云盘浏览：网盘 Tab 内切换（非全屏），切 Tab 再回来仍保留
@@ -187,6 +211,12 @@ fun DriveScreen(
     var showPan123Cloud by rememberSaveable { mutableStateOf(false) }
     // 115 网盘浏览：网盘 Tab 内切换（非全屏）
     var showPan115Cloud by rememberSaveable { mutableStateOf(false) }
+    // 光鸭云盘浏览：网盘 Tab 内切换（非全屏）
+    var showGuangYaCloud by rememberSaveable { mutableStateOf(false) }
+    // 蓝奏云优享版浏览：网盘 Tab 内切换（非全屏）
+    var showILanzouCloud by rememberSaveable { mutableStateOf(false) }
+    // 蓝奏云浏览：网盘 Tab 内切换（非全屏）
+    var showLanzouCloud by rememberSaveable { mutableStateOf(false) }
 
     // 夸克：登录态由数据库驱动；已登录则副标题显示昵称
     val quark = DriveAccount(
@@ -238,6 +268,27 @@ fun DriveScreen(
         avatarText = "115",
         isLoggedIn = pan115Account != null
     )
+    val guangya = DriveAccount(
+        id = "guangya",
+        name = "光鸭云盘",
+        description = guangyaAccount?.nickname ?: "点击登录，支持解析下载",
+        avatarText = "光",
+        isLoggedIn = guangyaAccount != null
+    )
+    val ilanzou = DriveAccount(
+        id = "ilanzou",
+        name = "蓝奏云优享版",
+        description = ilanzouAccount?.nickname?.let { maskAccount(it) } ?: "点击登录，支持解析下载",
+        avatarText = "蓝优",
+        isLoggedIn = ilanzouAccount != null
+    )
+    val lanzou = DriveAccount(
+        id = "lanzou",
+        name = "蓝奏云",
+        description = lanzouAccount?.nickname?.let { maskAccount(it) } ?: "点击登录，支持解析下载",
+        avatarText = "蓝",
+        isLoggedIn = lanzouAccount != null
+    )
     // GitHub：把 GitHub 当网盘浏览下载；此处仅做 Token 管理（提升 API 限额），浏览入口在解析页
     val github = DriveAccount(
         id = "github",
@@ -267,6 +318,9 @@ fun DriveScreen(
             showC139Cloud -> 5
             showPan123Cloud -> 6
             showPan115Cloud -> 7
+            showGuangYaCloud -> 8
+            showILanzouCloud -> 9
+            showLanzouCloud -> 10
             else -> 0
         },
         transitionSpec = {
@@ -316,6 +370,24 @@ fun DriveScreen(
             viewModel = pan115CloudViewModel,
             scrollBehavior = scrollBehavior,
             onExit = { showPan115Cloud = false },
+            onDownloadStarted = onDownloadStarted
+        )
+        8 -> GuangYaCloudScreen(
+            viewModel = guangyaCloudViewModel,
+            scrollBehavior = scrollBehavior,
+            onExit = { showGuangYaCloud = false },
+            onDownloadStarted = onDownloadStarted
+        )
+        9 -> ILanzouCloudScreen(
+            viewModel = ilanzouCloudViewModel,
+            scrollBehavior = scrollBehavior,
+            onExit = { showILanzouCloud = false },
+            onDownloadStarted = onDownloadStarted
+        )
+        10 -> LanzouCloudScreen(
+            viewModel = lanzouCloudViewModel,
+            scrollBehavior = scrollBehavior,
+            onExit = { showLanzouCloud = false },
             onDownloadStarted = onDownloadStarted
         )
             else -> PullToRefreshBox(
@@ -450,6 +522,53 @@ fun DriveScreen(
                         }
                     )
                 }
+                item(key = guangya.id) {
+                    DriveAccountCard(
+                        account = guangya,
+                        quota = driveQuotaViewModel.guangyaQuota.collectAsState().value,
+                        onClick = if (guangya.isLoggedIn) {
+                            { showGuangYaCloud = true }
+                        } else {
+                            onGuangYaLogin
+                        },
+                        onMoreClick = if (guangya.isLoggedIn) {
+                            { showGuangYaSheet = true }
+                        } else {
+                            null
+                        }
+                    )
+                }
+                item(key = ilanzou.id) {
+                    DriveAccountCard(
+                        account = ilanzou,
+                        quota = driveQuotaViewModel.ilanzouQuota.collectAsState().value,
+                        onClick = if (ilanzou.isLoggedIn) {
+                            { showILanzouCloud = true }
+                        } else {
+                            onILanzouLogin
+                        },
+                        onMoreClick = if (ilanzou.isLoggedIn) {
+                            { showILanzouSheet = true }
+                        } else {
+                            null
+                        }
+                    )
+                }
+                item(key = lanzou.id) {
+                    DriveAccountCard(
+                        account = lanzou,
+                        onClick = if (lanzou.isLoggedIn) {
+                            { showLanzouCloud = true }
+                        } else {
+                            onLanzouLogin
+                        },
+                        onMoreClick = if (lanzou.isLoggedIn) {
+                            { showLanzouSheet = true }
+                        } else {
+                            null
+                        }
+                    )
+                }
                 item(key = github.id) {
                     // GitHub：已配置 Token 点击主体进入「我的主页」；未配置打开 Token 弹窗；更多按钮在登录后显示
                     DriveAccountCard(
@@ -547,6 +666,42 @@ fun DriveScreen(
                 showPan115Sheet = false
             },
             onDismiss = { showPan115Sheet = false }
+        )
+    }
+
+    // 已登录光鸭：点击卡片弹出账号信息底部弹窗
+    if (showGuangYaSheet && guangyaAccount != null) {
+        GuangYaAccountSheet(
+            account = guangyaAccount,
+            onLogout = {
+                onGuangYaLogout()
+                showGuangYaSheet = false
+            },
+            onDismiss = { showGuangYaSheet = false }
+        )
+    }
+
+    // 已登录蓝奏优享：点击卡片弹出账号信息底部弹窗
+    if (showILanzouSheet && ilanzouAccount != null) {
+        ILanzouAccountSheet(
+            account = ilanzouAccount,
+            onLogout = {
+                onILanzouLogout()
+                showILanzouSheet = false
+            },
+            onDismiss = { showILanzouSheet = false }
+        )
+    }
+
+    // 已登录蓝奏云：点击卡片弹出账号信息底部弹窗
+    if (showLanzouSheet && lanzouAccount != null) {
+        LanzouAccountSheet(
+            account = lanzouAccount,
+            onLogout = {
+                onLanzouLogout()
+                showLanzouSheet = false
+            },
+            onDismiss = { showLanzouSheet = false }
         )
     }
 

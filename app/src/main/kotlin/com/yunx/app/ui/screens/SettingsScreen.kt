@@ -26,9 +26,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
@@ -70,7 +67,6 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
-import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolunteerActivism
@@ -115,7 +111,6 @@ import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.backup.AuthCrypto
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSaver
-import com.yunx.app.data.gopeed.GopeedEngine
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
@@ -126,7 +121,6 @@ import com.yunx.app.ui.theme.ThemeController
 import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.util.AppLinks
 import com.yunx.app.util.LogExporter
-import com.yunx.app.util.StorageDirs
 import com.yunx.app.ui.components.YunXLoading
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -196,17 +190,14 @@ fun SettingsScreen(
     scrollBehavior: TopAppBarScrollBehavior,
     /**
      * 容器变换（Container Transform）源侧修饰符：由 MainScreen 在 SharedTransitionLayout 作用域内构造
-     * （设置页自己拿不到那个作用域），分别挂到「主题与外观 / 关于云析 / 支持开发 / 下载引擎」这四行上。
+     * （设置页自己拿不到那个作用域），分别挂到「主题与外观 / 关于云析 / 支持开发」三行上。
      */
     themeRowModifier: Modifier = Modifier,
     aboutRowModifier: Modifier = Modifier,
     supportRowModifier: Modifier = Modifier,
-    engineRowModifier: Modifier = Modifier,
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
-    /** 打开下载引擎页（两套下载器切换、导入内核、引擎启停与状态） */
-    onGopeedClick: () -> Unit,
     backupManager: AuthBackupManager,
     /** 手动检查更新（弹窗与下载逻辑都由 MainScreen 统一持有，设置页不再自己实现一份） */
     onCheckUpdate: () -> Unit,
@@ -229,24 +220,14 @@ fun SettingsScreen(
     var showPlatformThreadDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 下载保存目录：内置下载器存 SAF tree Uri；Gopeed 引擎只能按真实路径写，所以另存一份路径字符串
+    // 下载保存目录（SAF）：本地状态驱动 UI 刷新，同时同步 SharedPreferences
     val settingsRepo = remember { SettingsRepository(context) }
     var downloadDirUri by remember { mutableStateOf(settingsRepo.downloadDirUri) }
-    var engineDirPath by remember { mutableStateOf(settingsRepo.engineDownloadDir) }
-    var showEngineDirDialog by remember { mutableStateOf(false) }
-    var engineDirInput by remember { mutableStateOf("") }
     var showDevMenu by remember { mutableStateOf(false) }
-    // 下载引擎（内置分片下载器 / Gopeed 引擎）：本身在独立页面里改，这里只读来渲染副标题
-    var engineChoice by remember { mutableStateOf(settingsRepo.downloadEngine) }
-    // 引擎模式下「下载保存目录」这一行的语义/副标题不同，而且会隐藏若干「只对内置分片下载器有意义」的设置项，
-    // 所以这个判断要早于下面几个回调（目录选择器的回调里就要用），声明在这里
-    val engineOn = engineChoice == SettingsRepository.ENGINE_GOPEED
     // 网络与下载策略（本地状态驱动 UI，同时同步 SharedPreferences）
     var maxConcurrent by remember { mutableStateOf(settingsRepo.maxConcurrentDownloads) }
     var speedLimitBps by remember { mutableStateOf(settingsRepo.downloadSpeedLimit) }
     var retryCount by remember { mutableStateOf(settingsRepo.downloadRetryCount) }
-    // 夸克取链方式：免转存（默认，不写入网盘）↔ 转存（先存临时目录再取链）
-    var quarkNoSave by remember { mutableStateOf(settingsRepo.quarkNoSaveDownload) }
     var showConcurrencyDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRetryDialog by remember { mutableStateOf(false) }
@@ -272,8 +253,6 @@ fun SettingsScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
-                // 下载引擎在独立页面里切换，返回设置页时同步副标题
-                engineChoice = settingsRepo.downloadEngine
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -294,37 +273,12 @@ fun SettingsScreen(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) {
-            if (engineOn) {
-                // Gopeed 引擎要的是**真实路径**：本机存储（外部存储 provider）能反解出来，
-                // 第三方 provider（网盘/Drive 之类）反解不了 → 退到手输弹窗，绝不把 content:// 当路径用
-                val path = GopeedEngine.realPathFromTreeUri(uri)
-                val dir = path?.let {
-                    runCatching { GopeedEngine.prepareDownloadDir(it.absolutePath) }.getOrNull()
-                }
-                if (dir != null) {
-                    settingsRepo.engineDownloadDir = dir.absolutePath
-                    engineDirPath = dir.absolutePath
-                    SnackbarController.show("Gopeed 下载目录已更新：${dir.absolutePath}")
-                } else {
-                    val fallback = engineDirPath.ifBlank { StorageDirs.defaultDownloadPath() }
-                    engineDirInput = path?.absolutePath ?: fallback
-                    showEngineDirDialog = true
-                    SnackbarController.show(
-                        if (path == null) {
-                            "这个位置拿不到真实路径，请手动输入目录"
-                        } else {
-                            "这个目录不可写，请手动输入或先授予「所有文件访问」"
-                        }
-                    )
-                }
-            } else {
-                // 持久授权：应用重启后仍可写（API19+；Android 10/11+ 分区存储必需）
-                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
-                settingsRepo.downloadDirUri = uri.toString()
-                downloadDirUri = uri.toString()
-                SnackbarController.show("下载保存目录已更新")
-            }
+            // 持久授权：应用重启后仍可写（API19+；Android 10/11+ 分区存储必需）
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
+            settingsRepo.downloadDirUri = uri.toString()
+            downloadDirUri = uri.toString()
+            SnackbarController.show("下载保存目录已更新")
         }
     }
     // 导入网盘认证文件选择器：选择后先判断是否加密备份，加密则弹密码框
@@ -373,24 +327,9 @@ fun SettingsScreen(
             .padding(16.dp)
     ) {
         SectionLabel("下载")
-        // 引擎切换在独立页面里做（那里上下两段各一个按钮），这里只显示当前用的是哪个
-        SettingsItem(
-            icon = Icons.Outlined.SwapHoriz,
-            shape = listGroupShape(ListGroupPos.FIRST),
-            title = "下载引擎",
-            description = if (engineOn) {
-                "Gopeed 引擎（内置 gomobile 核心，按真实路径落盘）"
-            } else {
-                "内置分片下载器（默认，走 SAF/MediaStore 保存）"
-            },
-            modifier = engineRowModifier,
-            onClick = onGopeedClick
-        )
-
-        Spacer(modifier = Modifier.height(ListGroupGap))
         SettingsItem(
             icon = Icons.Outlined.Tune,
-            shape = listGroupShape(ListGroupPos.MIDDLE),
+            shape = listGroupShape(ListGroupPos.FIRST),
             title = "下载线程数",
             description = "按网盘分别设置分片并发数（默认 32，最高 512）",
             onClick = { showThreadsDialog = true }
@@ -398,51 +337,29 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(ListGroupGap))
 
-        // 下载保存目录（两种下载器共用这一行，但存的东西不一样）：
-        // - 内置分片下载器：SAF tree Uri（写 content://，走 MediaStore/SAF，Android 10+ 免存储权限）；
-        // - Gopeed 引擎：**真实文件路径**（原生核心写不了 content://），所以从 SAF 选的目录里反解路径，
-        //   反解不到（第三方 provider）或选择器不可用时退到手输弹窗（见 Agent.md §3.33）。
+        // 下载保存目录：系统文件夹选择器（SAF，适配各 Android 版本分区存储）；
+        // 已自定义时卡片右侧内嵌「恢复默认」操作（不单独外露按钮）。
         // 系统选择器被卸载或禁用时 launch 抛 ActivityNotFoundException（#90）：
-        // 内置下载器只能提示恢复选择器；引擎模式则直接给手输兜底。
-        val dirCustomized = if (engineOn) engineDirPath.isNotBlank() else downloadDirUri != null
+        // 只提示恢复选择器，不改已保存的目录，也不改用其他文件管理器。
         SettingsItem(
             icon = Icons.Outlined.FolderOpen,
-            // 这一行在两种引擎下都是**组内中间行**：它后面还有「免转存下载 / 锁屏后保持下载 /
-            // 通知栏下载进度」，整个「下载」组一直到最后的通知栏那行才收尾（LAST）。
-            // ★ 别按当前引擎改成 LAST —— 引擎模式下折叠掉的只是"只对内置有意义"的那几项，
-            //   组并没有结束；组尾圆角会变成"圆了底又接着下一行"的怪样子（用户报过）。
             shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "下载保存目录",
-            description = when {
-                engineOn && engineDirPath.isNotBlank() -> "Gopeed：$engineDirPath"
-                engineOn -> "Gopeed 默认 ${StorageDirs.defaultDownloadPath()}（点击自定义）"
-                else -> downloadDirUri?.let { "已自定义：${DownloadSaver.safDirDisplay(it)}" }
-                    ?: "默认 ${StorageDirs.defaultDownloadPath()}（点击自定义）"
-            },
+            description = downloadDirUri?.let { "已自定义：${DownloadSaver.safDirDisplay(it)}" }
+                ?: "系统默认 Download（点击自定义）",
             onClick = {
                 try {
                     dirLauncher.launch(null)
                 } catch (_: ActivityNotFoundException) {
-                    if (engineOn) {
-                        // SAF 不可用：引擎模式退到手输路径
-                        engineDirInput = engineDirPath.ifBlank { StorageDirs.defaultDownloadPath() }
-                        showEngineDirDialog = true
-                    } else {
-                        SnackbarController.show("无法打开文件夹选择器，请恢复或启用系统文件选择器后重试")
-                    }
+                    SnackbarController.show("无法打开文件夹选择器，请恢复或启用系统文件选择器后重试")
                 }
             },
-            trailing = if (dirCustomized) {
+            trailing = if (downloadDirUri != null) {
                 {
                     TextButton(
                         onClick = {
-                            if (engineOn) {
-                                engineDirPath = ""
-                                settingsRepo.engineDownloadDir = ""
-                            } else {
-                                downloadDirUri = null
-                                settingsRepo.downloadDirUri = null
-                            }
+                            downloadDirUri = null
+                            settingsRepo.downloadDirUri = null
                             SnackbarController.show("已恢复默认下载目录")
                         },
                         modifier = Modifier.padding(start = 8.dp)
@@ -459,13 +376,8 @@ fun SettingsScreen(
             }
         )
 
-        // ★ 组内 3dp 发丝缝必须留在这个 AnimatedVisibility **外面**：折叠时里面的间距会一起消失，
-        //   引擎模式下这一行就会和下面的「免转存下载」贴在一起（用户报的"边距错误"）。
         Spacer(modifier = Modifier.height(ListGroupGap))
 
-        // 引擎模式下隐藏「只对内置分片下载器有意义」的设置（引擎只认自己的并发/重试，也不支持限速）
-        AnimatedVisibility(visible = !engineOn, enter = expandVertically(), exit = shrinkVertically()) {
-            Column {
         // 网络与下载策略
         SettingsItem(
             icon = Icons.Outlined.Layers,
@@ -495,32 +407,9 @@ fun SettingsScreen(
             onClick = { showRetryDialog = true }
         )
 
-            Spacer(modifier = Modifier.height(ListGroupGap))
-            }
-        }
-
-        // 取链方式：免转存（默认）↔ 转存。只影响夸克 —— 其分享文件可以「用分享凭证直接换直链」，
-        // 不必先转存进用户网盘；关掉后回到「转存到 YunX临时转存 再取链」的老流程。
-        SettingsItem(
-            icon = Icons.Outlined.SwapHoriz,
-            shape = listGroupShape(ListGroupPos.MIDDLE),
-            title = "免转存下载",
-            description = if (quarkNoSave) {
-                "夸克：解析出直链后直接下载，不把文件转存到自己的网盘"
-            } else {
-                "夸克：先转存到临时目录再取链（下载完成后自动清理）"
-            },
-            onClick = {
-                quarkNoSave = !quarkNoSave
-                settingsRepo.quarkNoSaveDownload = quarkNoSave
-            },
-            trailing = { Switch(checked = quarkNoSave, onCheckedChange = null) }
-        )
-
         Spacer(modifier = Modifier.height(ListGroupGap))
 
         // 用户体验与系统适配：锁屏保持下载 / 通知栏进度样式
-        // （这两项对引擎任务同样生效：引擎任务走同一套前台服务、WakeLock 与通知通道，所以不隐藏）
         SettingsItem(
             icon = Icons.Outlined.Power,
             shape = listGroupShape(ListGroupPos.MIDDLE),
@@ -743,51 +632,6 @@ fun SettingsScreen(
             title = "GitHub 仓库",
             description = "${AppLinks.GITHUB_REPO_DISPLAY} · 查看源码与反馈问题",
             onClick = { openUrl(context, AppLinks.GITHUB_REPO) }
-        )
-    }
-
-    // Gopeed 下载目录手输弹窗：SAF 反解不到真实路径（第三方 provider / 选择器不可用）时的兜底。
-    // 校验（建目录 + 试写探针）统一交给 GopeedEngine.prepareDownloadDir，失败原文直接提示、不关弹窗。
-    if (showEngineDirDialog) {
-        AlertDialog(
-            onDismissRequest = { showEngineDirDialog = false },
-            title = { Text("自定义 Gopeed 下载目录") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Gopeed 是原生下载核心，只能按真实文件路径落盘，读不了系统文件选择器给的目录。" +
-                            "请填一个绝对路径，例如 ${StorageDirs.defaultDownloadPath()}/YunX。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OutlinedTextField(
-                        value = engineDirInput,
-                        onValueChange = { engineDirInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("目录路径") },
-                        placeholder = { Text(StorageDirs.defaultDownloadPath()) },
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val dir = runCatching { GopeedEngine.prepareDownloadDir(engineDirInput) }
-                        .getOrElse { e ->
-                            SnackbarController.show(e.message ?: "这个目录不可写")
-                            return@TextButton
-                        }
-                    settingsRepo.engineDownloadDir = dir.absolutePath
-                    engineDirPath = dir.absolutePath
-                    showEngineDirDialog = false
-                    SnackbarController.show("Gopeed 下载目录已设为 ${dir.absolutePath}")
-                }) {
-                    Text("确定")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEngineDirDialog = false }) { Text("取消") }
-            }
         )
     }
 

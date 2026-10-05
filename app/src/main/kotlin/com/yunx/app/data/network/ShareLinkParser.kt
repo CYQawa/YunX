@@ -19,7 +19,7 @@
 package com.yunx.app.data.network
 
 /** 网盘平台 */
-enum class SharePlatform { QUARK, UC, XUNLEI, BAIDU, C139, PAN123, PAN115, GITHUB }
+enum class SharePlatform { QUARK, UC, XUNLEI, BAIDU, C139, PAN123, PAN115, GUANGYA, ILANZOU, LANZOU, GITHUB }
 
 /**
  * 解析结果：share_id + 提取码 + 平台。
@@ -57,6 +57,19 @@ object ShareLinkParser {
     private val pan115ShareIdRegex = Regex("""115(?:cdn|rc)?\.com/s/(sw[A-Za-z0-9]+)""", RegexOption.IGNORE_CASE)
     private val pan115CommandRegex = Regex("""115(?:cdn|rc)?\.com/(sw[A-Za-z0-9]{8,})-([A-Za-z0-9]{4,8})""", RegexOption.IGNORE_CASE)
     private val pwdIn115UrlRegex = Regex("""[?&]password=([A-Za-z0-9]+)""")
+    // 光鸭云盘分享链接（文档 §1.1）：https://www.guangyapan.com/s/{shareId}；shareId 字符集 [A-Za-z0-9_-]+
+    private val guangyaShareIdRegex = Regex("""guangyapan\.com/s/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
+    // 蓝奏云优享版分享链接（参考实现 wenxi：ilanzou hosts=[ilanzou.com]，share 路径 /s/<id>）。
+    // 单独识别为 ILANZOU，避免与蓝奏云混淆；该平台无分享解析接口，解析入口会给出明确提示。
+    private val ilanzouShareIdRegex =
+        Regex("""(?:^|[/.])ilanzou\.(?:com|net|org|cn)/s/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
+    // 蓝奏云分享链接（文档 §1.1）：域名族 lanzou*、lan[zs]o[ux]，后缀 com/net/org/cn；shareId 为路径末段（i... 文件 / b... 文件夹）。
+    // 前置边界 (?:^|[/.]) 参照 wenxi 的 lanzouHostPattern（带 subdomainHostPattern）——
+    // 否则 “www.ilanzou.com”（蓝奏云优享版）里的 “lanzou.com” 会被误判为蓝奏云。
+    private val lanzouShareIdRegex =
+        Regex("""(?:^|[/.])(?:lanzou[a-z0-9-]*|lan[zs]o[ux])\.(?:com|net|org|cn)/([A-Za-z0-9]+)""", RegexOption.IGNORE_CASE)
+    // 蓝奏云提取码参数：?pwd= / ?pass= / ?passcode= / ?password=
+    private val pwdInLanzouUrlRegex = Regex("""[?&](?:pwd|pass|passcode|password)=([A-Za-z0-9]+)""", RegexOption.IGNORE_CASE)
     private val pwdInUrlRegex = Regex("""[?&]pwd=([A-Za-z0-9]+)""")
     private val pwdInTextRegex = Regex("""(?:提取码|访问码|密码)[：:]\s*([A-Za-z0-9]{4,8})""")
 
@@ -125,6 +138,24 @@ object ShareLinkParser {
                 pwd = match.groupValues[2],
                 platform = SharePlatform.PAN115
             )
+        }
+        // 光鸭云盘链接：https://www.guangyapan.com/s/{shareId}（提取码可由 ?pwd= 或文案指定）
+        guangyaShareIdRegex.find(url)?.groupValues?.getOrNull(1)?.let { sid ->
+            val pwd = pwdInUrlRegex.find(url)?.groupValues?.getOrNull(1)
+                ?: pwdInTextRegex.find(text)?.groupValues?.getOrNull(1)
+            return ParsedShare(shareId = sid, pwd = pwd, platform = SharePlatform.GUANGYA)
+        }
+        // 蓝奏云优享版链接：https://{ilanzou-host}/s/{shareId}（先于蓝奏云判断，避免混淆）
+        ilanzouShareIdRegex.find(url)?.groupValues?.getOrNull(1)?.let { sid ->
+            val pwd = pwdInLanzouUrlRegex.find(url)?.groupValues?.getOrNull(1)
+                ?: pwdInTextRegex.find(text)?.groupValues?.getOrNull(1)
+            return ParsedShare(shareId = sid, pwd = pwd, platform = SharePlatform.ILANZOU)
+        }
+        // 蓝奏云链接：https://{lanzou-host}/{shareId}（提取码参数 pwd/pass/passcode/password，或文案）
+        lanzouShareIdRegex.find(url)?.groupValues?.getOrNull(1)?.let { sid ->
+            val pwd = pwdInLanzouUrlRegex.find(url)?.groupValues?.getOrNull(1)
+                ?: pwdInTextRegex.find(text)?.groupValues?.getOrNull(1)
+            return ParsedShare(shareId = sid, pwd = pwd, platform = SharePlatform.LANZOU)
         }
         return null
     }

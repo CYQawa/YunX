@@ -28,8 +28,8 @@ import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
 import com.yunx.app.data.security.CredentialCipher
 
 @Database(
-    entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, BookmarkEntity::class],
-    version = 17,
+    entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, GuangYaAccountEntity::class, ILanzouAccountEntity::class, LanzouAccountEntity::class, BookmarkEntity::class],
+    version = 18,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -50,6 +50,12 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun rawPan115AccountDao(): Pan115AccountDao
 
+    abstract fun rawGuangYaAccountDao(): GuangYaAccountDao
+
+    abstract fun rawILanzouAccountDao(): ILanzouAccountDao
+
+    abstract fun rawLanzouAccountDao(): LanzouAccountDao
+
     abstract fun bookmarkDao(): BookmarkDao
 
     private lateinit var credentialCipher: CredentialCipher
@@ -61,6 +67,9 @@ abstract class AppDatabase : RoomDatabase() {
     fun c139AccountDao(): C139AccountDao = SecureAccountDaos.c139(rawC139AccountDao(), credentialCipher)
     fun pan123AccountDao(): Pan123AccountDao = SecureAccountDaos.pan123(rawPan123AccountDao(), credentialCipher)
     fun pan115AccountDao(): Pan115AccountDao = SecureAccountDaos.pan115(rawPan115AccountDao(), credentialCipher)
+    fun guangyaAccountDao(): GuangYaAccountDao = SecureAccountDaos.guangya(rawGuangYaAccountDao(), credentialCipher)
+    fun ilanzouAccountDao(): ILanzouAccountDao = SecureAccountDaos.ilanzou(rawILanzouAccountDao(), credentialCipher)
+    fun lanzouAccountDao(): LanzouAccountDao = SecureAccountDaos.lanzou(rawLanzouAccountDao(), credentialCipher)
 
     companion object {
         @Volatile
@@ -81,7 +90,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_13_14,
                         MIGRATION_14_15,
                         MIGRATION_15_16,
-                        MIGRATION_16_17
+                        MIGRATION_16_17,
+                        MIGRATION_17_18
                     )
                     // 早期开发版（1-8）无可靠 schema；从 v9 起必须保留凭证和下载任务
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8)
@@ -161,6 +171,44 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `download_task` ADD COLUMN `engineTaskId` TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        /** v18：新增光鸭云盘 / 蓝奏云优享版 / 蓝奏云登录凭证表（凭证落库前在 SecureAccountDaos 里加密） */
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `guangya_account` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`accessToken` TEXT NOT NULL, " +
+                        "`refreshToken` TEXT NOT NULL, " +
+                        "`deviceId` TEXT NOT NULL, " +
+                        "`deviceSign` TEXT NOT NULL, " +
+                        "`account` TEXT NOT NULL, " +
+                        "`nickname` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ilanzou_account` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`appToken` TEXT NOT NULL, " +
+                        "`uuid` TEXT NOT NULL, " +
+                        "`account` TEXT NOT NULL, " +
+                        "`password` TEXT NOT NULL, " +
+                        "`userId` TEXT NOT NULL, " +
+                        "`nickname` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `lanzou_account` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`cookie` TEXT NOT NULL, " +
+                        "`nickname` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
                 )
             }
         }

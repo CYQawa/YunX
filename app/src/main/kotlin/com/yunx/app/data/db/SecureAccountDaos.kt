@@ -98,6 +98,39 @@ internal object SecureAccountDaos {
         override suspend fun clear() = raw.clear()
     }
 
+    fun guangya(raw: GuangYaAccountDao, cipher: CredentialCipher): GuangYaAccountDao = object : GuangYaAccountDao {
+        override fun observeAccount(): Flow<GuangYaAccountEntity?> = raw.observeAccount().map { value ->
+            value?.let { decryptGuangYa(raw, cipher, it) }
+        }
+        override suspend fun upsert(account: GuangYaAccountEntity) = withContext(Dispatchers.IO) {
+            raw.upsert(encryptGuangYa(cipher, account))
+        }
+        override suspend fun getAccount(): GuangYaAccountEntity? = raw.getAccount()?.let { decryptGuangYa(raw, cipher, it) }
+        override suspend fun clear() = raw.clear()
+    }
+
+    fun ilanzou(raw: ILanzouAccountDao, cipher: CredentialCipher): ILanzouAccountDao = object : ILanzouAccountDao {
+        override fun observeAccount(): Flow<ILanzouAccountEntity?> = raw.observeAccount().map { value ->
+            value?.let { decryptILanzou(raw, cipher, it) }
+        }
+        override suspend fun upsert(account: ILanzouAccountEntity) = withContext(Dispatchers.IO) {
+            raw.upsert(encryptILanzou(cipher, account))
+        }
+        override suspend fun getAccount(): ILanzouAccountEntity? = raw.getAccount()?.let { decryptILanzou(raw, cipher, it) }
+        override suspend fun clear() = raw.clear()
+    }
+
+    fun lanzou(raw: LanzouAccountDao, cipher: CredentialCipher): LanzouAccountDao = object : LanzouAccountDao {
+        override fun observeAccount(): Flow<LanzouAccountEntity?> = raw.observeAccount().map { value ->
+            value?.let { decryptLanzou(raw, cipher, it) }
+        }
+        override suspend fun upsert(account: LanzouAccountEntity) = withContext(Dispatchers.IO) {
+            raw.upsert(encryptLanzou(cipher, account))
+        }
+        override suspend fun getAccount(): LanzouAccountEntity? = raw.getAccount()?.let { decryptLanzou(raw, cipher, it) }
+        override suspend fun clear() = raw.clear()
+    }
+
     fun xunlei(raw: XunleiAccountDao, cipher: CredentialCipher): XunleiAccountDao = object : XunleiAccountDao {
         override fun observeAccount(): Flow<XunleiAccountEntity?> = raw.observeAccount().map { value ->
             value?.let { decryptXunlei(raw, cipher, it) }
@@ -168,6 +201,45 @@ internal object SecureAccountDaos {
             }
         }
 
+    private suspend fun decryptGuangYa(raw: GuangYaAccountDao, cipher: CredentialCipher, stored: GuangYaAccountEntity): GuangYaAccountEntity? =
+        withContext(Dispatchers.IO) {
+            decryptOrClear(raw::clear) {
+                val plain = stored.copy(
+                    accessToken = cipher.decrypt(stored.accessToken, "guangya.accessToken"),
+                    refreshToken = cipher.decrypt(stored.refreshToken, "guangya.refreshToken"),
+                    deviceId = cipher.decrypt(stored.deviceId, "guangya.deviceId"),
+                    deviceSign = cipher.decrypt(stored.deviceSign, "guangya.deviceSign")
+                )
+                if (listOf(stored.accessToken, stored.refreshToken, stored.deviceId, stored.deviceSign).any { !cipher.isEncrypted(it) }) {
+                    raw.upsert(encryptGuangYa(cipher, plain))
+                }
+                plain
+            }
+        }
+
+    private suspend fun decryptILanzou(raw: ILanzouAccountDao, cipher: CredentialCipher, stored: ILanzouAccountEntity): ILanzouAccountEntity? =
+        withContext(Dispatchers.IO) {
+            decryptOrClear(raw::clear) {
+                val plain = stored.copy(
+                    appToken = cipher.decrypt(stored.appToken, "ilanzou.appToken"),
+                    password = cipher.decrypt(stored.password, "ilanzou.password")
+                )
+                if (!cipher.isEncrypted(stored.appToken) || !cipher.isEncrypted(stored.password)) {
+                    raw.upsert(encryptILanzou(cipher, plain))
+                }
+                plain
+            }
+        }
+
+    private suspend fun decryptLanzou(raw: LanzouAccountDao, cipher: CredentialCipher, stored: LanzouAccountEntity): LanzouAccountEntity? =
+        withContext(Dispatchers.IO) {
+            decryptOrClear(raw::clear) {
+                val plain = stored.copy(cookie = cipher.decrypt(stored.cookie, "lanzou.cookie"))
+                if (!cipher.isEncrypted(stored.cookie)) raw.upsert(encryptLanzou(cipher, plain))
+                plain
+            }
+        }
+
     private suspend fun decryptXunlei(raw: XunleiAccountDao, cipher: CredentialCipher, stored: XunleiAccountEntity): XunleiAccountEntity? =
         withContext(Dispatchers.IO) {
             decryptOrClear(raw::clear) {
@@ -198,6 +270,18 @@ internal object SecureAccountDaos {
         value.copy(accessToken = cipher.encrypt(value.accessToken, "pan123.accessToken"))
     private fun encryptPan115(cipher: CredentialCipher, value: Pan115AccountEntity) =
         value.copy(cookie = cipher.encrypt(value.cookie, "pan115.cookie"))
+    private fun encryptGuangYa(cipher: CredentialCipher, value: GuangYaAccountEntity) = value.copy(
+        accessToken = cipher.encrypt(value.accessToken, "guangya.accessToken"),
+        refreshToken = cipher.encrypt(value.refreshToken, "guangya.refreshToken"),
+        deviceId = cipher.encrypt(value.deviceId, "guangya.deviceId"),
+        deviceSign = cipher.encrypt(value.deviceSign, "guangya.deviceSign")
+    )
+    private fun encryptILanzou(cipher: CredentialCipher, value: ILanzouAccountEntity) = value.copy(
+        appToken = cipher.encrypt(value.appToken, "ilanzou.appToken"),
+        password = cipher.encrypt(value.password, "ilanzou.password")
+    )
+    private fun encryptLanzou(cipher: CredentialCipher, value: LanzouAccountEntity) =
+        value.copy(cookie = cipher.encrypt(value.cookie, "lanzou.cookie"))
     private fun encryptXunlei(cipher: CredentialCipher, value: XunleiAccountEntity) = value.copy(
         accessToken = cipher.encrypt(value.accessToken, "xunlei.accessToken"),
         refreshToken = cipher.encrypt(value.refreshToken, "xunlei.refreshToken"),

@@ -146,31 +146,6 @@ class QuarkResolveRepository(private val api: QuarkApi) : ShareResolveRepository
     )
 
     /**
-     * 免转存取链（登录态）：不建临时目录、不转存，直接把分享凭证（pwd_id / stoken / fids /
-     * share_fid_token）交给 file/download 换直链。省掉整条「建目录 → 转存 → 轮询 → 下载完再删」
-     * 链路，也就不存在转存去重与临时目录残留问题。
-     *
-     * 注意：个别分享类型服务端仍要求「先转存再取链」，此时本方法会失败，由调用方
-     * （ResolveViewModel.resolveShareLink）回退到 [getShareDownloadLink]。
-     */
-    override suspend fun getShareDownloadLinkWithoutSave(
-        session: ShareSession,
-        file: ShareFile,
-        cookie: String
-    ): Result<DownloadLink> = runCatching {
-        api.getShareDownloadLinkWithoutSave(
-            fid = file.fid,
-            fidToken = file.fidToken,
-            shareId = session.shareId,
-            stoken = session.stoken,
-            cookie = cookie
-        ) ?: throw IllegalStateException("获取下载链接失败")
-    }.fold(
-        onSuccess = { Result.success(it) },
-        onFailure = { Result.failure(it) }
-    )
-
-    /**
      * 游客取链（未登录）：不碰用户网盘 —— 不建临时目录、不转存，直接按分享参数打 download 接口，
      * 带回服务端随响应下发的游客态 __pugs。夸克只放行约 50MB 以内的小文件（超出报 23018）。
      */

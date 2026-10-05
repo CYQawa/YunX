@@ -36,13 +36,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmarks
-import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,7 +91,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import com.yunx.app.data.announcement.AnnouncementReadStore
 import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.download.ChunkDownloader
 import com.yunx.app.data.download.DownloadManager
@@ -104,6 +100,9 @@ import com.yunx.app.data.network.C139Api
 import com.yunx.app.data.network.GitHubApi
 import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.GitHubTokenStore
+import com.yunx.app.data.network.GuangYaApi
+import com.yunx.app.data.network.ILanzouApi
+import com.yunx.app.data.network.LanzouApi
 import com.yunx.app.data.network.Pan115Api
 import com.yunx.app.data.network.Pan123Api
 import com.yunx.app.data.network.QuarkApi
@@ -116,6 +115,12 @@ import com.yunx.app.data.repository.BaiduAccountRepository
 import com.yunx.app.data.repository.BaiduResolveRepository
 import com.yunx.app.data.repository.C139AccountRepository
 import com.yunx.app.data.repository.C139ResolveRepository
+import com.yunx.app.data.repository.GuangYaAccountRepository
+import com.yunx.app.data.repository.GuangYaResolveRepository
+import com.yunx.app.data.repository.ILanzouAccountRepository
+import com.yunx.app.data.repository.ILanzouResolveRepository
+import com.yunx.app.data.repository.LanzouAccountRepository
+import com.yunx.app.data.repository.LanzouResolveRepository
 import com.yunx.app.data.repository.Pan115AccountRepository
 import com.yunx.app.data.repository.Pan115ResolveRepository
 import com.yunx.app.data.repository.Pan123AccountRepository
@@ -128,6 +133,9 @@ import com.yunx.app.data.repository.XunleiAccountRepository
 import com.yunx.app.data.repository.XunleiResolveRepository
 import com.yunx.app.ui.login.BaiduLoginScreen
 import com.yunx.app.ui.login.C139LoginScreen
+import com.yunx.app.ui.login.GuangYaLoginScreen
+import com.yunx.app.ui.login.ILanzouLoginScreen
+import com.yunx.app.ui.login.LanzouLoginScreen
 import com.yunx.app.ui.login.Pan115LoginScreen
 import com.yunx.app.ui.login.Pan123LoginScreen
 import com.yunx.app.ui.login.QuarkLoginScreen
@@ -136,20 +144,15 @@ import com.yunx.app.ui.login.XunleiLoginScreen
 import com.yunx.app.ui.login.XunleiVerifyWebViewScreen
 import com.yunx.app.ui.navigation.MainTab
 import com.yunx.app.ui.screens.AboutScreen
-import com.yunx.app.ui.screens.AnnouncementPopupDialog
-import com.yunx.app.ui.screens.AnnouncementScreen
-import com.yunx.app.ui.screens.AnnouncementUnreadBadge
 import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
-import com.yunx.app.ui.screens.DownloadEngineScreen
 import com.yunx.app.ui.screens.OnboardingScreen
 import com.yunx.app.ui.screens.ResolveScreen
 import com.yunx.app.ui.screens.SettingsScreen
 import com.yunx.app.ui.screens.SupportScreen
 import com.yunx.app.ui.screens.ThemeScreen
 import com.yunx.app.ui.screens.UpdateSheet
-import com.yunx.app.ui.viewmodel.AnnouncementViewModel
 import com.yunx.app.ui.viewmodel.BaiduAccountViewModel
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.BookmarkViewModel
@@ -157,6 +160,12 @@ import com.yunx.app.ui.viewmodel.C139AccountViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.DownloadViewModel
 import com.yunx.app.ui.viewmodel.DriveQuotaViewModel
+import com.yunx.app.ui.viewmodel.GuangYaAccountViewModel
+import com.yunx.app.ui.viewmodel.GuangYaCloudViewModel
+import com.yunx.app.ui.viewmodel.ILanzouAccountViewModel
+import com.yunx.app.ui.viewmodel.ILanzouCloudViewModel
+import com.yunx.app.ui.viewmodel.LanzouAccountViewModel
+import com.yunx.app.ui.viewmodel.LanzouCloudViewModel
 import com.yunx.app.ui.viewmodel.Pan115AccountViewModel
 import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123AccountViewModel
@@ -189,12 +198,6 @@ internal const val OVERLAY_KEY_THEME = "overlay-theme"
 /** 收藏页从顶栏图标进入，没有"被点的那一项"，不做共享元素形变（普通淡入即可） */
 internal const val OVERLAY_KEY_BOOKMARKS = "overlay-bookmarks"
 
-/** Gopeed 引擎页从设置页那一行进入，同样没有共享元素形变（普通淡入即可） */
-internal const val OVERLAY_KEY_GOPEED = "overlay-gopeed"
-
-/** 公告页：源是顶栏那个公告图标（与收藏页同一手法 —— 图标本身当"源"，长成整页） */
-internal const val OVERLAY_KEY_ANNOUNCEMENTS = "overlay-announcements"
-
 /**
  * 主页框架：
  * - 顶部可折叠标题（MediumFlexibleTopAppBar，Expressive 柔性顶栏），切换 Tab 时标题文字随 Tab 变化，折叠状态不受影响；
@@ -220,14 +223,13 @@ fun MainScreen() {
     var showC139Login by rememberSaveable { mutableStateOf(false) }
     var showPan123Login by rememberSaveable { mutableStateOf(false) }
     var showPan115Login by rememberSaveable { mutableStateOf(false) }
+    var showGuangYaLogin by rememberSaveable { mutableStateOf(false) }
+    var showILanzouLogin by rememberSaveable { mutableStateOf(false) }
+    var showLanzouLogin by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
-    var showGopeed by rememberSaveable { mutableStateOf(false) }
-    var showAnnouncements by rememberSaveable { mutableStateOf(false) }
-    /** 启动公告弹窗点「查看详情」时带进去的公告 id（null = 从图标进来先看列表） */
-    var announcementDetailId by rememberSaveable { mutableStateOf<String?>(null) }
     val saveableStateHolder = rememberSaveableStateHolder()
 
     val context = LocalContext.current
@@ -296,21 +298,6 @@ fun MainScreen() {
             SnackbarController.show("暂未获取到 Release 数据，请先联网检查一次更新")
         }
     }
-    /**
-     * 应用内公告：顶栏红点角标 + 启动弹窗。
-     *
-     * 启动检查（[AnnouncementViewModel.checkStartup]）整个会话只跑一次：一次列表请求同时决定
-     * 「角标数字」与「弹窗展示哪一条」—— 有未读的置顶公告就弹它，否则弹最新的一条未读，全读完则不弹。
-     * 失败静默（与上面的更新检查同一口径），用户点进公告页时会再拉一次并把错误显示出来。
-     */
-    val announcementReadStore = remember { AnnouncementReadStore(context) }
-    val announcementViewModel: AnnouncementViewModel = viewModel(
-        factory = AnnouncementViewModel.Factory(announcementReadStore)
-    )
-    val unreadAnnouncementCount by announcementViewModel.unreadCount.collectAsState()
-    val popupAnnouncement by announcementViewModel.popup.collectAsState()
-    LaunchedEffect(Unit) { announcementViewModel.checkStartup() }
-
     val api = remember { QuarkApi() }
     val ucApi = remember { UCApi() }
     val xunleiApi = remember { XunleiApi() }
@@ -318,6 +305,9 @@ fun MainScreen() {
     val c139Api = remember { C139Api() }
     val pan123Api = remember { Pan123Api() }
     val pan115Api = remember { Pan115Api() }
+    val guangyaApi = remember { GuangYaApi() }
+    val ilanzouApi = remember { ILanzouApi() }
+    val lanzouApi = remember { LanzouApi() }
     val db = remember { AppDatabase.get(context) }
     val settings = remember { SettingsRepository(context) }
     val repository = remember {
@@ -340,6 +330,17 @@ fun MainScreen() {
     }
     val pan115Repository = remember {
         Pan115AccountRepository(db.pan115AccountDao(), pan115Api)
+    }
+    val guangyaRepository = remember {
+        GuangYaAccountRepository(db.guangyaAccountDao(), guangyaApi)
+    }
+    // 光鸭业务 API（个人盘 / 分享）必须带 did 设备头：从仓库缓存的 deviceId 同步注入
+    guangyaApi.deviceIdProvider = { guangyaRepository.cachedDeviceId() }
+    val ilanzouRepository = remember {
+        ILanzouAccountRepository(db.ilanzouAccountDao(), ilanzouApi)
+    }
+    val lanzouRepository = remember {
+        LanzouAccountRepository(db.lanzouAccountDao(), lanzouApi)
     }
     // 网盘认证备份：打包/恢复各平台凭证
     val backupManager = remember {
@@ -436,6 +437,15 @@ fun MainScreen() {
     val pan115ViewModel: Pan115AccountViewModel = viewModel(
         factory = Pan115AccountViewModel.Factory(pan115Repository)
     )
+    val guangyaViewModel: GuangYaAccountViewModel = viewModel(
+        factory = GuangYaAccountViewModel.Factory(guangyaRepository)
+    )
+    val ilanzouViewModel: ILanzouAccountViewModel = viewModel(
+        factory = ILanzouAccountViewModel.Factory(ilanzouRepository)
+    )
+    val lanzouViewModel: LanzouAccountViewModel = viewModel(
+        factory = LanzouAccountViewModel.Factory(lanzouRepository)
+    )
     // 各平台「账号是否已登录」流：云盘浏览 VM 在启动期（未登录）init 加载会残留「请先登录…」错误态，
     // 首次登录成功后由 VM 监听该流自动重载根目录（见各 XxxCloudViewModel init）
     val quarkLoginState = remember { repository.observeAccount().map { it != null } }
@@ -445,6 +455,9 @@ fun MainScreen() {
     val c139LoginState = remember { c139Repository.observeAccount().map { it != null } }
     val pan123LoginState = remember { pan123Repository.observeAccount().map { it != null } }
     val pan115LoginState = remember { pan115Repository.observeAccount().map { it != null } }
+    val guangyaLoginState = remember { guangyaRepository.observeAccount().map { it != null } }
+    val ilanzouLoginState = remember { ilanzouRepository.observeAccount().map { it != null } }
+    val lanzouLoginState = remember { lanzouRepository.observeAccount().map { it != null } }
     // 夸克云盘浏览：作为网盘 Tab 内容展示（非全屏），cookie 从数据库读取（避免 StateFlow 初始值为空的竞态）；
     // 下载前经 getFreshCookie 惰性刷新 __puus（修复 AlistGo/alist#830 下载 412）
     val quarkCloudViewModel: QuarkCloudViewModel = viewModel(
@@ -520,6 +533,33 @@ fun MainScreen() {
             loginState = pan115LoginState
         )
     )
+    // 光鸭云盘浏览：点击已登录的光鸭卡片打开（access token / 设备标识从数据库读取）
+    val guangyaCloudViewModel: GuangYaCloudViewModel = viewModel(
+        factory = GuangYaCloudViewModel.Factory(
+            guangyaApi,
+            guangyaRepository,
+            downloadManager,
+            loginState = guangyaLoginState
+        )
+    )
+    // 蓝奏云优享版浏览：点击已登录的蓝奏优享卡片打开（appToken + uuid 从数据库读取）
+    val ilanzouCloudViewModel: ILanzouCloudViewModel = viewModel(
+        factory = ILanzouCloudViewModel.Factory(
+            ilanzouApi,
+            ilanzouRepository,
+            downloadManager,
+            loginState = ilanzouLoginState
+        )
+    )
+    // 蓝奏云浏览：点击已登录的蓝奏云卡片打开（Cookie 从数据库读取）
+    val lanzouCloudViewModel: LanzouCloudViewModel = viewModel(
+        factory = LanzouCloudViewModel.Factory(
+            lanzouApi,
+            lanzouRepository,
+            downloadManager,
+            loginState = lanzouLoginState
+        )
+    )
     // 网盘空间详情：网盘页顶部「空间总览」展示各平台容量使用
     val driveQuotaViewModel: DriveQuotaViewModel = viewModel(
         factory = DriveQuotaViewModel.Factory(
@@ -532,7 +572,9 @@ fun MainScreen() {
             baiduApi, { baiduRepository.getAccount()?.cookie },
             c139Api, { c139Repository.getAccount()?.cookie },
             pan123Api, { pan123Repository.getAccount()?.accessToken },
-            pan115Api, { pan115Repository.getAccount()?.cookie }
+            pan115Api, { pan115Repository.getAccount()?.cookie },
+            guangyaApi, { guangyaRepository.getAccount() },
+            ilanzouApi, { ilanzouRepository.getAccount() }
         )
     )
     val xunleiResolveRepository = remember {
@@ -566,6 +608,19 @@ fun MainScreen() {
     val pan115ResolveRepository = remember {
         Pan115ResolveRepository(pan115Api)
     }
+    val guangyaResolveRepository = remember {
+        GuangYaResolveRepository(
+            api = guangyaApi,
+            // 转存取链需要有效 access：用 ensureAccessToken（临近过期会先刷新）
+            tokenProvider = { guangyaRepository.ensureAccessToken() }
+        )
+    }
+    val lanzouResolveRepository = remember {
+        LanzouResolveRepository(lanzouApi)
+    }
+    val ilanzouResolveRepository = remember {
+        ILanzouResolveRepository(ilanzouApi, ilanzouRepository)
+    }
     val resolveViewModel: ResolveViewModel = viewModel(
         factory = ResolveViewModel.Factory(
             repository,
@@ -582,11 +637,15 @@ fun MainScreen() {
             pan123ResolveRepository,
             pan115Repository,
             pan115ResolveRepository,
+            guangyaRepository,
+            guangyaResolveRepository,
+            ilanzouRepository,
+            ilanzouResolveRepository,
+            lanzouRepository,
+            lanzouResolveRepository,
             downloadManager,
             db.bookmarkDao(),
-            githubApi,
-            // 取链方式开关：设置页「免转存下载」实时生效
-            noSaveDownloadProvider = { settings.quarkNoSaveDownload }
+            githubApi
         )
     )
     val downloadViewModel: DownloadViewModel = viewModel(
@@ -602,6 +661,9 @@ fun MainScreen() {
     val c139Account by c139ViewModel.c139Account.collectAsState()
     val pan123Account by pan123ViewModel.pan123Account.collectAsState()
     val pan115Account by pan115ViewModel.pan115Account.collectAsState()
+    val guangyaAccount by guangyaViewModel.guangyaAccount.collectAsState()
+    val ilanzouAccount by ilanzouViewModel.ilanzouAccount.collectAsState()
+    val lanzouAccount by lanzouViewModel.lanzouAccount.collectAsState()
 
     // 解析页发起下载后，自动切换到「下载」Tab
     LaunchedEffect(resolveViewModel.downloadStarted) {
@@ -737,14 +799,42 @@ fun MainScreen() {
         return
     }
 
+    // 光鸭登录页：全屏覆盖（账号密码登录）
+    if (showGuangYaLogin) {
+        GuangYaLoginScreen(
+            viewModel = guangyaViewModel,
+            onBack = { showGuangYaLogin = false },
+            onSaved = { showGuangYaLogin = false }
+        )
+        return
+    }
+
+    // 蓝奏云优享版登录页：全屏覆盖（账号密码登录）
+    if (showILanzouLogin) {
+        ILanzouLoginScreen(
+            viewModel = ilanzouViewModel,
+            onBack = { showILanzouLogin = false },
+            onSaved = { showILanzouLogin = false }
+        )
+        return
+    }
+
+    // 蓝奏云登录页：全屏覆盖（WebView 打开 pc.woozooo.com 登录，提取 Cookie）
+    if (showLanzouLogin) {
+        LanzouLoginScreen(
+            viewModel = lanzouViewModel,
+            onBack = { showLanzouLogin = false },
+            onSaved = { showLanzouLogin = false }
+        )
+        return
+    }
+
     // 当前叠加页路由（null = 主界面）：容器变换用它当"源/目标"的共享 key
     val overlayRoute = when {
         showAbout -> OVERLAY_KEY_ABOUT
         showSupport -> OVERLAY_KEY_SUPPORT
         showTheme -> OVERLAY_KEY_THEME
         showBookmarks -> OVERLAY_KEY_BOOKMARKS
-        showGopeed -> OVERLAY_KEY_GOPEED
-        showAnnouncements -> OVERLAY_KEY_ANNOUNCEMENTS
         else -> null
     }
     // 正在展示的叠加页路由：打开时更新，关闭时**保留**（退出动画要用它渲染那个页面）
@@ -787,9 +877,9 @@ fun MainScreen() {
                 enter = fadeIn(effectsDefault()),
                 exit = fadeOut(effectsFast())
             ) {
-                // 源侧共享元素修饰符：设置页里能进入独立页面的那几行各自对应一个 key（见 SettingsScreen）。
+                // 源侧共享元素修饰符：设置页那三行各自对应一个 key（见 SettingsScreen）。
                 // ★ rememberSharedContentState 是 @Composable，必须在 composable 作用域里直接调用，
-                //   不能包在普通 lambda 里延迟构造 —— 所以这里一次性建好再传下去。
+                //   不能包在普通 lambda 里延迟构造 —— 所以这里一次性建好三个传下去。
                 val sourceScope = this
                 val themeRowModifier = Modifier.sharedBounds(
                     rememberSharedContentState(OVERLAY_KEY_THEME),
@@ -801,11 +891,6 @@ fun MainScreen() {
                 )
                 val supportRowModifier = Modifier.sharedBounds(
                     rememberSharedContentState(OVERLAY_KEY_SUPPORT),
-                    animatedVisibilityScope = sourceScope
-                )
-                // 「下载引擎」行 → 下载引擎页：和上面三行同样走容器变换（整行长成整页）
-                val engineRowModifier = Modifier.sharedBounds(
-                    rememberSharedContentState(OVERLAY_KEY_GOPEED),
                     animatedVisibilityScope = sourceScope
                 )
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -820,49 +905,6 @@ fun MainScreen() {
                             Text(text = currentTab.title)
                         },
                         actions = {
-                            // 公告入口：所有 Tab 都显示（收藏只在解析页出现，公告是全局入口），
-                            // 位置在收藏图标左侧 —— 与收藏图标共用"图标当源、长成整页"的容器变换手法。
-                            //
-                            // ★ 角标必须画在 IconButton **外面**（外层再套一个 48dp 的 Box）：
-                            //   material3 的 IconButton 内部带 `.clip(CircleShape)`（那颗 40dp 的圆形
-                            //   水波纹 StateLayer），角标一旦超出这颗圆就被切掉 —— 实测症状是红点被切成
-                            //   水滴形（见用户截图）。外层 Box 与 IconButton 同为 48dp 且不裁剪；
-                            //   Box 仍是同一个 48dp 点击区，而角标自身没有 pointerInput，
-                            //   点在角标上的事件照旧落到 IconButton，不影响点击。
-                            Box(
-                                modifier = Modifier.size(48.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        // 从图标进 = 先看列表（清掉上次「查看详情」直接进详情的请求）
-                                        announcementDetailId = null
-                                        showAnnouncements = true
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Campaign,
-                                        contentDescription = if (unreadAnnouncementCount > 0) {
-                                            "公告（$unreadAnnouncementCount 条未读）"
-                                        } else {
-                                            "公告"
-                                        },
-                                        modifier = Modifier.sharedBounds(
-                                            rememberSharedContentState(OVERLAY_KEY_ANNOUNCEMENTS),
-                                            animatedVisibilityScope = sourceScope
-                                        )
-                                    )
-                                }
-                                // 未读红点角标：只有主界面显示（公告页自己开着的时候不显示）
-                                if (unreadAnnouncementCount > 0 && overlayRoute == null) {
-                                    AnnouncementUnreadBadge(
-                                        count = unreadAnnouncementCount,
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .offset(x = (-6).dp, y = 2.dp)
-                                    )
-                                }
-                            }
                             // 解析页标题右上角：收藏网盘链接入口
                             if (currentTab == MainTab.Resolve) {
                                 IconButton(
@@ -922,6 +964,7 @@ fun MainScreen() {
                                     ucCloudViewModel,
                                     pan123CloudViewModel,
                                     pan115CloudViewModel,
+                                    guangyaCloudViewModel,
                                     bookmarkViewModel = bookmarkViewModel,
                                     onOpenBookmarks = { showBookmarks = true }
                                 )
@@ -934,6 +977,9 @@ fun MainScreen() {
                                     c139Account = c139Account,
                                     pan123Account = pan123Account,
                                     pan115Account = pan115Account,
+                                    guangyaAccount = guangyaAccount,
+                                    ilanzouAccount = ilanzouAccount,
+                                    lanzouAccount = lanzouAccount,
                                     quarkCloudViewModel = quarkCloudViewModel,
                                     ucCloudViewModel = ucCloudViewModel,
                                     xunleiCloudViewModel = xunleiCloudViewModel,
@@ -941,6 +987,9 @@ fun MainScreen() {
                                     c139CloudViewModel = c139CloudViewModel,
                                     pan123CloudViewModel = pan123CloudViewModel,
                                     pan115CloudViewModel = pan115CloudViewModel,
+                                    guangyaCloudViewModel = guangyaCloudViewModel,
+                                    ilanzouCloudViewModel = ilanzouCloudViewModel,
+                                    lanzouCloudViewModel = lanzouCloudViewModel,
                                     driveQuotaViewModel = driveQuotaViewModel,
                                     onQuarkLogin = { showQuarkLogin = true },
                                     onQuarkLogout = { viewModel.logout() },
@@ -957,6 +1006,12 @@ fun MainScreen() {
                                     onPan123Logout = { pan123ViewModel.logout() },
                                     onPan115Login = { showPan115Login = true },
                                     onPan115Logout = { pan115ViewModel.logout() },
+                                    onGuangYaLogin = { showGuangYaLogin = true },
+                                    onGuangYaLogout = { guangyaViewModel.logout() },
+                                    onILanzouLogin = { showILanzouLogin = true },
+                                    onILanzouLogout = { ilanzouViewModel.logout() },
+                                    onLanzouLogin = { showLanzouLogin = true },
+                                    onLanzouLogout = { lanzouViewModel.logout() },
                                     githubHasToken = githubHasTokenState,
                                     onGitHubTokenClick = { showGitHubTokenDialog = true },
                                     // 已配置 Token 点卡片主体：用 GET /user 取 login，经统一解析入口进入该账号仓库列表
@@ -981,11 +1036,9 @@ fun MainScreen() {
                                     themeRowModifier = themeRowModifier,
                                     aboutRowModifier = aboutRowModifier,
                                     supportRowModifier = supportRowModifier,
-                                    engineRowModifier = engineRowModifier,
                                     onThemeClick = { showTheme = true },
                                     onAboutClick = { showAbout = true },
                                     onSupportClick = { showSupport = true },
-                                    onGopeedClick = { showGopeed = true },
                                     backupManager = backupManager,
                                     // 手动检查更新与开发调试预览都复用 MainScreen 的更新弹窗状态
                                     onCheckUpdate = checkForUpdate,
@@ -1096,13 +1149,6 @@ fun MainScreen() {
                             )
                             OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
                             OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
-                            OVERLAY_KEY_GOPEED -> DownloadEngineScreen(onBack = { showGopeed = false })
-                            OVERLAY_KEY_ANNOUNCEMENTS -> AnnouncementScreen(
-                                viewModel = announcementViewModel,
-                                onBack = { showAnnouncements = false },
-                                // 启动弹窗点了「查看详情」就直接落在详情页（列表 ↔ 详情的共享元素在页面内部）
-                                initialDetailId = announcementDetailId
-                            )
                             else -> BookmarkScreen(
                                 viewModel = bookmarkViewModel,
                                 onBack = { showBookmarks = false },
@@ -1187,19 +1233,6 @@ fun MainScreen() {
                 }
             )
         }
-    }
-
-    // 启动公告弹窗：展示未读的置顶公告（没有则最新未读）。两个出口都算已读，见 AnnouncementViewModel.consumePopup
-    popupAnnouncement?.let { announcement ->
-        AnnouncementPopupDialog(
-            announcement = announcement,
-            onDetail = {
-                announcementDetailId = announcement.id
-                showAnnouncements = true
-                announcementViewModel.consumePopup()
-            },
-            onDismiss = { announcementViewModel.consumePopup() }
-        )
     }
 
     // GitHub Token 配置弹窗（网盘页入口）：Keystore 加密存储，输入用密码可见性切换

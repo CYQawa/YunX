@@ -108,6 +108,7 @@ import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.screens.AddToBookmarkDialog
 import com.yunx.app.ui.screens.BaiduSaveContent
 import com.yunx.app.ui.screens.C139SaveContent
+import com.yunx.app.ui.screens.GuangYaSaveContent
 import com.yunx.app.ui.screens.Pan115SaveContent
 import com.yunx.app.ui.screens.Pan123SaveContent
 import com.yunx.app.ui.screens.SaveToCloudContent
@@ -115,6 +116,7 @@ import com.yunx.app.ui.screens.UCSaveContent
 import com.yunx.app.ui.screens.XunleiSaveContent
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
+import com.yunx.app.ui.viewmodel.GuangYaCloudViewModel
 import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
 import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
@@ -159,6 +161,8 @@ fun ShareDetailScreen(
     pan123CloudViewModel: Pan123CloudViewModel,
     /** 115 网盘浏览 ViewModel（115 分享转存目录选择用） */
     pan115CloudViewModel: Pan115CloudViewModel,
+    /** 光鸭云盘浏览 ViewModel（光鸭分享转存目录选择用） */
+    guangyaCloudViewModel: GuangYaCloudViewModel,
     scrollBehavior: TopAppBarScrollBehavior,
     /** 文件列表滚动状态（由上层持有，跨目录切换保留） */
     listState: LazyListState,
@@ -587,6 +591,7 @@ fun ShareDetailScreen(
                     viewModel.isSaveUC -> UCSaveContent(viewModel, ucCloudViewModel, onBack)
                     viewModel.isSavePan123 -> Pan123SaveContent(viewModel, pan123CloudViewModel, onBack)
                     viewModel.isSavePan115 -> Pan115SaveContent(viewModel, pan115CloudViewModel, onBack)
+                    viewModel.isSaveGuangYa -> GuangYaSaveContent(viewModel, guangyaCloudViewModel, onBack)
                     else -> SaveToCloudContent(viewModel, quarkCloudViewModel, onBack)
                 }
             }
