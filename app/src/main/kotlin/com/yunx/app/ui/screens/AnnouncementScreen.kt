@@ -124,16 +124,29 @@ fun AnnouncementScreen(
                 onRefresh = { viewModel.refresh() },
                 onLoadMore = { viewModel.loadMore() },
                 onMarkAllRead = { viewModel.markAllRead() },
-                onOpen = { detailId = it.id }
+                // ★ 两个状态一起写：detailId 决定"去详情页"，shownDetailId 决定"渲染哪一条"。
+                //   这里同步写死 shownDetailId，详情页在被打开的第一帧就能用上正确的共享元素 key
+                //   （只靠下面那个 LaunchedEffect 会晚一帧，首帧等于没有形变目标）。
+                onOpen = {
+                    detailId = it.id
+                    shownDetailId = it.id
+                }
             )
         }
 
         AnimatedVisibility(
-            visible = shownDetailId != null,
+            // ★★ 可见性必须用**真实状态** detailId，绝不能用 shownDetailId：
+            //   shownDetailId 只是「退出动画期间还要渲染哪一页」的记忆，它**永远不会被清空**
+            //   （清空了退出时就没内容可渲染，回收形变会断）。拿它当 visible 会让详情页根本关不掉：
+            //   点返回 → detailId 变 null → 列表淡入、详情却依然"可见" ⇒ 动画一结束又闪回详情页；
+            //   而此时 detailId 已经是 null，详情页那个返回按钮再点就是空操作 ⇒ 看起来"按钮点不动了"。
+            //   MainScreen 的叠加页是同一个道理：visible 用 overlayRoute != null，shownRoute 只用来取内容。
+            visible = detailId != null,
             enter = fadeIn(effectsDefault()),
             exit = fadeOut(tween(durationMillis = 300))
         ) {
             val detailScope = this
+            // 内容取 shownDetailId：退出期间它仍是刚关掉的那条，页面才不会瞬间变空
             val id = shownDetailId
             if (id != null) {
                 val boundsModifier = with(innerScope) {

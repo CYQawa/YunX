@@ -1281,8 +1281,15 @@ security policy`，表现是公告**永远加载失败**（启动弹窗与未读
   `SharedTransitionLayout`** —— 共享元素只在**同一个** layout 作用域内匹配，套一层就天然隔离了。
   ★ 容器变换必须 `resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds`：
   列表项很窄、详情页是整屏，默认的 `ScaleToBounds` 会把详情页整体缩放（文字被拉伸）。
-  「列表 ↔ 详情」仍用 MainScreen 那套**两个 AnimatedVisibility 互斥 + `shownDetailId` 延迟清空**的写法
-  （不用 AnimatedContent）：退出时长必须 ≥ 300ms，否则退出动画一结束内容就被移出组合、回收形变被截断。
+  「列表 ↔ 详情」仍用 MainScreen 那套**两个 AnimatedVisibility 互斥 + 「正在展示的 id」延迟清空**的写法
+  （不用 AnimatedContent），但有两条硬要求，**别搞反**：
+  ① 退出时长必须 ≥ 300ms，否则退出动画一结束内容就被移出组合、回收形变被截断；
+  ② ★ `visible` 只能用**真实状态**（`detailId != null` / `detailId == null`）；那个「正在展示的 id」
+     （`shownDetailId`）**永远不清空**，它的唯一用途是「退出期间渲染哪一页」。
+     拿它当 `visible` 会让详情页**关不掉**（已踩过）：点返回 → 列表淡入、详情却仍「可见」
+     ⇒ 动画一结束就闪回详情页；而此时 `detailId` 已经是 null，详情页那个返回按钮再点就是空操作
+     ⇒ 观感是「返回按钮点不动了」。进入方向还要在点击处把两个状态**一起写死**，
+     否则详情页被打开的首帧没有形变目标（只靠 `LaunchedEffect` 会晚一帧）。
 
 **图片：不加新依赖，复用 README 那一套**。`GitHubMarkdownImageTransformer` 里的加载逻辑已抽成
 `RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），
