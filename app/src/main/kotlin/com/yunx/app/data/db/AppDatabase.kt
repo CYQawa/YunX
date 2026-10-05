@@ -222,14 +222,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /**
-         * v19：迅雷账号记录登录方式（空串 = App 通道；webToken = 网页登录）。
-         * 存在的意义是「刷新令牌该用哪个 OAuth 客户端」——网页 token 只有配网页 client_id 才刷得动，
-         * 老数据一律为空串（App 通道），行为与升级前完全一致。
-         *
-         * 编号说明：本迁移原本是 v18，但协作者的「三个新网盘」先一步占用了 v18（新建三张凭证表），
-         * 因此这里顺延到 v19；链条必须连续（17→18→19），不能跳号。
-         */
         private val MIGRATION_18_19 = object : Migration(18, 19) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(

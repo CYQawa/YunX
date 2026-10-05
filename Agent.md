@@ -1473,7 +1473,8 @@ android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently in
   - 网页：`Xqp0kJBXWhwaTpB6`（`XunleiWebCredential.CLIENT_ID`）**无 secret**，刷新走 **JSON** +
     `X-Client-Id` + `Origin/Referer` + 桌面 UA；
   - 用错客户端刷新**必失败**，用户看到的是「刚登录没多久就提示过期」。
-    所以落库时要记 `authType='webToken'`（DB **v18** 新增列，见 `MIGRATION_17_18`），
+    所以落库时要记 `authType='webToken'`（DB 新增列，见 `MIGRATION_18_19`；原本编号是 v18，
+    被协作者的「三个新网盘」先占了，顺延到 v19），
     `XunleiApi.refreshToken(..., authType)` 按它分支；认证备份也要带上这个字段，
     否则「备份 → 恢复」后刷新路径会退化成 App 通道。
 - 网页凭据的读取（`XunleiWebCredential`）：localStorage 键 `credentials_Xqp0kJBXWhwaTpB6`
@@ -1506,7 +1507,7 @@ JSON 那一层只负责把文本拍平成 `Map`。照抄别人的「直接测 JS
 
 **落点**：`data/network/XunleiWebCredential.kt`、`XunleiApi.kt`（`refreshToken` 分支 +
 `verifyAccessToken`）、`Pan123Api.kt`（`passwordLogin`）、`Pan123LoginSupport.kt`、
-`Pan123Constants.kt`、`Pan123DeviceId.kt`、`data/db/XunleiAccountEntity.kt` + `AppDatabase.kt`（v18）、
+`Pan123Constants.kt`、`Pan123DeviceId.kt`、`data/db/XunleiAccountEntity.kt` + `AppDatabase.kt`（v19 迁移）、
 `data/repository/{Xunlei,Pan123}AccountRepository.kt`、`ui/viewmodel/{Xunlei,Pan123}AccountViewModel.kt`、
 `ui/login/{XunleiLoginScreen,XunleiWebLoginScreen,Pan123LoginScreen,WebViewJs}.kt`、`ui/MainScreen.kt`、
 `YunXApp.kt`、`data/backup/AuthBackupManager.kt`；回归测试
