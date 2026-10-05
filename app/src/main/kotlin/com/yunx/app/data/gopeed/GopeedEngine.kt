@@ -355,9 +355,10 @@ object GopeedEngine {
             port = Libgopeed.start(cfg).toInt()
             _state.value = State.RUNNING
             Log.d(TAG, "引擎已启动：port=$port")
-            // 关做种是「锦上添花」：失败只记日志，绝不让引擎启动失败（默认配置最多多做种 2 小时）
-            runCatching { applyBtNoSeedConfig() }
-                .onFailure { Log.w(TAG, "下发 BT 不做种配置失败：${it.message}") }
+            // 并发上限与做种开关是「锦上添花」：失败只记日志，绝不让引擎启动失败
+            // （失败时引擎用库里存着的旧上限，最多是并发数和设置里选的不一致）
+            runCatching { applyRuntimeConfig(context) }
+                .onFailure { Log.w(TAG, "下发引擎运行配置失败（最大并发/不做种）：${it.message}") }
             return port
         } catch (e: Throwable) {
             lastError = e.message ?: e.toString()
@@ -427,23 +428,30 @@ object GopeedEngine {
     }
 
     /**
-     * 关掉 BT 做种（每次引擎启动成功后调一次）。
+     * 把「引擎运行期由 App 决定的配置」下发进引擎（每次引擎启动成功后调一次）：并发上限 + BT 不做种。
      *
-     * 为什么必须显式关：Gopeed 的 bt 默认配置是 `seedKeep=false, seedRatio=1.0, seedTime=7200`
-     * —— 下载完还会继续上传，直到分享率达到 1.0 或满 2 小时。手机上（尤其流量）这不可接受。
+     * ★ 为什么必须在启动后走 REST 写回去：启动配置里的 `downloadConfig` **只在空库首次生效**——
+     *   `Downloader.Setup()` 一旦读到 bolt 里存过的配置，就整个替换掉启动配置。导入内核后每次冷启动
+     *   读到的都是库里那份旧值，启动配置里写什么都不算数。
      *
-     * ★ 两个坑，改这里之前先看：
-     *   ① `seedRatio=0 && seedTime=0 && seedKeep=false` **不是「关」**：doUpload 里三个停止条件
-     *      都不成立 ⇒ 循环永远不退出，等于**永远做种**。真正能立刻停的是 `seedTime=1`（秒）。
-     *   ② 启动配置里的 `downloadConfig` 只在**空库首次**生效：`Downloader.Setup()` 一旦读到 bolt
-     *      里存过的配置，就整个替换掉启动配置（含我们下发的 bt 段）⇒ 必须在启动后走 REST 写回去。
+     * ★ 只改这两个地方、其余字段原样带回：GET 到的整份配置直接 PUT 回去，
+     *   `trackers`/`listenPort`/`downloadDir` 等仍是库里已有的值，不会被我们冲掉。
      *
-     * 只改做种三个字段、其余字段原样带回：`trackers`/`listenPort` 保留库里已有的值
-     * （GET 到的整份配置原样 PUT 回去，避免把 downloadDir / maxRunning 等一起冲掉）。
+     * 并发上限（`maxRunning`）——**引擎自己就有多任务并发**，不用我们另外排一个队列：
+     * `doCreate` 里 `remainRunningCount = maxRunning - 正在跑的任务数`，为 0 就把新任务置成
+     * `wait` 塞进 `waitTasks`；某个任务结束时 `notifyRunning()` 再放行下一个。
+     * 所以我们要做的只是把用户在设置里选的值下发下去（之前这里写死 1，相当于引擎永远单任务）。
+     *
+     * BT 不做种——Gopeed 的 bt 默认是 `seedKeep=false, seedRatio=1.0, seedTime=7200`：
+     * 下载完还会继续上传，直到分享率达到 1.0 或满 2 小时。手机上（尤其流量）这不可接受。
+     * ★ 坑：`seedRatio=0 && seedTime=0 && seedKeep=false` **不是「关」**——doUpload 里三个停止条件
+     *   都不成立 ⇒ 循环永远不退出，等于**永远做种**。真正能立刻停的是 `seedTime=1`（秒）。
      */
-    fun applyBtNoSeedConfig() {
+    fun applyRuntimeConfig(context: Context) {
         val cfg = invoke("GET", "/api/v1/config").optJSONObject("data")
             ?: throw IllegalStateException("引擎没有返回配置")
+        val maxRunning = maxRunningOf(context)
+        cfg.put("maxRunning", maxRunning)
         val protocols = cfg.optJSONObject("protocolConfig") ?: JSONObject()
         val bt = protocols.optJSONObject("bt") ?: JSONObject()
         bt.put("seedKeep", false)
@@ -452,8 +460,56 @@ object GopeedEngine {
         protocols.put("bt", bt)
         cfg.put("protocolConfig", protocols)
         invoke("PUT", "/api/v1/config", null, cfg.toString())
-        Log.d(TAG, "已下发 BT 不做种配置：$bt")
+        Log.d(TAG, "已下发引擎运行配置：maxRunning=$maxRunning BT不做种=$bt")
     }
+
+    /**
+     * 设置在设置页改完「最大同时下载任务数」后立刻生效（引擎没在跑返回 null，下次 [start] 会带上新值）。
+     *
+     * ★ 为什么还要自己补位：引擎只在**有任务结束**时补一个空位（`notifyRunning` 每次只从 waitTasks
+     *   放行一个），把上限从 3 调到 5 时已经排队的任务不会自己动，得由我们按空位数逐个唤醒。
+     *   唤醒用 `PUT /api/v1/tasks/{id}/continue`：对 `wait` 任务等价于「上车」。
+     *   注意 `Continue` 的 `needPauseCount = min(上限, 要继续的数量) - 空位数`，**只有没有空位时才 > 0**
+     *   （那时它会去暂停一个正在跑的任务给新任务让路）——所以这里严格按「空位数」放行，
+     *   绝不越过上限，也就绝不会把正在下载的任务挤下去。
+     *
+     * ★ 调小时不打断已经在跑的任务：它们继续跑完，只是不再补位（引擎的 PutConfig 不做重新平衡）。
+     */
+    fun applyMaxRunning(context: Context): Int? {
+        if (_state.value != State.RUNNING) return null
+        val value = maxRunningOf(context)
+        val cfg = invoke("GET", "/api/v1/config").optJSONObject("data")
+            ?: throw IllegalStateException("引擎没有返回配置")
+        cfg.put("maxRunning", value)
+        invoke("PUT", "/api/v1/config", null, cfg.toString())
+
+        // 补位：先看引擎里现在有几个在跑、几个在排队（空 filter 的 GET /api/v1/tasks 返回全部任务）
+        val tasks = invoke("GET", "/api/v1/tasks").optJSONArray("data")
+        var running = 0
+        val waiting = ArrayList<String>()
+        for (i in 0 until (tasks?.length() ?: 0)) {
+            val t = tasks?.optJSONObject(i) ?: continue
+            when (t.optString("status")) {
+                "running" -> running++
+                "wait" -> t.optString("id").takeIf { it.isNotBlank() }?.let { waiting.add(it) }
+            }
+        }
+        var free = value - running
+        var woken = 0
+        for (id in waiting) {
+            if (free <= 0) break
+            runCatching { invoke("PUT", "/api/v1/tasks/$id/continue") }
+                .onFailure { Log.w(TAG, "唤醒排队任务失败：engineId=$id ${it.message}") }
+            free--
+            woken++
+        }
+        Log.d(TAG, "并发上限已更新：maxRunning=$value 在跑=$running 排队=${waiting.size} 唤醒=$woken")
+        return value
+    }
+
+    /** 「最大同时下载任务数」：内置下载器与引擎共用设置里的同一个值（引擎侧字段是 DownloaderStoreConfig.maxRunning） */
+    private fun maxRunningOf(context: Context): Int =
+        SettingsRepository(context).maxConcurrentDownloads.coerceAtLeast(1)
 
     /** 列表/详情里的任务对象转成 UI 用的纯数据（字段名对照 Gopeed 的 Task/TaskRuntimeStatus） */
     data class TaskView(
@@ -645,7 +701,10 @@ object GopeedEngine {
             put("refreshInterval", 500)
             put("downloadConfig", JSONObject().apply {
                 put("downloadDir", downloadDir.absolutePath)
-                put("maxRunning", 1)
+                // 只在**空库首次**生效（之后 Setup() 会用 bolt 里那份替换掉整个启动配置），
+                // 所以真正的下发改在 applyRuntimeConfig() 里走 REST 写回；这里写上是为了
+                // 「首次装引擎就拿到正确上限」，而不是引擎默认的 5
+                put("maxRunning", maxRunningOf(context))
                 // 只表示「启动时恢复未完成任务」，新建任务照常立即开始
                 put("autoStartTasks", false)
                 put("protocolConfig", JSONObject())

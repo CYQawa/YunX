@@ -71,7 +71,13 @@ class SettingsRepository(context: Context) {
             prefs.edit().putString("engine_download_dir", value.trim()).apply()
         }
 
-    /** 最大同时下载任务数（默认 1：前台任务吃满带宽，其余排队；参考 IDM 默认单任务满速） */
+    /**
+     * 最大同时下载任务数（默认 3，超出的任务排队等待）。
+     *
+     * ★ 这一个值**同时**管两条下载路径，改默认值时两边一起走：
+     *   ① 内置分片下载器：`DownloadManager` 的并发闸门按它轮询等空位；
+     *   ② Gopeed 引擎：引擎自己的调度器按配置顶层的 `maxRunning` 排队（见 `GopeedEngine`）。
+     */
     var maxConcurrentDownloads: Int
         get() = prefs.getInt("max_concurrent_downloads", DEFAULT_MAX_CONCURRENT_DOWNLOADS)
         set(value) {
@@ -240,7 +246,7 @@ class SettingsRepository(context: Context) {
          */
         const val MAX_DOWNLOAD_THREADS = 512
         const val XUNLEI_DOWNLOAD_THREADS = 8
-        const val DEFAULT_MAX_CONCURRENT_DOWNLOADS = 1
+        const val DEFAULT_MAX_CONCURRENT_DOWNLOADS = 3
         const val DEFAULT_DOWNLOAD_RETRY_COUNT = 3
         const val DEFAULT_PROXY_PORT = 7890
 

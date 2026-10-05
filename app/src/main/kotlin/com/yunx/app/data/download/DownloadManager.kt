@@ -672,6 +672,13 @@ class DownloadManager(
                             // 引擎侧自己变暂停（进程重启后未续传等）：保活到此为止，用户点继续时会重新拉起
                             if (engineKeepAliveIds.remove(task.id)) onTaskFinished()
                         }
+                        "wait" -> {
+                            // 超出「最大同时下载任务数」，被引擎排在 waitTasks 里等空位（上限见 GopeedEngine.applyRuntimeConfig）
+                            // → 本地记成「等待中」。★ 不能落到下面的 else：那会显示成 0% 的「下载中」，看着像卡死。
+                            // 进度一律不动（排队中引擎报的是 0）：任务被挤出后重新上车时，库里的进度还是上次那份。
+                            dao.updateStatus(task.id, DownloadTaskEntity.STATUS_PENDING)
+                            _stats.update { it - task.id }
+                        }
                         else -> {
                             val total = if (status.total > 0L) status.total else task.totalSize
                             dao.updateProgress(

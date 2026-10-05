@@ -466,20 +466,22 @@ fun SettingsScreen(
         //   引擎模式下这一行就会和下面的「免转存下载」贴在一起（用户报的"边距错误"）。
         Spacer(modifier = Modifier.height(ListGroupGap))
 
-        // 引擎模式下隐藏「只对内置分片下载器有意义」的设置（引擎只认自己的并发/重试，也不支持限速）
-        AnimatedVisibility(visible = !engineOn, enter = expandVertically(), exit = shrinkVertically()) {
-            Column {
-        // 网络与下载策略
+        // 最大同时下载任务数：**两条下载路径共用这一个上限**，所以不能跟着下面的 AnimatedVisibility 一起折叠
+        // （内置分片下载器是自己的并发闸门；Gopeed 引擎侧下发成配置顶层的 maxRunning，由引擎自己排队）
         SettingsItem(
             icon = Icons.Outlined.Layers,
             shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "最大同时下载任务数",
-            description = "同时下载 $maxConcurrent 个任务（限制后台并发，避免占满带宽）",
+            description = "同时下载 $maxConcurrent 个任务，超出的排队等待（内置下载器与 Gopeed 引擎共用）",
             onClick = { showConcurrencyDialog = true }
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))
 
+        // 引擎模式下隐藏「只对内置分片下载器有意义」的设置（引擎不支持限速；重试是引擎内部自己的策略）
+        AnimatedVisibility(visible = !engineOn, enter = expandVertically(), exit = shrinkVertically()) {
+            Column {
+        // 网络与下载策略
         SettingsItem(
             icon = Icons.Outlined.Speed,
             shape = listGroupShape(ListGroupPos.MIDDLE),
@@ -1084,6 +1086,19 @@ fun SettingsScreen(
                                     maxConcurrent = v
                                     settingsRepo.maxConcurrentDownloads = v
                                     showConcurrencyDialog = false
+                                    // 引擎自己不读这个设置，只在启动时同步一次，所以这里立刻补一次下发：
+                                    // 调大时顺手唤醒引擎里已在排队的任务；调小不打断正在下载的（跑完自然收敛）。
+                                    scope.launch {
+                                        val applied = runCatching {
+                                            withContext(Dispatchers.IO) { GopeedEngine.applyMaxRunning(context) }
+                                        }.getOrNull()
+                                        // null = 引擎没在跑（下次启动会带上新值），不算失败；引擎在跑却拿不到值才是失败
+                                        if (applied == null &&
+                                            GopeedEngine.state.value == GopeedEngine.State.RUNNING
+                                        ) {
+                                            SnackbarController.show("下载引擎并发上限下发失败，重启引擎后生效")
+                                        }
+                                    }
                                 }
                             )
                             Spacer(modifier = Modifier.width(8.dp))

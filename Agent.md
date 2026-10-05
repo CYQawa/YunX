@@ -1539,11 +1539,11 @@ JSON 那一层只负责把文本拍平成 `Map`。照抄别人的「直接测 JS
 3. **做种必须显式关，而且 `0/0` 不是关**：bt 默认 `seedKeep=false, seedRatio=1.0, seedTime=7200`
    （下完还要传最长 2 小时）。`seedRatio=0 && seedTime=0 && seedKeep=false` ⇒ `doUpload` 里三个停止
    条件**都不成立**，循环永不退出 = 永远做种；能立刻停的是 `seedTime=1`（秒）。见
-   `GopeedEngine.applyBtNoSeedConfig()`。
+   `GopeedEngine.applyRuntimeConfig()`。
 4. **启动配置里的 `downloadConfig` 只在空库首次生效**：`Downloader.Setup()` 一旦从 bolt 里读到存过的
-   配置就**整个替换**掉启动配置（含我们下发的 bt 段）⇒ 关做种只能在引擎起来之后走
-   `GET /api/v1/config` → 改 `protocolConfig.bt` → `PUT /api/v1/config` 写回去
-   （GET 到的整份配置原样带回，避免把 `downloadDir`/`maxRunning` 一起冲掉）。
+   配置就**整个替换**掉启动配置（含我们下发的 bt 段）⇒ 关做种/并发上限只能在引擎起来之后走
+   `GET /api/v1/config` → 改 `protocolConfig.bt` / 顶层 `maxRunning` → `PUT /api/v1/config` 写回去
+   （GET 到的整份配置原样带回，别把 `downloadDir`/`trackers`/`listenPort` 一起冲掉）。
 
 **拦截而不是降级**：内置分片下载器是纯 HTTP Range 实现，喂它 `magnet:` 只会抛一个和「该去导入内核」
 毫无关系的协议错误。`DownloadManager.magnetBlockReason()` 在 `enqueue` 里就把磁力拦下来，
@@ -1556,6 +1556,55 @@ org.json/Uri 空壳条目）、`DownloadPlatform.MAGNET`、`DownloadManager`（`
 `DownloadTaskDao.updateFileName`、`DownloadSaver.delete` 支持目录（多文件种子是**目录**，
 `File.delete()` 对非空目录必然失败）、`DownloadScreen`（对话框提示 + 「正在解析磁力」状态文案）；
 回归测试 `app/src/test/kotlin/com/yunx/app/data/download/MagnetLinkTest.kt`。
+
+
+---
+
+### 3.39 最大同时下载任务数（默认 3）：内置下载器与 Gopeed 引擎共用一个值
+
+**结论先说**：Gopeed **自带**多任务并发调度，不用我们自己排队列——缺的只是「把用户选的值下发进去」。
+`GopeedEngine.buildConfig()` 里原本写死 `maxRunning = 1`（等于引擎永远单任务），而 App 侧
+`SettingsRepository.maxConcurrentDownloads` 是另一份（原本默认 1），两边各管各的。
+
+**引擎侧机制（照抄前先读）**：
+
+- `Downloader.doCreate()`：`remainRunningCount = maxRunning - 正在跑的任务数`，为 0 就把新任务置成
+  `wait` 塞进 `waitTasks` 排队，否则立刻 `doStart`；任务**结束**时 `notifyRunning()` 从 `waitTasks`
+  放行**一个**（每次只放行一个，不管空出几个位置）。
+- 字段位置：`DownloaderStoreConfig.maxRunning` 在配置对象的**顶层**（不是 `downloadConfig` 里）。
+  `GET /api/v1/config` 的 `data` 就是这份 store config；`PUT /api/v1/config` 同时写 bolt 和内存
+  `d.cfg`，所以改完对新任务立刻生效。`MaxRunning == 0` 时 `Init()` 会给 5、`Merge()` 会回退旧值
+  ⇒ **绝不能下发 0**。
+
+**两个坑**：
+
+1. **调大上限不会自动放行已排队的任务**（`notifyRunning` 只挂在任务结束上）。所以
+   `GopeedEngine.applyMaxRunning()` 下发完新值要自己补位：`GET /api/v1/tasks` 数出 `running`/`wait`
+   （空 filter 返回全部任务），按「空位数」逐个 `PUT /api/v1/tasks/{id}/continue` 唤醒。
+   ★ 必须严格按空位数，一个都不能多：`Continue` 里 `needPauseCount = min(maxRunning, 要继续的数量) - 空位数`，
+   **只有在没有空位时才 > 0**，那时它会暂停一个正在跑的任务给新任务让路（引擎的「继续=优先」语义）。
+   ★ 被 `continue` 唤醒的 wait 任务**仍留在 `waitTasks` 里**（引擎不清理），之后对应次数任务结束时
+   `notifyRunning` 会弹出一个已经在跑的任务——`doStart` 开头有 `status == running → return` 的幂等保护，
+   所以只是白弹一次、不会重复下载，代价是紧接着几次任务结束不推进队列。
+2. **暂停一个还在排队的任务，之后可能被引擎自己拉起来**：`Pause(filter)` 不把任务从 `waitTasks` 摘掉，
+   等有任务结束时 `notifyRunning` 弹出它并 `doStart`（此时状态是 pause，不在幂等保护里）。这是**上游行为**
+   （只有 `pauseAll()` 会清队列），我们这边只记着；真被用户报，正解是「排队中的任务改成删除+重建」
+   （wait 任务本来一个字节都没下，重建无损）。
+
+**设置项**：`最大同时下载任务数` 从「引擎模式下隐藏」的折叠块里挪出来了（两条路径共用同一个值），
+副标题写明「超出的排队等待」；选项仍是 1/2/3/5/8，默认 **3**
+（`SettingsRepository.DEFAULT_MAX_CONCURRENT_DOWNLOADS`，只对**没存过**这个键的用户生效）。
+`MainScreen` 把它喂给 `DownloadManager.concurrencyProvider`（内置分片下载器的轮询闸门）；
+`GopeedEngine.applyRuntimeConfig()` 在**每次引擎启动后**写进 `maxRunning`，设置页改完立刻再调
+`applyMaxRunning()`（引擎没在跑就返回 null，下次 `start()` 会带上）。
+
+**排队中的任务在界面上是「等待中」**：引擎报 `status = "wait"`（`base.DownloadStatusWait`），
+`DownloadManager` 的同步循环把它回写成本地 `STATUS_PENDING`——不单独映射就会落到 `else` 分支，
+显示成 0% 的「下载中」，看着像卡死。
+
+**已知边界**（设计取舍，不是 bug）：调**小**上限不打断正在下载的任务（`PutConfig` 不做重新平衡），
+只是不再补位；GitHub 平台的下载固定走内置下载器（引擎不支持镜像回退），极端情况下
+「3 个引擎任务 + 1 个内置任务」会比设置值多一个——两条路径各有自己的闸门，没有做全局统一计数。
 
 
 ---
