@@ -1623,30 +1623,25 @@ org.json/Uri 空壳条目）、`DownloadPlatform.MAGNET`、`DownloadManager`（`
 
 ### 3.40 诊断模式（分模块日志）与「导出日志为什么不再按 PID 过滤」
 
-**① 日志导出：绝不用「当前 pid」过滤（改动过，别改回去）**
+**① 日志导出：直接 `logcat -d -v time`，不加任何过滤**
 
-`LogExporter` 以前是 `logcat -d -v time --pid=${Process.myPid()}`。pid 每次启动/闪退重启都会变，
-用户「复现闪退 → 重开 App → 导出日志」时，最该看的那段崩溃日志**正好被过滤掉了**——这就是
-「旧日志找不到 / 导不全」的根因。
-
-现在分两级取（`exportRuntimeLog`），目标都是「重启/闪退之后仍能导到历史日志」：
-
-1. **首选** `logcat -d -v time --uid=<本应用 uid>`：uid 在安装期内恒定，一次就能覆盖本应用历史所有进程。
-2. **降级**（`--uid` 不被支持时）：不过滤 dump + **本应用历史 pid 白名单**筛选。Android 上应用只能读到
-   自己 uid 的日志（logd 按 uid 隔离，真机实测无过滤 dump 里没有别的 uid 的日志），所以全量 dump
-   本身就是本应用的日志；pid 白名单是第二道保险，防止个别 ROM 不隔离时把别的应用的日志带进分享出去的文件。
-   白名单由 `LogExporter.rememberPid(this)`（`YunXApp.onCreate` → 内部存储 `log_pids.txt`，一行一个 pid、
-   最多 200 个）维护，所以**跨重启、含闪退那一次进程**都在里面。
-3. **保底**：白名单一行都没匹配上（不同 ROM 列顺序可能不同）就原样输出 dump，**宁可多不可空**。
-
-★ **真机踩坑（vivo V2065A / Android 10 / SDK 29）：这台机器的 logcat 根本不认 `--uid=`**，会先吐
-`Unrecognized Option` + 整段 `Usage: logcat ...`，而 `redirectErrorStream(true)` 把这段 usage 和日志混在
-同一条流里 ⇒ 导出文件里只有 usage 文本、日志一行都没有（用户就是这么报「导出日志坏了」的）。因此：
-`query()` **不能只看退出码**，必须识别 usage 文本并返回 null 让调用方降级；`writeLogLines()` 还要丢掉
-混进来的 NUL（否则整个 txt 被当成二进制，打开是乱码，连文本工具都读不了）。这台机器 `--pid=` 是认的，
-`-v` 的修饰词支持 `color descriptive epoch monotonic printable uid usec UTC year zone`。
-PID/uid 都只作为**内容字段**留在头部信息里，不参与文件命名/筛选/查找；文件名一直是
+`LogExporter` 现在是 `query(listOf("logcat", "-d", "-v", "time"))` 一把梭。理由：logd 按 uid 隔离，
+应用不加过滤读到的**本来就只是自己 uid 的日志**，而且是**本应用所有进程**（含闪退那一次）的日志——
+最全、也最简单。头部里的 uid/pid 只是**内容字段**，不参与文件命名/筛选/查找；文件名一直是
 `yunx_log_<yyyyMMdd_HHmmss>.txt`，只按时间命名。
+
+★ **别给它加过滤条件（前后改坏过两次，别再来第三次）**：
+- `--pid=${Process.myPid()}`：只能捞到**当前这一次**进程的日志。用户复现闪退 → 重开 App → 导出，
+  最该看的那段崩溃日志正好被过滤掉了（「旧日志找不到 / 导不全」的根因）。
+- `--uid=<uid>`：**vivo V2065A / Android 10 / SDK 29 这台机器的 logcat 根本不认**，它先吐
+  `Unrecognized Option` + 整段 `Usage: logcat ...`，被 `redirectErrorStream(true)` 混进同一条流
+  ⇒ 导出文件里只有 usage 文本、一行日志都没有（用户就是这么报「导出日志坏了」的）。
+  这台机器 `--pid=` 是认的，`-v` 的修饰词支持 `color descriptive epoch monotonic printable uid usec UTC year zone`。
+- 曾经加过「全量 dump + 本应用历史 pid 白名单」的降级方案（连 `rememberPid`/`log_pids.txt`），
+  用户明确要求删掉——**不要再引入任何过滤/白名单机制**。
+
+另外 `writeLogLines()` 会丢掉混进来的 NUL（`\u0000`）：上一版导出文件里就带着它，
+整个 txt 被当成二进制，文本工具打不开、看着像乱码。
 
 **② 诊断模式开关**：设置 → 「关于云析」长按 → 开发调试 → **诊断模式**（`SettingsRepository.diagnosticMode`，
 键 `diagnostic_mode`，默认关）。`DiagnosticLog.setEnabled` 立刻起/停写线程（关闭前先 flush），

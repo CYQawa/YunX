@@ -105,8 +105,6 @@ class YunXApp : Application() {
         purgeDownloadLeftovers(this)
         // 诊断日志：读开关（默认关）并定好落盘目录；开着才起写线程，关着这里几乎零开销
         com.yunx.app.util.DiagnosticLog.install(this)
-        // 记下本次启动的 pid：导出日志降级到「pid 白名单」时要靠它捞回历史进程（含闪退那一次）的日志
-        com.yunx.app.util.LogExporter.rememberPid(this)
         // 选了 Gopeed 引擎且已导入内核：启动就把它加载起来（失败只记日志，绝不影响应用启动）
         autoStartGopeedIfSelected(this)
     }
