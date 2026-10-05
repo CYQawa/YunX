@@ -1275,6 +1275,11 @@ security policy`，表现是公告**永远加载失败**（启动弹窗与未读
 未读 > 0 时叠一颗红点角标（>99 显示 `99+`）——★ 角标是 `Surface` + `Text` 手搓的，
 **没有用 `BadgedBox`**：要自己控偏移与最小尺寸，也不想跟着 alpha 版组件 API 走；
 公告页打开期间不显示角标（`overlayRoute == null` 才画）。
+★★ **角标必须画在 `IconButton` 外面**（外层再套一个同为 48dp 的 `Box`）：
+material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的圆形水波纹 StateLayer），
+角标只要超出这颗圆就被切掉 —— 实测症状是「红点被切成水滴形」（已踩过）。
+外层 Box 不裁剪、尺寸与 `IconButton` 一致，仍是同一个 48dp 点击区；角标自身没有 pointerInput，
+点在角标上事件照旧落到 `IconButton`，不影响点击。
 共享元素分两层，各管一段、互不干扰：
 - 外层：顶栏公告图标 ↔ 公告整页，key = `OVERLAY_KEY_ANNOUNCEMENTS`（与收藏页同一手法）；
 - 内层：列表项 ↔ 详情页，key = `announcementSharedKey(id)`，在 `AnnouncementScreen` 里**再套一层
@@ -1296,9 +1301,17 @@ security policy`，表现是公告**永远加载失败**（启动弹窗与未读
 Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正文图集）**共用同一份缓存**；
 `GitHubMarkdownImageTransformer` 现在只是「渲染器适配层」（`mirrorPrefix` 转发给加载器）。
 项目里**没有 Coil**，这是既定选择（见 `RemoteImageLoader` 的文件注释与本节），不要再引第二个图片库。
-★ `RemoteImage` 的高度必须由调用方给（`Modifier.size`），或显式开 `autoHeight = true` 让内部按位图比例
-算 —— 不指定高度的 `Image` 在 LazyColumn 的 `maxHeight = Infinity` 约束下会被量成 0 高或按原始像素高排，
-长图直接糊一屏。
+★ `RemoteImage` 的尺寸只有两种给法，别混：
+1. **固定尺寸**（头像 / 列表缩略图 / **弹窗封面**）：调用方传 `Modifier.size(...)` 或 `height(...)`，
+   宽高必须**都有界**（`Image` 在无界高度下会退化成图片固有尺寸，长图糊一屏）；
+2. **只给宽度**：传 `Modifier.fillMaxWidth()` 且 `autoHeight = true`，内部用 `BoxWithConstraints`
+   拿可用宽度、按位图比例算高度、再用调用方的 `heightIn(max = …)` 夹一次，最后 `Modifier.size(w, h)`。
+★ **不要用 `fillMaxWidth` + `heightIn(max)` + `Modifier.aspectRatio` 这组写法**（已踩过）：
+   公告弹窗封面就是它 —— 实测图片远超 180dp 上限、把标题和摘要压成一团，观感是「弹窗图片显示异常」。
+   判断有界性也别拿 `maxWidth == Dp.Infinity` 比：无界时 `BoxWithConstraints` 给的是一个巨大的**有限** Dp，
+   要用 `constraints.hasBoundedWidth/Height`。
+★ 弹窗里的图**一律走固定高度**（公告弹窗封面 180dp + `Crop`）：弹窗高度必须可预期，
+   按图片原始比例的话一张方图就能把弹窗撑满、把正文挤掉；想看全图点进详情页（那里才用 `autoHeight`）。
 
 **正文渲染不用 WebView**：走 mikepenz GFM 渲染器（与 README 预览同一套 + `compactMarkdownTypography()`），
 `content` 里的 HTML 片段只会当普通文本显示。这样**没有脚本执行面**（XSS / CSP 都不用自己扛），

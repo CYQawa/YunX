@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -242,16 +241,18 @@ fun AnnouncementPopupDialog(
             Column {
                 val cover = announcement.coverImage
                 if (!cover.isNullOrBlank()) {
-                    // 弹窗高度有限：封面按比例铺满宽度，但最多 180dp，超出部分由 Fit 留白
+                    // ★ 弹窗封面走**固定高度**，不用 autoHeight：弹窗高度必须可预期 ——
+                    //   按图片原始比例的话，一张方图/长图就能把弹窗撑满、把标题和摘要挤成一团
+                    //   （实测症状：图片占了大半个弹窗、标题看不见、摘要压在图上）。
+                    //   写死 180dp + Crop 铺满，任何比例的图都只占 180dp。
                     RemoteImage(
                         url = cover,
                         contentDescription = null,
                         shape = MaterialTheme.shapes.medium,
-                        contentScale = ContentScale.Fit,
-                        autoHeight = true,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 180.dp)
+                            .height(180.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
@@ -259,7 +260,7 @@ fun AnnouncementPopupDialog(
                     Text(
                         text = announcement.summary,
                         style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 6,
+                        maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(8.dp))

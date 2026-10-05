@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.Campaign
@@ -821,14 +822,24 @@ fun MainScreen() {
                         actions = {
                             // 公告入口：所有 Tab 都显示（收藏只在解析页出现，公告是全局入口），
                             // 位置在收藏图标左侧 —— 与收藏图标共用"图标当源、长成整页"的容器变换手法。
-                            IconButton(
-                                onClick = {
-                                    // 从图标进 = 先看列表（清掉上次「查看详情」直接进详情的请求）
-                                    announcementDetailId = null
-                                    showAnnouncements = true
-                                }
+                            //
+                            // ★ 角标必须画在 IconButton **外面**（外层再套一个 48dp 的 Box）：
+                            //   material3 的 IconButton 内部带 `.clip(CircleShape)`（那颗 40dp 的圆形
+                            //   水波纹 StateLayer），角标一旦超出这颗圆就被切掉 —— 实测症状是红点被切成
+                            //   水滴形（见用户截图）。外层 Box 与 IconButton 同为 48dp 且不裁剪；
+                            //   Box 仍是同一个 48dp 点击区，而角标自身没有 pointerInput，
+                            //   点在角标上的事件照旧落到 IconButton，不影响点击。
+                            Box(
+                                modifier = Modifier.size(48.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
+                                IconButton(
+                                    onClick = {
+                                        // 从图标进 = 先看列表（清掉上次「查看详情」直接进详情的请求）
+                                        announcementDetailId = null
+                                        showAnnouncements = true
+                                    }
+                                ) {
                                     Icon(
                                         imageVector = Icons.Outlined.Campaign,
                                         contentDescription = if (unreadAnnouncementCount > 0) {
@@ -841,15 +852,15 @@ fun MainScreen() {
                                             animatedVisibilityScope = sourceScope
                                         )
                                     )
-                                    // 未读红点角标：只有主界面显示（公告页自己开着的时候不显示）
-                                    if (unreadAnnouncementCount > 0 && overlayRoute == null) {
-                                        AnnouncementUnreadBadge(
-                                            count = unreadAnnouncementCount,
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .offset(x = 7.dp, y = (-5).dp)
-                                        )
-                                    }
+                                }
+                                // 未读红点角标：只有主界面显示（公告页自己开着的时候不显示）
+                                if (unreadAnnouncementCount > 0 && overlayRoute == null) {
+                                    AnnouncementUnreadBadge(
+                                        count = unreadAnnouncementCount,
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = (-6).dp, y = 2.dp)
+                                    )
                                 }
                             }
                             // 解析页标题右上角：收藏网盘链接入口

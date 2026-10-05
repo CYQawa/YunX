@@ -22,7 +22,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -53,12 +53,16 @@ import androidx.compose.ui.unit.dp
  * - 成功：铺满容器（[contentScale] 默认 Crop，配合 [shape] 做圆角 / 圆形裁切）；
  * - 失败或地址为空：显示 [fallback] 图标（未指定则保留底色占位）。
  *
- * 尺寸有两种给法：
- * - 固定尺寸（头像、列表缩略图）：调用方传 `Modifier.size(...)`，此时 [contentScale] 用 Crop 最合适；
- * - 只给宽度（正文配图 / 封面，高度未知）：传 `Modifier.fillMaxWidth()` 且 [autoHeight] = true，
- *   内部按**图片自身比例**算高度（加载完成前用 [placeholderRatio] 占位）。
- *   ★ 必须这样兜底：不指定高度的 Image 在 `maxHeight = Infinity` 的列表项里会被量成 0 高或被
- *     按原始像素高排版（长图直接糊一屏），所以高度要么由调用方给、要么由位图比例推。
+ * 尺寸两种给法：
+ * - **固定尺寸**（头像、列表缩略图、弹窗封面）：调用方传 `Modifier.size(...)` / `height(...)`，
+ *   必须让宽高**都有界**（`fillMaxSize` 遇到无界高度会退化成图片固有尺寸）；
+ * - **只给宽度、高度随图片比例**：传 `Modifier.fillMaxWidth()` 且 [autoHeight] = true。
+ *
+ * ★ [autoHeight] 的高度是**自己算的**，不依赖 `Modifier.aspectRatio`：
+ *   实测「`fillMaxWidth` + `heightIn(max)` + `aspectRatio`」这组写法在弹窗里会让图片远超上限、
+ *   把标题与正文压成一团（公告弹窗封面的实测症状）。这里用 [BoxWithConstraints] 拿可用宽度，
+ *   按位图比例算高度、再用调用方给的 `maxHeight` 夹一次，最后 `Modifier.size(w, h)` 落一个明确尺寸，
+ *   图片永远画在框内；加载完成前用 [placeholderRatio] 占位，避免高度从 0 跳变。
  */
 @Composable
 fun RemoteImage(
@@ -89,25 +93,69 @@ fun RemoteImage(
             value = loaded
         }
     }
-
-    // autoHeight：按位图比例定高；位图还没到时用 placeholderRatio，避免容器高度从 0 跳变
     val bmp = bitmap
-    val ratio = if (autoHeight && bmp != null && bmp.height > 0) {
-        bmp.width.toFloat() / bmp.height.toFloat()
-    } else {
-        placeholderRatio
+
+    if (autoHeight) {
+        BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+            val ratio = if (bmp != null && bmp.height > 0) {
+                bmp.width.toFloat() / bmp.height.toFloat()
+            } else {
+                placeholderRatio
+            }
+            // ★ 有界性判断用 constraints.hasBoundedWidth/Height，而不是拿 Dp 去比 `Dp.Infinity`：
+            //   无界时 BoxWithConstraints 给的 maxWidth 是一个巨大的有限 Dp（≈Int.MAX_VALUE/density），
+            //   比不出 Infinity 来。宽度无界就兜一个默认宽度，别把高度算成天文数字。
+            val width = if (constraints.hasBoundedWidth) maxWidth else DefaultAutoWidth
+            val natural = if (ratio > 0f) width / ratio else width
+            // 调用方可用 heightIn(max = …) 给上限；高度无界时不夹
+            val height = if (constraints.hasBoundedHeight) minOf(natural, maxHeight) else natural
+            ImageFrame(
+                bitmap = bmp,
+                failed = failed,
+                contentDescription = contentDescription,
+                shape = shape,
+                contentScale = contentScale,
+                fallback = fallback,
+                fallbackTint = fallbackTint,
+                modifier = Modifier.size(width, height)
+            )
+        }
+        return
     }
 
+    ImageFrame(
+        bitmap = bmp,
+        failed = failed,
+        contentDescription = contentDescription,
+        shape = shape,
+        contentScale = contentScale,
+        fallback = fallback,
+        fallbackTint = fallbackTint,
+        modifier = modifier
+    )
+}
+
+/** 图片本体（底色占位 + 载入后的图 / 失败图标）：两种尺寸路径共用，保证外观完全一致 */
+@Composable
+private fun ImageFrame(
+    bitmap: Bitmap?,
+    failed: Boolean,
+    contentDescription: String?,
+    shape: Shape,
+    contentScale: ContentScale,
+    fallback: ImageVector?,
+    fallbackTint: Color,
+    modifier: Modifier
+) {
     Box(
         modifier = modifier
-            .then(if (autoHeight) Modifier.aspectRatio(ratio) else Modifier)
             .clip(shape)
             .background(color = MaterialTheme.colorScheme.surfaceVariant, shape = shape),
         contentAlignment = Alignment.Center
     ) {
-        if (bmp != null) {
+        if (bitmap != null) {
             Image(
-                bitmap = bmp.asImageBitmap(),
+                bitmap = bitmap.asImageBitmap(),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale
@@ -122,3 +170,6 @@ fun RemoteImage(
         }
     }
 }
+
+/** [RemoteImage] autoHeight 模式下宽度无界时的兜底宽度（正常调用方都会给 fillMaxWidth） */
+private val DefaultAutoWidth = 240.dp
