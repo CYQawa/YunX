@@ -565,6 +565,18 @@ FileNameText(text = file.fname, style = MaterialTheme.typography.bodyLarge, font
 - 两个调用点都在 `app/src/main/kotlin/com/yunx/app/ui/MainScreen.kt`（启动检查 + 手动检查），都传 `ThemeController.acceptPrereleaseUpdate`；**切换开关后不会自动重查**，下一次手动检查（或重启后的启动检查）才生效。
 - `app/src/main/kotlin/com/yunx/app/ui/screens/UpdateSheet.kt` 在版本号后面加了一枚「预发布」小标签（`release.prerelease == true` 时），避免用户不知情地装上测试包。
 
+**说明正文的装饰过滤（`UpdateChecker.cleanReleaseNotes`）**：`UpdateSheet` 是用**纯文本** `Text()` 显示
+`release.body` 的（没上 markdown/HTML 渲染），而 GitHub Release 正文开头那两样东西只是装饰：
+① capsule-render 的波浪头图 `<img src="https://capsule-render.vercel.app/api?..." />`；
+② QQ 群徽章 `[![QQ交流群](https://img.shields.io/badge/...&logo=qq&logoColor=white)](http://qm.qq.com/cgi-bin/qm/qr?...&group_code=635207650)`。
+它们在 GitHub 页面上是图片，到我们这儿只会显示成一长串 URL，白占那 220dp 的高度 ⇒ 在 `parseRelease()`
+里清洗一次（**只此一处**：`UpdateSheet` 与 `netdiskDownloadUrl()` 读到的都是清洗后的那份）。
+★ 用户明确要求「其他不要去掉」，所以规则只认这两类：不认 shields.io 的通用徽章、不认别的图床 `<img>`；
+两条 QQ 徽章正则**顺序不能换**（带外链的那条先跑，否则裸图片规则会吃掉内层、只剩一个 `[](http://qm.qq.com/...)`）。
+整行只剩装饰时整行删掉、连续空行压成一个（markdown 本来就把多个空行当一个），这是唯一的"额外"改动。
+用例见 `app/src/test/kotlin/com/yunx/app/data/update/UpdateCheckerNotesTest.kt`
+（拿 v1.2.8 的真实正文逐行断言「除那两行外一行都没少」）。
+
 **版本比较规则（`UpdateChecker.compareVersions`，改动过，注意别改回去）**：先逐段比数字前缀；数字段完全相同时，
 只有**两边都带后缀**才继续比后缀（先比后缀里的第一段数字，`1.3.0-beta2 > 1.3.0-beta1`，再按字符串比）；
 **只有一边带后缀时视为相等** —— 这是为了保住 fork 构建 `1.2.6-gh1` 不被判成比同号正式版旧的既有约定。

@@ -102,6 +102,61 @@ object UpdateChecker {
             ?.trim()
             ?.takeIf { it.isNotBlank() }
 
+    /** capsule-render 头图（波浪 banner）：只要 `<img>` 里出现这个域名就整段删掉（不依赖属性顺序） */
+    private val CAPSULE_BANNER_REGEX =
+        Regex("""<img\b[^>]*capsule-render\.vercel\.app[^>]*>""", RegexOption.IGNORE_CASE)
+
+    /**
+     * QQ 群徽章（带外链的形式）：`[![任意文字](https://img.shields.io/badge/...)](http://qm.qq.com/...)`
+     *
+     * ★ 必须排在裸图片规则**前面**（见 [DECORATION_REGEXES]）：先整体吃掉外层链接，
+     *   否则裸图片规则会把里面那截删掉，只剩一个 `[](http://qm.qq.com/...)` 的空链接。
+     */
+    private val QQ_BADGE_LINKED_REGEX = Regex(
+        """\[!\[[^\]]*]\(\s*https://img\.shields\.io/[^)\s]*\)]\(\s*https?://[^)\s]*qm\.qq\.com[^)\s]*\s*\)"""
+    )
+
+    /** QQ 群徽章（裸图片形式）：`![任意文字](https://img.shields.io/badge/...&logo=qq...)` */
+    private val QQ_BADGE_BARE_REGEX =
+        Regex("""!\[[^\]]*]\(\s*https://img\.shields\.io/[^)\s]*logo=qq[^)\s]*\)""")
+
+    /** Release 说明里对纯文本展示毫无意义、只该整段丢掉的装饰片段（顺序即执行顺序，别调换前两条） */
+    private val DECORATION_REGEXES =
+        listOf(CAPSULE_BANNER_REGEX, QQ_BADGE_LINKED_REGEX, QQ_BADGE_BARE_REGEX)
+
+    /**
+     * 过滤 Release 说明里对用户没用的装饰，只去这两类（**别扩大范围**，其余内容一字不动）：
+     *
+     * ① capsule-render 的头图 `<img src="https://capsule-render.vercel.app/api?..." />`；
+     * ② QQ 群徽章那一行 `[![QQ交流群](https://img.shields.io/badge/QQ%E7%BE%A4-...?logo=qq)](http://qm.qq.com/...)`。
+     *
+     * 为什么要在客户端去：`UpdateSheet` 是用**纯文本** `Text()` 显示说明正文的（没上 markdown/HTML 渲染），
+     * 这两样在 GitHub Release 页是图片，到我们这儿只会显示成一长串 URL，白占那 220dp 的高度。
+     * ★ 因此这里只认「capsule-render 的 img」和「指向 qm.qq.com / 带 logo=qq 的 shields.io 徽章」，
+     *   不认 shields.io 的其它徽章（别的徽章可能是有信息量的）。
+     *
+     * 整行只剩装饰时**整行删掉**（这两样都是独占一行），否则会在说明开头留下一片空行；
+     * 顺带把连续空行压成一个 —— markdown 本来就把多个空行当一个，压缩不改语义，只影响观感。
+     */
+    fun cleanReleaseNotes(body: String): String {
+        if (body.isBlank()) return body
+        val kept = ArrayList<String>()
+        for (line in body.lines()) {
+            val stripped = DECORATION_REGEXES.fold(line) { acc, regex -> regex.replace(acc, "") }.trim()
+            // 整行都是装饰 → 丢掉整行；本来就是空行的原样留着（后面统一压缩连续空行）
+            if (stripped.isEmpty() && line.isNotBlank()) continue
+            if (stripped.isEmpty()) {
+                if (kept.isNotEmpty() && kept.last().isEmpty()) continue
+                kept.add("")
+            } else {
+                // 行内还夹着装饰（如「文字 <img ...>」）时只去掉片段，其余文字原样保留
+                kept.add(stripped)
+            }
+        }
+        // trim() 顺手去掉说明开头/结尾的空行（正文第一个字符往往就是换行）
+        return kept.joinToString("\n").trim()
+    }
+
     /**
      * 比较两个版本号：v1 > v2 返回正数，v1 < v2 返回负数，相等返回 0。
      * 兼容 fork 构建后缀（如 "1.2.6-gh1"）：每段取数字前缀比较，后缀（-gh<n> 等）不影响主版本比较。
@@ -248,12 +303,14 @@ object UpdateChecker {
                 }
             }
         }
-        val body = json.optString("body")
+        val rawBody = json.optString("body")
+        // 说明正文只在这一处清洗（UpdateSheet / 网盘链接提取读到的都是清洗后的那份，别再各清一遍）
+        val body = cleanReleaseNotes(rawBody)
         val prerelease = json.optBoolean("prerelease")
         Log.d(
             TAG,
             "获取最新 Release 成功：$tag（${if (prerelease) "预发布版；" else ""}资产 ${assets.size} 个；" +
-                "说明 ${body.length} 字；网盘链接=${netdiskDownloadUrl(body) ?: "无"}）"
+                "说明 ${rawBody.length} 字 → 过滤装饰后 ${body.length} 字；网盘链接=${netdiskDownloadUrl(body) ?: "无"}）"
         )
         return CheckResult.Success(
             Release(
