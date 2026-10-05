@@ -324,7 +324,14 @@ internal class AndroidKeystoreCredentialCipher : CredentialCipher {
     private fun PermanentlyInvalid(error: Throwable) =
         CredentialKeyException.PermanentlyInvalid(describe(error), error)
 
-    private companion object {
+    /**
+     * ★ 注意：companion **不能**声明成 `private` —— [shared] 要给 DAO / GitHubTokenStore /
+     *   DownloadManager 三处用，而 companion 的可见性会**连带限制它自己的成员**
+     *   （`private companion object` 里写 `val shared` ⇒ 报
+     *   `Cannot access 'companion object Companion': it is private`）。
+     *   常量仍然是 private，只有 [shared] 公开给同模块。
+     */
+    companion object {
         const val TAG = "YunX"
         const val KEYSTORE = "AndroidKeyStore"
         const val KEY_ALIAS = "yunx.account.credentials.v1"
