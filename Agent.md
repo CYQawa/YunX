@@ -1444,6 +1444,67 @@ android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently in
 
 ---
 
+### 3.37 迅雷 / 123 的登录方式（三条路各自的坑，改前必读）
+
+**迅雷现在的三种登录入口**（`ui/login/XunleiLoginScreen.kt` + `XunleiWebLoginScreen.kt`）：
+
+| 入口 | 通道 | 触发风控的情况 |
+|---|---|---|
+| 账号密码 | App 通道 `xluser.core.login/v3/login` | 新设备/异地**必然**返回 `review_panel(1007)`，要再补一次短信验证码 |
+| 短信登录 | App 通道 `sendsms` → `smslogin` | 与密码登录同一套风控，成功率更高 |
+| 网页登录 | 网页版 `pan.xunlei.com`（另一套接口） | 与 App 通道无关，前两条被拦时用它 |
+
+- 老版本只有「密码登录触发风控后」才会走到短信（`loginStep.needSms`）；现在短信是**一等入口**，
+  没设过密码/忘记密码/被风控挡住都不用再绕。两条流程共用 `sendSms` / `loginWithSms`，
+  验证码重发有 **60 秒冷却**（`SMS_RESEND_COOLDOWN_SECONDS`），别去掉——连点就是连发短信。
+- 切换登录方式必须调 `XunleiAccountViewModel.resetLoginStep()`：旧的 `creditkey/token` 属于上一条流程，
+  带过去提交只会报「验证已失效」。
+- **网页登录的 token 与 App token 不是同一套 OAuth 客户端**，这是最容易踩的一条：
+  - App：`Xp6vsxz_7IYVw2BB` + secret，刷新走**表单** + `X-Device-Id`；
+  - 网页：`Xqp0kJBXWhwaTpB6`（`XunleiWebCredential.CLIENT_ID`）**无 secret**，刷新走 **JSON** +
+    `X-Client-Id` + `Origin/Referer` + 桌面 UA；
+  - 用错客户端刷新**必失败**，用户看到的是「刚登录没多久就提示过期」。
+    所以落库时要记 `authType='webToken'`（DB **v18** 新增列，见 `MIGRATION_17_18`），
+    `XunleiApi.refreshToken(..., authType)` 按它分支；认证备份也要带上这个字段，
+    否则「备份 → 恢复」后刷新路径会退化成 App 通道。
+- 网页凭据的读取（`XunleiWebCredential`）：localStorage 键 `credentials_Xqp0kJBXWhwaTpB6`
+  （子账号是 `...@<current_sub>`），`deviceid` Cookie 补 `device_id`、`captcha_<clientId>` 补
+  `captcha_token`。读到的只是**文本**，不等于登录成功——必须再打一次
+  `GET /drive/v1/about`（`XunleiApi.verifyAccessToken`）确认可用才落库，失败就继续轮询。
+  页面改版时用户可以走「手动粘贴」（整段 JSON / 带引号的 JSON 串 / 裸 token 三种都认）。
+- 判断逻辑写成了纯函数（`fieldsFrom` / `parseRawToken` / `isValidToken`）以便单测，原因见本节末尾。
+
+**123 云盘现在的两条路**（`ui/login/Pan123LoginScreen.kt`，顶部 `SegmentedButton` 切换）：
+
+- 网页登录：WebView 打开 `yun.123pan.cn`，登录后读 localStorage 的 `authorToken`（原有行为，未改动）。
+- 账号密码：`POST https://user.123pan.cn/api/user/sign_in`（**另一个站**，不是个人盘 API 的
+  `yun.123pan.cn`），body `{"passport","password","remember":false}`：
+  - 成功判定是 **`code == 200`**，不是其它接口的 `code == 0`；
+  - **密码不 trim**（有用户密码真的带首尾空格），账号才 trim；
+  - 请求头要 `platform: web` / `app-version: 132`（登录专用值）/ `loginuuid` / `Origin` / `Referer`；
+  - `loginuuid` 必须**跨启动稳定**（`Pan123DeviceId`，`Application.onCreate` 装配）——
+    每次启动换一个会被服务端当新设备；
+  - 失败文案由 `Pan123LoginSupport.describeFailure` 统一生成，**绝不复述服务端原文**：
+    登录响应可能把账号甚至密码回显回来；频率/风控/账号冻结三类要给不同指引
+    （等着重试 / 换网页登录 / 去官方客户端查账号）。
+- 两条路拿到的是同一种 authorToken，落库后行为完全一致（`account` 字段在账号密码登录时才有值）。
+
+**单测的硬约束（重要）**：工程开了 `unitTests.isReturnDefaultValues = true`，JVM 单测里
+android.jar 的 `org.json` 是**空壳**——任何 `JSONObject`/`JSONTokener` 调用只会返回 null，
+测不了。所以凡是「判断该不该认为登录成功」的逻辑都必须放在**不碰 JSON 的纯函数**里
+（`XunleiWebCredential.fieldsFrom(map)`、`Pan123LoginSupport.describeFailure`），
+JSON 那一层只负责把文本拍平成 `Map`。照抄别人的「直接测 JSON 解析」写法，CI 会红。
+
+**落点**：`data/network/XunleiWebCredential.kt`、`XunleiApi.kt`（`refreshToken` 分支 +
+`verifyAccessToken`）、`Pan123Api.kt`（`passwordLogin`）、`Pan123LoginSupport.kt`、
+`Pan123Constants.kt`、`Pan123DeviceId.kt`、`data/db/XunleiAccountEntity.kt` + `AppDatabase.kt`（v18）、
+`data/repository/{Xunlei,Pan123}AccountRepository.kt`、`ui/viewmodel/{Xunlei,Pan123}AccountViewModel.kt`、
+`ui/login/{XunleiLoginScreen,XunleiWebLoginScreen,Pan123LoginScreen,WebViewJs}.kt`、`ui/MainScreen.kt`、
+`YunXApp.kt`、`data/backup/AuthBackupManager.kt`；回归测试
+`app/src/test/kotlin/com/yunx/app/data/network/{XunleiWebCredentialTest,Pan123LoginSupportTest}.kt`。
+
+---
+
 ## 4. 验证
 
 
@@ -1481,6 +1542,7 @@ android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently in
 | `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
 | `animateColorAsState` 报 `Unresolved reference` | 包是 `androidx.compose.animation.animateColorAsState`（**不是** `androidx.compose.animation.core`）。判断依据：`.animation` 放的是**进出场/内容切换**（`AnimatedVisibility`/`AnimatedContent`/`fadeIn`/`fadeOut`/`slideInVertically`/`togetherWith`/`animateColorAsState`），`.animation.core` 放的是**时间曲线与动画值**（`tween`/`spring`/`Animatable`/`animateFloatAsState`/`animateDpAsState`）。写错包会连带一片 `Cannot infer type for this parameter`（`by` 委托推不出类型） |
 | Room 编译报 schema 错 | 检查 `version` 是否 +1、Migration 是否注册 |
+| 单测本地跑绿 / CI 红，或单测里 `JSONObject` 解析结果永远是 null | 工程开了 `unitTests.isReturnDefaultValues = true`，JVM 单测里 android.jar 的 `org.json` 是**空壳**（`JSONObject`/`JSONTokener` 只会返回 null，不抛异常）。**任何依赖 JSON 解析的断言都测不了**：把判定逻辑抽成不碰 JSON 的纯函数（收 `Map` / `String`）再测，JSON 那一层只留「把文本拍平成 Map」。已踩过一次（迅雷网页凭据解析） |
 | `Unclosed comment` + 一串「莫名其妙」的语法错（如 `Identifier expected`，行号还指着一段正常代码） | **注释正文里出现了 `/*`** —— Kotlin 的块注释**支持嵌套**，多出来的 `/*` 会一路吞到文件尾，报错行号与真正的位置无关（别顺着行号改）。典型来源：注释里写接口路径 `/api/v1/admin/**`、通配路径、正则片段。已踩过一次：公告客户端 KDoc 里的 `/api/v1/admin/**` 让整个文件被注释掉 ⇒ 搜本次改动文件注释内的 `/*` |
 
 ---
