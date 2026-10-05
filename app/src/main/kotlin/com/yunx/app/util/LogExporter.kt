@@ -41,15 +41,14 @@ import java.util.Locale
 
 /**
  * 日志导出工具：
- * 1. 头部写入应用 / 设备信息；
- * 2. `logcat -d -v time --uid=<本应用 uid>` dump 本应用的运行日志；
+ * 1. 头部写入应用 / 设备信息（uid、本次 pid 只作为**内容字段**，不参与文件命名与筛选）；
+ * 2. dump 本应用的运行日志：首选 `logcat -d -v time --uid=<本应用 uid>`，
+ *    本机 logcat 不认 `--uid` 时自动降级为「全量 dump + 本应用历史 pid 白名单」（见 [exportRuntimeLog]）；
  * 3. 合并写入 cacheDir/logs/ 下文本文件，通过 FileProvider + 系统分享导出。
  *
- * ★ 过滤键是 **uid 而不是 pid**（改动过，别改回去）：pid 每次启动/闪退重启都会换，
+ * ★ 过滤键绝不能是**当前 pid**（改动过，别改回去）：pid 每次启动/闪退重启都会换，
  *   用 `--pid=${Process.myPid()}` 只能捞到**当前这一次**进程的日志——用户复现闪退后重开 App 再导出，
  *   最该看的那段崩溃日志正好被过滤掉了（旧日志「找不到 / 导不全」的根因）。
- *   uid 在整个应用安装期内不变，`--uid` 会把本应用**历史所有进程**（含崩溃那一次）的日志都带出来。
- *   PID 只作为**内容字段**保留在头部信息里，绝不参与文件命名、筛选、查找。
  *   文件名 `yunx_log_<yyyyMMdd_HHmmss>.txt` 也**只按时间**命名，与进程无关。
  */
 object LogExporter {
@@ -107,15 +106,48 @@ object LogExporter {
             writer.write("设备：${Build.MANUFACTURER} ${Build.MODEL}\n")
             writer.write("系统：Android ${Build.VERSION.RELEASE}（SDK ${Build.VERSION.SDK_INT}）\n")
             writer.write("诊断模式：${if (DiagnosticLog.isEnabled()) "已开启" else "关闭"}\n")
+            writer.write("本应用 uid=${Process.myUid()}，本次 pid=${Process.myPid()}\n")
             writer.write("\n")
 
-            // ---------- 运行日志：按 uid 过滤（跨重启、含闪退那一次进程；pid 只在上面的信息里出现） ----------
-            val uid = Process.myUid()
-            writer.write("========== 运行日志（logcat -d -v time --uid=$uid，uid 恒定，含历史进程）==========\n")
-            dumpLogcat(writer, listOf("logcat", "-d", "-v", "time", "--uid=$uid"))
+            exportRuntimeLog(context, writer)
         }
         true
     }.getOrDefault(false)
+
+    /**
+     * 运行日志分两级取，目标是**重启 / 闪退之后仍然能导到历史日志**：
+     *
+     * ① 首选 `logcat -d -v time --uid=<本应用 uid>`：uid 在安装期内恒定，一次就能覆盖本应用历史所有进程。
+     *    但 `--uid` 是较新的 logcat 才有的选项——vivo / Android 10 这类老 logcat 会直接吐
+     *    「Unrecognized Option + Usage: logcat」，**必须识别出来并降级**，绝不能把这段 usage 文本
+     *    当成日志写进导出文件（真机上就是这么坏掉的）。
+     * ② 降级：全量 dump + **本应用历史 pid 白名单**筛选。Android 上应用只能读到自己 uid 的日志
+     *    （logd 按 uid 隔离，真机实测无过滤 dump 里没有别的 uid 的日志），所以全量 dump 本身就是本应用的日志；
+     *    pid 白名单是第二道保险：万一某个 ROM 不隔离，也不会把别的应用的日志带进要分享出去的文件里。
+     *    白名单由 [rememberPid] 在每次启动时记录，所以跨重启、含闪退那一次进程都能捞到。
+     * ③ 保底：白名单一行都没匹配上（不同 ROM 的列顺序可能不同）就原样输出 dump——**宁可多，不可空**。
+     */
+    private fun exportRuntimeLog(context: Context, writer: OutputStreamWriter) {
+        val uid = Process.myUid()
+        val byUid = query(listOf("logcat", "-d", "-v", "time", "--uid=$uid"))
+        if (byUid != null) {
+            writer.write("========== 运行日志（logcat --uid=$uid，uid 恒定，含历史进程）==========\n")
+            writeLogLines(writer, byUid)
+            return
+        }
+
+        val pids = PidHistory.pids(context)
+        writer.write(
+            "========== 运行日志（本机 logcat 不认 --uid，已降级为全量 dump + 本应用历史 pid 白名单，" +
+                "已知 pid ${pids.size} 个）==========\n"
+        )
+        val raw = query(listOf("logcat", "-d", "-v", "time"))
+        if (raw == null) {
+            writer.write("（读取日志失败：本机 logcat 不可用）\n")
+            return
+        }
+        writeLogLines(writer, filterByPid(raw, pids).ifEmpty { raw })
+    }
 
     /** 清空 logcat 缓冲（便于复现后只导出本次操作日志） */
     fun clearLogcat(): Boolean = runCatching {
@@ -131,10 +163,16 @@ object LogExporter {
      */
     fun exportDiagnosticZip(context: Context): File? = DiagnosticLog.exportZip(context)
 
-    /** 执行 logcat 命令并写入 writer（仅保留最近 MAX_LINES 行） */
-    private fun dumpLogcat(writer: OutputStreamWriter, command: List<String>) {
+    /**
+     * 执行 logcat 命令并返回输出行；**失败或输出的是 usage 文本时返回 null**（调用方据此降级）。
+     *
+     * 为什么不看退出码：老 logcat 遇到不认识的选项会先把 Usage 打到输出里，而
+     * `redirectErrorStream(true)` 会把它和日志混在一起——上一版就是这么把
+     * 「Unrecognized Option / Usage: logcat」当成日志写进导出文件的。
+     */
+    private fun query(command: List<String>): List<String>? {
         var process: java.lang.Process? = null
-        try {
+        return try {
             process = ProcessBuilder(command).redirectErrorStream(true).start()
             val reader =
                 BufferedReader(InputStreamReader(process.inputStream, StandardCharsets.UTF_8))
@@ -148,19 +186,84 @@ object LogExporter {
                 line = reader.readLine()
             }
             process.waitFor()
-
-            if (lines.isEmpty()) {
-                writer.write("（无输出）\n")
-            } else {
-                lines.forEach { writer.write(LogRedactor.line(it)); writer.write("\n") }
-            }
+            if (looksLikeUsage(lines)) null else lines.toList()
         } catch (e: Exception) {
-            writer.write("（读取日志失败：${e.message}）\n")
+            null
         } finally {
             try {
                 process?.destroy()
             } catch (_: Exception) {
             }
+        }
+    }
+
+    /** logcat 不认某个选项时会先吐 Usage——识别出来，别当成日志 */
+    private fun looksLikeUsage(lines: Collection<String>): Boolean = lines.take(5).any {
+        it.startsWith("Unrecognized Option") ||
+            it.startsWith("Usage: logcat") ||
+            it.startsWith("unknown option")
+    }
+
+    /** 写入日志行：脱敏 + 丢掉混进来的 NUL（否则整个导出文件会被当成二进制，打开是乱码） */
+    private fun writeLogLines(writer: OutputStreamWriter, lines: List<String>) {
+        if (lines.isEmpty()) {
+            writer.write("（无输出）\n")
+            return
+        }
+        lines.forEach {
+            writer.write(LogRedactor.line(it).replace('\u0000', ' '))
+            writer.write("\n")
+        }
+    }
+
+    /** `-v time` 的行头：`MM-DD HH:MM:SS.mmm  PID [TID] L Tag: 内容`，pid 是第 3 列 */
+    private val PID_LINE_REGEX = Regex("""^\d\d-\d\d\s+\d\d:\d\d:\d\d\.\d+\s+(\d+)\s""")
+
+    /** 只保留 pid 在白名单里的行；多行日志的续行（不匹配行头）跟着上一条同进同出 */
+    private fun filterByPid(lines: List<String>, pids: Set<String>): List<String> {
+        val kept = ArrayList<String>(lines.size)
+        var lastKept = false
+        for (line in lines) {
+            val match = PID_LINE_REGEX.find(line)
+            if (match == null) {
+                if (lastKept) kept.add(line)
+                continue
+            }
+            lastKept = match.groupValues[1] in pids
+            if (lastKept) kept.add(line)
+        }
+        return kept
+    }
+
+    /**
+     * 记下本次启动的 pid：导出日志降级到「pid 白名单」时，靠它把**历史进程（含闪退那一次）**的
+     * 日志捞回来。一行一个、最多 [MAX_PID_HISTORY] 个，写内部存储，不需要任何权限。
+     */
+    fun rememberPid(context: Context) = PidHistory.remember(context)
+
+    private object PidHistory {
+        private const val FILE_NAME = "log_pids.txt"
+        private const val MAX_PID_HISTORY = 200
+
+        private fun file(context: Context) = File(context.filesDir, FILE_NAME)
+
+        fun remember(context: Context) {
+            val pid = Process.myPid().toString()
+            runCatching {
+                val f = file(context)
+                val existing = if (f.isFile) f.readLines() else emptyList()
+                if (existing.lastOrNull() == pid) return@runCatching
+                f.writeText((existing + pid).takeLast(MAX_PID_HISTORY).joinToString("\n"))
+            }
+        }
+
+        fun pids(context: Context): Set<String> {
+            val stored = runCatching {
+                val f = file(context)
+                if (f.isFile) f.readLines().filter { it.isNotBlank() }.toSet() else emptySet()
+            }.getOrDefault(emptySet())
+            // 当前 pid 一定在里面：即使 pid 文件写失败，本次会话的日志也要导得出来
+            return stored + Process.myPid().toString()
         }
     }
 

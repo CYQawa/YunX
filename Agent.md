@@ -1623,13 +1623,29 @@ org.json/Uri 空壳条目）、`DownloadPlatform.MAGNET`、`DownloadManager`（`
 
 ### 3.40 诊断模式（分模块日志）与「导出日志为什么不再按 PID 过滤」
 
-**① 日志导出换成 uid 过滤（改动过，别改回 pid）**
+**① 日志导出：绝不用「当前 pid」过滤（改动过，别改回去）**
 
 `LogExporter` 以前是 `logcat -d -v time --pid=${Process.myPid()}`。pid 每次启动/闪退重启都会变，
 用户「复现闪退 → 重开 App → 导出日志」时，最该看的那段崩溃日志**正好被过滤掉了**——这就是
-「旧日志找不到 / 导不全」的根因。现在用 `--uid=${Process.myUid()}`：uid 在整个安装期内不变，
-会把本应用**历史所有进程（含崩溃那一次）**的日志都带出来（`--uid` 从 Android 7.0 起支持，minSdk 24 够）。
-PID 只作为**内容字段**留在头部信息里，不参与文件命名/筛选/查找；文件名一直是
+「旧日志找不到 / 导不全」的根因。
+
+现在分两级取（`exportRuntimeLog`），目标都是「重启/闪退之后仍能导到历史日志」：
+
+1. **首选** `logcat -d -v time --uid=<本应用 uid>`：uid 在安装期内恒定，一次就能覆盖本应用历史所有进程。
+2. **降级**（`--uid` 不被支持时）：不过滤 dump + **本应用历史 pid 白名单**筛选。Android 上应用只能读到
+   自己 uid 的日志（logd 按 uid 隔离，真机实测无过滤 dump 里没有别的 uid 的日志），所以全量 dump
+   本身就是本应用的日志；pid 白名单是第二道保险，防止个别 ROM 不隔离时把别的应用的日志带进分享出去的文件。
+   白名单由 `LogExporter.rememberPid(this)`（`YunXApp.onCreate` → 内部存储 `log_pids.txt`，一行一个 pid、
+   最多 200 个）维护，所以**跨重启、含闪退那一次进程**都在里面。
+3. **保底**：白名单一行都没匹配上（不同 ROM 列顺序可能不同）就原样输出 dump，**宁可多不可空**。
+
+★ **真机踩坑（vivo V2065A / Android 10 / SDK 29）：这台机器的 logcat 根本不认 `--uid=`**，会先吐
+`Unrecognized Option` + 整段 `Usage: logcat ...`，而 `redirectErrorStream(true)` 把这段 usage 和日志混在
+同一条流里 ⇒ 导出文件里只有 usage 文本、日志一行都没有（用户就是这么报「导出日志坏了」的）。因此：
+`query()` **不能只看退出码**，必须识别 usage 文本并返回 null 让调用方降级；`writeLogLines()` 还要丢掉
+混进来的 NUL（否则整个 txt 被当成二进制，打开是乱码，连文本工具都读不了）。这台机器 `--pid=` 是认的，
+`-v` 的修饰词支持 `color descriptive epoch monotonic printable uid usec UTC year zone`。
+PID/uid 都只作为**内容字段**留在头部信息里，不参与文件命名/筛选/查找；文件名一直是
 `yunx_log_<yyyyMMdd_HHmmss>.txt`，只按时间命名。
 
 **② 诊断模式开关**：设置 → 「关于云析」长按 → 开发调试 → **诊断模式**（`SettingsRepository.diagnosticMode`，
