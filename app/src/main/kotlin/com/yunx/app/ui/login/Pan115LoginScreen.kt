@@ -114,6 +114,7 @@ fun Pan115LoginScreen(
             setInitialScale(0)
             // 桌面 UA：115 网页版是桌面站点，且接口请求头也用同一 UA，避免风控
             settings.userAgentString = Pan115Constants.WEB_UA
+            settings.suppressRequestedWithHeader()
             webViewClient = object : DiagnosticWebViewClient() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,

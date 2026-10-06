@@ -112,6 +112,7 @@ fun QuarkLoginScreen(
             settings.loadWithOverviewMode = true
 
             settings.userAgentString = QuarkConstants.USER_AGENT
+            settings.suppressRequestedWithHeader()
             webViewClient = object : DiagnosticWebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     DiagnosticLog.webview("page_started", url)

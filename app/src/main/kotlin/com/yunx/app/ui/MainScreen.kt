@@ -400,7 +400,10 @@ fun MainScreen() {
             db.baiduAccountDao(),
             db.c139AccountDao(),
             db.pan123AccountDao(),
-            db.pan115AccountDao()
+            db.pan115AccountDao(),
+            db.guangyaAccountDao(),
+            db.ilanzouAccountDao(),
+            db.lanzouAccountDao()
         )
     }
     // GitHub API 封装：Token 从 GitHubTokenStore 动态读取（Keystore 加密），提升 API 限额

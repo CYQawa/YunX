@@ -105,6 +105,7 @@ fun UCLoginScreen(
             settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
             setInitialScale(0)
             settings.userAgentString = UCConstants.USER_AGENT
+            settings.suppressRequestedWithHeader()
             webViewClient = object : DiagnosticWebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     DiagnosticLog.webview("page_started", url)

@@ -110,6 +110,7 @@ fun BaiduLoginScreen(
             settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
             setInitialScale(0)
             settings.userAgentString = BaiduConstants.UA_WEB
+            settings.suppressRequestedWithHeader()
             webViewClient = object : DiagnosticWebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     DiagnosticLog.webview("page_started", url)

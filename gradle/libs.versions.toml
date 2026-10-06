@@ -2,6 +2,7 @@
 agp = "8.13.0"
 kotlin = "2.1.0"
 coreKtx = "1.17.0"
+webkit = "1.12.1"   # 登录 WebView 关闭 X-Requested-With（REQUESTED_WITH_HEADER_ALLOW_LIST，1.8.0+）
 lifecycleRuntimeKtx = "2.9.2"
 activityCompose = "1.11.0"
 composeBom = "2026.06.01"  
@@ -24,6 +25,7 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

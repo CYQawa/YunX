@@ -290,6 +290,10 @@ class XunleiApi(
                     .header("Origin", "https://pan.xunlei.com")
                     .header("Referer", "https://pan.xunlei.com/")
                     .header("User-Agent", XunleiWebCredential.DESKTOP_UA)
+                    // 桌面 UA 必须同步这套 client hints：只改 UA 不同步 Sec-CH-UA 会被判成移动端而冲突
+                    .header("Sec-Ch-Ua", XunleiWebCredential.DESKTOP_SEC_CH_UA)
+                    .header("Sec-Ch-Ua-Mobile", XunleiWebCredential.DESKTOP_SEC_CH_UA_MOBILE)
+                    .header("Sec-Ch-Ua-Platform", XunleiWebCredential.DESKTOP_SEC_CH_UA_PLATFORM)
                     .post(body.toRequestBody(jsonMediaType))
                     .build()
             } else {

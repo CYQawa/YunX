@@ -120,6 +120,7 @@ fun C139LoginScreen(
             setInitialScale(0)
             // 139 网盘用手机 UA（移动版页面在 WebView 渲染稳定；PC 版 SPA 会因环境检测白屏）
             settings.userAgentString = WebSettings.getDefaultUserAgent(context)
+            settings.suppressRequestedWithHeader()
             webViewClient = object : DiagnosticWebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     DiagnosticLog.webview("page_started", url)

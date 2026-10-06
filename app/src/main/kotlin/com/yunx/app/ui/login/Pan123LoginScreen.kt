@@ -495,6 +495,7 @@ private fun buildWebView(context: Context, onLoadingChange: (Boolean) -> Unit): 
         settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
         setInitialScale(0)
         settings.userAgentString = Pan123Constants.WEB_UA
+        settings.suppressRequestedWithHeader()
         webViewClient = object : DiagnosticWebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 DiagnosticLog.webview("page_started", url)

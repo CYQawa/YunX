@@ -116,6 +116,7 @@ fun XunleiWebLoginScreen(
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             // 桌面 UA：网页版登录态（credentials_* 键）只在桌面版页面写入，移动版页面是另一套
             settings.userAgentString = XunleiWebCredential.DESKTOP_UA
+            settings.suppressRequestedWithHeader()
             webViewClient = object : DiagnosticWebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     DiagnosticLog.webview("page_started", url)
@@ -268,7 +269,7 @@ fun XunleiWebLoginScreen(
                 Column {
                     Text(
                         text = "在电脑浏览器登录 pan.xunlei.com 后，从开发者工具复制 localStorage 中 " +
-                            "${XunleiWebCredential.STORAGE_KEY} 的值（整段 JSON 即可）；也可以直接粘贴 access_token",
+                            "${XunleiWebCredential.STORAGE_KEY} 的值（整段 JSON 即可）",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -277,7 +278,7 @@ fun XunleiWebLoginScreen(
                         value = pasteInput,
                         onValueChange = { pasteInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("粘贴凭据 JSON 或 access_token…") },
+                        placeholder = { Text("粘贴凭据 JSON…") },
                         minLines = 4,
                         maxLines = 8
                     )

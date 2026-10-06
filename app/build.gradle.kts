@@ -138,6 +138,7 @@ dependencies {
     implementation(libs.markdownRenderer)
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.webkit)   // 登录 WebView 关闭 X-Requested-With（见 DiagnosticWebViewClient.suppressRequestedWithHeader）
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

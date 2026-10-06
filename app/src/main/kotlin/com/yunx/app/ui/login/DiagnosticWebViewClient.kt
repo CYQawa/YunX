@@ -22,8 +22,11 @@ import android.graphics.Bitmap
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.yunx.app.util.DiagnosticLog
 
 /**
@@ -80,5 +83,22 @@ internal open class DiagnosticWebViewClient : WebViewClient() {
             code = errorResponse?.statusCode ?: -1,
             summary = "mainFrame=${request?.isForMainFrame}"
         )
+    }
+}
+
+/**
+ * 关闭 WebView 自带的 `X-Requested-With: <应用包名>` 请求头。
+ *
+ * Android WebView 默认会在请求里带上该头，值是本应用包名（`com.yunx.app`）——等于向站点声明
+ * 「本请求来自某个第三方 App」，既是可被识别的指纹，也可能触发厂商风控封禁。这里把「允许接收
+ * 该头的来源」设为空集合：任何站点都收不到，等价于移除该头。
+ *
+ * 依赖 WebView 的 `REQUESTED_WITH_HEADER_ALLOW_LIST` 特性，不支持时静默跳过（不影响登录）。
+ * 与 [DiagnosticWebViewClient] 同一目的：8 个登录页（夸克/UC/百度/139/123/115/迅雷×2）统一处理，
+ * 避免各自漏改。
+ */
+internal fun WebSettings.suppressRequestedWithHeader() {
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+        WebSettingsCompat.setRequestedWithHeaderOriginAllowList(this, emptySet())
     }
 }

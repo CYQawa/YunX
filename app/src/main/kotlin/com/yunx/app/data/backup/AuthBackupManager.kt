@@ -28,6 +28,12 @@ import com.yunx.app.data.db.BaiduAccountDao
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.C139AccountDao
 import com.yunx.app.data.db.C139AccountEntity
+import com.yunx.app.data.db.GuangYaAccountDao
+import com.yunx.app.data.db.GuangYaAccountEntity
+import com.yunx.app.data.db.ILanzouAccountDao
+import com.yunx.app.data.db.ILanzouAccountEntity
+import com.yunx.app.data.db.LanzouAccountDao
+import com.yunx.app.data.db.LanzouAccountEntity
 import com.yunx.app.data.db.Pan115AccountDao
 import com.yunx.app.data.db.Pan115AccountEntity
 import com.yunx.app.data.db.Pan123AccountDao
@@ -50,7 +56,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 网盘认证信息备份：把已登录的平台（夸克/UC/迅雷/百度/139/123/115）凭证打包为 JSON，
+ * 网盘认证信息备份：把已登录的平台（夸克/UC/迅雷/百度/139/123/115/光鸭/蓝奏云优享版/蓝奏云）凭证打包为 JSON，
  * 可导出到下载目录并在另一台设备导入恢复。
  */
 class AuthBackupManager(
@@ -60,7 +66,10 @@ class AuthBackupManager(
     private val baiduDao: BaiduAccountDao,
     private val c139Dao: C139AccountDao,
     private val pan123Dao: Pan123AccountDao,
-    private val pan115Dao: Pan115AccountDao
+    private val pan115Dao: Pan115AccountDao,
+    private val guangyaDao: GuangYaAccountDao,
+    private val ilanzouDao: ILanzouAccountDao,
+    private val lanzouDao: LanzouAccountDao
 ) {
 
     private companion object {
@@ -151,6 +160,41 @@ class AuthBackupManager(
             if (!onlyLoggedIn || a.cookie.isNotBlank()) accounts.put(
                 JSONObject()
                     .put("platform", "pan115")
+                    .put("cookie", a.cookie)
+                    .put("nickname", a.nickname)
+                    .put("updatedAt", a.updatedAt)
+            )
+        }
+        guangyaDao.getAccount()?.let { a ->
+            if (!onlyLoggedIn || a.accessToken.isNotBlank()) accounts.put(
+                JSONObject()
+                    .put("platform", "guangya")
+                    .put("accessToken", a.accessToken)
+                    .put("refreshToken", a.refreshToken)
+                    .put("deviceId", a.deviceId)
+                    .put("deviceSign", a.deviceSign)
+                    .put("account", a.account)
+                    .put("nickname", a.nickname)
+                    .put("updatedAt", a.updatedAt)
+            )
+        }
+        ilanzouDao.getAccount()?.let { a ->
+            if (!onlyLoggedIn || a.appToken.isNotBlank()) accounts.put(
+                JSONObject()
+                    .put("platform", "ilanzou")
+                    .put("appToken", a.appToken)
+                    .put("uuid", a.uuid)
+                    .put("account", a.account)
+                    .put("password", a.password)
+                    .put("userId", a.userId)
+                    .put("nickname", a.nickname)
+                    .put("updatedAt", a.updatedAt)
+            )
+        }
+        lanzouDao.getAccount()?.let { a ->
+            if (!onlyLoggedIn || a.cookie.isNotBlank()) accounts.put(
+                JSONObject()
+                    .put("platform", "lanzou")
                     .put("cookie", a.cookie)
                     .put("nickname", a.nickname)
                     .put("updatedAt", a.updatedAt)
@@ -278,6 +322,50 @@ class AuthBackupManager(
                         pan115Dao.upsert(
                             Pan115AccountEntity(
                                 id = "pan115", cookie = c,
+                                nickname = obj.optString("nickname"),
+                                updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                            )
+                        ); count++
+                    }
+                }
+                "guangya" -> {
+                    val t = obj.optString("accessToken")
+                    if (t.isNotBlank()) {
+                        guangyaDao.upsert(
+                            GuangYaAccountEntity(
+                                id = "guangya", accessToken = t,
+                                refreshToken = obj.optString("refreshToken"),
+                                deviceId = obj.optString("deviceId"),
+                                deviceSign = obj.optString("deviceSign"),
+                                account = obj.optString("account"),
+                                nickname = obj.optString("nickname"),
+                                updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                            )
+                        ); count++
+                    }
+                }
+                "ilanzou" -> {
+                    val t = obj.optString("appToken")
+                    if (t.isNotBlank()) {
+                        ilanzouDao.upsert(
+                            ILanzouAccountEntity(
+                                id = "ilanzou", appToken = t,
+                                uuid = obj.optString("uuid"),
+                                account = obj.optString("account"),
+                                password = obj.optString("password"),
+                                userId = obj.optString("userId"),
+                                nickname = obj.optString("nickname"),
+                                updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                            )
+                        ); count++
+                    }
+                }
+                "lanzou" -> {
+                    val c = obj.optString("cookie")
+                    if (c.isNotBlank()) {
+                        lanzouDao.upsert(
+                            LanzouAccountEntity(
+                                id = "lanzou", cookie = c,
                                 nickname = obj.optString("nickname"),
                                 updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                             )

@@ -124,6 +124,7 @@ fun XunleiVerifyWebViewScreen(
             settings.loadWithOverviewMode = true
             settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
             settings.userAgentString = XunleiConstants.APP_UA
+            settings.suppressRequestedWithHeader()
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
