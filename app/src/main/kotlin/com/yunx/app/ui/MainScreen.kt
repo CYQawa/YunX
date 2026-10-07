@@ -228,8 +228,21 @@ internal const val OVERLAY_KEY_ANNOUNCEMENTS = "overlay-announcements"
     ExperimentalSharedTransitionApi::class
 )
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    /** 外部来源请求直接打开的 Tab（如点击实况通知 → 下载页）；null = 用默认「解析」页 */
+    openTab: MainTab? = null,
+    /** [openTab] 被消费后回调：调用方负责清空它，避免旋转/重组时重复切页 */
+    onOpenTabConsumed: () -> Unit = {}
+) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Resolve) }
+
+    // 实况通知等外部来源请求切 Tab：读一次即消费（清空由调用方做）
+    LaunchedEffect(openTab) {
+        if (openTab != null) {
+            currentTab = openTab
+            onOpenTabConsumed()
+        }
+    }
     var showQuarkLogin by rememberSaveable { mutableStateOf(false) }
     var showUCLogin by rememberSaveable { mutableStateOf(false) }
     var showXunleiLogin by rememberSaveable { mutableStateOf(false) }
@@ -1149,7 +1162,12 @@ fun MainScreen() {
                                     // 更多菜单「清除 Token」：先二次确认再清除
                                     onGitHubClearToken = { showGitHubClearConfirm = true }
                                 )
-                                MainTab.Download -> DownloadScreen(scrollBehavior, downloadViewModel)
+                                MainTab.Download -> DownloadScreen(
+                                    scrollBehavior,
+                                    downloadViewModel,
+                                    // 下载调试开关（开发调试菜单）：开启后下载页长按任务可进「调试信息」页
+                                    downloadDebug = ThemeController.downloadDebug
+                                )
                                 MainTab.Settings -> SettingsScreen(
                                     scrollBehavior = scrollBehavior,
                                     themeRowModifier = themeRowModifier,

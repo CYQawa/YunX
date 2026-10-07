@@ -56,6 +56,10 @@ object ThemeController {
     var acceptPrereleaseUpdate by mutableStateOf(false)
         private set
 
+    /** 下载调试：开启后下载页长按任务可查看「调试信息」（默认关闭；关闭会清空全部调试日志） */
+    var downloadDebug by mutableStateOf(false)
+        private set
+
     private var initialized = false
 
     /** 从持久化存储加载（幂等；首次调用有效） */
@@ -68,6 +72,7 @@ object ThemeController {
         fileNameMultiLine = s.fileNameMultiLine
         clipboardSuggestEnabled = s.clipboardSuggestEnabled
         acceptPrereleaseUpdate = s.acceptPrereleaseUpdate
+        downloadDebug = s.downloadDebug
         initialized = true
     }
 
@@ -109,5 +114,14 @@ object ThemeController {
     fun setAcceptPrereleaseUpdate(context: Context, value: Boolean) {
         acceptPrereleaseUpdate = value
         SettingsRepository(context).acceptPrereleaseUpdate = value
+    }
+
+    /**
+     * 设置下载调试开关并持久化。**关闭会清空全部调试日志**，所以清空与提示由调用方负责
+     * （设置页关开关前会先弹二次确认，确认后调用 `DownloadDebugLog.setEnabled`）。
+     */
+    fun setDownloadDebug(context: Context, value: Boolean) {
+        downloadDebug = value
+        SettingsRepository(context).downloadDebug = value
     }
 }

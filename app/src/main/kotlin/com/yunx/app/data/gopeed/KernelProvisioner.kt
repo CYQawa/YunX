@@ -633,10 +633,10 @@ object KernelProvisioner {
         notifyStage("正在合并 Gopeed 内核分片", 100)
         val written = withContext(Dispatchers.IO) {
             FileOutputStream(target).use { out ->
-                engine.mergeChunksToStream(parts.map { it.first }, out) { done ->
+                engine.mergeChunksToStream(parts.map { it.first }, out, onProgress = { done ->
                     val percent = ((done * 100) / total).toInt().coerceIn(0, 100)
                     _phase.value = Phase.Merging(percent)
-                }
+                })
             }
         }
         if (written != total) {

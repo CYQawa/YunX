@@ -113,6 +113,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.backup.AuthCrypto
+import com.yunx.app.data.download.DownloadDebugLog
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSaver
 import com.yunx.app.data.gopeed.GopeedEngine
@@ -242,6 +243,11 @@ fun SettingsScreen(
     var showDevMenu by remember { mutableStateOf(false) }
     // 诊断模式开关（开发调试菜单里）：本地状态驱动 UI，运行态在 DiagnosticLog 里（改完立刻生效）
     var diagnosticOn by remember { mutableStateOf(settingsRepo.diagnosticMode) }
+    // 下载调试开关（开发调试菜单里）：开启后下载页长按任务可查看「调试信息」；关闭会清空日志，故需二次确认
+    var downloadDebugOn by remember { mutableStateOf(settingsRepo.downloadDebug) }
+    var showDisableDownloadDebugConfirm by remember { mutableStateOf(false) }
+    // 全量 SHA-256 校验开关（开发调试菜单里）：默认关，开启后保存文件时顺带算整文件摘要写进调试日志
+    var fullShaOn by remember { mutableStateOf(settingsRepo.fullFileSha256) }
     // 下载引擎（内置分片下载器 / Gopeed 引擎）：本身在独立页面里改，这里只读来渲染副标题
     var engineChoice by remember { mutableStateOf(settingsRepo.downloadEngine) }
     // 引擎模式下「下载保存目录」这一行的语义/副标题不同，而且会隐藏若干「只对内置分片下载器有意义」的设置项，
@@ -931,6 +937,76 @@ fun SettingsScreen(
                         )
                     }
 
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 下载调试：开启后按下载任务记录事件流（主要变更 / 错误节点），下载页长按任务可进调试信息页。
+                    // ★ 关闭会清空全部日志，所以不直接关，先弹二次确认（见下方 AlertDialog）。
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("下载调试", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = if (downloadDebugOn) {
+                                    "已在记录：下载页长按任务 → 调试信息（关闭会清空日志）"
+                                } else {
+                                    "关闭：不记录下载调试日志"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = downloadDebugOn,
+                            onCheckedChange = { on ->
+                                if (on) {
+                                    downloadDebugOn = true
+                                    ThemeController.setDownloadDebug(context, true)
+                                    DownloadDebugLog.setEnabled(true)
+                                    SnackbarController.show("下载调试已开启")
+                                } else {
+                                    // 关闭会清空全部调试日志：先二次确认再真正关闭
+                                    showDisableDownloadDebugConfirm = true
+                                }
+                            }
+                        )
+                    }
+
+                    // 全量 SHA-256 只在「下载调试」开启时才有意义（摘要只写进调试日志），
+                    // 所以调试关着时整行隐藏；关掉下载调试会把它一并强制关闭，下次要手动重新开。
+                    if (downloadDebugOn) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // 全量 SHA-256（默认关）：保存文件时顺带算整文件摘要并写进下载调试日志。
+                        // 与合并复用同一遍 IO，所以不额外读盘，只多一点 CPU —— 大文件想省 CPU 就关着。
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("全量 SHA-256", style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    text = if (fullShaOn) {
+                                        "已开启：保存后记录整文件 SHA-256（写入调试日志）"
+                                    } else {
+                                        "关闭：不算整文件摘要（默认，省 CPU）"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = fullShaOn,
+                                onCheckedChange = { on ->
+                                    fullShaOn = on
+                                    settingsRepo.fullFileSha256 = on
+                                    SnackbarController.show(if (on) "已开启全量 SHA-256 校验" else "已关闭全量 SHA-256 校验")
+                                }
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // 导出入口（zip 名 yunx_diagnostic_logs_yyyyMMdd_HHmmss.zip，导出前会先 flush）
@@ -952,6 +1028,32 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showDevMenu = false }) { Text("关闭") }
+            }
+        )
+    }
+
+    // 关闭「下载调试」的二次确认：关闭会清空已记录的全部调试日志，且不可恢复
+    if (showDisableDownloadDebugConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDisableDownloadDebugConfirm = false },
+            title = { Text("关闭下载调试？") },
+            text = { Text("关闭后会清空已记录的全部下载调试日志，且无法恢复；「全量 SHA-256」也会被一并关闭（下次开启下载调试后需手动重新开启）。确定要关闭吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDisableDownloadDebugConfirm = false
+                    downloadDebugOn = false
+                    ThemeController.setDownloadDebug(context, false)
+                    // 关闭即清空：DownloadDebugLog.setEnabled(false) 内部会 clear()
+                    DownloadDebugLog.setEnabled(false)
+                    // 全量 SHA-256 依赖下载调试（摘要只写调试日志）：一并强制关闭，且不记忆，
+                    // 下次重新开启下载调试后需要用户手动再开一次。
+                    fullShaOn = false
+                    settingsRepo.fullFileSha256 = false
+                    SnackbarController.show("下载调试已关闭，日志已清空；全量 SHA-256 已一并关闭")
+                }) { Text("关闭并清空") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisableDownloadDebugConfirm = false }) { Text("取消") }
             }
         )
     }

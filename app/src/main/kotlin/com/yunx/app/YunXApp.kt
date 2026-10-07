@@ -105,6 +105,8 @@ class YunXApp : Application() {
         purgeDownloadLeftovers(this)
         // 诊断日志：读开关（默认关）并定好落盘目录；开着才起写线程，关着这里几乎零开销
         com.yunx.app.util.DiagnosticLog.install(this)
+        // 下载调试：读开关（默认关）。必须在任何下载开始之前装配，否则开关打开后先建的任务收不到事件
+        com.yunx.app.data.download.DownloadDebugLog.install(this)
         // 选了 Gopeed 引擎且已导入内核：启动就把它加载起来（失败只记日志，绝不影响应用启动）
         autoStartGopeedIfSelected(this)
     }

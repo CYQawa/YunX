@@ -173,6 +173,27 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("diagnostic_mode", value).apply()
         }
 
+    /**
+     * 下载调试（设置 → 关于云析 → 长按 → 开发调试）：默认关。
+     * 开启后按下载任务记录事件流（主要变更节点 / 错误节点），下载页长按任务可进「调试信息」页查看并导出；
+     * **关闭会清空全部日志**（见 `DownloadDebugLog`），所以设置页关开关前有二次确认弹窗。
+     */
+    var downloadDebug: Boolean
+        get() = prefs.getBoolean("download_debug", false)
+        set(value) {
+            prefs.edit().putBoolean("download_debug", value).apply()
+        }
+
+    /**
+     * 全量 SHA-256 校验（开发调试菜单，**默认关**）：开启后保存文件时顺带算出整文件摘要，
+     * 写进下载调试日志（「全量校验」事件）。合并那一遍本来就在读所有字节，所以不额外读盘，只多一点 CPU。
+     */
+    var fullFileSha256: Boolean
+        get() = prefs.getBoolean("download_full_sha256", false)
+        set(value) {
+            prefs.edit().putBoolean("download_full_sha256", value).apply()
+        }
+
     /** 忽略 SSL 证书校验（抓包调试用，隐藏菜单开启；默认关闭） */
     var ignoreSslCert: Boolean
         get() = prefs.getBoolean("ignore_ssl_cert", false)
