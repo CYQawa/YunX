@@ -64,6 +64,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -191,7 +194,7 @@ fun GuangYaLoginScreen(
                     label = { Text("账号") },
                     placeholder = { Text("手机号 / 邮箱 / 用户名") },
                     singleLine = true,
-                    isError = error != null,
+                    enabled = !isSaving,
                     shape = MaterialTheme.shapes.large
                 )
 
@@ -204,14 +207,15 @@ fun GuangYaLoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("密码") },
                     singleLine = true,
-                    isError = error != null,
+                    enabled = !isSaving,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     visualTransformation = if (passwordVisible) VisualTransformation.None
                     else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
-                                if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
-                                contentDescription = if (passwordVisible) "隐藏" else "显示"
+                                if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
                             )
                         }
                     },
@@ -221,6 +225,7 @@ fun GuangYaLoginScreen(
                 error?.let {
                     Text(
                         text = it,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -282,7 +287,7 @@ fun GuangYaLoginScreen(
                     leadingIcon = { Icon(Icons.Outlined.Phone, contentDescription = null) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
-                    isError = error != null,
+                    enabled = !isSaving,
                     shape = MaterialTheme.shapes.large
                 )
 
@@ -302,7 +307,7 @@ fun GuangYaLoginScreen(
                         leadingIcon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
-                        isError = error != null,
+                        enabled = !isSaving,
                         shape = MaterialTheme.shapes.large
                     )
                     OutlinedButton(
@@ -324,6 +329,7 @@ fun GuangYaLoginScreen(
                 error?.let {
                     Text(
                         text = it,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )

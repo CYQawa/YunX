@@ -23,70 +23,76 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
-/**
- * 全局 Snackbar 通道：任何位置（Composable / 工具函数）调用 show() 即可显示。
- * 页面层使用 GlobalSnackbarHost() / rememberGlobalSnackbarHostState() 渲染监听。
- *
- * 修复要点：多条消息并发时不会互相覆盖——每条 show() 都生成自增序号的独立事件，
- * consume(seq) 只清空"刚显示的那条"，期间新来的消息保留排队，前一条消失后继续显示。
- * 多个宿主（MainScreen / 各 Sheet / 各 LoginScreen）同时活跃时共享广播，各自渲染。
- */
-object SnackbarController {
+/** 顺序保存提示；仅最上层仍在组合中的宿主有权显示和消费。 */
+internal class SnackbarEventQueue {
     internal data class Event(val seq: Long, val message: String)
+    internal data class Snapshot(val events: List<Event> = emptyList(), val hosts: List<Any> = emptyList())
+    private val lock = Any()
+    private var sequence = 0L
+    internal val state = MutableStateFlow(Snapshot())
 
-    private val _events = MutableStateFlow<Event?>(null)
-    private var seq = 0L
-
-    internal val events: StateFlow<Event?> = _events
-
-    fun show(message: String) {
-        // 每次 show 都是新 Event（seq 递增），StateFlow 值必然变化 → 所有收集者都会收到
-        _events.value = Event(++seq, message)
+    fun show(message: String) = synchronized(lock) {
+        state.value = state.value.copy(events = state.value.events + Event(++sequence, message))
     }
 
-    /**
-     * 消费（清空）事件：仅当当前事件就是刚刚显示的那条时置空，
-     * 避免清空动作覆盖期间新 show 进来的消息（这是旧实现丢失第二条的根因）。
-     */
-    fun consume(shownSeq: Long) {
-        val cur = _events.value
-        if (cur != null && cur.seq == shownSeq) _events.value = null
+    fun register(host: Any) = synchronized(lock) {
+        state.value = state.value.copy(hosts = state.value.hosts.filterNot { it === host } + host)
     }
-}
 
-/** 渲染 SnackbarHost 并监听全局事件（放在页面最外层 Box 内即可，位于内容之上、不拦截点击） */
-@Composable
-fun GlobalSnackbarHost(modifier: Modifier = Modifier) {
-    val hostState = remember { SnackbarHostState() }
-    LaunchedEffect(hostState) {
-        SnackbarController.events.collect { event ->
-            if (event != null) {
-                hostState.showSnackbar(event.message)
-                SnackbarController.consume(event.seq)
-            }
+    fun unregister(host: Any) = synchronized(lock) {
+        state.value = state.value.copy(hosts = state.value.hosts.filterNot { it === host })
+    }
+
+    fun consume(host: Any, sequence: Long) = synchronized(lock) {
+        val current = state.value
+        if (current.hosts.lastOrNull() === host && current.events.firstOrNull()?.seq == sequence) {
+            state.value = current.copy(events = current.events.drop(1))
         }
     }
+
+    fun eventsFor(host: Any) = state.map { snapshot ->
+        snapshot.events.firstOrNull().takeIf { snapshot.hosts.lastOrNull() === host }
+    }.distinctUntilChanged()
+}
+
+/** 全局入口保持不变；连续调用按顺序排队，弹窗和覆盖页接管提示宿主。 */
+object SnackbarController {
+    internal val queue = SnackbarEventQueue()
+    fun show(message: String) { queue.show(message) }
+}
+
+@Composable
+fun GlobalSnackbarHost(modifier: Modifier = Modifier) {
+    val hostState = rememberGlobalSnackbarHostState()
     Box(modifier = modifier.fillMaxSize()) {
         SnackbarHost(hostState = hostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
-/** 供 Scaffold(snackbarHost = { SnackbarHost(state) }) 或页面 Box 使用的宿主状态（自动监听全局事件） */
+/** 宿主切换取消旧显示，但保留队首消息，避免遮挡、重复显示和丢失。 */
 @Composable
 fun rememberGlobalSnackbarHostState(): SnackbarHostState {
     val hostState = remember { SnackbarHostState() }
-    LaunchedEffect(hostState) {
-        SnackbarController.events.collect { event ->
+    val host = remember { Any() }
+    DisposableEffect(host) {
+        SnackbarController.queue.register(host)
+        onDispose { SnackbarController.queue.unregister(host) }
+    }
+    LaunchedEffect(hostState, host) {
+        SnackbarController.queue.eventsFor(host).collectLatest { event ->
             if (event != null) {
                 hostState.showSnackbar(event.message)
-                SnackbarController.consume(event.seq)
+                SnackbarController.queue.consume(host, event.seq)
             }
         }
     }

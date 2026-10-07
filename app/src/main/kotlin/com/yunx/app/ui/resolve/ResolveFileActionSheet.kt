@@ -22,6 +22,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +36,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
+import com.yunx.app.ui.components.rememberOperationSheetState
+import com.yunx.app.ui.components.OperationSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,7 +89,7 @@ internal fun ResolveFileActionSheet(
 ) {
     var step by remember { mutableStateOf(ResolveActionStep.MENU) }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberOperationSheetState(saving)
     val scope = rememberCoroutineScope()
 
     /** 先播放退场动画再执行动作（动作里会关掉本弹窗，故不能直接调 onDismiss） */
@@ -97,10 +100,10 @@ internal fun ResolveFileActionSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = { if (!saving) onDismiss() },
+    OperationSheet(
+        busy = saving,
+        onDismiss = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
     ) {
         // 步骤切换统一带过渡（与网盘页文件操作弹窗的菜单→移动到/分享 一致）
         AnimatedContent(
@@ -112,6 +115,7 @@ internal fun ResolveFileActionSheet(
                 ResolveActionStep.MENU -> Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
                 ) {
                     // 顶部：图标 + 文件名 + 类型（与网盘页文件操作弹窗同一组件，观感一致）

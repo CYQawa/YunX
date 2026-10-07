@@ -18,6 +18,7 @@
 
 package com.yunx.app.ui
 
+import com.yunx.app.ui.theme.useNavigationRail
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -85,7 +86,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.content.res.Configuration
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -256,8 +256,9 @@ fun MainScreen() {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 横屏时使用侧边导航栏（NavigationRail），竖屏保持底部导航条（ShortNavigationBar）
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // 按可用窗口宽高选择导航，支持分屏与平板窗口
+    val windowConfiguration = LocalConfiguration.current
+    val useRail = useNavigationRail(windowConfiguration.screenWidthDp, windowConfiguration.screenHeightDp)
     // 首次启动引导页（context 声明后检测）
     var showOnboarding by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -1170,7 +1171,7 @@ fun MainScreen() {
                     }
                 }
 
-                if (isLandscape) {
+                if (useRail) {
                     // 横屏：左侧侧边导航栏（NavigationRail）+ 右侧顶栏 & 内容
                     // ★ 外层 Surface 不只是底色（竖屏由 Scaffold 提供背景，横屏手动布局必须自己铺，
                     //   否则露出窗口默认白色）：**只有 Surface/Scaffold 才会提供 LocalContentColor**

@@ -21,6 +21,13 @@ package com.yunx.app.ui.items
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
@@ -49,11 +56,12 @@ internal data class MultiSelectAction(
  * ★ 只放图标不放文字：文字会让胶囊条变长、且与图标叠在一起显得拥挤（操作含义由无障碍标签给出）。
  * ★ 显式指定容器色与展开态阴影：默认展开态没有阴影，与页面背景贴在一起看不出边界。
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun MultiSelectBar(
     count: Int,
-    actions: List<MultiSelectAction>
+    actions: List<MultiSelectAction>,
+    busy: Boolean = false
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalFloatingToolbar(
@@ -67,12 +75,19 @@ internal fun MultiSelectBar(
             expandedShadowElevation = 6.dp
         ) {
             actions.forEach { action ->
-                IconButton(onClick = action.onClick) {
-                    Icon(
-                        imageVector = action.icon,
-                        contentDescription = action.label,
-                        tint = action.tint
-                    )
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                    tooltip = { PlainTooltip { Text(action.label) } },
+                    state = rememberTooltipState()
+                ) {
+                    IconButton(onClick = action.onClick, enabled = count > 0 && !busy) {
+                        Icon(
+                            imageVector = action.icon,
+                            contentDescription = action.label,
+                            tint = if (count > 0 && !busy) action.tint
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
                 }
             }
         }

@@ -23,17 +23,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -50,6 +46,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,6 +54,8 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -71,11 +70,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -109,6 +110,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -121,6 +125,7 @@ import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.theme.ThemeController
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
+import com.yunx.app.ui.theme.readableSeedForeground
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
 
@@ -155,17 +160,21 @@ fun ThemeScreen(
     var showColorPicker by remember { mutableStateOf(false) }
     // 主题色卡片默认展开
     var expanded by rememberSaveable { mutableStateOf(true) }
-    val expandDuration = 200
 
-    // 单一动画源驱动折叠（Animatable 支持打断：快速连续点击时自动平滑过渡到新目标）：
-    // 高度 = contentHeightPx * progress，透明度 = progress，二者同步
+    // Animatable 支持中断，快速连续点击时平滑过渡到新目标。
+    // 高度走 spatial，透明度走不回弹的 effects，避免将空间弹簧用于透明度。
     val density = LocalDensity.current
     var contentHeightPx by remember { mutableIntStateOf(0) }
     val expandProgress = remember { Animatable(if (expanded) 1f else 0f) }
+    val expandAlpha by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = effectsDefault(),
+        label = "expandAlpha"
+    )
     LaunchedEffect(expanded) {
         expandProgress.animateTo(
             targetValue = if (expanded) 1f else 0f,
-            animationSpec = spatialDefault()   // 折叠进度（高度+透明度）：改用 spatial 弹簧
+            animationSpec = spatialDefault()
         )
     }
 
@@ -233,7 +242,7 @@ fun ThemeScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().selectableGroup(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val modes = listOf("跟随系统", "浅色", "深色")
@@ -267,7 +276,7 @@ fun ThemeScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().selectableGroup(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 默认「跑马灯滚动」= 改动前的观感；「多行显示」把长文件名折成最多 3 行
@@ -342,8 +351,8 @@ fun ThemeScreen(
                         )
                     }
 
-                            // 展开内容：高度 + 透明度由 Animatable 同步驱动（可打断、不裁剪、无跳变）
-                            val animatedHeightDp = with(density) { (contentHeightPx * expandProgress.value).toDp() }
+                            // 高度和透明度分别使用空间与效果动效，折叠过程裁剪内容。
+                            val animatedHeightDp = with(density) { (contentHeightPx * expandProgress.value.coerceAtLeast(0f)).toDp() }
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -355,7 +364,7 @@ fun ThemeScreen(
                                         .fillMaxWidth()
                                         .wrapContentHeight(unbounded = true)
                                         .onSizeChanged { contentHeightPx = it.height }
-                                        .graphicsLayer { alpha = expandProgress.value }
+                                        .graphicsLayer { alpha = expandAlpha }
                                 ) {
                         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -395,6 +404,7 @@ fun ThemeScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     LazyRow(
+                                        modifier = Modifier.selectableGroup(),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                                         contentPadding = PaddingValues(top = 10.dp, bottom = 8.dp)
                                     ) {
@@ -552,38 +562,17 @@ private fun SmoothFilterChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val duration = 200
-    val containerColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-        animationSpec = tween(durationMillis = duration, easing = LinearEasing),   // 刻意线性：颜色扫过动画
-        label = "container"
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-        animationSpec = tween(durationMillis = duration, easing = LinearEasing),
-        label = "content"
-    )
-    Surface(
+    FilterChip(
+        selected = selected,
         onClick = onClick,
-        modifier = modifier.height(36.dp),
-        shape = CircleShape,
-        color = containerColor,
-        contentColor = contentColor,
-        border = if (!selected) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-            )
-        }
-    }
+        modifier = modifier.heightIn(min = 48.dp),
+        label = { Text(label, style = MaterialTheme.typography.labelLarge) }
+    )
 }
 
 /** 预置色圆点（色圆 + 名称，选中显示对勾） */
 @Composable
-private fun ColorSelectionItem(
+internal fun ColorSelectionItem(
     color: Long,
     name: String,
     isSelected: Boolean,
@@ -591,7 +580,9 @@ private fun ColorSelectionItem(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = name },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -603,15 +594,14 @@ private fun ColorSelectionItem(
                     width = if (isSelected) 3.dp else 1.dp,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                     shape = CircleShape
-                )
-                .clickable(onClick = onClick),
+                ),
             contentAlignment = Alignment.Center
         ) {
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Outlined.Check,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = readableSeedForeground(Color(color.toInt())),
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -634,7 +624,9 @@ private fun CustomColorButton(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = "自定义" },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -649,14 +641,13 @@ private fun CustomColorButton(
                     width = if (isSelected) 3.dp else 1.dp,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                     shape = CircleShape
-                )
-                .clickable(onClick = onClick),
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.Palette,
                 contentDescription = null,
-                tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (isSelected) readableSeedForeground(Color(customColor.toInt())) else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -672,7 +663,7 @@ private fun CustomColorButton(
 // ================= 调色盘 Dialog（参考 WebIDE ColorPickerDialog 精简版） =================
 
 @Composable
-private fun ColorPickerDialog(
+internal fun ColorPickerDialog(
     initialColor: Long,
     onDismiss: () -> Unit,
     onColorSelected: (Long) -> Unit
@@ -698,6 +689,7 @@ private fun ColorPickerDialog(
         ) {
             Column(
                 modifier = Modifier
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp)
                     .fillMaxWidth()
             ) {
@@ -707,7 +699,7 @@ private fun ColorPickerDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "#",
                             style = MaterialTheme.typography.headlineMedium,
@@ -715,8 +707,9 @@ private fun ColorPickerDialog(
                         )
                         BasicTextField(
                             value = hexInput,
+                            singleLine = true,
                             onValueChange = { input ->
-                                val filtered = input.filter { it.isLetterOrDigit() }.take(6).uppercase()
+                                val filtered = input.filter { it in '0'..'9' || it.uppercaseChar() in 'A'..'F' }.take(6).uppercase()
                                 hexInput = filtered
                                 if (filtered.length == 6) {
                                     runCatching {
@@ -738,7 +731,7 @@ private fun ColorPickerDialog(
                                 keyboardType = KeyboardType.Ascii
                             ),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.width(140.dp)
+                            modifier = Modifier.weight(1f).semantics { contentDescription = "十六进制颜色" }
                         )
                     }
                     Box(
@@ -783,7 +776,7 @@ private fun ColorPickerDialog(
                         hue = hue,
                         onHueChange = { hue = it },
                         modifier = Modifier
-                            .width(24.dp)
+                            .width(48.dp)
                             .fillMaxSize()
                             .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
@@ -791,6 +784,17 @@ private fun ColorPickerDialog(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
+
+                // 标准 Slider 提供值域、调节动作、焦点和方向键支持。
+                Text("色相", style = MaterialTheme.typography.labelLarge)
+                Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f,
+                    modifier = Modifier.semantics { contentDescription = "色相" })
+                Text("饱和度", style = MaterialTheme.typography.labelLarge)
+                Slider(value = saturation, onValueChange = { saturation = it },
+                    modifier = Modifier.semantics { contentDescription = "饱和度" })
+                Text("明度", style = MaterialTheme.typography.labelLarge)
+                Slider(value = value, onValueChange = { value = it },
+                    modifier = Modifier.semantics { contentDescription = "明度" })
 
                 // 底部按钮
                 Row(
@@ -918,7 +922,11 @@ private fun AppIconOption(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier.selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            .semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Box(
             modifier = Modifier
                 .size(72.dp)
@@ -927,8 +935,7 @@ private fun AppIconOption(
                     width = if (isSelected) 3.dp else 1.dp,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                     shape = RoundedCornerShape(18.dp)
-                )
-                .clickable(onClick = onClick),
+                ),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -949,7 +956,7 @@ private fun AppIconOption(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Check,
-                        contentDescription = "已选择",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(14.dp)
                     )

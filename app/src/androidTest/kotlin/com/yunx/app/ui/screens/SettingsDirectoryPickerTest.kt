@@ -75,7 +75,10 @@ class SettingsDirectoryPickerTest {
                 database.rawBaiduAccountDao(),
                 database.rawC139AccountDao(),
                 database.rawPan123AccountDao(),
-                database.rawPan115AccountDao()
+                database.rawPan115AccountDao(),
+                database.rawGuangYaAccountDao(),
+                database.rawILanzouAccountDao(),
+                database.rawLanzouAccountDao()
             )
             val owner = object : ActivityResultRegistryOwner {
                 override val activityResultRegistry = object : ActivityResultRegistry() {
@@ -97,6 +100,7 @@ class SettingsDirectoryPickerTest {
                                 scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(),
                                 onThemeClick = {},
                                 onAboutClick = {},
+                                onGopeedClick = {},
                                 onSupportClick = {},
                                 backupManager = backupManager,
                                 onCheckUpdate = {},

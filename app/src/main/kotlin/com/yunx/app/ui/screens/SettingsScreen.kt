@@ -17,24 +17,27 @@
  */
 
 package com.yunx.app.ui.screens
+
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,11 +49,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Article
@@ -74,7 +75,6 @@ import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolunteerActivism
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -104,10 +104,13 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -120,15 +123,15 @@ import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.update.UpdateChecker
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.ListGroupPos
 import com.yunx.app.ui.theme.ThemeController
 import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.util.AppLinks
+import com.yunx.app.util.DiagnosticLog
 import com.yunx.app.util.LogExporter
 import com.yunx.app.util.StorageDirs
-import com.yunx.app.ui.components.YunXLoading
-import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -522,6 +525,7 @@ fun SettingsScreen(
                 quarkNoSave = !quarkNoSave
                 settingsRepo.quarkNoSaveDownload = quarkNoSave
             },
+            checked = quarkNoSave,
             trailing = { Switch(checked = quarkNoSave, onCheckedChange = null) }
         )
 
@@ -544,6 +548,7 @@ fun SettingsScreen(
                     }
                 }
             },
+            checked = keepLocked,
             trailing = { Switch(checked = keepLocked, onCheckedChange = null) }
         )
 
@@ -575,6 +580,7 @@ fun SettingsScreen(
                     settingsRepo.notificationShowSpeed = showSpeed
                 }
             },
+            checked = if (notificationsEnabled) showSpeed else null,
             trailing = { Switch(checked = showSpeed, onCheckedChange = null) }
         )
 
@@ -608,6 +614,7 @@ fun SettingsScreen(
                     !ThemeController.clipboardSuggestEnabled
                 )
             },
+            checked = ThemeController.clipboardSuggestEnabled,
             trailing = {
                 Switch(checked = ThemeController.clipboardSuggestEnabled, onCheckedChange = null)
             }
@@ -640,6 +647,7 @@ fun SettingsScreen(
                     !ThemeController.acceptPrereleaseUpdate
                 )
             },
+            checked = ThemeController.acceptPrereleaseUpdate,
             trailing = {
                 Switch(checked = ThemeController.acceptPrereleaseUpdate, onCheckedChange = null)
             }
@@ -1647,11 +1655,12 @@ private fun SectionLabel(text: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SettingsItem(
+internal fun SettingsItem(
     icon: ImageVector,
     title: String,
     description: String,
     onClick: () -> Unit,
+    checked: Boolean? = null,
     /** 长按回调（隐藏菜单等）；null 时不启用长按 */
     onLongClick: (() -> Unit)? = null,
     /** 自定义尾部内容（如「恢复默认」操作）；null 时显示默认 ChevronRight */
@@ -1666,11 +1675,19 @@ private fun SettingsItem(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = ripple(bounded = true),
-                onClick = onClick,
-                onLongClick = onLongClick
+            .then(
+                if (checked != null) Modifier.toggleable(
+                    value = checked,
+                    role = Role.Switch,
+                    interactionSource = interactionSource,
+                    indication = ripple(bounded = true),
+                    onValueChange = { onClick() }
+                ) else Modifier.combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(bounded = true),
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                )
             ),
         shape = shape,
         colors = CardDefaults.cardColors(

@@ -581,9 +581,7 @@ private fun FolderDownloadGroup(
                             progress = { fraction },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp)),
+                                .padding(horizontal = 14.dp),
                             color = MaterialTheme.colorScheme.primary,
                             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                             waving = tasks.any { it.status == DownloadTaskEntity.STATUS_DOWNLOADING }
@@ -696,19 +694,19 @@ private fun DownloadSubTaskRow(
                 // 主操作（暂停/继续/重试/打开）
                 when (task.status) {
                     DownloadTaskEntity.STATUS_DOWNLOADING,
-                    DownloadTaskEntity.STATUS_PENDING -> IconButton(onClick = onPause, modifier = Modifier.size(32.dp)) {
+                    DownloadTaskEntity.STATUS_PENDING -> IconButton(onClick = onPause, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.Outlined.Pause, contentDescription = "暂停",
                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)
                         )
                     }
-                    DownloadTaskEntity.STATUS_PAUSED -> IconButton(onClick = onResume, modifier = Modifier.size(32.dp)) {
+                    DownloadTaskEntity.STATUS_PAUSED -> IconButton(onClick = onResume, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.Outlined.PlayArrow, contentDescription = "继续",
                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)
                         )
                     }
-                    DownloadTaskEntity.STATUS_FAILED -> IconButton(onClick = onResume, modifier = Modifier.size(32.dp)) {
+                    DownloadTaskEntity.STATUS_FAILED -> IconButton(onClick = onResume, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.Outlined.Refresh, contentDescription = "重试",
                             tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)
@@ -716,7 +714,7 @@ private fun DownloadSubTaskRow(
                     }
                     DownloadTaskEntity.STATUS_COMPLETED -> IconButton(
                         onClick = { openSavedFile(context, task.savePath) },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Outlined.OpenInNew, contentDescription = "打开",
@@ -725,7 +723,7 @@ private fun DownloadSubTaskRow(
                     }
                 }
                 // 删除
-                IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onRemove, modifier = Modifier.size(48.dp)) {
                     Icon(
                         Icons.Outlined.Delete, contentDescription = "删除",
                         tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)
@@ -742,9 +740,7 @@ private fun DownloadSubTaskRow(
                     progress = { fraction },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 6.dp)
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(1.5f)),
+                        .padding(top = 6.dp),
                     color = if (task.status == DownloadTaskEntity.STATUS_FAILED) {
                         MaterialTheme.colorScheme.error
                     } else {
