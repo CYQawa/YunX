@@ -18,6 +18,10 @@
 
 package com.yunx.app.data.network
 
+import android.webkit.WebSettings
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 import org.json.JSONTokener
 
@@ -77,13 +81,85 @@ object XunleiWebCredential {
     /**
      * 与 [DESKTOP_UA] 配套的客户端提示头（Sec-CH-UA 系，版本号必须与 UA 里的 Chrome 大版本一致）。
      * 桌面 UA 若不同步这些头，服务端会按移动端 client hints 判定，与 UA 冲突导致页面降级/被拒。
+     *
+     * ⚠️ 源码里的 `\"` 是 **Kotlin 转义写法**：运行时字符串里就是普通双引号 `"`、**不含反斜杠**
+     * （品牌名必须带引号，这是 client hints 的规范格式，与真实 Chrome 一致，也被 [ILanzouApi] 同样使用）。
+     * 因此不要在 `\` 与 `"` 之间加空格——那会变成「反斜杠 + 字符串结束」，直接编译不过。
+     * 该点由 `XunleiWebCredentialTest.desktopClientHintConstantsMatchChrome` 锁定。
      */
     const val DESKTOP_SEC_CH_UA = "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\""
     const val DESKTOP_SEC_CH_UA_MOBILE = "?0"
     const val DESKTOP_SEC_CH_UA_PLATFORM = "\"Windows\""
 
+    /**
+     * 让 WebView 的**客户端提示**（Sec-CH-UA / Sec-CH-UA-Mobile / Sec-CH-UA-Platform）与
+     * [DESKTOP_UA] 保持一致。
+     *
+     * 只把 `settings.userAgentString` 改成桌面 UA、而不同步 client hints 时，服务端会按 Android/
+     * 移动端提示判定请求，与 UA 冲突 —— 实测表现为 pan.xunlei.com 只渲染出「迅雷云盘 / 打开APP」
+     * 的移动版落地页（issues #152）。这里用 `WebSettingsCompat.setUserAgentMetadata` 把 client
+     * hints 的 UA 元数据也改成桌面 Chrome 131 / Windows（同时影响 HTTP 头与 `navigator.userAgentData`）。
+     *
+     * 依赖 WebView 的 `USER_AGENT_METADATA` 特性；不支持时静默跳过（页面回退到仅靠 UA 判定）。
+     */
+    fun applyDesktopClientHints(settings: WebSettings) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) return
+        // 品牌顺序/版本与 DESKTOP_UA（Chrome 131 / Windows 64 位）保持一致
+        val brandVersions = listOf(
+            Triple("Google Chrome", "131", "131.0.0.0"),
+            Triple("Chromium", "131", "131.0.0.0"),
+            Triple("Not_A Brand", "24", "24.0.0.0")
+        ).map { (brand, major, full) ->
+            UserAgentMetadata.BrandVersion.Builder()
+                .setBrand(brand)
+                .setMajorVersion(major)
+                .setFullVersion(full)
+                .build()
+        }
+        val metadata = UserAgentMetadata.Builder()
+            .setBrandVersionList(brandVersions)
+            .setFullVersion("131.0.0.0")
+            .setPlatform("Windows")
+            .setPlatformVersion("10.0.0")
+            .setArchitecture("x86")
+            .setModel("")
+            .setMobile(false)
+            .setWow64(false)
+            .build()
+        WebSettingsCompat.setUserAgentMetadata(settings, metadata)
+    }
+
     /** 允许 WebView 停留 / 跳转的域名（登录过程会经 i.xunlei.com 等官方域，统一放行 *.xunlei.com） */
     private val TRUSTED_HOSTS = listOf("xunlei.com")
+
+    /**
+     * 桌面版登录页的「渲染修补」脚本（页面加载完成后注入）。迅雷这个登录页在手机 WebView 里有三个坑，
+     * 实测必须同时处理才可正常使用（改动仅作用于登录页 WebView，登录成功后即关闭，不影响主应用）：
+     *
+     * 1) 页面 CSS 依赖 `html,body{height:100%}`，但在 WebView 里会被算成 **0px**，再叠加 `overflow:hidden`
+     *    → 整页（含登录框）被裁掉，肉眼就是"一片空白"；这里强制高度自适应、溢出可见。
+     * 2) 外层是桌面版布局（左侧宣传图 + 右侧登录框）且**不做响应式**：按手机宽度（≈364px）会把登录框
+     *    压成 11px。这里固定一个较窄的桌面宽度 520，并隐藏左侧宣传图，让登录框占满、字号也够看。
+     * 3) 真正的登录表单在一个来自 `i.xunlei.com` 的 OAuth **iframe** 里，其内容宽 400px，但页面只给了
+     *    300px → 右侧（"获取验证码"等）被裁掉；这里把 iframe 放宽到 400px。
+     */
+    val DESKTOP_RENDER_FIX_JS: String = """
+        (function(){try{
+          var m=document.querySelector('meta[name="viewport"]');
+          if(!m){m=document.createElement('meta');m.setAttribute('name','viewport');(document.head||document.documentElement).appendChild(m);}
+          m.setAttribute('content','width=520');
+          var s=document.getElementById('yunx-render-fix');
+          if(!s){s=document.createElement('style');s.id='yunx-render-fix';(document.head||document.documentElement).appendChild(s);}
+          s.textContent=[
+            'html,body{height:auto !important;overflow:visible !important;}',
+            '#__nuxt,#__layout,.wrapper,.login-page{height:auto !important;overflow:visible !important;}',
+            '.pan-share-web-content .banner-wrap{display:none !important;}',
+            '.pan-share-web-content .login-web{width:100% !important;max-width:100% !important;}',
+            '.login-web iframe,iframe{width:400px !important;max-width:100% !important;}'
+          ].join('');
+          window.dispatchEvent(new Event('resize'));
+        }catch(e){}})()
+    """.trimIndent()
 
     /** 点击「保存」/自动检测时读取登录态的 JS：返回 encodeURIComponent 后的 JSON（空串=还没登录） */
     val READ_SCRIPT: String = """

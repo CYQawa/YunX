@@ -110,12 +110,16 @@ fun XunleiWebLoginScreen(
             settings.displayZoomControls = false
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = true
-            settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NARROW_COLUMNS
+            // ★ 不要用 NARROW_COLUMNS：那是给移动版单列排版用的，会把桌面版 SPA 的布局压坏（实测整页空白）。
+            //   桌面版页面走默认算法 + useWideViewPort/loadWithOverviewMode 自动缩放适配即可。
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             // 桌面 UA：网页版登录态（credentials_* 键）只在桌面版页面写入，移动版页面是另一套
+            // ★ 光改 UA 不够：必须同步 client hints（Sec-CH-UA 系），否则服务端按移动端判定，
+            //   页面会退化成「迅雷云盘 / 打开APP」落地页（见 XunleiWebCredential.applyDesktopClientHints）
             settings.userAgentString = XunleiWebCredential.DESKTOP_UA
+            XunleiWebCredential.applyDesktopClientHints(settings)
             settings.suppressRequestedWithHeader()
             webViewClient = object : DiagnosticWebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -126,14 +130,8 @@ fun XunleiWebLoginScreen(
                 override fun onPageFinished(view: WebView?, url: String?) {
                     DiagnosticLog.webview("page_finished", url)
                     isLoading = false
-                    // 强制覆盖页面 viewport：适配屏幕宽度，桌面版页面在手机上才点得动
-                    view?.evaluateJavascript(
-                        "(function(){var m=document.querySelector('meta[name=\"viewport\"]');" +
-                            "var c='width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes';" +
-                            "if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.name='viewport';n.content=c;document.head.appendChild(n);}" +
-                            "window.dispatchEvent(new Event('resize'));})()",
-                        null
-                    )
+                    // 修桌面版登录页的渲染（布局视口 + CSS 高度，见 XunleiWebCredential.DESKTOP_RENDER_FIX_JS）
+                    view?.evaluateJavascript(XunleiWebCredential.DESKTOP_RENDER_FIX_JS, null)
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
