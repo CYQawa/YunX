@@ -22,7 +22,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.data.db.DownloadTaskEntity
+import com.yunx.app.data.download.ChunkDebug
+import com.yunx.app.data.download.DownloadDebugLog
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadResourceDebug
 import com.yunx.app.data.download.DownloadStats
 import com.yunx.app.ui.SnackbarController
 import kotlinx.coroutines.flow.SharingStarted
@@ -89,6 +92,20 @@ class DownloadViewModel(private val manager: DownloadManager) : ViewModel() {
     fun removeAll(deleteLocal: Boolean = false) {
         tasks.value.toList().forEach { manager.remove(it.id, deleteLocal) }
     }
+
+    // ---------- 下载调试（设置 → 关于云析 → 长按 → 开发调试 → 下载调试）----------
+
+    /** 调试：某任务当前每个在飞线程（分片）在干什么（拉取式快照，无在飞分片时为空表） */
+    fun chunkDebugSnapshot(taskId: Long): List<ChunkDebug> = manager.chunkDebugSnapshot(taskId)
+
+    /** 调试：强制某一路换连接续传（慢连接抢占的手动入口），返回是否命中该在飞分片 */
+    fun forcePreemptChunk(taskId: Long, key: String): Boolean = manager.forcePreemptChunk(taskId, key)
+
+    /** 调试：全局资源快照（在飞配额占用 / 活跃任务数 / 堆内存） */
+    fun resourceDebugSnapshot(): DownloadResourceDebug = manager.resourceDebugSnapshot()
+
+    /** 调试：某任务的事件流（主要变更节点 / 错误节点） */
+    fun debugLogEntries(taskId: Long): List<String> = DownloadDebugLog.entries(taskId)
 
     class Factory(private val manager: DownloadManager) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

@@ -54,6 +54,9 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.io.FileInputStream
+import java.security.DigestOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
@@ -76,6 +79,45 @@ data class DownloadStats(
      * 合并只活在内存里、不写 DB —— 进程被杀时合并本来就会中断，无需在库里留状态。
      */
     val mergePercent: Int = -1
+)
+
+/**
+ * 单个「在飞分片」的调试快照（下载调试页用）。
+ * 一路在飞分片就对应一个正在干活的 worker，所以这张表就是「每个线程此刻在干什么」。
+ * [key] 形如 `m<片号>`（主池）/ `seg@<起点>`（弹性区）/ `retry@<起点>`（失败重试）。
+ */
+data class ChunkDebug(
+    val key: String,
+    val start: Long,
+    val size: Long,
+    /** 负责这一片的 worker 序号（0 起）：`worker #k`，方便看「哪个线程在干什么」 */
+    val worker: Int,
+    val received: Long,
+    /** 看门狗上一次采样算出的瞬时速度（字节/秒） */
+    val bps: Long,
+    val elapsedMs: Long,
+    /** 已被「慢连接抢占」换连接的次数 */
+    val preemptCount: Int,
+    /** 是否已置位抢占标志（下一次检查点会断开换连接） */
+    val preempting: Boolean
+)
+
+/** 下载引擎的全局资源快照（下载调试页的「全局资源」面板用） */
+data class DownloadResourceDebug(
+    /** 全进程在飞分片配额（MAX_INFLIGHT_CHUNKS） */
+    val inflightCap: Int,
+    /** 当前已占用的在飞槽位 */
+    val inflightUsed: Int,
+    /** 正在跑的任务协程数 */
+    val activeTasks: Int,
+    val heapUsed: Long,
+    val heapMax: Long,
+    /** 分片 IO 线程池当前线程数 */
+    val poolSize: Int,
+    /** 分片 IO 线程池正在执行任务的线程数 */
+    val poolActive: Int,
+    /** 分片 IO 线程池等待队列长度（>0 说明有 worker 在排队等线程，常因并发开得比线程池大） */
+    val poolQueue: Int
 )
 
 private const val TAG = "YunX-DL"
@@ -196,7 +238,7 @@ private class ElasticAllocator(
  * 每 PREEMPT_TICK_MS 刷新一次瞬时速度（[lastBps]）；[preempt] / [preemptCount] / [lastPreemptAtMs]
  * 决定该路是否换连接续传——删掉它们收尾长尾就会回来（见 PREEMPT_MIN_BPS 注释）。
  */
-private class InflightChunk(val start: Long, val size: Long) {
+private class InflightChunk(val start: Long, val size: Long, val worker: Int) {
     val bytes = AtomicLong(0L)
     val startedAtMs = System.currentTimeMillis()
 
@@ -398,7 +440,7 @@ class DownloadManager(
         val floor = maxOf(PREEMPT_MIN_BPS, avgPerConn / 2)
         val now = System.currentTimeMillis()
         var taken = 0
-        for (d in diag.values.sortedBy { it.lastBps }) {
+        for ((chunkKey, d) in diag.entries.sortedBy { it.value.lastBps }) {
             if (taken >= PREEMPT_PER_TICK) break
             if (d.preemptCount >= PREEMPT_MAX) continue
             if (now - d.lastPreemptAtMs < PREEMPT_COOLDOWN_MS) continue
@@ -415,8 +457,13 @@ class DownloadManager(
             d.lastPreemptAtMs = now
             d.preempt.set(true)
             taken++
-            Log.w(TAG, "runTask: id=$id 抢占慢连接 起点=${d.start} 块=${diagSize(d.size)} 已收=${diagSize(d.bytes.get())} " +
-                "瞬时=${formatSpeed(d.lastBps)} 阈值=${formatSpeed(floor)} 第${d.preemptCount}/$PREEMPT_MAX 次（换连接续传）")
+            Log.w(TAG, "runTask: id=$id 抢占慢连接 分片=$chunkKey(worker#${d.worker}) 起点=${d.start} 块=${diagSize(d.size)} 已收=${diagSize(d.bytes.get())} " +
+                "瞬时=${diagSpeed(d.lastBps)} 阈值=${diagSpeed(floor)} 第${d.preemptCount}/$PREEMPT_MAX 次（换连接续传）")
+            DownloadDebugLog.record(
+                id, "抢占慢连接",
+                "分片=$chunkKey worker#${d.worker} 起点=${d.start} 块=${diagSize(d.size)} 已收=${diagSize(d.bytes.get())} " +
+                    "瞬时=${diagSpeed(d.lastBps)} 阈值=${diagSpeed(floor)} 第${d.preemptCount}/$PREEMPT_MAX 次"
+            )
         }
     }
 
@@ -427,6 +474,13 @@ class DownloadManager(
         bytes >= 1024L -> String.format("%.1fKB", bytes / 1024.0)
         else -> "${bytes}B"
     }
+
+    /**
+     * 速度转可读文本（调试日志用）：与 [formatSpeed] 的区别是**取不到就写「未知」而不是空串**——
+     * 看门狗刚判定慢连接时 lastBps 可能还是 0，留空会让日志出现 `瞬时=` 这种没有值的字段。
+     */
+    private fun diagSpeed(bytesPerSec: Long): String =
+        if (bytesPerSec > 0) formatSpeed(bytesPerSec) else "未知"
 
     /**
      * 进度落盘节流：多 worker 并发回调下，每 progressPersistIntervalMs 最多写一次 DB。
@@ -455,6 +509,7 @@ class DownloadManager(
         val start = taskStartTimes.remove(id) ?: 0L
         val elapsedSec = ((System.currentTimeMillis() - start) / 1000.0).coerceAtLeast(1.0)
         val avg = if (total > 0 && elapsedSec > 0) (total / elapsedSec).toLong() else 0L
+        DownloadDebugLog.record(id, "完成", "总大小=$total 本段耗时=${elapsedSec.toInt()}s 平均速度=$avg B/s 保存=$savedPath")
         DiagnosticLog.dbOp("download_task", "complete", rowsOf = { -1 }) {
             dao.complete(id, DownloadTaskEntity.STATUS_COMPLETED, savedPath, avg)
         }
@@ -481,6 +536,85 @@ class DownloadManager(
     /** 实时下载统计（速度/剩余时间/线程数） */
     private val _stats = MutableStateFlow<Map<Long, DownloadStats>>(emptyMap())
     val stats: StateFlow<Map<Long, DownloadStats>> = _stats.asStateFlow()
+
+    /**
+     * 各任务当前的在飞分片表（taskId → 该任务 runTask 里的在飞表）。
+     *
+     * ★ 只为「下载调试」按需读取，不参与任何下载逻辑：`runTask` 建表时登记、`start` 的 finally 里移除。
+     *   用拉取式快照（[chunkDebugSnapshot]）而不是定时推送，是为了让没打开调试页时**零额外开销**。
+     */
+    private val activeChunkMaps = ConcurrentHashMap<Long, ConcurrentHashMap<String, InflightChunk>>()
+
+    /**
+     * 分片级校验：taskId → 每个分片**下载时**算出的 SHA-256（文件名 → 十六进制）。
+     * 合并时逐片重算比对（`finishDownload`），内容对不上就拒绝保存损坏文件。
+     * 只活在内存里、随任务结束清理；断点续传前缀由 [newPartDigest] 预先喂好，不额外读整片。
+     */
+    private val taskPartDigests = ConcurrentHashMap<Long, ConcurrentHashMap<String, String>>()
+
+    /**
+     * 为某个分片准备分片级校验摘要：先把**断点续传已有的前缀**喂进去，之后由
+     * [ChunkDownloader.downloadChunk] 在写入时增量更新（全程只多读一次前缀，不额外读整个分片）。
+     * ★ 前缀读取失败时返回 null（这一片放弃校验）：校验只做"额外保险"，绝不能把正常下载弄挂。
+     */
+    private fun newPartDigest(partFile: File): MessageDigest? = runCatching {
+        val md = MessageDigest.getInstance("SHA-256")
+        if (partFile.length() > 0) {
+            FileInputStream(partFile).use { fis ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val r = fis.read(buf)
+                    if (r <= 0) break
+                    md.update(buf, 0, r)
+                }
+            }
+        }
+        md
+    }.onFailure {
+        Log.w(TAG, "分片摘要前缀读取失败（该片跳过校验）：${partFile.name} ${it.message}")
+    }.getOrNull()
+
+    /** 下载调试：某任务当前每个在飞分片（= 每个线程正在干什么）；无在飞分片时返回空表 */
+    fun chunkDebugSnapshot(taskId: Long): List<ChunkDebug> {
+        val map = activeChunkMaps[taskId] ?: return emptyList()
+        return map.map { (key, d) ->
+            ChunkDebug(
+                key = key,
+                start = d.start,
+                size = d.size,
+                worker = d.worker,
+                received = d.bytes.get(),
+                bps = d.lastBps,
+                elapsedMs = d.elapsedMs,
+                preemptCount = d.preemptCount,
+                preempting = d.preempt.get()
+            )
+        }.sortedBy { it.start }
+    }
+
+    /** 下载调试：手动把某一路标记为「慢连接、换连接续传」（调试页的「强制重连」） */
+    fun forcePreemptChunk(taskId: Long, key: String): Boolean {
+        val d = activeChunkMaps[taskId]?.get(key) ?: return false
+        DownloadDebugLog.record(taskId, "手动抢占", "调试页强制重连 key=$key")
+        d.preempt.set(true)
+        return true
+    }
+
+    /** 下载调试：全局资源快照（在飞配额占用 / 活跃任务数 / 堆内存 / 分片 IO 线程池） */
+    fun resourceDebugSnapshot(): DownloadResourceDebug {
+        val rt = Runtime.getRuntime()
+        val pool = chunkIoExecutor
+        return DownloadResourceDebug(
+            inflightCap = MAX_INFLIGHT_CHUNKS,
+            inflightUsed = MAX_INFLIGHT_CHUNKS - inflightLimiter.availablePermits,
+            activeTasks = activeJobs.size,
+            heapUsed = rt.totalMemory() - rt.freeMemory(),
+            heapMax = rt.maxMemory(),
+            poolSize = pool.poolSize,
+            poolActive = pool.activeCount,
+            poolQueue = pool.queue.size
+        )
+    }
 
     /** 进度落盘节流（毫秒）：updateProgress 写库会触发全表 Flow 重发 → 主线程全列表重组；
      *  按字节（256KB）节流时高速下载每秒写库几十次，主线程重组洪峰 → ANR。
@@ -538,6 +672,11 @@ class DownloadManager(
             DiagnosticLog.OPERATION, "download_enqueue",
             "id=$id platform=$taskPlatform size=$size name=$safeName"
         )
+        DownloadDebugLog.record(
+            id, "入队",
+            "平台=${taskPlatform.ifBlank { "-" }} 文件名=$safeName " +
+                "大小=${if (size > 0) size else "未知"} 直链=${LogRedactor.url(url)}"
+        )
         // 保存请求头（Cookie/UA），暂停后恢复仍需携带
         if (headers.isNotEmpty()) taskHeaders[id] = headers
         if (size > 0) taskSizes[id] = size
@@ -548,6 +687,7 @@ class DownloadManager(
         val blocked = magnetBlockReason(isMagnet)
         if (blocked != null) {
             Log.w(TAG, "磁力任务被拦下：id=$id 原因=$blocked")
+            DownloadDebugLog.record(id, "拦截失败", blocked)
             taskCallbacks.remove(id)
             // 不会有下载协程来消费这几份内存数据了，直接清掉
             taskHeaders.remove(id)
@@ -624,11 +764,13 @@ class DownloadManager(
             }
         } catch (e: Throwable) {
             Log.e(TAG, "引擎建任务失败：id=$id ${e.message}", e)
+            DownloadDebugLog.record(id, "失败", "引擎建任务失败：${e.message ?: e.javaClass.simpleName}")
             dao.updateStatus(id, DownloadTaskEntity.STATUS_FAILED)
             dao.updateError(id, e.message ?: e.toString())
             return
         }
         Log.d(TAG, "引擎任务已创建：yunxId=$id engineId=$engineTaskId")
+        DownloadDebugLog.record(id, "引擎任务创建", "engineId=$engineTaskId 平台=$platform 连接数=${threadProvider(platform)}")
         DiagnosticLog.log(
             DiagnosticLog.DOWNLOAD, "engine_task_created", taskId = id, status = "downloading",
             summary = "engineId=$engineTaskId platform=$platform name=$fileName"
@@ -739,6 +881,7 @@ class DownloadManager(
     /** 引擎任务完成：状态/保存路径/平均速度落库 + 触发清理回调（语义与内置下载器的完成路径一致） */
     private suspend fun completeEngineTask(task: DownloadTaskEntity, size: Long) {
         val dir = GopeedEngine.resolveDownloadDir(context)
+        DownloadDebugLog.record(task.id, "完成", "引擎任务完成 大小=$size 目录=$dir")
         // 磁力（BT）任务的真实名字/落盘结构只有引擎解析完元数据才知道：
         // 引擎侧 TorrentDirMaker 用 opts.path、FilePathMaker 返回「种子名/子路径」⇒ 多文件种子落成
         // <下载目录>/<种子名>/...，单文件种子落成 <下载目录>/<种子名>。本地记录里的 fileName 是元数据
@@ -841,6 +984,7 @@ class DownloadManager(
         // 恢复时未传 headers：沿用入队时保存的（Cookie/UA 对直链下载是必需的）
         val effectiveHeaders = headers.ifEmpty { taskHeaders[id] ?: emptyMap() }
         Log.d(TAG, "start: id=$id headers=${effectiveHeaders.keys}")
+        DownloadDebugLog.record(id, "开始/恢复", "请求头=${effectiveHeaders.keys.joinToString(",").ifBlank { "-" }}")
         synchronized(jobsLock) {
             // 原子注册：检查 + 占位 + launch + complete 在同一锁内完成，
             // pause/remove 要么拿到已注册的 job，要么拿不到（视为未运行）
@@ -877,6 +1021,7 @@ class DownloadManager(
                     if (isTaskActive()) {
                         val reason = e.message ?: e.javaClass.simpleName
                         Log.e(TAG, "task $id failed: $reason", e)
+                        DownloadDebugLog.record(id, "失败", reason)
                         dao.updateStatus(id, DownloadTaskEntity.STATUS_FAILED)
                         dao.updateError(id, reason)
                         // 终态通知：失败同样先出流体云胶囊，随后转为可划掉的普通通知
@@ -890,6 +1035,9 @@ class DownloadManager(
                 } finally {
                     // 任务结束（成功/失败/暂停/删除）：无任务时停止前台服务
                     onTaskFinished()
+                    // 任务协程已结束，在飞表不会再更新：撤掉下载调试的登记（否则会留下一个空表占位）
+                    activeChunkMaps.remove(id)
+                    taskPartDigests.remove(id)
                     // 只移除自己注册的 deferred：
                     // 若暂停后立即恢复（新 job 已注册到同一 id），不能误删新任务的注册，
                     // 否则新任务将无法再被暂停/删除（后台继续下载）
@@ -948,6 +1096,7 @@ class DownloadManager(
     fun pause(id: Long) {
         Log.d(TAG, "pause: id=$id")
         DiagnosticLog.event(DiagnosticLog.OPERATION, "download_pause", "id=$id")
+        DownloadDebugLog.record(id, "暂停", "用户暂停，分片文件保留")
         // 引擎任务：额外通知引擎暂停；本地状态与清理继续走下面的原逻辑（引擎任务没有分片文件，两步互不干扰）
         taskEngineIds.remove(id)?.let { engineId -> pauseEngineTask(id, engineId) }
         // 立即中断该任务所有分片网络请求（不依赖协程取消传播，阻塞 IO 马上停止）
@@ -979,6 +1128,8 @@ class DownloadManager(
      */
     fun remove(id: Long, deleteLocal: Boolean = false) {
         Log.d(TAG, "remove: id=$id deleteLocal=$deleteLocal")
+        DownloadDebugLog.record(id, "删除", "deleteLocal=$deleteLocal")
+        DownloadDebugLog.drop(id)
         // 引擎任务：额外通知引擎删除；本地清理（DB 记录 + 已下载文件）继续走下面的原逻辑
         taskEngineIds.remove(id)?.let { engineId ->
             releaseEngineTaskMemory(id)
@@ -994,6 +1145,7 @@ class DownloadManager(
         _stats.update { it - id }
         taskHeaders.remove(id)
         taskFallbackUrls.remove(id)
+        taskPartDigests.remove(id)
         // 删除任务同样触发清理回调（如删除网盘临时转存文件）：
         // 用户放弃下载时云盘里已转存的临时文件也应一并清理
         val cleanup = taskCallbacks.remove(id)
@@ -1100,6 +1252,7 @@ class DownloadManager(
                             DiagnosticLog.DOWNLOAD, "task_retry",
                             "task=$id | attempt=$attempts/$maxRetries | err=${e.message}"
                         )
+                        DownloadDebugLog.record(id, "重试", "第 $attempts/$maxRetries 次：${e.message}")
                         // 逐次递增延迟，避免失败风暴
                         delay(1200L * attempts)
                     } else {
@@ -1119,6 +1272,10 @@ class DownloadManager(
         dao.updateStatus(id, DownloadTaskEntity.STATUS_DOWNLOADING)
         taskStartTimes[id] = System.currentTimeMillis()
         Log.d(TAG, "runTask: id=$id fileName=${task.fileName}")
+        // 下载调试：记下开始时的网络/电源环境（网络类型、信号、省电模式），后面靠看门狗检测「是否切换网络」
+        if (DownloadDebugLog.isEnabled()) {
+            DownloadDebugLog.record(id, "网络环境", DownloadDebugLog.environmentSnapshot(context))
+        }
 
         // HLS（m3u8 转码流，如 UC play）：不走 Range 分片，直接拉分片合并
         if (task.url.contains(".m3u8", true) || task.url.contains(".m3u", true)) {
@@ -1142,11 +1299,13 @@ class DownloadManager(
         if (total == null) {
             // 服务器不返回文件大小（Range/Content-Length 均缺失）：降级为流式下载（开放区间 Range）
             Log.w(TAG, "runTask: id=$id 无法获取总大小，降级流式下载 origin=${LogRedactor.url(task.url)}")
+            DownloadDebugLog.record(id, "降级流式下载", "服务器未返回大小（Content-Length/Range 均缺失）")
             DiagnosticLog.warn(DiagnosticLog.DOWNLOAD, "task_stream_fallback", "task=$id | 服务器没给大小，降级流式下载")
             streamDownload(id, task, headers)
             return
         }
         Log.d(TAG, "getTotalSize: id=$id total=$total origin=${LogRedactor.url(task.url)}")
+        DownloadDebugLog.record(id, "探测大小", "total=$total 已有进度=${task.downloadedSize}")
         DiagnosticLog.log(
             DiagnosticLog.DOWNLOAD, "task_size_probed", taskId = id, status = "downloading", size = total,
             summary = "已有进度=${task.downloadedSize} url=${LogRedactor.url(task.url)}"
@@ -1159,6 +1318,9 @@ class DownloadManager(
         val chunkCount = chunkCountFor(total, threadCount)
         val chunkSize = ceil(total.toDouble() / chunkCount).toLong()
         val chunkDir = chunkDirOf(id).apply { mkdirs() }
+        // 分片级校验：本次运行内记录每个分片下载时算出的摘要，合并时逐片重算比对（下面清空旧分片时会一并清掉）
+        val partDigests = ConcurrentHashMap<String, String>()
+        taskPartDigests[id] = partDigests
         DiagnosticLog.log(
             DiagnosticLog.DOWNLOAD, "chunk_plan", taskId = id, status = "downloading", size = total,
             summary = "线程数=$threadCount 分片数=$chunkCount 分片大小=$chunkSize 已完成=${task.downloadedSize}"
@@ -1172,8 +1334,10 @@ class DownloadManager(
         val plan = "chunks=$chunkCount total=$total main=$mainPoolCount"
         if (planFile.exists() && planFile.readText() != plan) {
             Log.w(TAG, "runTask: id=$id 分片计划变化（$plan），清空旧 part 重下")
+            DownloadDebugLog.record(id, "断点失效", "分片计划变化（$plan），清空旧分片重下")
             chunkDir.deleteRecursively()
             chunkDir.mkdirs()
+            partDigests.clear()   // 旧分片已删，摘要一并作废
         } else {
             // 计划一致（断点续传）：主池 part_i 与弹性区 seg_{start}_{end} 均按文件已有长度续传
             // （seg 文件名携带区间信息，downloadChunk 按长度续传，不再删除重下）
@@ -1196,6 +1360,11 @@ class DownloadManager(
         Log.d(TAG, "分片规划: id=$id chunks=$chunkCount main=$mainPoolCount elasticStart=$elasticStart " +
             "size=$chunkSize threads=$threadCount effectiveWorkers=$effectiveWorkers " +
             "actualWorkers=$actualWorkers inflightCap=$MAX_INFLIGHT_CHUNKS isXunlei=$isXunlei")
+        DownloadDebugLog.record(
+            id, "分片规划",
+            "分片数=$chunkCount 主池=$mainPoolCount 弹性起点=$elasticStart 单片=$chunkSize " +
+                "线程=$threadCount 有效并发=$effectiveWorkers 实际worker=$actualWorkers 迅雷=$isXunlei"
+        )
 
         // 注册实时统计：线程数 = 实际并发（受安全上限与内存预算约束）
         _stats.update { it + (id to DownloadStats(0L, -1L, actualWorkers)) }
@@ -1253,11 +1422,13 @@ class DownloadManager(
         val elasticResults = ConcurrentHashMap<String, ChunkResult>()
         // 在飞分片表（key = m<片号> / seg@<起点> / retry@<起点>）：仅供看门狗算瞬时速度与抢占判定
         val inflightChunks = ConcurrentHashMap<String, InflightChunk>()
+        // 登记给「下载调试」按需读取（start 的 finally 里移除）；不在下载热路径上做任何额外工作
+        activeChunkMaps[id] = inflightChunks
 
         val allOk = coroutineScope {
             // ★ worker 数已钳到 actualWorkers；在飞槽位由全进程共享的 inflightLimiter 控制
             //   （见字段注释：绝不手动 release，也不要改回「每任务一个信号量」）
-            val workers = List(actualWorkers) {
+            val workers = List(actualWorkers) { workerIndex ->
                 async(chunkIoDispatcher) {
                     // 阶段 1：主池循环领取
                     while (true) {
@@ -1272,13 +1443,17 @@ class DownloadManager(
                             val end = min(start + chunkSize - 1, total - 1)
                             // 登记在飞分片（key=m<片号>）：看门狗据此算单路瞬时速度、判定慢连接抢占
                             val diagKey = "m${i + 1}"
-                            val diag = InflightChunk(start, end - start + 1)
+                            val diag = InflightChunk(start, end - start + 1, workerIndex)
                             inflightChunks[diagKey] = diag
+                            // 分片级校验：本片（含续传前缀）的摘要，写完即登记，合并时比对
+                            val partFile = File(chunkDir, "part_$i")
+                            val partDigest = newPartDigest(partFile)
                             val res = try {
                                 downloader.downloadChunk(
                                     taskId = id, url = task.url, start = start, end = end,
-                                    partFile = File(chunkDir, "part_$i"), headers = headers,
-                                    preempt = diag.preempt
+                                    partFile = partFile, headers = headers,
+                                    preempt = diag.preempt,
+                                    contentDigest = partDigest
                                 ) { bytes ->
                                     speedLimiter.awaitAllow(bytes)
                                     diag.bytes.addAndGet(bytes)   // 采样：供看门狗算瞬时速度
@@ -1302,6 +1477,19 @@ class DownloadManager(
                             } finally {
                                 inflightChunks.remove(diagKey)
                             }
+                            // 只在成功时登记摘要：失败/忽略 Range 的片会在后续重试里重新算
+                            if (res == ChunkResult.OK && partDigest != null) {
+                                partDigests[partFile.name] = partDigest.digest().toHexDigest()
+                            }
+                            // 抢占后的结果：这条分片换过连接，最终是续传成功还是仍失败（含换连接后跑出的成绩）
+                            if (diag.preemptCount > 0) {
+                                DownloadDebugLog.record(
+                                    id, "抢占结果",
+                                    "分片=$diagKey worker#$workerIndex 结果=${res.name} " +
+                                        "已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
+                                        "用时=${diag.elapsedMs / 1000}s 共抢占${diag.preemptCount}次"
+                                )
+                            }
                             results[i] = res
                             when (res) {
                                 ChunkResult.RANGE_IGNORED -> {
@@ -1324,15 +1512,19 @@ class DownloadManager(
                         val key = "${s}_${e}"
                         // 登记在飞弹性块（key=seg@<起点>）：看门狗据此算单路瞬时速度、判定慢连接抢占
                         val diagKey = "seg@$s"
-                        val diag = InflightChunk(s, e - s + 1)
+                        val diag = InflightChunk(s, e - s + 1, workerIndex)
                         inflightChunks[diagKey] = diag
+                        // 分片级校验：弹性块的摘要
+                        val segFile = File(chunkDir, "seg_$key.part")
+                        val segDigest = newPartDigest(segFile)
                         val res = try {
                             inflightLimiter.withPermit {
                                 if (fallback.get()) return@withPermit ChunkResult.FAILED
                                 downloader.downloadChunk(
                                     taskId = id, url = task.url, start = s, end = e,
-                                    partFile = File(chunkDir, "seg_$key.part"), headers = headers,
-                                    preempt = diag.preempt
+                                    partFile = segFile, headers = headers,
+                                    preempt = diag.preempt,
+                                    contentDigest = segDigest
                                 ) { bytes ->
                                     speedLimiter.awaitAllow(bytes)
                                     diag.bytes.addAndGet(bytes)   // 采样：供看门狗算瞬时速度
@@ -1356,6 +1548,18 @@ class DownloadManager(
                         } finally {
                             inflightChunks.remove(diagKey)
                         }
+                        if (res == ChunkResult.OK && segDigest != null) {
+                            partDigests[segFile.name] = segDigest.digest().toHexDigest()
+                        }
+                        // 抢占后的结果（弹性区）
+                        if (diag.preemptCount > 0) {
+                            DownloadDebugLog.record(
+                                id, "抢占结果",
+                                "分片=$diagKey worker#$workerIndex 结果=${res.name} " +
+                                    "已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
+                                    "用时=${diag.elapsedMs / 1000}s 共抢占${diag.preemptCount}次"
+                            )
+                        }
                         elasticResults[key] = res
                         when (res) {
                             ChunkResult.RANGE_IGNORED -> {
@@ -1372,11 +1576,20 @@ class DownloadManager(
             // 看门狗：周期刷新每路瞬时速度，并判定是否把慢连接换掉（worker 全部跑完即停）
             val preemptJob = launch(Dispatchers.IO) {
                 val runStartMs = System.currentTimeMillis()
+                var lastNetSig = DownloadDebugLog.networkSignature(context)
                 while (true) {
                     delay(PREEMPT_TICK_MS)
                     // ★ 慢连接抢占（永久逻辑，勿删）：先刷新瞬时速度，再以本任务的平均单连接速度为参照
                     sampleInflightChunks(inflightChunks)
                     preemptSlowChunks(id, downloaded.get(), System.currentTimeMillis() - runStartMs, actualWorkers, inflightChunks)
+                    // 下载调试：网络特征串变化 = 换了网络（切 Wi-Fi/蜂窝、掉线重连、开关飞行模式），附完整环境
+                    if (DownloadDebugLog.isEnabled()) {
+                        val sig = DownloadDebugLog.networkSignature(context)
+                        if (sig != lastNetSig) {
+                            lastNetSig = sig
+                            DownloadDebugLog.record(id, "网络变化", DownloadDebugLog.environmentSnapshot(context))
+                        }
+                    }
                 }
             }
             workers.awaitAll()
@@ -1413,7 +1626,7 @@ class DownloadManager(
             val retryOk = if (missing.isEmpty()) true else coroutineScope {
                 val retryIdx = AtomicInteger(0)
                 val retryResults = arrayOfNulls<ChunkResult?>(missing.size)
-                val retryWorkers = List(min(actualWorkers, missing.size)) {
+                val retryWorkers = List(min(actualWorkers, missing.size)) { retryWorkerIndex ->
                     async(chunkIoDispatcher) {
                         while (true) {
                             if (!isTaskActive()) break
@@ -1422,8 +1635,10 @@ class DownloadManager(
                             val m = missing[pos]
                             // 重试区间同样登记：重试期间的慢连接也会被看门狗采样、抢占
                             val diagKey = "retry@${m.start}"
-                            val diag = InflightChunk(m.start, m.end - m.start + 1)
+                            val diag = InflightChunk(m.start, m.end - m.start + 1, retryWorkerIndex)
                             inflightChunks[diagKey] = diag
+                            // 分片级校验：重试区间的摘要
+                            val retryDigest = newPartDigest(m.file)
                             val res = try {
                                 // ★ 重试同样走全进程在飞信号量：少这一处会让「主池 + 弹性区 + 重试」
                                 //   三路并发叠加，正是 OOM 的成因之一
@@ -1431,7 +1646,8 @@ class DownloadManager(
                                     downloader.downloadChunk(
                                         taskId = id, url = task.url, start = m.start, end = m.end,
                                         partFile = m.file, headers = headers,
-                                        preempt = diag.preempt
+                                        preempt = diag.preempt,
+                                        contentDigest = retryDigest
                                     ) { bytes ->
                                         speedLimiter.awaitAllow(bytes)
                                         diag.bytes.addAndGet(bytes)   // 采样：供看门狗算瞬时速度
@@ -1448,6 +1664,18 @@ class DownloadManager(
                                 ChunkResult.FAILED
                             } finally {
                                 inflightChunks.remove(diagKey)
+                            }
+                            if (res == ChunkResult.OK && retryDigest != null) {
+                                partDigests[m.file.name] = retryDigest.digest().toHexDigest()
+                            }
+                            // 抢占后的结果（失败区间重试）
+                            if (diag.preemptCount > 0) {
+                                DownloadDebugLog.record(
+                                    id, "抢占结果",
+                                    "分片=$diagKey worker#$retryWorkerIndex 结果=${res.name} " +
+                                        "已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
+                                        "用时=${diag.elapsedMs / 1000}s 共抢占${diag.preemptCount}次"
+                                )
                             }
                             retryResults[pos] = res
                             if (res != ChunkResult.OK) {
@@ -1615,12 +1843,24 @@ class DownloadManager(
         total: Long
     ) {
         if (!isTaskActive()) return
+        // 分片级校验：下载时记录的分片摘要（合并时逐片重算比对；流式/单流/HLS 路径没有记录，跳过校验）
+        val expectedDigests = taskPartDigests[id].orEmpty()
         // 1) 分片完整性
         for (part in chunkFiles) {
             if (!part.exists() || part.length() <= 0) {
                 Log.e(TAG, "finishDownload: id=$id 分片缺失/为空 $part")
                 throw IllegalStateException("分片文件缺失或为空，拒绝合并（防止文件损坏）")
             }
+        }
+        // 下载调试：合并顺序 + 完整性与大小校验（校验口径 = 每片非空 + 每片字节数之和，见下方 written == total）
+        if (DownloadDebugLog.isEnabled()) {
+            val orderText = chunkFiles.take(8).joinToString(",") { "${it.name}=${it.length()}B" } +
+                if (chunkFiles.size > 8) "…共${chunkFiles.size}片" else ""
+            DownloadDebugLog.record(
+                id, "分片校验",
+                "合并=${chunkFiles.size}片 非空=通过 摘要=已记录${expectedDigests.size}片（合并时逐片比对） 顺序=$orderText " +
+                    "字节合计=${chunkFiles.sumOf { it.length() }} 预期=${if (total > 0) total else "未知"}"
+            )
         }
         // 2) Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
         if (!storagePermissionProvider()) {
@@ -1649,6 +1889,7 @@ class DownloadManager(
                     DiagnosticLog.DOWNLOAD, "merge_progress", taskId = id, status = "merging",
                     size = done, summary = "percent=$percent%"
                 )
+                DownloadDebugLog.record(id, "合并进度", "$percent% 已合并=$done/$mergeTotal")
             }
             // 通知沿用下载中那条 2 秒节流（合并回调很密，别把系统通知刷爆）
             if (now - lastNotifyTs.get() >= notifyThrottleMs) {
@@ -1662,16 +1903,45 @@ class DownloadManager(
             DiagnosticLog.DOWNLOAD, "merge_start", taskId = id, status = "merging", size = mergeTotal,
             summary = "分片数=${chunkFiles.size} 目标=$fileName"
         )
+        DownloadDebugLog.record(id, "开始合并", "分片数=${chunkFiles.size} 目标=$fileName 合计=$mergeTotal")
         reportMergeProgress(0L)
+        // 全量 SHA-256（设置项，默认关）：合并这一遍本来就在读所有字节，顺带算掉即可，不额外读盘。
+        // ★ 只在「下载调试」开着时才算：摘要只写进调试日志，调试关着算它没有任何去处（设置页也把该开关藏了）
+        val fullShaEnabled = settings.downloadDebug && settings.fullFileSha256
         val savedPath = withContext(Dispatchers.IO) {
             val dest = DownloadSaver.openDestination(context, fileName, saveDirProvider())
                 ?: throw IllegalStateException("无法创建下载目标（下载目录不可用）")
             try {
                 val out = dest.open() ?: throw IllegalStateException("无法打开下载目标输出流")
-                val written = out.use {
-                    downloader.mergeChunksToStream(chunkFiles, it, ::reportMergeProgress)
+                val fullDigest = if (fullShaEnabled) MessageDigest.getInstance("SHA-256") else null
+                val sink = if (fullDigest != null) DigestOutputStream(out, fullDigest) else out
+                val written = sink.use {
+                    downloader.mergeChunksToStream(chunkFiles, it, ::reportMergeProgress) { part, hex ->
+                        // ★ 分片级校验：重算该片摘要，与下载时记录的对不上 ⇒ 内容级损坏，拒绝保存
+                        val expected = expectedDigests[part.name]
+                        if (expected != null && expected != hex) {
+                            Log.e(TAG, "finishDownload: id=$id 分片校验失败 ${part.name} 期望=$expected 实际=$hex")
+                            DownloadDebugLog.record(
+                                id, "分片校验失败",
+                                "${part.name} 内容与下载时不一致（期望 $expected 实际 $hex）"
+                            )
+                            throw IllegalStateException(
+                                "分片 ${part.name} 校验失败：内容与下载时不一致（已拒绝保存损坏文件）"
+                            )
+                        }
+                    }
+                }
+                if (fullDigest != null) {
+                    DownloadDebugLog.record(
+                        id, "全量校验",
+                        "SHA-256=${fullDigest.digest().toHexDigest()} 共 $written 字节"
+                    )
                 }
                 if (total > 0 && written != total) {
+                    DownloadDebugLog.record(
+                        id, "校验失败",
+                        "期望 $total 字节，实际 $written 字节（拒绝保存损坏文件）"
+                    )
                     throw IllegalStateException("文件大小校验失败：期望 $total 字节，实际 $written 字节（已拒绝保存损坏文件）")
                 }
                 dest.commit()
@@ -1679,6 +1949,10 @@ class DownloadManager(
             } catch (e: Exception) {
                 // 失败（含 ENOSPC）/取消：删掉半成品，否则残留数据会一直占空间，重试时空间只减不增
                 dest.abort()
+                DownloadDebugLog.record(
+                    id, "合并失败",
+                    "${e.message ?: e.javaClass.simpleName}（已删除半成品，分片保留可重试）"
+                )
                 throw e
             }
         }
@@ -1697,6 +1971,10 @@ class DownloadManager(
         }
         _stats.update { it - id }
         chunkDir.deleteRecursively()
+        DownloadDebugLog.record(
+            id, "清理临时文件",
+            "分片已随合并边写边删；删除分片目录 ${chunkDir.name}（${chunkFiles.size} 片）"
+        )
     }
 
     /**
@@ -1842,15 +2120,16 @@ class DownloadManager(
          * 条）、空闲 30 秒回收，只有真用到大并发时才会存在那么多线程。
          * 必须 core = max 而不是 core = 0 + 无界队列：后者在 ThreadPoolExecutor 里只会养出 1 个 worker。
          */
-        internal val chunkIoDispatcher: CoroutineDispatcher =
-            ThreadPoolExecutor(
-                MAX_INFLIGHT_CHUNKS,
-                MAX_INFLIGHT_CHUNKS,
-                30L,
-                TimeUnit.SECONDS,
-                LinkedBlockingQueue<Runnable>()
-            ) { r -> Thread(r, "yunx-chunk-io").apply { isDaemon = true } }
-                .apply { allowCoreThreadTimeOut(true) }
-                .asCoroutineDispatcher()
+        /** 分片 IO 线程池本体：保留引用是为了让「下载调试」能读到队列长度 / 活跃线程数等运行时状态 */
+        private val chunkIoExecutor = ThreadPoolExecutor(
+            MAX_INFLIGHT_CHUNKS,
+            MAX_INFLIGHT_CHUNKS,
+            30L,
+            TimeUnit.SECONDS,
+            LinkedBlockingQueue<Runnable>()
+        ) { r -> Thread(r, "yunx-chunk-io").apply { isDaemon = true } }
+            .apply { allowCoreThreadTimeOut(true) }
+
+        internal val chunkIoDispatcher: CoroutineDispatcher = chunkIoExecutor.asCoroutineDispatcher()
     }
 }

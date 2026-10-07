@@ -33,6 +33,7 @@ import java.io.FileInputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.io.RandomAccessFile
+import java.security.MessageDigest
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -52,6 +53,18 @@ private const val RANGE_RETRIES = 4
  * 网络读本身按 MTU 粒度返回，64KB 已足够摊掉 syscall 开销；与 HlsDownloader.COPY_BUFFER_SIZE 对齐。
  */
 internal const val BUFFER_SIZE = 64 * 1024
+
+private const val HEX_CHARS = "0123456789abcdef"
+
+/** 摘要 → 小写十六进制（分片级校验用；避免 String.format 的逐字节开销） */
+internal fun ByteArray.toHexDigest(): String {
+    val sb = StringBuilder(size * 2)
+    for (b in this) {
+        val v = b.toInt() and 0xFF
+        sb.append(HEX_CHARS[v ushr 4]).append(HEX_CHARS[v and 0x0F])
+    }
+    return sb.toString()
+}
 
 /**
  * 分片下载结果（结构化）：
@@ -154,6 +167,12 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
         headers: Map<String, String>,
         /** 慢连接抢占标志（由 DownloadManager 看门狗置位）；null = 不抢占 */
         preempt: AtomicBoolean? = null,
+        /**
+         * 分片级校验用的摘要：非 null 时，本方法会把本次写入的字节增量喂进去。
+         * 断点续传的**已有前缀由调用方预先喂好**（见 `DownloadManager.newPartDigest`），
+         * 所以成功返回时该摘要是「整个 part 文件」的摘要，上层合并时逐片重算比对即可。
+         */
+        contentDigest: MessageDigest? = null,
         onBytes: suspend (Long) -> Unit
     ): ChunkResult = withContext(DownloadManager.chunkIoDispatcher) {
         val attempts = CHUNK_RETRIES + RANGE_RETRIES
@@ -168,7 +187,7 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
 
             var preempted = false
             val res = try {
-                doChunkAttempt(taskId, url, from, end, unknownTotal, partFile, headers, existing, preempt, onBytes)
+                doChunkAttempt(taskId, url, from, end, unknownTotal, partFile, headers, existing, preempt, contentDigest, onBytes)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: PreemptedException) {
@@ -211,6 +230,7 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
         headers: Map<String, String>,
         existing: Long,
         preempt: AtomicBoolean?,
+        contentDigest: MessageDigest?,
         onBytes: suspend (Long) -> Unit
     ): ChunkResult {
         val request = Request.Builder()
@@ -240,7 +260,7 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
                         val body = response.body ?: return@use ChunkResult.FAILED
                         val expected = if (unknownTotal) -1L else end - from + 1
                         // 写入分片，严格截断到预期区间
-                        val written = writeSlice(body.byteStream(), partFile, existing, expected, preempt, onBytes)
+                        val written = writeSlice(body.byteStream(), partFile, existing, expected, preempt, contentDigest, onBytes)
                         // ★ 慢连接抢占：主动断开、保留已写字节（否则会被下面的「写入不足」误判为失败丢片）
                         if (preempt?.get() == true) throw PreemptedException()
                         // ★ 校验：206 也必须写满预期字节，否则视为失败（防空洞/损坏）
@@ -275,6 +295,7 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
         existing: Long,
         expected: Long,
         preempt: AtomicBoolean?,
+        contentDigest: MessageDigest?,
         onBytes: suspend (Long) -> Unit
     ): Long {
         var written = 0L
@@ -288,6 +309,8 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
                 val allow = if (expected < 0) read.toLong() else min(read.toLong(), expected - written)
                 if (allow <= 0) break
                 raf.write(buffer, 0, allow.toInt())
+                // ★ 分片级校验：写入多少就喂多少（不额外读盘）
+                contentDigest?.update(buffer, 0, allow.toInt())
                 written += allow
                 onBytes(allow)
                 // ★ 慢连接抢占：立即停止读取，已写字节保留（下次从 partFile.length() 续传）
@@ -391,12 +414,19 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
     suspend fun mergeChunksToStream(
         chunkFiles: List<File>,
         out: OutputStream,
-        onProgress: ((Long) -> Unit)? = null
+        onProgress: ((Long) -> Unit)? = null,
+        /**
+         * 每读完一个分片回调它的 SHA-256（十六进制）：供「分片级校验」与下载时记录的摘要比对。
+         * ★ 在**删除该分片之前**回调：校验失败会抛异常中断合并，此时后续分片还留着，便于恢复。
+         */
+        onPartDigest: ((File, String) -> Unit)? = null
     ): Long =
         withContext(DownloadManager.chunkIoDispatcher) {
             var total = 0L
             val buffer = ByteArray(BUFFER_SIZE)
             chunkFiles.forEach { part ->
+                // 分片级校验：读多少喂多少，与写入复用同一遍 IO，不额外读盘
+                val digest = onPartDigest?.let { MessageDigest.getInstance("SHA-256") }
                 FileInputStream(part).use { fis ->
                     while (true) {
                         // 阻塞式写入不响应协程取消，逐块自检：暂停/删除后最多再写一个缓冲块就退出，
@@ -405,9 +435,11 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
                         val read = fis.read(buffer)
                         if (read <= 0) break
                         out.write(buffer, 0, read)
+                        digest?.update(buffer, 0, read)
                         total += read
                     }
                 }
+                if (digest != null) onPartDigest?.invoke(part, digest.digest().toHexDigest())
                 // 该片已完整写入目标，立即释放分片空间（在 use 之后，确保 fd 已关闭）
                 if (!part.delete()) Log.w(TAG, "mergeChunksToStream: 删除分片失败 $part")
                 onProgress?.invoke(total)

@@ -47,6 +47,7 @@ import com.yunx.app.data.network.QuarkConstants
 import com.yunx.app.data.network.QuarkCdn
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.SharePlatform
+import com.yunx.app.data.network.StarSeaApi
 import com.yunx.app.data.network.UCConstants
 import com.yunx.app.data.network.XunleiConstants
 import com.yunx.app.data.network.XunleiKouling
@@ -918,23 +919,28 @@ class ResolveViewModel(
         }
         viewModelScope.launch {
             uiState = ResolveUiState.Loading
-            // 迅雷中文口令（如「张三丰资源」）：不是分享链接的短中文文本 → 先用 shoulei 跳转接口
-            // 换成带提取码的分享链接，再按普通分享链接继续解析。口令是迅雷专有的输入形态，
-            // 其它平台没有对应形式，所以只在「不像任何分享链接」时尝试一次。
-            val koulingUrl = if (ShareLinkParser.parse(link) == null && XunleiKouling.looksLikeKouling(link)) {
-                val r = xunleiResolveRepository.resolveKouling(XunleiKouling.normalize(link))
-                r.exceptionOrNull()?.let { e ->
-                    uiState = ResolveUiState.Error(e.message ?: "口令解析失败")
-                    return@launch
+            // 中文口令兜底（既不是分享链接、也不是 GitHub 链接）：**先迅雷，迅雷没给出可用链接再问星海**。
+            // ① 迅雷口令（如「张三丰资源」）：口令是「分享链接 + 提取码」的打包形式，打 shoulei 跳转接口换链接；
+            // ② 星海（夸克/UC 中文口令）：换回 pwd_id，再合成分享链接，后续提取码/登录/列表/取链全走既有链路。
+            // 两个服务都用同一段原文，成功即止；都失败时把原因带出去（而不是只丢一句「无法识别」）。
+            var effectiveLink = link
+            var commandError: String? = null
+            if (ShareLinkParser.parse(link) == null) {
+                if (XunleiKouling.looksLikeKouling(link)) {
+                    xunleiResolveRepository.resolveKouling(XunleiKouling.normalize(link))
+                        .onSuccess { effectiveLink = it }
+                        .onFailure { commandError = it.message }
                 }
-                r.getOrNull()
-            } else {
-                null
+                if (ShareLinkParser.parse(effectiveLink) == null && StarSeaApi.looksLikeCommand(link)) {
+                    StarSeaApi.resolveToShareLink(link)
+                        .onSuccess { effectiveLink = it }
+                        .onFailure { commandError = it.message }
+                }
             }
-            val effectiveLink = koulingUrl ?: link
             val parsed = ShareLinkParser.parse(effectiveLink)
             if (parsed == null) {
-                uiState = ResolveUiState.Error("无法识别分享链接")
+                // 两个口令服务都给不出结果时，用更靠后那次（星海）的原因——它对夸克/UC 口令最准
+                uiState = ResolveUiState.Error(commandError ?: "无法识别分享链接")
                 return@launch
             }
             // 口令已换成真实分享链接：收藏 / 复制 / 重新解析都用它，而不是原始口令

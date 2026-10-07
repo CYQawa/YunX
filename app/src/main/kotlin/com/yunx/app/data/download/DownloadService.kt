@@ -26,6 +26,14 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Build
 import android.os.IBinder
 import com.yunx.app.MainActivity
@@ -87,9 +95,7 @@ class DownloadService : Service() {
     }
 
     private fun buildNotification(title: String, progress: Int, speed: String, showSpeed: Boolean): Notification {
-        val contentIntent = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
-        )
+        val contentIntent = openDownloadTabIntent(this)
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -109,6 +115,12 @@ class DownloadService : Service() {
             .setContentIntent(contentIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+        // Android 16 流体云（实时更新）：胶囊与展开态左侧大图标都取「圆形应用图标」。
+        // ProgressStyle 的「追踪图标」就是 setLargeIcon 指定的图；不设置时系统会回落到方形应用图标，
+        // 于是胶囊里是一个方块、展开后左侧大图标位置为空 —— 这两个症状都由这一处修复。
+        if (Build.VERSION.SDK_INT >= 36) {
+            circularAppIcon(this)?.let { builder.setLargeIcon(it) }
+        }
         // 仅「完整通知」模式显示进度条；简化模式隐藏进度条
         if (showSpeed && progress in 0..100) {
             builder.setProgress(100, progress, false)
@@ -153,6 +165,13 @@ class DownloadService : Service() {
         /** 进度条总刻度（千分比）：段长不用文件字节数，避免大文件字节数超出 Int 上限而溢出 */
         private const val PROGRESS_SCALE = 1000
 
+        /** 通知大图标的边长（dp）：系统会按胶囊 / 卡片尺寸自行缩放 */
+        private const val LARGE_ICON_DP = 64
+
+        /** 圆形应用图标缓存（进程内唯一）：通知高频刷新，避免反复解码 + 裁剪 */
+        @Volatile
+        private var cachedLargeIcon: Bitmap? = null
+
         /**
          * 合并阶段速度栏占位文案：DownloadManager 合并分片时把它当作 speed 传进来，
          * 通知正文因此显示「正在合并分片」，而不是「下载速度 合并中」。
@@ -177,6 +196,25 @@ class DownloadService : Service() {
         /** 结果通知派发用作用域：与服务生命周期无关（服务在任务结束时已停止） */
         private val resultScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+        /**
+         * 点击通知打开应用并**直接落在「下载」Tab**的 PendingIntent。
+         *
+         * 实况通知（流体云）点开的场景就是「看下载进度」，落在解析页还得多点一次底部导航；
+         * 所以带上 `MainActivity.EXTRA_OPEN_TAB = download`，由 MainActivity → MainScreen 切页。
+         * `FLAG_ACTIVITY_SINGLE_TOP` 让应用已在前台时走 onNewIntent（而不是再起一个 Activity 实例）。
+         */
+        private fun openDownloadTabIntent(context: Context): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_TAB, MainActivity.TAB_DOWNLOAD)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            return PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        }
+
         private fun ensureChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -186,6 +224,43 @@ class DownloadService : Service() {
                     )
                 }
             }
+        }
+
+        /**
+         * 圆形应用图标，用作通知大图标。
+         *
+         * [R.drawable.icon] 是 748×748 的整块方形位图（四角不透明、没有圆角），直接当大图标用会被渲染成方块；
+         * 这里「居中裁成正方形 → 套圆形蒙版」得到圆形图标。Android 16 流体云（实时更新）的
+         * 胶囊图标与展开态左侧大图标取的是同一张图（ProgressStyle 的「追踪图标」= setLargeIcon），
+         * 所以一处设置同时解决「胶囊是方的」与「展开后左侧没有大图标」两个问题。
+         *
+         * 结果进程内缓存：通知每 2 秒刷新一次，不能每次刷新都重新解码 + 裁剪。
+         * 解码时 `inScaled = false`：图标放在无密度限定的 `drawable/` 下，按默认密度解码会在高 DPI 设备上被放大数倍。
+         */
+        private fun circularAppIcon(context: Context): Bitmap? {
+            cachedLargeIcon?.let { return it }
+            return runCatching {
+                val opts = BitmapFactory.Options().apply { inScaled = false }
+                val src = BitmapFactory.decodeResource(context.resources, R.drawable.icon, opts)
+                    ?: return@runCatching null
+                val size = (LARGE_ICON_DP * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+                val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(output)
+                val dst = RectF(0f, 0f, size.toFloat(), size.toFloat())
+                // ① 先画一个实心圆作蒙版底
+                canvas.drawOval(dst, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() })
+                // ② SRC_IN：源图只保留与圆相交的部分 ⇒ 方形位图被切成圆形
+                val edge = minOf(src.width, src.height)
+                val srcRect = Rect(
+                    (src.width - edge) / 2, (src.height - edge) / 2,
+                    (src.width + edge) / 2, (src.height + edge) / 2
+                )
+                canvas.drawBitmap(
+                    src, srcRect, dst,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) }
+                )
+                output.also { cachedLargeIcon = it }
+            }.getOrNull()
         }
 
         /**
@@ -228,9 +303,7 @@ class DownloadService : Service() {
             error: String,
             linger: Boolean
         ): Notification {
-            val contentIntent = PendingIntent.getActivity(
-                context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
-            )
+            val contentIntent = openDownloadTabIntent(context)
             val title = if (success) "下载完成" else "下载失败"
             val text = if (success) fileName else if (error.isBlank()) fileName else "$fileName：$error"
             val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -247,6 +320,10 @@ class DownloadService : Service() {
                 .setStyle(Notification.BigTextStyle().bigText(text))
                 .setContentIntent(contentIntent)
                 .setOnlyAlertOnce(true)
+            // 与下载中的通知同一口径：流体云胶囊 / 展开态左侧都用圆形应用图标
+            if (Build.VERSION.SDK_INT >= 36) {
+                circularAppIcon(context)?.let { builder.setLargeIcon(it) }
+            }
             if (linger) {
                 builder.setOngoing(true)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

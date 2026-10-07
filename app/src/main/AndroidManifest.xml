@@ -25,6 +25,10 @@
     <!-- Android 16 实时更新（OPPO ColorOS 16 流体云按此规范接入）：把下载进度提升为「进行中」通知 -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 下载调试：读取当前网络类型 / 是否计费 / 链路速率估计（普通权限，安装即授予，无运行时弹窗；
+         蜂窝代际 5G/4G 与真正的信号强度还需要 READ_PHONE_STATE / ACCESS_WIFI_STATE 等权限，
+         本项目不申请，日志里只记「未区分」，改用系统给的链路速率估计当网络质量指标） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 锁屏保持下载：息屏时维持 Wi-Fi/CPU，避免长时间下载断连 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 锁屏保持下载：允许引导用户将应用加入「忽略电池优化」白名单 -->

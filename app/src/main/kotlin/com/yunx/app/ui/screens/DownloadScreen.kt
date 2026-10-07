@@ -58,6 +58,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
@@ -92,6 +93,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -125,6 +127,8 @@ import java.io.File
 fun DownloadScreen(
     scrollBehavior: TopAppBarScrollBehavior,
     viewModel: DownloadViewModel,
+    /** 下载调试开关（设置 → 关于云析 → 长按 → 开发调试）：开启后长按任务菜单里出现「调试信息」 */
+    downloadDebug: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -133,6 +137,23 @@ fun DownloadScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<DownloadTaskEntity?>(null) }
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
+    // 「调试信息」页打开的任务 id（null = 不显示）。本页在「下载」Tab 内全屏展开，与 ResolveScreen 内嵌
+    // ShareDetailScreen 同款（不是 MainScreen 的叠加页，可直接复用下载页的卡片与格式化口径）。
+    var debugTaskId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // 任务可能在调试页打开期间被删除：取不到就自动退回列表（不用再手动关页）
+    val debugTask = debugTaskId?.let { id -> tasks.firstOrNull { it.id == id } }
+    if (debugTask != null) {
+        DownloadDebugScreen(
+            task = debugTask,
+            stats = stats[debugTask.id],
+            viewModel = viewModel,
+            onPause = { viewModel.pause(debugTask.id) },
+            onResume = { viewModel.resume(debugTask.id) },
+            onBack = { debugTaskId = null },
+            modifier = modifier
+        )
+        return
+    }
 
     // Android 9- 写公共目录需要 WRITE_EXTERNAL_STORAGE
     val needLegacyPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
@@ -189,7 +210,9 @@ fun DownloadScreen(
                             onPause = { viewModel.pause(task.id) },
                             onResume = { viewModel.resume(task.id) },
                             onRemove = { pendingDelete = task },
-                            onRedownload = { viewModel.redownload(task) }
+                            onRedownload = { viewModel.redownload(task) },
+                            downloadDebug = downloadDebug,
+                            onOpenDebug = { debugTaskId = it }
                         )
                     }
 
@@ -202,7 +225,9 @@ fun DownloadScreen(
                                 onPause = { viewModel.pause(it) },
                                 onResume = { viewModel.resume(it) },
                                 onRemove = { pendingDelete = it },
-                                onRedownload = { viewModel.redownload(it) }
+                                onRedownload = { viewModel.redownload(it) },
+                                downloadDebug = downloadDebug,
+                                onOpenDebug = { debugTaskId = it }
                             )
                         }
                     }
@@ -477,7 +502,10 @@ private fun FolderDownloadGroup(
     onPause: (Long) -> Unit,
     onResume: (Long) -> Unit,
     onRemove: (DownloadTaskEntity) -> Unit,
-    onRedownload: (DownloadTaskEntity) -> Unit
+    onRedownload: (DownloadTaskEntity) -> Unit,
+    /** 下载调试：开启时组内子任务的长按菜单也出现「调试信息」 */
+    downloadDebug: Boolean = false,
+    onOpenDebug: (Long) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(true) }
     val completed = tasks.count { it.status == DownloadTaskEntity.STATUS_COMPLETED }
@@ -601,7 +629,9 @@ private fun FolderDownloadGroup(
                                 onPause = { onPause(task.id) },
                                 onResume = { onResume(task.id) },
                                 onRemove = { onRemove(task) },
-                                onRedownload = { onRedownload(task) }
+                                onRedownload = { onRedownload(task) },
+                                downloadDebug = downloadDebug,
+                                onOpenDebug = onOpenDebug
                             )
                         }
                     }
@@ -622,7 +652,10 @@ private fun DownloadSubTaskRow(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRemove: () -> Unit,
-    onRedownload: () -> Unit
+    onRedownload: () -> Unit,
+    /** 下载调试开启时长按菜单出现「调试信息」 */
+    downloadDebug: Boolean = false,
+    onOpenDebug: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val isDownloading = task.status == DownloadTaskEntity.STATUS_DOWNLOADING ||
@@ -795,6 +828,16 @@ private fun DownloadSubTaskRow(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("删除任务")
                         }
+                        if (downloadDebug) {
+                            TextButton(onClick = {
+                                showMenu = false
+                                onOpenDebug(task.id)
+                            }) {
+                                Icon(Icons.Outlined.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("调试信息")
+                            }
+                        }
                     }
                 },
                 confirmButton = {
@@ -812,7 +855,10 @@ private fun DownloadTaskCard(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRemove: () -> Unit,
-    onRedownload: () -> Unit
+    onRedownload: () -> Unit,
+    /** 下载调试开启时长按菜单出现「调试信息」 */
+    downloadDebug: Boolean = false,
+    onOpenDebug: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val isDownloading = task.status == DownloadTaskEntity.STATUS_DOWNLOADING ||
@@ -1041,6 +1087,16 @@ private fun DownloadTaskCard(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("删除任务")
                         }
+                        if (downloadDebug) {
+                            TextButton(onClick = {
+                                showMenu = false
+                                onOpenDebug(task.id)
+                            }) {
+                                Icon(Icons.Outlined.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("调试信息")
+                            }
+                        }
                     }
                 },
                 confirmButton = {
@@ -1056,7 +1112,7 @@ private fun copyToClipboard(context: Context, text: String) {
     cm.setPrimaryClip(ClipData.newPlainText("yunx_url", text))
 }
 
-private fun taskStatusLine(task: DownloadTaskEntity): String {
+internal fun taskStatusLine(task: DownloadTaskEntity): String {
     // 磁力任务在引擎拿到元数据之前 totalSize 一直是 0：这时按进度显示会变成「下载中」却没有任何数字，
     // 看起来像卡死。BT 的元数据要等 DHT/tracker 找到 peer，慢起来是分钟级，明说在解析更诚实。
     if (task.status == DownloadTaskEntity.STATUS_DOWNLOADING &&
@@ -1075,7 +1131,7 @@ private fun taskStatusLine(task: DownloadTaskEntity): String {
     }
 }
 
-private fun progressText(task: DownloadTaskEntity): String {
+internal fun progressText(task: DownloadTaskEntity): String {
     if (task.totalSize <= 0) return ""
     // 显示值钳制到 total（防恢复竞态残留导致显示超总大小）
     val shown = minOf(task.downloadedSize, task.totalSize)
@@ -1083,7 +1139,7 @@ private fun progressText(task: DownloadTaskEntity): String {
     return "已下载 ${formatSize(shown)} / ${formatSize(task.totalSize)} · $percent%"
 }
 
-private fun formatSize(bytes: Long): String {
+internal fun formatSize(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val units = arrayOf("B", "KB", "MB", "GB", "TB")
     var value = bytes.toDouble()
@@ -1095,7 +1151,7 @@ private fun formatSize(bytes: Long): String {
     return String.format("%.1f %s", value, units[i])
 }
 
-private fun formatSpeed(bytesPerSec: Long): String {
+internal fun formatSpeed(bytesPerSec: Long): String {
     if (bytesPerSec <= 0) return "0 B/s"
     val units = arrayOf("B/s", "KB/s", "MB/s", "GB/s")
     var value = bytesPerSec.toDouble()
@@ -1107,7 +1163,7 @@ private fun formatSpeed(bytesPerSec: Long): String {
     return String.format("%.1f %s", value, units[i])
 }
 
-private fun formatRemain(millis: Long): String {
+internal fun formatRemain(millis: Long): String {
     if (millis < 0) return "计算中"
     val sec = millis / 1000
     return when {
