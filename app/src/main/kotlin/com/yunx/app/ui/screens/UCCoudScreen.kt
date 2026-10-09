@@ -427,6 +427,7 @@ fun UCCoudScreen(
                     modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
                     MultiSelectBar(
+                        busy = viewModel.isOperating,
                         count = viewModel.selected.size,
                         actions = listOf(
                             MultiSelectAction("下载", Icons.Outlined.Download, MaterialTheme.colorScheme.primary) {

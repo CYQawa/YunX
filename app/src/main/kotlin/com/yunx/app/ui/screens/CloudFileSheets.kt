@@ -75,14 +75,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -102,6 +100,8 @@ import androidx.compose.ui.unit.sp
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.ui.components.OperationSheet
+import com.yunx.app.ui.components.LocalFileOperationBusy
 import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
@@ -151,15 +151,7 @@ internal fun FileActionSheet(
 ) {
     var step by remember { mutableStateOf(ActionStep.MENU) }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = {
-            if (!operating) onDismiss()
-        },
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
+    OperationSheet(busy = operating, onDismiss = onDismiss) {
         // 步骤切换统一带过渡（六平台一致）
         AnimatedContent(
             targetState = step,
@@ -205,7 +197,6 @@ internal fun FileActionSheet(
                     file = file,
                     operating = operating,
                     onBack = { step = ActionStep.MENU },
-                    onDone = onDismiss,
                     onRename = onRename
                 )
 
@@ -392,6 +383,7 @@ private fun ActionMenu(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
         // 标题
@@ -465,7 +457,7 @@ internal fun ActionItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = !LocalFileOperationBusy.current, onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -591,7 +583,7 @@ internal fun QuarkMoveStep(
             enabled = !operating,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .heightIn(min = 50.dp)
         ) {
             if (operating) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -635,6 +627,7 @@ private fun ShareStep(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
         StepHeader(title = title, subtitle = subtitle, onBack = onBack)
@@ -649,6 +642,7 @@ private fun ShareStep(
                 // 间距置 0 + checkedShape 指回未选中形状：避免两段之间出现缝/豁口（选中态由填充色表达）
                 ButtonGroup(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
                     ToggleButton(
+                        enabled = !operating,
                         checked = !withPassword,
                         onCheckedChange = { withPassword = false },
                         shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(
@@ -658,6 +652,7 @@ private fun ShareStep(
                         Text("无提取码")
                     }
                     ToggleButton(
+                        enabled = !operating,
                         checked = withPassword,
                         onCheckedChange = {
                             withPassword = true
@@ -729,6 +724,7 @@ private fun ShareStep(
         ) {
             expireOptions.forEach { (name, value) ->
                 FilterChip(
+                    enabled = !operating,
                     selected = expiredType == value,
                     onClick = { expiredType = value },
                     label = { Text(name) },
@@ -761,7 +757,7 @@ private fun ShareStep(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .heightIn(min = 50.dp)
         ) {
             if (operating) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -786,6 +782,7 @@ private fun PasscodeField(
         onValueChange = { onPasscodeChange(it.take(4).filter { c -> c.isLetterOrDigit() }) },
         modifier = Modifier.fillMaxWidth(),
         label = { Text(label) },
+        enabled = !LocalFileOperationBusy.current,
         singleLine = true,
         shape = MaterialTheme.shapes.large
     )
@@ -797,13 +794,14 @@ private fun RenameStep(
     file: ShareFile,
     operating: Boolean,
     onBack: () -> Unit,
-    onDone: () -> Unit,
     onRename: (String) -> Unit
 ) {
     var name by remember { mutableStateOf(file.fname) }
+    val nameError = cloudNameError(name)
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
         StepHeader(title = "重命名", subtitle = file.fname, onBack = onBack)
@@ -813,25 +811,21 @@ private fun RenameStep(
             onValueChange = { name = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("新文件名") },
+            enabled = !operating,
+            isError = nameError != null,
+            supportingText = { nameError?.let { Text(it) } },
             singleLine = true,
             shape = MaterialTheme.shapes.large
         )
         Spacer(modifier = Modifier.height(20.dp))
         Button(
-            onClick = {
-                if (name.isNotBlank() && name != file.fname) {
-                    onRename(name.trim())
-                    onDone()
-                } else {
-                    onBack()
-                }
-            },
-            enabled = !operating && name.isNotBlank(),
+            onClick = { onRename(name.trim()) },
+            enabled = !operating && nameError == null && name.trim() != file.fname,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .heightIn(min = 50.dp)
         ) {
-            Text("确认重命名")
+            Text(if (operating) "重命名中…" else "确认重命名")
         }
     }
 }
@@ -854,6 +848,7 @@ private fun ConfirmDeleteContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
         Text("删除文件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
@@ -873,7 +868,7 @@ private fun ConfirmDeleteContent(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .heightIn(min = 50.dp)
         ) {
             Text("删除")
         }
@@ -907,14 +902,7 @@ internal fun ConfirmDeleteSheet(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        // 操作进行中禁止下滑关闭：避免请求已发出、弹窗却先消失造成的状态错乱
-        onDismissRequest = { if (!operating) onDismiss() },
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
+    OperationSheet(busy = operating, onDismiss = onDismiss) {
         ConfirmDeleteContent(
             target = target,
             operating = operating,
@@ -1019,7 +1007,7 @@ internal fun StepHeader(
     modifier: Modifier = Modifier
 ) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) {
+        IconButton(onClick = onBack, enabled = !LocalFileOperationBusy.current) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "返回"
@@ -1112,15 +1100,7 @@ internal fun BatchActionSheet(
 ) {
     var step by remember { mutableStateOf(initialStep) }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = {
-            if (!operating) onDismiss()
-        },
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
+    OperationSheet(busy = operating, onDismiss = onDismiss) {
         // 步骤切换带过渡：与单文件弹窗一致
         AnimatedContent(
             targetState = step,
@@ -1170,6 +1150,7 @@ private fun BatchMenu(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
         // 标题

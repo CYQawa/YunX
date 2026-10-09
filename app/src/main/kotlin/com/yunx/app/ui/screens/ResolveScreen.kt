@@ -931,9 +931,9 @@ private fun ClipboardSuggestCard(
 @Composable
 private fun GitHubBadge(label: String) {
     val (bg, fg) = when (label) {
-        "最新" -> androidx.compose.ui.graphics.Color(0xFF2DA44E) to androidx.compose.ui.graphics.Color.White
-        "预发布" -> androidx.compose.ui.graphics.Color(0xFFBF8700) to androidx.compose.ui.graphics.Color.White
-        "草稿" -> androidx.compose.ui.graphics.Color(0xFF6E7681) to androidx.compose.ui.graphics.Color.White
+        "最新" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        "预发布" -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        "草稿" -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
     Box(

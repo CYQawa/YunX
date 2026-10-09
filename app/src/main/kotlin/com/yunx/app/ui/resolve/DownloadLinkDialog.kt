@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -106,6 +107,7 @@ fun DownloadLinkDialog(
                             .padding(12.dp)
                             .combinedClickable(
                                 onClick = {},
+                                onLongClickLabel = "复制下载链接",
                                 onLongClick = {
                                     copyToClipboard(context, link.downloadUrl)
                                     SnackbarController.show("下载链接已复制")
@@ -121,8 +123,16 @@ fun DownloadLinkDialog(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                TextButton(onClick = {
+                    copyToClipboard(context, link.downloadUrl)
+                    SnackbarController.show("下载链接已复制")
+                }) {
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("复制下载链接")
+                }
                 Text(
-                    text = "点击「开始下载」将分片多线程下载并保存到 Download 目录",
+                    text = "开始下载后，可在「下载」页查看保存进度",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -58,6 +59,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -134,7 +139,7 @@ fun ILanzouLoginScreen(
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("用户名") },
                 singleLine = true,
-                isError = error != null,
+                enabled = !isSaving,
                 shape = MaterialTheme.shapes.large
             )
 
@@ -147,14 +152,15 @@ fun ILanzouLoginScreen(
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("密码") },
                 singleLine = true,
-                isError = error != null,
+                enabled = !isSaving,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = if (passwordVisible) VisualTransformation.None
                 else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
-                            if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
-                            contentDescription = if (passwordVisible) "隐藏" else "显示"
+                            if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
                         )
                     }
                 },
@@ -164,6 +170,7 @@ fun ILanzouLoginScreen(
             error?.let {
                 Text(
                     text = it,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
