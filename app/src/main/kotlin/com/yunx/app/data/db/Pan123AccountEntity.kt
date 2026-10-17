@@ -30,11 +30,15 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "pan123_account")
 data class Pan123AccountEntity(
     @PrimaryKey
-    val id: String = "pan123",
+    override val id: String = "pan123",
     /** Bearer JWT（ResolveViewModel.currentCredential 返回，作为 repository 的 cookie 参数） */
     val accessToken: String = "",
     /** 登录账号（账号密码登录时是手机号/邮箱；网页登录拿不到，留空后账号页回退显示昵称） */
     val account: String = "",
-    val nickname: String = "",
-    val updatedAt: Long = System.currentTimeMillis()
-)
+    override val nickname: String = "",
+    override val updatedAt: Long = System.currentTimeMillis(),
+    /** 是否该平台的主账号（多账号）：同平台只应有一条为 true，见 [MultiAccountEntity] */
+    override val isPrimary: Boolean = false,
+    /** 用户备注，便于区分同一平台的多个账号（空串 = 界面回退显示昵称） */
+    override val remark: String = ""
+) : MultiAccountEntity

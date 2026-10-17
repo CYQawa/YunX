@@ -26,7 +26,6 @@ import com.yunx.app.data.repository.BaiduAccountRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 /**
  * 百度账号 ViewModel：暴露登录态，供主页与登录页共享。
@@ -42,13 +41,25 @@ class BaiduAccountViewModel(
             initialValue = null
         )
 
-    /** 保存百度 Cookie；返回是否保存成功 */
-    suspend fun saveBaiduAccount(cookie: String): Boolean =
-        repository.saveBaiduAccount(cookie)
+    /**
+     * 「添加账号」标记：网盘页账号弹窗点「添加账号」时置位，登录页关闭时清掉。
+     * 置位后这一次登录会落成新的账号行，而不是覆盖当前主账号（见 [resolveAccountSlot]）。
+     */
+    private var addNewAccount = false
 
-    /** 退出登录：清除本地 Cookie */
-    fun logout() {
-        viewModelScope.launch { repository.logoutBaidu() }
+    fun beginAddAccount() {
+        addNewAccount = true
+    }
+
+    fun cancelAddAccount() {
+        addNewAccount = false
+    }
+
+    /** 保存百度 Cookie；返回是否保存成功 */
+    suspend fun saveBaiduAccount(cookie: String): Boolean {
+        val saved = repository.saveBaiduAccount(cookie, newAccount = addNewAccount)
+        if (saved) addNewAccount = false
+        return saved
     }
 
     class Factory(

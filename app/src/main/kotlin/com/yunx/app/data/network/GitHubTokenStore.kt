@@ -40,12 +40,13 @@ object GitHubTokenStore {
     private val cipher = AndroidKeystoreCredentialCipher.shared
 
     /**
-     * 读取已加密 Token 并解密；未配置或解密失败返回 null。
+     * 读取并解密 Token；未配置或**这次读不出来**均返回 null。
      *
-     * ★ 解密失败时**必须把存的那条删掉**（自愈）：本机密钥可能已被系统作废（改锁屏密码、
-     *   系统升级），此时这条密文再也解不开。不删的话 [hasToken] 会一直返回 true，
-     *   界面显示「已配置 Token」但每次请求都在静默回退匿名限额，用户完全看不出问题。
-     *   顺带把「本机密钥失效」记进一次性提示，让用户知道要重登/重配。
+     * ★ 读不出来时**不删**存的那份密文（2026-10 起与账号凭证同口径，见 Agent.md §3.36）：
+     *   删了才是真的拿不回来，而留着还有机会 —— Keystore 的失败多数是一过性的（进程刚起来、
+     *   服务正忙、直接启动未解锁），下一次读取往往就好了。
+     *   只有「条目永久失效」才记一次提示（[CredentialStore.markKeyLost]），且**只提示、不删数据**。
+     *   代价是密文可能长期读不出来：界面靠 [hasToken] 如实显示「未配置」，用户重新粘贴一次即覆盖。
      */
     fun getToken(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -53,38 +54,44 @@ object GitHubTokenStore {
         return try {
             cipher.decrypt(stored, PURPOSE).takeIf { it.isNotBlank() }
         } catch (error: Throwable) {
-            // 只有「永久失效」才删：Keystore 暂时进不去（设备还锁着）时留着，下次还能读出来
             if (CredentialStore.isKeyLost(error)) {
-                prefs.edit().remove(KEY_TOKEN).apply()
                 CredentialStore.markKeyLost(context.applicationContext)
             }
             null
         }
     }
 
-    /** 设置/更新 Token；传 null 或空串则清除 */
-    fun setToken(context: Context, token: String?) {
+    /**
+     * 设置/更新 Token；传 null 或空串则**清除**（这是用户主动操作，删除是对的）。
+     *
+     * @return 是否写入成功。加密失败（本机密钥暂时不可用）时返回 false，并**保留原来存的那份** ——
+     *   它可能还是好的，删掉等于把用户已配置的 Token 一起弄丢；由调用方如实提示「没能保存」。
+     */
+    fun setToken(context: Context, token: String?): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val trimmed = token?.trim().orEmpty()
         if (trimmed.isEmpty()) {
             prefs.edit().remove(KEY_TOKEN).apply()
-            return
+            return true
         }
-        try {
+        return try {
             val encrypted = cipher.encrypt(trimmed, PURPOSE)
             prefs.edit().putString(KEY_TOKEN, encrypted).apply()
+            true
         } catch (error: Throwable) {
-            // 加密都失败说明密钥彻底不可用：别静默吞掉（否则界面会显示「已配置」但其实没存上）
             if (CredentialStore.isKeyLost(error)) {
-                prefs.edit().remove(KEY_TOKEN).apply()
                 CredentialStore.markKeyLost(context.applicationContext)
             }
+            false
         }
     }
 
-    /** 是否已配置 Token（仅判断是否存在，不做解密） */
-    fun hasToken(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return !prefs.getString(KEY_TOKEN, null).isNullOrBlank()
-    }
+    /**
+     * 是否「已配置**且当前能读出来**」。
+     *
+     * ★ 刻意解密一次，而不是只判断键是否存在：密文读不出来时若仍报「已配置」，
+     *   界面会显示已登录 GitHub，实际每个请求都在静默走匿名限额（60 次/小时），用户完全看不出问题。
+     *   代价是一次 Keystore IPC（30~75ms），所以调用方要 remember 住、别每帧调（见 MainScreen）。
+     */
+    fun hasToken(context: Context): Boolean = getToken(context) != null
 }

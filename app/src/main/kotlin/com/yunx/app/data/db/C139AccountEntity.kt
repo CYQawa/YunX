@@ -28,9 +28,13 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "c139_account")
 data class C139AccountEntity(
     @PrimaryKey
-    val id: String = "c139",
+    override val id: String = "c139",
     val cookie: String = "",
-    val nickname: String = "",
+    override val nickname: String = "",
     val authorization: String = "",
-    val updatedAt: Long = System.currentTimeMillis()
-)
+    override val updatedAt: Long = System.currentTimeMillis(),
+    /** 是否该平台的主账号（多账号）：同平台只应有一条为 true，见 [MultiAccountEntity] */
+    override val isPrimary: Boolean = false,
+    /** 用户备注，便于区分同一平台的多个账号（空串 = 界面回退显示昵称） */
+    override val remark: String = ""
+) : MultiAccountEntity

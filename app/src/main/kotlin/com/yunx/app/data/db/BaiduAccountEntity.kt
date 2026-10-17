@@ -28,8 +28,12 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "baidu_account")
 data class BaiduAccountEntity(
     @PrimaryKey
-    val id: String = "baidu",
+    override val id: String = "baidu",
     val cookie: String = "",
-    val nickname: String = "",
-    val updatedAt: Long = System.currentTimeMillis()
-)
+    override val nickname: String = "",
+    override val updatedAt: Long = System.currentTimeMillis(),
+    /** 是否该平台的主账号（多账号）：同平台只应有一条为 true，见 [MultiAccountEntity] */
+    override val isPrimary: Boolean = false,
+    /** 用户备注，便于区分同一平台的多个账号（空串 = 界面回退显示昵称） */
+    override val remark: String = ""
+) : MultiAccountEntity

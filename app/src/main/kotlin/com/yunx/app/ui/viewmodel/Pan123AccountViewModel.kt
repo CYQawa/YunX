@@ -27,7 +27,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 /**
  * 123 云盘账号 ViewModel：两条登录路径（网页 authorToken / 原生账号密码）最终都落成同一份
@@ -44,8 +43,26 @@ class Pan123AccountViewModel(
             initialValue = null
         )
 
+    /**
+     * 「添加账号」标记：网盘页账号弹窗点「添加账号」时置位，登录页关闭时清掉。
+     * 置位后这一次登录会落成新的账号行，而不是覆盖当前主账号（见 [resolveAccountSlot]）。
+     */
+    private var addNewAccount = false
+
+    fun beginAddAccount() {
+        addNewAccount = true
+    }
+
+    fun cancelAddAccount() {
+        addNewAccount = false
+    }
+
     /** 网页登录凭证（authorToken）校验并落库；返回是否保存成功（登录页「保存」与自动检测共用同一入口） */
-    suspend fun saveToken(token: String): Boolean = repository.saveToken(token)
+    suspend fun saveToken(token: String): Boolean {
+        val saved = repository.saveToken(token, newAccount = addNewAccount)
+        if (saved) addNewAccount = false
+        return saved
+    }
 
     /**
      * 账号密码登录（123 原生 sign_in 接口）。
@@ -53,17 +70,15 @@ class Pan123AccountViewModel(
      */
     suspend fun login(account: String, password: String): String? =
         try {
-            repository.loginWithPassword(account, password)
+            val error = repository.loginWithPassword(account, password, newAccount = addNewAccount)
+            if (error == null) addNewAccount = false
+            error
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // 登录接口自身已经把网络错误映射成文案了，这里是最后一道兜底（写库等非网络异常）
             "登录失败，请稍后重试"
         }
-
-    fun logout() {
-        viewModelScope.launch { repository.logout() }
-    }
 
     class Factory(
         private val repository: Pan123AccountRepository

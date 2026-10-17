@@ -29,6 +29,7 @@ import com.yunx.app.data.db.BookmarkDao
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.download.DownloadManager
 import com.yunx.app.data.download.DownloadPlatform
+import com.yunx.app.data.download.DownloadSource
 import com.yunx.app.data.network.BaiduConstants
 import com.yunx.app.data.network.C139Constants
 import com.yunx.app.data.network.GuangYaConstants
@@ -128,7 +129,19 @@ class ResolveViewModel(
      * true = 夸克免转存（直接换直链，不写入网盘，默认）；false = 先转存到临时目录再取链。
      * 用 lambda 而不是构造时取值，设置页改了立即生效。
      */
-    private val noSaveDownloadProvider: () -> Boolean = { true }
+    private val noSaveDownloadProvider: () -> Boolean = { true },
+    /**
+     * 多账号下载（实验性 C1）开关：由上层从 SettingsRepository 注入，改设置即时生效。
+     * 开启后批量下载会按文件轮换该网盘的不同账号取链，绕开单账号的并发数 / 限速
+     * （每个文件仍只用一个账号下载），见 [credentialRotation]。
+     */
+    private val multiAccountDownloadProvider: () -> Boolean = { false },
+    /**
+     * 单文件多源分片（实验性 C2）开关：由上层从 SettingsRepository 注入
+     * （工厂侧用 `multiSourceActive()` 判断，已保证 C2 生效时 C1 也开着）。
+     * 开启后同一个文件用多个账号各取一条直链，分片轮流交给不同直链下载，见 [fetchMultiSources]。
+     */
+    private val multiSourceDownloadProvider: () -> Boolean = { false }
 ) : ViewModel() {
 
     var uiState by mutableStateOf<ResolveUiState>(ResolveUiState.Idle)
@@ -145,6 +158,13 @@ class ResolveViewModel(
 
     var downloadLink by mutableStateOf<DownloadLink?>(null)
         private set
+
+    /**
+     * 单文件多源分片（实验性 C2）预取的备选直链（直链 + 该账号凭证）。
+     * 与 [downloadLink] 在同一时刻取回、由紧接着的那次 [startDownload] 消费后清空 ——
+     * 直链签名有时效，不能等用户点「下载」时再去取。
+     */
+    private var pendingAltLinks: List<Pair<DownloadLink, String>> = emptyList()
 
     var downloadError by mutableStateOf<String?>(null)
     private set
@@ -878,6 +898,65 @@ class ResolveViewModel(
         SharePlatform.LANZOU -> lanzouAccountRepository.getAccount()?.cookie
         SharePlatform.GITHUB -> null
         else -> accountRepository.getAccount()?.cookie
+    }
+
+    /**
+     * 多账号下载（实验性 C1）：本次批量下载可以轮换使用的凭证列表（主账号在前）。
+     *
+     * ★ 只覆盖「取链接口按参数收凭证」的平台：夸克 / UC / 迅雷 / 百度 / 139 / 115 / 蓝奏云。
+     *   123 / 光鸭 / 蓝奏优享 的凭证由各自 ResolveRepository 内部的 provider 闭包绑定主账号
+     *   （那条链路还负责 token 过期自动刷新），要换账号得改整条 provider 接线，
+     *   本次不做 —— 它们退回单账号，行为与开启前一致。
+     *
+     * 关闭开关、平台只有一个账号、或游客链路时返回原来那一条。
+     */
+    private suspend fun credentialRotation(fallback: String): List<String> {
+        if (!multiAccountDownloadProvider()) return listOf(fallback)
+        val credentials = when (currentPlatform) {
+            SharePlatform.QUARK -> accountRepository.allCredentials()
+            SharePlatform.UC -> ucAccountRepository.allCredentials()
+            SharePlatform.XUNLEI -> xunleiAccountRepository.allCredentials()
+            SharePlatform.BAIDU -> baiduAccountRepository.allCredentials()
+            SharePlatform.C139 -> c139AccountRepository.allCredentials()
+            SharePlatform.PAN115 -> pan115AccountRepository.allCredentials()
+            SharePlatform.LANZOU -> lanzouAccountRepository.allCredentials()
+            else -> emptyList()
+        }.filter { it.isNotBlank() }
+        return credentials.ifEmpty { listOf(fallback) }
+    }
+
+    /**
+     * 单文件多源分片（实验性 C2）支持轮换的四个主流平台（用户指定）。
+     * 其余平台即使开着 C2 也退回单源：它们的取链要么走 provider 闭包（123/光鸭/蓝奏优享），
+     * 要么没有独立的账号维度可用。
+     */
+    private val multiSourcePlatforms = setOf(
+        SharePlatform.QUARK,
+        SharePlatform.UC,
+        SharePlatform.XUNLEI,
+        SharePlatform.BAIDU
+    )
+
+    /**
+     * 单文件多源分片（实验性 C2）：对同一个文件再用**其他账号**各取一条直链。
+     *
+     * 只在「C2 生效 + 平台受支持 + 确实还有第二个账号」时才返回非空；任一账号取链失败就跳过它
+     * （多源只是提速手段，少一条照样能把文件下完）。
+     * 返回「直链 + 该账号凭证」成对的数据：下载请求头必须按这个凭证配，不能配主账号的。
+     */
+    private suspend fun fetchAltLinks(
+        file: ShareFile,
+        primaryCredential: String
+    ): List<Pair<DownloadLink, String>> {
+        if (!multiSourceDownloadProvider() || currentPlatform !in multiSourcePlatforms) return emptyList()
+        val s = session ?: return emptyList()
+        return credentialRotation(primaryCredential)
+            .filter { it != primaryCredential }
+            .mapNotNull { credential ->
+                runCatching { resolveShareLink(currentRepo(), s, file, credential).getOrNull() }
+                    .getOrNull()
+                    ?.let { link -> link to credential }
+            }
     }
 
     private fun currentRepo(): ShareResolveRepository = when (currentPlatform) {
@@ -1684,6 +1763,8 @@ class ResolveViewModel(
                     currentRepo().getGuestShareDownloadLink(s, file)
                         .onSuccess { downloadLink = it }
                         .onFailure { downloadError = it.message ?: "获取下载链接失败" }
+                    // 游客链路只有一个身份，不存在多源
+                    pendingAltLinks = emptyList()
                     return@launch
                 }
                 // 夸克/UC 共用 __puus：取链前确保新鲜（直链签名绑定取链时刻的 Cookie）
@@ -1694,7 +1775,12 @@ class ResolveViewModel(
                 }
                 // 优先免转存（不往用户网盘里转存）：夸克失败时自动回退到转存取链
                 resolveShareLink(currentRepo(), s, file, quarkCred)
-                    .onSuccess { downloadLink = it }
+                    .onSuccess { link ->
+                        downloadLink = link
+                        // 单文件多源分片（实验性 C2）：同一时刻再用其他账号各取一条直链，
+                        // 下载时由内置分片下载器按分片轮流使用（见 DownloadManager 的「多源分片」）
+                        pendingAltLinks = fetchAltLinks(file, quarkCred)
+                    }
                     .onFailure { downloadError = it.message ?: "获取下载链接失败" }
             } finally {
                 isFetchingDownloadLink = false
@@ -1705,6 +1791,8 @@ class ResolveViewModel(
     fun dismissDownloadDialog() {
         val link = downloadLink
         downloadLink = null
+        // 弹窗没开始下载就关掉：预取的多源直链一并作废（下次取链会重新预取，避免用到过期直链）
+        pendingAltLinks = emptyList()
         // 弹窗被关闭（用户点关闭，未开始下载）：清理当前平台的云端临时转存，避免残留
         if (link?.cleanupDirFid != null) {
             viewModelScope.launch {
@@ -1723,7 +1811,12 @@ class ResolveViewModel(
     private suspend fun enqueueDownload(
         link: DownloadLink,
         credential: String,
-        fileName: String = link.filename
+        fileName: String = link.filename,
+        /**
+         * 单文件多源分片（实验性 C2）的备选直链（其他账号的直链 + 该账号凭证）；空 = 单源。
+         * 由 [fetchAltLinks] 预取，来自取链弹窗那一次交互，见 [pendingAltLinks]。
+         */
+        altLinks: List<Pair<DownloadLink, String>> = emptyList()
     ) {
         val isUC = currentPlatform == SharePlatform.UC
         val isXunlei = currentPlatform == SharePlatform.XUNLEI
@@ -1749,10 +1842,12 @@ class ResolveViewModel(
             else -> DownloadPlatform.QUARK
         }
         // 【关键修复】夸克/UC 共用 __puus：取链与下载必须用同一份已刷新 Cookie（AlistGo/alist#830 类缺陷）
-        // getFreshCookie 有 90 分钟间隔保护，与取链处调用幂等，得到的是同一份。
+        // refreshIfPrimary 只在「传进来的就是主账号那一份」时才刷新，所以主账号路径与原来的
+        // getFreshCookie 完全一致；多账号下载轮换到非主账号时保留它自己的 Cookie ——
+        // 换成主账号的会让直链与身份配成两个账号，CDN 直接 412/403。
         val effectiveCredential = when (currentPlatform) {
-            SharePlatform.QUARK -> accountRepository.getFreshCookie() ?: credential
-            SharePlatform.UC -> ucAccountRepository.getFreshCookie() ?: credential
+            SharePlatform.QUARK -> accountRepository.refreshIfPrimary(credential)
+            SharePlatform.UC -> ucAccountRepository.refreshIfPrimary(credential)
             else -> credential
         }
         // 游客直链（夸克/UC 小文件）：只有服务端随取链响应下发的游客态 __pugs，没有登录 Cookie。
@@ -1837,12 +1932,31 @@ class ResolveViewModel(
         // 入队前先记住「哪个平台的仓库 + 哪份凭证」：下载完成时用户可能已经切到别的分享页
         val cleanupRepo = currentRepo()
         val cleanupCredential = credential
+        // 单文件多源分片（实验性 C2）：备选源 = 其他账号的直链 + 「主源那一套请求头、只换 Cookie」。
+        // ★ 受支持的四个平台（夸克 / UC / 迅雷 / 百度）的下载请求头差异只有 Cookie 一项
+        //   （迅雷直链头里根本没有 Cookie，直链自带签名），所以这里沿用主源头再换 Cookie 即可；
+        //   将来若给 115（双 Cookie）之类开多源，必须重新评估这一处。
+        val altSources = altLinks.map { (altLink, altCred) ->
+            val url = if (isQuark) {
+                // 夸克每条备选直链同样做一次 CDN 节点优选（原样直链容易 412）
+                QuarkCdn.fastest(altLink.downloadUrl, altCred)
+            } else {
+                altLink.downloadUrl
+            }
+            val headersForAlt = if (headers.containsKey("Cookie")) {
+                headers + ("Cookie" to altCred)
+            } else {
+                headers
+            }
+            DownloadSource(url, headersForAlt)
+        }
         downloadManager.enqueue(
             url = effectiveUrl,
             fileName = fileName,
             headers = headers,
             size = link.size,
-            platform = platform
+            platform = platform,
+            altSources = altSources
         ) {
             // 下载完成（master 版通过 onComplete 回调）：清理网盘临时转存目录；失败/取消不触发
             val dirFid = link.cleanupDirFid
@@ -1877,7 +1991,10 @@ class ResolveViewModel(
                 downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
                 return@launch
             }
-            enqueueDownload(link, credential)
+            // 单文件多源分片（实验性 C2）：把取链时预取的备选源一起交给下载器；用完即弃
+            // （下次打开取链弹窗会重新预取，避免用到过期直链）
+            enqueueDownload(link, credential, altLinks = pendingAltLinks)
+            pendingAltLinks = emptyList()
             downloadStarted = true
         }
     }
@@ -1922,7 +2039,9 @@ class ResolveViewModel(
         private val bookmarkDao: BookmarkDao,
         private val githubApi: GitHubApi? = null,
         private val mirrorPrefixProvider: () -> String = { UpdateChecker.MIRROR_PREFIX },
-        private val noSaveDownloadProvider: () -> Boolean = { true }
+        private val noSaveDownloadProvider: () -> Boolean = { true },
+        private val multiAccountDownloadProvider: () -> Boolean = { false },
+        private val multiSourceDownloadProvider: () -> Boolean = { false }
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1942,7 +2061,9 @@ class ResolveViewModel(
                 bookmarkDao,
                 githubApi,
                 mirrorPrefixProvider,
-                noSaveDownloadProvider
+                noSaveDownloadProvider,
+                multiAccountDownloadProvider,
+                multiSourceDownloadProvider
             ) as T
         }
     }

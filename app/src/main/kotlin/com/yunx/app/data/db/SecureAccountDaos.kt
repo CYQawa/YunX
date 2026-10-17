@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.db
 
+import android.util.Log
 import com.yunx.app.data.security.CredentialCipher
 import com.yunx.app.data.security.CredentialStore
 import kotlinx.coroutines.Dispatchers
@@ -36,137 +37,259 @@ import kotlinx.coroutines.withContext
  * 稳定性修复（v1.2.9）：原来每处都是 `stored?.let { decryptXxx(...) }`，而 `decryptXxx` 是
  * suspend 函数——**接收者表达式先于 `withContext` 求值**，所以 `key()` 抛出的 Keystore 异常
  * （改锁屏密码后密钥失效）根本没进 `withContext` 里的 try，直接从 `getAccount()` 冒到主线程
- * 把 App 打崩（1.2.8 的三份崩溃报告）。现在统一用 [decryptGuarded] 兜住，
- * 并把「本机密钥失效」与「密文坏了」分开处理：前者清凭证 + 提示重登，后者沿用原先的静默清理。
+ * 把 App 打崩（1.2.8 的三份崩溃报告）。现在统一用 [decryptGuarded] 兜住：
+ * **任何失败都只返回 null、绝不删凭证** —— 删数据换不来任何好处，却可能一次抖动就清空用户账号。
  */
 internal object SecureAccountDaos {
+    private const val TAG = "YunX"
+
     fun quark(raw: QuarkAccountDao, cipher: CredentialCipher): QuarkAccountDao = object : QuarkAccountDao {
         override fun observeAccount(): Flow<QuarkAccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptQuark(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptQuark(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: QuarkAccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptQuark(cipher, account))
         }
-        override suspend fun getAccount(): QuarkAccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): QuarkAccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptQuark(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<QuarkAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptQuark(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<QuarkAccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptQuark(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun uc(raw: UCAccountDao, cipher: CredentialCipher): UCAccountDao = object : UCAccountDao {
         override fun observeAccount(): Flow<UCAccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptUc(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptUc(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: UCAccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptUc(cipher, account))
         }
-        override suspend fun getAccount(): UCAccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): UCAccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptUc(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<UCAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptUc(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<UCAccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptUc(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun baidu(raw: BaiduAccountDao, cipher: CredentialCipher): BaiduAccountDao = object : BaiduAccountDao {
         override fun observeAccount(): Flow<BaiduAccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptBaidu(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptBaidu(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: BaiduAccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptBaidu(cipher, account))
         }
-        override suspend fun getAccount(): BaiduAccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): BaiduAccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptBaidu(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<BaiduAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptBaidu(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<BaiduAccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptBaidu(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun c139(raw: C139AccountDao, cipher: CredentialCipher): C139AccountDao = object : C139AccountDao {
         override fun observeAccount(): Flow<C139AccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptC139(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptC139(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: C139AccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptC139(cipher, account))
         }
-        override suspend fun getAccount(): C139AccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): C139AccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptC139(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<C139AccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptC139(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<C139AccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptC139(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun pan123(raw: Pan123AccountDao, cipher: CredentialCipher): Pan123AccountDao = object : Pan123AccountDao {
         override fun observeAccount(): Flow<Pan123AccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptPan123(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptPan123(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: Pan123AccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptPan123(cipher, account))
         }
-        override suspend fun getAccount(): Pan123AccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): Pan123AccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptPan123(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<Pan123AccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptPan123(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<Pan123AccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { runCatching { decryptPan123(raw, cipher, it) }.getOrNull() }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun pan115(raw: Pan115AccountDao, cipher: CredentialCipher): Pan115AccountDao = object : Pan115AccountDao {
         override fun observeAccount(): Flow<Pan115AccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptPan115(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptPan115(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: Pan115AccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptPan115(cipher, account))
         }
-        override suspend fun getAccount(): Pan115AccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): Pan115AccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptPan115(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<Pan115AccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptPan115(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<Pan115AccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptPan115(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun guangya(raw: GuangYaAccountDao, cipher: CredentialCipher): GuangYaAccountDao = object : GuangYaAccountDao {
         override fun observeAccount(): Flow<GuangYaAccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptGuangYa(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptGuangYa(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: GuangYaAccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptGuangYa(cipher, account))
         }
-        override suspend fun getAccount(): GuangYaAccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): GuangYaAccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptGuangYa(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<GuangYaAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptGuangYa(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<GuangYaAccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptGuangYa(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun ilanzou(raw: ILanzouAccountDao, cipher: CredentialCipher): ILanzouAccountDao = object : ILanzouAccountDao {
         override fun observeAccount(): Flow<ILanzouAccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptILanzou(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptILanzou(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: ILanzouAccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptILanzou(cipher, account))
         }
-        override suspend fun getAccount(): ILanzouAccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): ILanzouAccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptILanzou(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<ILanzouAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptILanzou(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<ILanzouAccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptILanzou(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun lanzou(raw: LanzouAccountDao, cipher: CredentialCipher): LanzouAccountDao = object : LanzouAccountDao {
         override fun observeAccount(): Flow<LanzouAccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptLanzou(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptLanzou(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: LanzouAccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptLanzou(cipher, account))
         }
-        override suspend fun getAccount(): LanzouAccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): LanzouAccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptLanzou(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<LanzouAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptLanzou(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<LanzouAccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptLanzou(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
     fun xunlei(raw: XunleiAccountDao, cipher: CredentialCipher): XunleiAccountDao = object : XunleiAccountDao {
         override fun observeAccount(): Flow<XunleiAccountEntity?> = raw.observeAccount().map { value ->
-            value?.let { decryptXunlei(raw, cipher, it) }
+            // 单条失败只让这次 emit 为 null，**不能让 Flow 终止**（见 decryptOrNull）
+            value?.let { decryptOrNull { decryptXunlei(raw, cipher, it) } }
         }.catch { emit(null) }
         override suspend fun upsert(account: XunleiAccountEntity) = withContext(Dispatchers.IO) {
             raw.upsert(encryptXunlei(cipher, account))
         }
-        override suspend fun getAccount(): XunleiAccountEntity? = decryptGuarded(raw::clear) {
+        override suspend fun getAccount(): XunleiAccountEntity? = decryptOrNull {
             raw.getAccount()?.let { decryptXunlei(raw, cipher, it) }
         }
+        override fun observeAccounts(): Flow<List<XunleiAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptXunlei(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+        override suspend fun getAccounts(): List<XunleiAccountEntity> = decryptOrNull {
+            // ★ 逐行兜住：多账号下某一条密文坏了只跳过那一条，不能把同平台其他账号一起丢掉
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptXunlei(raw, cipher, it) } }
+        } ?: emptyList()
+        override suspend fun setPrimary(id: String) = raw.setPrimary(id)
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
         override suspend fun clear() = raw.clear()
     }
 
@@ -302,27 +425,27 @@ internal object SecureAccountDaos {
     // ---------- 异常兜底 ----------
 
     /**
-     * 兜住**整段**读取（接收者 + withContext 内部）抛出的异常。
+     * 单条凭证解密；失败只返回 null 并记日志，**绝不抛给调用方**。
      *
-     * - 密钥条目**永久失效**（改锁屏密码/系统升级）⇒ 这条凭证真的读不回来了：清掉它，
-     *   并记一次性提示让用户知道要重登；
-     * - 密钥**暂时**取不到（设备还锁着等）⇒ 只返回 null，**不删任何东西**，
-     *   等下次能读到 Keystore 时用户还是登录状态；
-     * - 其他异常（GCM 认证失败、格式不支持等）：沿用 v1.2.6 起的静默清理口径，不打扰用户。
+     * ★ 为什么不删任何凭证（2026-10「划掉后台后账号全丢」事故的收尾修复）：老实现在密钥永久失效时
+     *   清库、在其他解密异常时静默清库，于是 Keystore 的一次抖动就能把用户的全部账号不可逆地清掉。
+     *   解密失败一律只返回 null —— 界面表现就是「未登录」，用户重新登录即可，而 `upsert` 会
+     *   **覆盖同一个主键**（见 `resolveAccountSlot`），残留行既不会堆积、也不会挡住下一次登录。
+     * ★ 为什么不把异常交给 Flow 的 `catch` 去兜：`Flow.catch` 会**终止**这条流，长驻订阅
+     *   （MainScreen 的 stateIn）之后再也收不到值 —— 一次抖动就会让界面**整个会话**停在未登录/空列表。
+     *   所以单条读取失败必须在这里就地消化成 null，让这条流继续活着。
+     * ★ 只有「密钥条目永久失效」才记一条提示（[CredentialStore.isKeyLost]）：提示与删数据是两件事，
+     *   提示本身不需要清库；暂时取不到（设备还锁着等）连提示都不记。
      */
-    private suspend fun <T> decryptGuarded(clear: suspend () -> Unit, block: suspend () -> T?): T? =
+    private suspend fun <T> decryptOrNull(block: suspend () -> T?): T? =
         try {
             block()
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            // 协程取消不是「解密失败」：原样抛出，否则会把取消吞掉
+            throw error
         } catch (error: Throwable) {
-            if (CredentialStore.isKeyFailure(error)) {
-                if (CredentialStore.isKeyLost(error)) {
-                    runCatching { clear() }
-                    CredentialStore.markKeyLost()
-                }
-                // 暂时不可用：原样返回 null，不动数据
-            } else {
-                runCatching { clear() }
-            }
+            if (CredentialStore.isKeyLost(error)) CredentialStore.markKeyLost()
+            Log.w(TAG, "凭证读取失败（本次按未登录处理，数据原样保留）：${error.message}")
             null
         }
 }

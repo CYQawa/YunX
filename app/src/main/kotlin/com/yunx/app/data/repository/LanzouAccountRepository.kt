@@ -20,6 +20,8 @@ package com.yunx.app.data.repository
 
 import com.yunx.app.data.db.LanzouAccountDao
 import com.yunx.app.data.db.LanzouAccountEntity
+import com.yunx.app.data.db.resolveAccountSlot
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.LanzouApi
 import kotlinx.coroutines.flow.Flow
 
@@ -36,53 +38,66 @@ class LanzouAccountRepository(
 
     suspend fun getAccount(): LanzouAccountEntity? = dao.getAccount()
 
+    /** 该平台全部账号的 Cookie（主账号在前）：多账号下载（实验性 C1）轮换取链用 */
+    suspend fun allCredentials(): List<String> =
+        dao.getAccounts().map { it.cookie }.filter { it.isNotBlank() }
+
     /**
      * 原生账号密码登录：调用官网登录接口（accounts.woozooo.com，含人机校验）换取 Cookie，
      * 再用 B1 校验 uid/vei，成功则落库。
+     * @param newAccount true = 网盘页「添加账号」进来的，落成新的一行；false = 覆盖当前主账号那一行
      */
-    suspend fun login(account: String, password: String): Result<LanzouAccountEntity> = runCatching {
+    suspend fun login(
+        account: String,
+        password: String,
+        newAccount: Boolean = false
+    ): Result<LanzouAccountEntity> = runCatching {
         val cookie = api.login(account, password)
         val params = api.fetchLoginParams(cookie)
             ?: throw IllegalStateException("蓝奏云登录凭据校验失败，请重试")
         if (params.uid.isBlank() || params.vei.isBlank()) {
             throw IllegalStateException("蓝奏云登录凭据无效，请重试")
         }
+        val slot = resolveAccountSlot(DownloadPlatform.LANZOU, dao.getAccount(), newAccount)
         val entity = LanzouAccountEntity(
-            id = "lanzou",
+            id = slot.id,
             cookie = cookie,
-            nickname = account.trim().ifBlank { "蓝奏云用户" }
+            nickname = account.trim().ifBlank { "蓝奏云用户" },
+            isPrimary = slot.isPrimary,
+            remark = slot.remark
         )
         dao.upsert(entity)
         entity
     }
 
-    /** 校验 Cookie 是否包含 ylogin 与 phpdisk_info 且能取得 uid/vei，成功则落库。 */
-    suspend fun saveCookie(cookie: String): Boolean {
+    /**
+     * 校验 Cookie 是否包含 ylogin 与 phpdisk_info 且能取得 uid/vei，成功则落库。
+     * @param newAccount true = 网盘页「添加账号」进来的，落成新的一行；false = 覆盖当前主账号那一行
+     */
+    suspend fun saveCookie(cookie: String, newAccount: Boolean = false): Boolean {
         val c = cookie.trim()
         if (c.isBlank()) return false
         if (!c.contains("ylogin") || !c.contains("phpdisk_info")) return false
         val params = runCatching { api.fetchLoginParams(c) }.getOrNull() ?: return false
         if (params.uid.isBlank() || params.vei.isBlank()) return false
+        val slot = resolveAccountSlot(DownloadPlatform.LANZOU, dao.getAccount(), newAccount)
         dao.upsert(
             LanzouAccountEntity(
-                id = "lanzou",
+                id = slot.id,
                 cookie = c,
-                nickname = "蓝奏云用户"
+                nickname = "蓝奏云用户",
+                isPrimary = slot.isPrimary,
+                remark = slot.remark
             )
         )
         return true
     }
 
-    /** 校验当前 Cookie 是否仍有效（失效自动清库）。 */
+    /** 校验当前 Cookie 是否仍有效（失效只删这一个账号，同平台其他账号保留）。 */
     suspend fun validate(): Boolean {
         val acc = dao.getAccount() ?: return false
         val ok = runCatching { api.fetchLoginParams(acc.cookie) }.getOrNull() != null
-        if (!ok) dao.clear()
+        if (!ok) dao.deleteById(acc.id)
         return ok
-    }
-
-    /** 退出登录：清库（仅账号密码登录，无 WebView 登录态需清理）。 */
-    suspend fun logout() {
-        dao.clear()
     }
 }

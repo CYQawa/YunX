@@ -18,10 +18,10 @@
 
 package com.yunx.app.data.repository
 
-import android.webkit.CookieManager
-import android.webkit.WebStorage
 import com.yunx.app.data.db.Pan123AccountDao
 import com.yunx.app.data.db.Pan123AccountEntity
+import com.yunx.app.data.db.resolveAccountSlot
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.Pan123Api
 import com.yunx.app.data.network.Pan123LoginResult
 import kotlinx.coroutines.flow.Flow
@@ -43,18 +43,23 @@ class Pan123AccountRepository(
     /**
      * 网页登录凭证（authorToken）校验并落库：先用 user/info 接口确认 token 有效并取昵称，成功返回 true。
      * @param token 123 云盘网页 localStorage 的 authorToken（Bearer JWT）
+     * @param newAccount true = 网盘页「添加账号」进来的，落成新的一行；false = 覆盖当前主账号那一行
+     *                   （日常重新登录、会话过期后重登都走这条，避免次次重登都堆出一个失效账号）
      */
-    suspend fun saveToken(token: String): Boolean {
+    suspend fun saveToken(token: String, newAccount: Boolean = false): Boolean {
         val t = token.trim()
         if (t.isBlank()) return false
         // 网页登录拿不到手机号：account 留空，账号页展示时回退昵称
         val nickname = api.fetchNickname(t) ?: return false
+        val slot = resolveAccountSlot(DownloadPlatform.PAN123, dao.getAccount(), newAccount)
         dao.upsert(
             Pan123AccountEntity(
-                id = "pan123",
+                id = slot.id,
                 accessToken = t,
                 account = "",
-                nickname = nickname
+                nickname = nickname,
+                isPrimary = slot.isPrimary,
+                remark = slot.remark
             )
         )
         return true
@@ -67,19 +72,27 @@ class Pan123AccountRepository(
      * 这条不需要 WebView，也不用让用户在网页里手输一次。
      *
      * @return 成功返回 null；失败返回可直接展示给用户的原因（已做过错误映射，不回显服务端原文）
+     * @param newAccount true = 网盘页「添加账号」进来的，落成新的一行；false = 覆盖当前主账号那一行
      */
-    suspend fun loginWithPassword(account: String, password: String): String? =
+    suspend fun loginWithPassword(
+        account: String,
+        password: String,
+        newAccount: Boolean = false
+    ): String? =
         when (val result = api.passwordLogin(account, password)) {
             is Pan123LoginResult.Success -> {
                 // sign_in 只回 token，昵称要另取一次；取不到（网络抖动）不算登录失败——
                 // token 是刚签发的确实可用，昵称退化成账号名展示即可，别把到手的登录态扔掉
                 val nickname = api.fetchNickname(result.token).orEmpty()
+                val slot = resolveAccountSlot(DownloadPlatform.PAN123, dao.getAccount(), newAccount)
                 dao.upsert(
                     Pan123AccountEntity(
-                        id = "pan123",
+                        id = slot.id,
                         accessToken = result.token,
                         account = account.trim(),
-                        nickname = nickname
+                        nickname = nickname,
+                        isPrimary = slot.isPrimary,
+                        remark = slot.remark
                     )
                 )
                 null
@@ -88,28 +101,11 @@ class Pan123AccountRepository(
             is Pan123LoginResult.Failure -> result.message
         }
 
-    /** 校验当前 token 是否仍有效（失败自动清库，下次重新登录） */
+    /** 校验当前 token 是否仍有效（失效只删这一个账号，同平台其他账号保留） */
     suspend fun validate(): Boolean {
         val acc = dao.getAccount() ?: return false
         val ok = api.fetchNickname(acc.accessToken) != null
-        if (!ok) dao.clear()
+        if (!ok) dao.deleteById(acc.id)
         return ok
-    }
-
-    /**
-     * 退出登录：清库 + 清理 WebView 登录态（Cookie 与 localStorage/DOM 存储）。
-     * 网页登录态保存在 WebView 里；不清理的话，用户再次打开登录页时，页面残留的
-     * authorToken 会被自动登录检测直接登回旧账号，导致「退出登录」形同虚设。
-     * WebView 存储方法须在带 Looper 的线程（主线程）调用——本方法由 viewModelScope（Main）执行。
-     */
-    suspend fun logout() {
-        // 清 Cookie：顺带清掉 WebView 里其他平台的会话（与百度/夸克等登出行为一致，均为全量清理）
-        runCatching {
-            CookieManager.getInstance().removeAllCookies(null)
-            CookieManager.getInstance().flush()
-        }
-        // 清 localStorage/DOM 存储：authorToken 就存在这里
-        runCatching { WebStorage.getInstance().deleteAllData() }
-        dao.clear()
     }
 }

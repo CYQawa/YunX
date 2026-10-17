@@ -59,6 +59,13 @@ data class DownloadTaskEntity(
      */
     @ColumnInfo(defaultValue = "''")
     val engineTaskId: String = "",
+    /**
+     * 单文件多源分片（实验性「多账号下载提速 C2」）的备选下载源 JSON：多账号对同一文件
+     * 各取一条直链，内置分片下载器把分片轮流分给不同源（落库前按 `download.altSources` 加密）。
+     * 空串 = 单源，与未开启该功能时完全一致。
+     */
+    @ColumnInfo(defaultValue = "''")
+    val altSourcesJson: String = "",
     /** 下载完成时的平均速度（字节/秒）；完成态展示用，进行中为 0 */
     @ColumnInfo(defaultValue = "0")
     val avgSpeed: Long = 0,

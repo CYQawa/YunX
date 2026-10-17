@@ -26,7 +26,6 @@ import com.yunx.app.data.repository.Pan115AccountRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 /**
  * 115 网盘账号 ViewModel：暴露登录态，供主页与登录页共享。
@@ -42,12 +41,25 @@ class Pan115AccountViewModel(
             initialValue = null
         )
 
-    /** 保存 115 登录 Cookie（UID/CID/SEID/KID 等）；返回是否保存成功 */
-    suspend fun saveCookie(cookie: String): Boolean = repository.saveCookie(cookie)
+    /**
+     * 「添加账号」标记：网盘页账号弹窗点「添加账号」时置位，登录页关闭时清掉。
+     * 置位后这一次登录会落成新的账号行，而不是覆盖当前主账号（见 [resolveAccountSlot]）。
+     */
+    private var addNewAccount = false
 
-    /** 退出登录：清除本地 Cookie 与 WebView 存储 */
-    fun logout() {
-        viewModelScope.launch { repository.logout() }
+    fun beginAddAccount() {
+        addNewAccount = true
+    }
+
+    fun cancelAddAccount() {
+        addNewAccount = false
+    }
+
+    /** 保存 115 登录 Cookie（UID/CID/SEID/KID 等）；返回是否保存成功 */
+    suspend fun saveCookie(cookie: String): Boolean {
+        val saved = repository.saveCookie(cookie, newAccount = addNewAccount)
+        if (saved) addNewAccount = false
+        return saved
     }
 
     class Factory(

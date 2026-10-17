@@ -26,7 +26,6 @@ import com.yunx.app.data.repository.ILanzouAccountRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 /**
  * 蓝奏云优享版账号 ViewModel：账号密码登录并落库。
@@ -42,20 +41,32 @@ class ILanzouAccountViewModel(
             initialValue = null
         )
 
+    /**
+     * 「添加账号」标记：网盘页账号弹窗点「添加账号」时置位，登录页关闭时清掉。
+     * 置位后这一次登录会落成新的账号行，而不是覆盖当前主账号（见 [resolveAccountSlot]）。
+     */
+    private var addNewAccount = false
+
+    fun beginAddAccount() {
+        addNewAccount = true
+    }
+
+    fun cancelAddAccount() {
+        addNewAccount = false
+    }
+
     /** 账号密码登录；返回 (是否成功, 提示文案)。 */
     suspend fun login(account: String, password: String): Pair<Boolean, String> {
         if (account.isBlank() || password.isBlank()) {
             return false to "请输入蓝奏优享账号和密码"
         }
         // repository.login 内部用 runCatching，返回 Result（不会抛异常），必须按 Result 判定成败
-        return repository.login(account, password).fold(
+        val result = repository.login(account, password, newAccount = addNewAccount)
+        if (result.isSuccess) addNewAccount = false
+        return result.fold(
             onSuccess = { true to "登录成功" },
             onFailure = { false to (it.message ?: "蓝奏优享登录失败，请检查账号密码") }
         )
-    }
-
-    fun logout() {
-        viewModelScope.launch { repository.logout() }
     }
 
     class Factory(

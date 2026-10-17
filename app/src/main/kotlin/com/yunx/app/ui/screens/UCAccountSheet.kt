@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,6 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yunx.app.data.db.MultiAccountEntity
 import com.yunx.app.data.db.UCAccountEntity
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
@@ -57,12 +57,15 @@ import java.util.Locale
 @Composable
 fun UCAccountSheet(
     account: UCAccountEntity,
-    onLogout: () -> Unit,
+    accounts: List<MultiAccountEntity>,
+    onSetPrimary: (String) -> Unit,
+    onRename: (String, String) -> Unit,
+    onRemove: (String) -> Unit,
+    onAddAccount: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     var showFullCookie by rememberSaveable { mutableStateOf(false) }
-    var showLogoutConfirm by remember { mutableStateOf(false) }
     val cookiePreviewLimit = 200
     val cookieTruncated = account.cookie.length > cookiePreviewLimit
     val displayCookie = if (showFullCookie || !cookieTruncated) account.cookie
@@ -133,25 +136,19 @@ fun UCAccountSheet(
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = { showLogoutConfirm = true }, modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)) {
-                Icon(Icons.Outlined.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp)); Text("退出登录")
-            }
+            // 多账号：同一网盘可以同时登录多个账号，这里管理它们（主账号 / 备注 / 退出 / 添加）
+            AccountListSection(
+                accounts = accounts,
+                onSetPrimary = onSetPrimary,
+                onRename = onRename,
+                onRemove = onRemove,
+                onAddAccount = onAddAccount,
+                onEmpty = onDismiss
+            )
 
             // 复制提示（ModalBottomSheet 为独立窗口，需自带 Snackbar 宿主）
             SnackbarHost(hostState = snackbarHostState)
         }
-    }
-
-    if (showLogoutConfirm) {
-        AlertDialog(
-            onDismissRequest = { showLogoutConfirm = false },
-            title = { Text("退出登录") },
-            text = { Text("确定要退出当前 UC 账号吗？退出后将清除本地 Cookie。") },
-            confirmButton = { TextButton(onClick = { showLogoutConfirm = false; onLogout() }) { Text("退出", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { showLogoutConfirm = false }) { Text("取消") } }
-        )
     }
 }
 

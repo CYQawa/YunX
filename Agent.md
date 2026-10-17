@@ -1423,36 +1423,60 @@ android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently in
 **现在的口径（改这块之前先读）**：
 
 - `CredentialKeyException` 分**两种**，上层必须区分（`CredentialStore.isKeyLost`）：
-  - `PermanentlyInvalid`：条目永久失效 ⇒ 密文再也解不开 ⇒ 该清就清 + 提示重登；
-  - `Unavailable`：Keystore **暂时**进不去（设备还锁着等）⇒ **只返回 null，绝不删数据**，
-    删了等于把用户本来还能解开的账号白白作废。
-- `AndroidKeystoreCredentialCipher` 自愈：**条目坏了**才删坏条目 → `generateKey()` 建新密钥 →
-  **整段加解密流程重试一次**。重试必须在 `withRetry` 那一层包住整段，不能只重试 `key()`——
-  部分机型把「初始化失败」推迟到 `doFinal` 才报。
-- **删键前必须先确认 Keystore 可达**（`discardStaleEntry` 里先 `openKeyStore()`）：
-  连 `KeyStore.load` 都进不去时抛 `Unavailable`，不许删。
-- `isKeyProblem` 是**严格白名单**，而且**判断顺序有陷阱**：`AEADBadTagException` 是
-  `GeneralSecurityException` 的子类，**必须先单独排除**，否则「密文被改 / 跨版本残留」会被
-  误判成密钥故障 ⇒ 把**好密钥**删掉 ⇒ 全部账号真的作废。
+  - `PermanentlyInvalid`：条目永久失效 ⇒ 密文再也解不开 ⇒ **只记提示让用户重登，不清任何数据**；
+  - `Unavailable`：Keystore **暂时**进不去（设备还锁着、进程刚起来时的抖动等）⇒
+    **只返回 null，绝不删数据**，下次读取能拿到键就自动恢复登录态。
+- `AndroidKeystoreCredentialCipher` 自愈：**只有条目确定坏了（铁证，见 `isBrokenEntry`）**
+  才删坏条目 → `generateKey()` 建新密钥 → **整段加解密流程重试一次**。重试必须在 `withRetry`
+  那一层包住整段，不能只重试 `key()`——部分机型把「初始化失败」推迟到 `doFinal` 才报。
+- **删键要过三道闸**（`discardBrokenEntry`，2026-10 事故后加的）：
+  ① 连 `KeyStore.load` 都进不去 ⇒ 抛 `Unavailable`，不删；
+  ② 删之前**再取一次** ⇒ 能取到就说明上次只是一过性抖动，原样保留、不删；
+  ③ 只有「条目确实不在（`getKey` 返回 null）」或「再取一次仍然明确报坏」才删。
+  删与建都在 `key()` 的锁内，避免多线程各自「删 + 建」把密钥来回换。
+- `isBrokenEntry` 只认**两个铁证**：`KeyPermanentlyInvalidatedException`，以及消息为
+  `Key not found` / `Invalid key blob` 的 `KeyStoreException`。**绝不能**把 `ProviderException`、
+  泛化的 `GeneralSecurityException`、「消息里带 keystore 字样」算进来——那些多半只是
+  **一过性抖动**，而误判的代价不可逆（删掉好密钥 ⇒ 磁盘上全部历史密文永久解不开 ⇒ 账号全丢）。
+  判断顺序陷阱仍在：`AEADBadTagException` 是 `GeneralSecurityException` 的子类，必须先排除。
 - `AndroidKeystoreCredentialCipher.shared` 是**全进程唯一实例**：DAO（`AppDatabase.get`）、
   `GitHubTokenStore`、`DownloadManager` 三处必须共用。分开 new 会让 `cachedKey` 各缓存一份、
   `onKeyProvisioned` 只被最后一个注册者收到。
-- `onKeyProvisioned` 只在**真的 `generateKey()`** 时回调（不是「失败过」）：首次启动本来就没键，
-  不能据此判定「旧密文作废」。
+- `onKeyProvisioned` 只在**真的 `generateKey()`** 时回调（不是「失败过」）。接到后由
+  `CredentialStore.onKeyCreated` 判断这次新建是不是坏消息：用 `credential_key_provisioned`
+  标记区分「首次生成」（正常，不提示）与「密钥被替换」（旧密文作废，提示重登）。
+- `key()` 内部对**一过性失败原样重试一次**（`loadKeyWithRepair`）：keystore 冷启动/服务忙这类抖动
+  通常下一次 binder 调用就正常，不重试的话用户会看到「偶发地所有账号显示未登录 / 保存登录报错」，
+  数据虽没丢、观感与真丢一样。重试成功当无事发生，仍失败才按 `Unavailable` 上报。
 - 提示链路：数据层只写一个 SharedPreferences 标记（`CredentialStore.installRecovery` 在
   `YunXApp.onCreate` 装配，必须早于任何凭证读写），`MainScreen` 弹一次 `AlertDialog`。
   标记用 `commit()` 而不是 `apply()` —— 同一线程内先写后读，异步落盘的旧值会让提示不弹。
 
-**自愈路径（各自清各自那条，不做全局清库）**：账号走 `SecureAccountDaos.decryptGuarded`（并给
-`observeAccount()` 挂 `.catch { emit(null) }`，异常击穿的是收集方协程）；GitHub Token 走
-`GitHubTokenStore.getToken` 的失败删除；下载请求头走 `DownloadManager.loadPersistedHeaders` 的
-`runCatching`（重置成空表）。**故意不在失钥回调里无差别清空账号表**——判断稍有偏差就不可恢复，
-宁可让每个平台各自失败一次。
+**自愈路径（一律「只失效、不删数据」）**：账号走 `SecureAccountDaos.decryptOrNull`——
+**任何解密失败都只返回 null，绝不删凭证**（老实现在这里清库，于是「一次 Keystore 抖动 + 过宽判定」
+就清空了用户全部账号，见下），而 `upsert` 会覆盖同一个主键，所以残留行既不会堆积、也不会挡住
+重新登录。`observeAccount()` / `observeAccounts()` 都是**逐条**走 `decryptOrNull`，**不能让异常进入
+`Flow.catch`**：`catch` 会终止这条流，而 MainScreen 的 `stateIn` 是长驻订阅 —— 那会让界面
+**整个会话**停在「未登录 / 空列表」。GitHub Token 同样**只失效不删**：`getToken` 读不出来只返回 null，
+`hasToken` 改成「已配置**且当前可读**」（否则界面显示已配置、请求却在静默走匿名限额），
+`setToken` 加密失败返回 false 并**保留原值**，由界面提示「没能保存」。下载请求头走
+`DownloadManager.loadPersistedHeaders` 的 `runCatching`
+（**读不到就返回空表、保留原值**，不再覆盖成空表）。
+**故意不在失钥回调里无差别清空账号表**——判断稍有偏差就不可恢复。
+
+**2026-10 事故（「划掉后台后账号全丢」，改这块前必读）**：链路是「Keystore 一过性失败 →
+被过宽白名单误判成条目损坏 → `deleteEntry` 删掉好密钥 → 建新密钥 → 磁盘上所有密文
+`AEADBadTagException` → 数据层静默清库」。**六道修复**：① 判定收紧（只认铁证）；
+② 删前复查条目确实读不出来；③ `withRetry` 不再自行删键（删键只允许在 `key()` 锁内做）；
+④ 数据层任何解密失败都不再删凭证；⑤ 一过性失败原样重试一次（别把小抖动变成「未登录」）；
+⑥ 观测流逐条兜住、不让 `Flow.catch` 终止长驻订阅。判断不准时一律当作「暂时不可用」——
+本次读不出来，数据照旧留在盘上，下次读取（或重新登录覆盖同一主键）就能恢复。
 
 **落点**：`data/security/CredentialCipher.kt`、`data/db/SecureAccountDaos.kt`、
 `data/db/AppDatabase.kt`、`data/network/GitHubTokenStore.kt`、`data/download/DownloadManager.kt`、
 `ui/MainScreen.kt`、`YunXApp.kt`；回归测试 `app/src/test/kotlin/com/yunx/app/data/db/SecureAccountDaosTest.kt`
-（CI 跑 `./gradlew testDebugUnitTest`，三个用例钉住「不崩 / 永久失效清数据 / 暂时不可用保数据」）。
+（CI 跑 `./gradlew testDebugUnitTest`，四个用例钉住「不崩 / 永久失效保数据 / 密文损坏保数据 /
+暂时不可用保数据」）。
 
 ---
 

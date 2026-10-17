@@ -98,6 +98,7 @@ import com.yunx.app.data.announcement.AnnouncementReadStore
 import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.download.ChunkDownloader
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.C139Api
@@ -116,6 +117,7 @@ import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.security.CredentialStore
 import com.yunx.app.data.update.UpdateChecker
+import com.yunx.app.data.repository.AccountDirectory
 import com.yunx.app.data.repository.BaiduAccountRepository
 import com.yunx.app.data.repository.BaiduResolveRepository
 import com.yunx.app.data.repository.C139AccountRepository
@@ -158,6 +160,7 @@ import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
 import com.yunx.app.ui.screens.DownloadEngineScreen
 import com.yunx.app.ui.screens.LinkOpenScreen
+import com.yunx.app.ui.screens.MultiAccountDownloadScreen
 import com.yunx.app.ui.screens.OnboardingScreen
 import com.yunx.app.ui.screens.ResolveScreen
 import com.yunx.app.ui.screens.SettingsScreen
@@ -178,6 +181,7 @@ import com.yunx.app.ui.viewmodel.LanzouAccountViewModel
 import com.yunx.app.ui.viewmodel.LanzouCloudViewModel
 import com.yunx.app.ui.viewmodel.DownloadViewModel
 import com.yunx.app.ui.viewmodel.DriveQuotaViewModel
+import com.yunx.app.ui.viewmodel.MultiAccountViewModel
 import com.yunx.app.ui.viewmodel.Pan115AccountViewModel
 import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
 import com.yunx.app.ui.viewmodel.Pan123AccountViewModel
@@ -218,6 +222,9 @@ internal const val OVERLAY_KEY_ANNOUNCEMENTS = "overlay-announcements"
 
 /** 链接唤起（深链接注册项）设置页：从设置页那一行进入，整行长成整页 */
 internal const val OVERLAY_KEY_LINK_OPEN = "overlay-link-open"
+
+/** 多账号下载（两个实验性开关）设置页：从设置页那一行进入 */
+internal const val OVERLAY_KEY_MULTI_ACCOUNT = "overlay-multi-account"
 
 /**
  * 主页框架：
@@ -273,6 +280,7 @@ fun MainScreen(
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
     var showLinkOpen by rememberSaveable { mutableStateOf(false) }
+    var showMultiAccountDownload by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
     var showGopeed by rememberSaveable { mutableStateOf(false) }
     var showAnnouncements by rememberSaveable { mutableStateOf(false) }
@@ -525,6 +533,11 @@ fun MainScreen(
     val lanzouViewModel: LanzouAccountViewModel = viewModel(
         factory = LanzouAccountViewModel.Factory(lanzouRepository)
     )
+    // 多账号：账号列表 / 设主账号 / 改备注 / 退出 的统一入口
+    // （这四件事对 10 个平台同构，见 AccountDirectory；平台专属的凭证读写仍在各平台仓库里）
+    val multiAccountViewModel: MultiAccountViewModel = viewModel(
+        factory = MultiAccountViewModel.Factory(AccountDirectory(db))
+    )
     // 各平台「账号是否已登录」流：云盘浏览 VM 在启动期（未登录）init 加载会残留「请先登录…」错误态，
     // 首次登录成功后由 VM 监听该流自动重载根目录（见各 XxxCloudViewModel init）
     val quarkLoginState = remember { repository.observeAccount().map { it != null } }
@@ -669,6 +682,11 @@ fun MainScreen(
                 else xunleiApi.refreshToken(acc.refreshToken, acc.deviceId, acc.authType)?.also { (at, nrt) ->
                     xunleiRepository.updateTokens(at, nrt)
                 }
+            },
+            // 多账号下载：按 access_token 反查该账号自己的设备指纹与 captcha —— 迅雷的请求
+            // 必须「token + 设备号 + captcha」三件套同属一个账号，否则会被拒（见 identityFor）
+            accountByTokenProvider = { token ->
+                xunleiRepository.getAccounts().firstOrNull { it.accessToken == token }
             }
         )
     }
@@ -726,7 +744,11 @@ fun MainScreen(
             db.bookmarkDao(),
             githubApi,
             // 取链方式开关：设置页「免转存下载」实时生效
-            noSaveDownloadProvider = { settings.quarkNoSaveDownload }
+            noSaveDownloadProvider = { settings.quarkNoSaveDownload },
+            // 多账号下载 / 单文件多源分片（两个实验性开关）：实时读设置，改完立即生效
+            multiAccountDownloadProvider = { settings.multiAccountDownload },
+            // 用 multiSourceActive()：C2 依赖 C1，关掉 C1 后这里也自动为 false（见 SettingsRepository）
+            multiSourceDownloadProvider = { settings.multiSourceActive() }
         )
     )
     val downloadViewModel: DownloadViewModel = viewModel(
@@ -783,7 +805,10 @@ fun MainScreen(
     if (showQuarkLogin) {
         QuarkLoginScreen(
             viewModel = viewModel,
-            onBack = { showQuarkLogin = false },
+            onBack = {
+                showQuarkLogin = false
+                viewModel.cancelAddAccount()
+            },
             onSaved = { showQuarkLogin = false }
         )
         return
@@ -793,7 +818,10 @@ fun MainScreen(
     if (showUCLogin) {
         UCLoginScreen(
             viewModel = ucViewModel,
-            onBack = { showUCLogin = false },
+            onBack = {
+                showUCLogin = false
+                ucViewModel.cancelAddAccount()
+            },
             onSaved = { showUCLogin = false }
         )
         return
@@ -803,7 +831,10 @@ fun MainScreen(
     if (showXunleiLogin) {
         XunleiLoginScreen(
             viewModel = xunleiViewModel,
-            onBack = { showXunleiLogin = false },
+            onBack = {
+                showXunleiLogin = false
+                xunleiViewModel.cancelAddAccount()
+            },
             onSaved = { showXunleiLogin = false },
             onVerify = { url, deviceId ->
                 // 应用内验证：登录页让位，切到验证 WebView 全屏承载（不再跳外部浏览器）
@@ -825,7 +856,10 @@ fun MainScreen(
     if (showXunleiWebLogin) {
         XunleiWebLoginScreen(
             viewModel = xunleiViewModel,
-            onBack = { showXunleiWebLogin = false },
+            onBack = {
+                showXunleiWebLogin = false
+                xunleiViewModel.cancelAddAccount()
+            },
             onSaved = { showXunleiWebLogin = false }
         )
         return
@@ -869,7 +903,10 @@ fun MainScreen(
     if (showC139Login) {
         C139LoginScreen(
             viewModel = c139ViewModel,
-            onBack = { showC139Login = false },
+            onBack = {
+                showC139Login = false
+                c139ViewModel.cancelAddAccount()
+            },
             onSaved = { showC139Login = false }
         )
         return
@@ -879,7 +916,10 @@ fun MainScreen(
     if (showPan123Login) {
         Pan123LoginScreen(
             viewModel = pan123ViewModel,
-            onBack = { showPan123Login = false },
+            onBack = {
+                showPan123Login = false
+                pan123ViewModel.cancelAddAccount()
+            },
             onSaved = { showPan123Login = false }
         )
         return
@@ -889,7 +929,10 @@ fun MainScreen(
     if (showPan115Login) {
         Pan115LoginScreen(
             viewModel = pan115ViewModel,
-            onBack = { showPan115Login = false },
+            onBack = {
+                showPan115Login = false
+                pan115ViewModel.cancelAddAccount()
+            },
             onSaved = { showPan115Login = false }
         )
         return
@@ -899,7 +942,10 @@ fun MainScreen(
     if (showGuangYaLogin) {
         GuangYaLoginScreen(
             viewModel = guangyaViewModel,
-            onBack = { showGuangYaLogin = false },
+            onBack = {
+                showGuangYaLogin = false
+                guangyaViewModel.cancelAddAccount()
+            },
             onSaved = { showGuangYaLogin = false }
         )
         return
@@ -909,7 +955,10 @@ fun MainScreen(
     if (showILanzouLogin) {
         ILanzouLoginScreen(
             viewModel = ilanzouViewModel,
-            onBack = { showILanzouLogin = false },
+            onBack = {
+                showILanzouLogin = false
+                ilanzouViewModel.cancelAddAccount()
+            },
             onSaved = { showILanzouLogin = false }
         )
         return
@@ -919,7 +968,10 @@ fun MainScreen(
     if (showLanzouLogin) {
         LanzouLoginScreen(
             viewModel = lanzouViewModel,
-            onBack = { showLanzouLogin = false },
+            onBack = {
+                showLanzouLogin = false
+                lanzouViewModel.cancelAddAccount()
+            },
             onSaved = { showLanzouLogin = false }
         )
         return
@@ -931,6 +983,7 @@ fun MainScreen(
         showSupport -> OVERLAY_KEY_SUPPORT
         showTheme -> OVERLAY_KEY_THEME
         showLinkOpen -> OVERLAY_KEY_LINK_OPEN
+        showMultiAccountDownload -> OVERLAY_KEY_MULTI_ACCOUNT
         showBookmarks -> OVERLAY_KEY_BOOKMARKS
         showGopeed -> OVERLAY_KEY_GOPEED
         showAnnouncements -> OVERLAY_KEY_ANNOUNCEMENTS
@@ -1147,26 +1200,66 @@ fun MainScreen(
                                     lanzouCloudViewModel = lanzouCloudViewModel,
                                     driveQuotaViewModel = driveQuotaViewModel,
                                     onQuarkLogin = { showQuarkLogin = true },
-                                    onQuarkLogout = { viewModel.logout() },
+                                    // 「添加账号」：先给对应平台的账号 VM 打上「新增」标记，再打开它的登录页；
+                                    // 登录成功后这次登录会落成新的一行（见 resolveAccountSlot），
+                                    // 登录页关闭时会清掉标记，不会影响日后的普通重新登录
+                                    onAddAccount = { platform ->
+                                        // 先清 WebView 登录态：否则网页登录页会自动检测出旧账号又存一遍
+                                        // （见 MultiAccountViewModel.prepareAddAccount）
+                                        multiAccountViewModel.prepareAddAccount()
+                                        when (platform) {
+                                            DownloadPlatform.QUARK -> {
+                                                viewModel.beginAddAccount(); showQuarkLogin = true
+                                            }
+
+                                            DownloadPlatform.UC -> {
+                                                ucViewModel.beginAddAccount(); showUCLogin = true
+                                            }
+
+                                            DownloadPlatform.XUNLEI -> {
+                                                xunleiViewModel.beginAddAccount(); showXunleiLogin = true
+                                            }
+
+                                            DownloadPlatform.BAIDU -> {
+                                                baiduViewModel.beginAddAccount(); showBaiduLogin = true
+                                            }
+
+                                            DownloadPlatform.C139 -> {
+                                                c139ViewModel.beginAddAccount(); showC139Login = true
+                                            }
+
+                                            DownloadPlatform.PAN123 -> {
+                                                pan123ViewModel.beginAddAccount(); showPan123Login = true
+                                            }
+
+                                            DownloadPlatform.PAN115 -> {
+                                                pan115ViewModel.beginAddAccount(); showPan115Login = true
+                                            }
+
+                                            DownloadPlatform.GUANGYA -> {
+                                                guangyaViewModel.beginAddAccount(); showGuangYaLogin = true
+                                            }
+
+                                            DownloadPlatform.ILANZOU -> {
+                                                ilanzouViewModel.beginAddAccount(); showILanzouLogin = true
+                                            }
+
+                                            DownloadPlatform.LANZOU -> {
+                                                lanzouViewModel.beginAddAccount(); showLanzouLogin = true
+                                            }
+                                        }
+                                    },
+                                    multiAccountViewModel = multiAccountViewModel,
                                     onDownloadStarted = { currentTab = MainTab.Download },
                                     onUCLogin = { showUCLogin = true },
-                                    onUCLogout = { ucViewModel.logout() },
                                     onXunleiLogin = { showXunleiLogin = true },
-                                    onXunleiLogout = { xunleiViewModel.logout() },
                                     onBaiduLogin = { showBaiduLogin = true },
-                                    onBaiduLogout = { baiduViewModel.logout() },
                                     onC139Login = { showC139Login = true },
-                                    onC139Logout = { c139ViewModel.logout() },
                                     onPan123Login = { showPan123Login = true },
-                                    onPan123Logout = { pan123ViewModel.logout() },
                                     onPan115Login = { showPan115Login = true },
-                                    onPan115Logout = { pan115ViewModel.logout() },
                                     onGuangYaLogin = { showGuangYaLogin = true },
-                                    onGuangYaLogout = { guangyaViewModel.logout() },
                                     onILanzouLogin = { showILanzouLogin = true },
-                                    onILanzouLogout = { ilanzouViewModel.logout() },
                                     onLanzouLogin = { showLanzouLogin = true },
-                                    onLanzouLogout = { lanzouViewModel.logout() },
                                     githubHasToken = githubHasTokenState,
                                     onGitHubTokenClick = { showGitHubTokenDialog = true },
                                     // 已配置 Token 点卡片主体：用 GET /user 取 login，经统一解析入口进入该账号仓库列表
@@ -1206,6 +1299,7 @@ fun MainScreen(
                                     onSupportClick = { showSupport = true },
                                     onGopeedClick = { showGopeed = true },
                                     onLinkOpenClick = { showLinkOpen = true },
+                                    onMultiAccountDownloadClick = { showMultiAccountDownload = true },
                                     backupManager = backupManager,
                                     // 手动检查更新与开发调试预览都复用 MainScreen 的更新弹窗状态
                                     onCheckUpdate = checkForUpdate,
@@ -1317,6 +1411,9 @@ fun MainScreen(
                             OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
                             OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
                             OVERLAY_KEY_LINK_OPEN -> LinkOpenScreen(onBack = { showLinkOpen = false })
+                            OVERLAY_KEY_MULTI_ACCOUNT -> MultiAccountDownloadScreen(
+                                onBack = { showMultiAccountDownload = false }
+                            )
                             OVERLAY_KEY_GOPEED -> DownloadEngineScreen(onBack = { showGopeed = false })
                             OVERLAY_KEY_ANNOUNCEMENTS -> AnnouncementScreen(
                                 viewModel = announcementViewModel,
@@ -1513,10 +1610,15 @@ fun MainScreen(
                         scope.launch {
                             when (val check = githubApi.validateToken(input)) {
                                 is TokenCheck.Valid -> {
-                                    GitHubTokenStore.setToken(context, input)
-                                    githubHasTokenState = true
-                                    showGitHubTokenDialog = false
-                                    SnackbarController.show("GitHub Token 已保存（@${check.login}）")
+                                    // 保存失败（本机加密密钥暂时不可用）时留在弹窗里如实提示：
+                                    // 写不进去却报「已保存」，用户会以为配好了、实际仍在走匿名限额
+                                    if (GitHubTokenStore.setToken(context, input)) {
+                                        githubHasTokenState = true
+                                        showGitHubTokenDialog = false
+                                        SnackbarController.show("GitHub Token 已保存（@${check.login}）")
+                                    } else {
+                                        tokenError = "保存失败：本机加密密钥暂时不可用，请稍后重试"
+                                    }
                                 }
                                 TokenCheck.Invalid -> tokenError = "Token 无效或已过期，请重新生成后再保存"
                                 TokenCheck.Unknown -> tokenError = "无法校验 Token（网络异常），请联网后重试"

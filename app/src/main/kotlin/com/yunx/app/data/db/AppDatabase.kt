@@ -31,7 +31,7 @@ import com.yunx.app.util.DiagnosticLog
 
 @Database(
     entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, GuangYaAccountEntity::class, ILanzouAccountEntity::class, LanzouAccountEntity::class, BookmarkEntity::class],
-    version = 19,
+    version = 20,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -94,7 +94,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_15_16,
                         MIGRATION_16_17,
                         MIGRATION_17_18,
-                        MIGRATION_18_19
+                        MIGRATION_18_19,
+                        MIGRATION_19_20
                     )
                     // 早期开发版（1-8）无可靠 schema；从 v9 起必须保留凭证和下载任务
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8)
@@ -266,6 +267,39 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `xunlei_account` ADD COLUMN `authType` TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        /** 需要「多账号」两列的全部账号表（与 [entities] 里的 `*_account` 一一对应） */
+        private val ACCOUNT_TABLES = listOf(
+            "quark_account", "uc_account", "xunlei_account", "baidu_account", "c139_account",
+            "pan123_account", "pan115_account", "guangya_account", "ilanzou_account", "lanzou_account"
+        )
+
+        /**
+         * v20：网盘多账号 —— 每个平台可以同时登录多个账号。
+         *
+         * - 10 张账号表各加两列：`isPrimary`（主账号标记，列目录 / 转存 / 上传等需要单一身份的操作走它）、
+         *   `remark`（用户备注，便于区分同平台多个账号）；
+         * - **老数据每个平台只有一行，且它就是用户一直在用的账号** ⇒ 直接标成主账号：
+         *   不新增行、不动任何凭证，升级后表现与升级前完全一致；
+         * - 之后新增的账号主键是 `<platform>-<时间戳36进制>`，与老行的平台常量主键（如 `"quark"`）并存，
+         *   所以「主账号」既可能是老行也可能是新行，DAO 统一按 `isPrimary` 取用；
+         * - `download_task.altSourcesJson` 供「单文件多源分片」（多账号对同一文件各取一条直链）记录备选源，
+         *   默认空串 = 单源，与升级前行为一致。
+         */
+        private val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                ACCOUNT_TABLES.forEach { table ->
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `isPrimary` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `remark` TEXT NOT NULL DEFAULT ''")
+                }
+                ACCOUNT_TABLES.forEach { table ->
+                    db.execSQL("UPDATE `$table` SET `isPrimary` = 1")
+                }
+                db.execSQL(
+                    "ALTER TABLE `download_task` ADD COLUMN `altSourcesJson` TEXT NOT NULL DEFAULT ''"
                 )
             }
         }

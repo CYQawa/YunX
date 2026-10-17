@@ -83,8 +83,11 @@ class UCApi(
     /**
      * Cookie 回写接收器（推荐由 UCAccountRepository 注入并落库）：
      * 每次响应把 Set-Cookie 合并后的最新 Cookie 回调，保持 __puus/__pus 始终新鲜。
+     *
+     * ★ 回调同时带上「本次请求用的那份 Cookie」：多账号下载（实验性）会用**别的账号**取链，
+     *   只有按请求 Cookie 找到对应那一行回写，才不会把别的账号的 __puus 混进主账号那一行。
      */
-    var cookieSink: ((String) -> Unit)? = null
+    var cookieSink: ((merged: String, requestCookie: String) -> Unit)? = null
 
     /**
      * 游客态令牌 `__pugs`（未登录取链响应 Set-Cookie 下发，3 小时有效）。
@@ -366,7 +369,7 @@ class UCApi(
         runCatching {
             client.newCall(request).execute().use { resp ->
                 val merged = UCCookieUtil.mergeFromSetCookies(cookie, resp.headers("Set-Cookie"))
-                if (merged != cookie) cookieSink?.invoke(merged)
+                if (merged != cookie) cookieSink?.invoke(merged, cookie)
                 merged
             }
         }.getOrNull()
@@ -868,6 +871,6 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
         val original = request.header("Cookie").orEmpty()
         if (original.isBlank()) return
         val merged = UCCookieUtil.mergeFromSetCookies(original, setCookies)
-        if (merged != original) cookieSink?.invoke(merged)
+        if (merged != original) cookieSink?.invoke(merged, original)
     }
 }

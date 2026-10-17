@@ -23,6 +23,7 @@ import com.yunx.app.data.security.CredentialKeyException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -48,16 +49,30 @@ class SecureAccountDaosTest {
     /**
      * 回归（1.2.8 崩溃）：改锁屏密码后 Keystore 里的密钥被系统永久作废，
      * `getAccount()` 当年会把 `InvalidKeyException` 直接抛到主线程把 App 打崩。
-     * 现在必须**吞掉异常、返回 null、清掉这条读不回来的凭证**。
+     * 现在必须**吞掉异常、返回 null**；而且**不能删掉这条读不回来的凭证** ——
+     * 老实现会在这里清库，配合「密钥被误判损坏」就酿成了「划掉后台后账号全丢」（真实事故）。
      */
     @Test
-    fun permanentlyInvalidKeyReturnsNullInsteadOfCrashing() = runBlocking {
+    fun permanentlyInvalidKeyReturnsNullAndKeepsRow() = runBlocking {
         val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "sealed:cookie"))
         val secure = SecureAccountDaos.quark(raw, ThrowingCipher(keyLost = true))
 
         assertNull(secure.getAccount())
-        // 密文再也解不开，必须清掉；否则界面会一直显示「已登录」但每个请求都失败
-        assertNull(raw.value())
+        // 只返回 null（界面表现即「未登录」），密文原样留在库里：用户重新登录会覆盖同一个主键
+        assertEquals("sealed:cookie", raw.value()?.cookie)
+    }
+
+    /**
+     * 密文解不开（换过密钥 / 跨版本残留，抛的是非密钥类异常）时同样**只返回 null、不删数据**：
+     * 老实现对这类失败走「静默清理」，一次抖动就能把整表账号清空且不可恢复。
+     */
+    @Test
+    fun brokenCiphertextReturnsNullAndKeepsRow() = runBlocking {
+        val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "sealed:cookie"))
+        val secure = SecureAccountDaos.quark(raw, CorruptCipher())
+
+        assertNull(secure.getAccount())
+        assertEquals("sealed:cookie", raw.value()?.cookie)
     }
 
     /** 观测流同样不能被异常击穿（这条路径崩的是收集方协程，比 getAccount 更早触发） */
@@ -88,6 +103,26 @@ class SecureAccountDaosTest {
         override fun observeAccount(): Flow<QuarkAccountEntity?> = state
         override suspend fun upsert(account: QuarkAccountEntity) { state.value = account }
         override suspend fun getAccount(): QuarkAccountEntity? = state.value
+        // 多账号（v20）新增的接口：本测试只关心单个账号的加解密，列表/主账号/删除按最小语义实现
+        override fun observeAccounts(): Flow<List<QuarkAccountEntity>> =
+            state.map { listOfNotNull(it) }
+
+        override suspend fun getAccounts(): List<QuarkAccountEntity> = listOfNotNull(state.value)
+
+        override suspend fun setPrimary(id: String) {
+            val current = state.value ?: return
+            state.value = current.copy(isPrimary = current.id == id)
+        }
+
+        override suspend fun updateRemark(id: String, remark: String) {
+            val current = state.value ?: return
+            if (current.id == id) state.value = current.copy(remark = remark)
+        }
+
+        override suspend fun deleteById(id: String) {
+            if (state.value?.id == id) state.value = null
+        }
+
         override suspend fun clear() { state.value = null }
     }
 
@@ -97,6 +132,21 @@ class SecureAccountDaosTest {
 
         override fun decrypt(stored: String, purpose: String): String =
             if (isEncrypted(stored)) stored.substringAfterLast(':').reversed() else stored
+
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("sealed:")
+
+        override fun onKeyProvisioned(listener: () -> Unit) = Unit
+    }
+
+    /**
+     * 模拟「密文与当前密钥不匹配」（换过密钥 / 跨版本残留）：解密抛非密钥类异常。
+     * 用来钉住「这类失败也绝不能清库」。
+     */
+    private class CorruptCipher : CredentialCipher {
+        override fun encrypt(plaintext: String, purpose: String): String = "sealed:$plaintext"
+
+        override fun decrypt(stored: String, purpose: String): String =
+            throw IllegalStateException("GCM tag mismatch")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("sealed:")
 

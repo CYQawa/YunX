@@ -21,14 +21,13 @@ package com.yunx.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.yunx.app.data.db.MultiAccountEntity
 import com.yunx.app.data.db.XunleiAccountEntity
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,10 +40,13 @@ import java.util.Locale
 @Composable
 fun XunleiAccountSheet(
     account: XunleiAccountEntity,
-    onLogout: () -> Unit,
+    accounts: List<MultiAccountEntity>,
+    onSetPrimary: (String) -> Unit,
+    onRename: (String, String) -> Unit,
+    onRemove: (String) -> Unit,
+    onAddAccount: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var showLogoutConfirm by remember { mutableStateOf(false) }
     val loginTime = remember(account.updatedAt) {
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(account.updatedAt))
     }
@@ -93,33 +95,16 @@ fun XunleiAccountSheet(
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = { showLogoutConfirm = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
-                )
-            ) {
-                Icon(Icons.Outlined.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("退出登录")
-            }
+            // 多账号：同一网盘可以同时登录多个账号，这里管理它们（主账号 / 备注 / 退出 / 添加）
+            AccountListSection(
+                accounts = accounts,
+                onSetPrimary = onSetPrimary,
+                onRename = onRename,
+                onRemove = onRemove,
+                onAddAccount = onAddAccount,
+                onEmpty = onDismiss
+            )
         }
-    }
-
-    if (showLogoutConfirm) {
-        AlertDialog(
-            onDismissRequest = { showLogoutConfirm = false },
-            title = { Text("退出登录") },
-            text = { Text("确定要退出当前迅雷账号吗？") },
-            confirmButton = {
-                TextButton(onClick = { showLogoutConfirm = false; onLogout() }) {
-                    Text("退出", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showLogoutConfirm = false }) { Text("取消") } }
-        )
     }
 }
 

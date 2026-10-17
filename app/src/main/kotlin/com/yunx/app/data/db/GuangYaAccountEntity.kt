@@ -30,12 +30,16 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "guangya_account")
 data class GuangYaAccountEntity(
     @PrimaryKey
-    val id: String = "guangya",
+    override val id: String = "guangya",
     val accessToken: String = "",
     val refreshToken: String = "",
     val deviceId: String = "",
     val deviceSign: String = "",
     val account: String = "",
-    val nickname: String = "",
-    val updatedAt: Long = System.currentTimeMillis()
-)
+    override val nickname: String = "",
+    override val updatedAt: Long = System.currentTimeMillis(),
+    /** 是否该平台的主账号（多账号）：同平台只应有一条为 true，见 [MultiAccountEntity] */
+    override val isPrimary: Boolean = false,
+    /** 用户备注，便于区分同一平台的多个账号（空串 = 界面回退显示昵称） */
+    override val remark: String = ""
+) : MultiAccountEntity

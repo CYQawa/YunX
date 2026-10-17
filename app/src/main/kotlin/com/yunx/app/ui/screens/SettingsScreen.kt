@@ -73,6 +73,7 @@ import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.SwitchAccount
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolunteerActivism
@@ -220,6 +221,8 @@ fun SettingsScreen(
     onGopeedClick: () -> Unit,
     /** 打开「链接唤起」页（深链接注册项的逐个开关） */
     onLinkOpenClick: () -> Unit,
+    /** 打开「多账号下载」页（两个实验性开关：多账号轮流取链 / 单文件多源分片） */
+    onMultiAccountDownloadClick: () -> Unit,
     backupManager: AuthBackupManager,
     /** 手动检查更新（弹窗与下载逻辑都由 MainScreen 统一持有，设置页不再自己实现一份） */
     onCheckUpdate: () -> Unit,
@@ -414,6 +417,18 @@ fun SettingsScreen(
             title = "下载线程数",
             description = "按网盘分别设置分片并发数（默认 32，最高 512）",
             onClick = { showThreadsDialog = true }
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+
+        // 多账号下载（实验性）：只做入口，两个开关在独立页面里改（开启前有二次风险确认）；
+        // 「实验性」徽标只标在里面那两个开关上，入口这一行不重复标
+        SettingsItem(
+            icon = Icons.Outlined.SwitchAccount,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
+            title = "多账号下载",
+            description = "实验性：同一网盘多个账号轮流取链 / 单文件多源提速",
+            onClick = onMultiAccountDownloadClick
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))

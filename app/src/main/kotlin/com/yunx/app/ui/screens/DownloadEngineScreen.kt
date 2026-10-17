@@ -100,6 +100,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yunx.app.data.gopeed.GopeedEngine
 import com.yunx.app.data.gopeed.KernelProvisioner
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.ui.components.ExperimentalBadge
 import com.yunx.app.ui.components.YunXWavyLoading
 import com.yunx.app.ui.components.YunXWavyProgress
 import com.yunx.app.ui.resolve.formatSize
@@ -1086,17 +1087,8 @@ private fun EngineSectionHeader(
             modifier = Modifier.weight(1f)
         )
         if (badge != null) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Text(
-                    badge,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
+            // 样式统一在 ExperimentalBadge 里（设置项 / 开关行 / 这里共用同一份）
+            ExperimentalBadge(badge)
         }
     }
 }

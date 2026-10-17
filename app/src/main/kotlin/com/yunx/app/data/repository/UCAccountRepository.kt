@@ -18,9 +18,10 @@
 
 package com.yunx.app.data.repository
 
-import android.webkit.CookieManager
 import com.yunx.app.data.db.UCAccountDao
 import com.yunx.app.data.db.UCAccountEntity
+import com.yunx.app.data.db.resolveAccountSlot
+import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.UCConstants
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +29,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * UC 账号数据仓库：Room 持久化 + 网络验证 + __puus 会话刷新（与夸克同源，修复取链/直链过期失败）。
@@ -47,13 +47,14 @@ class UCAccountRepository(
     private val sinkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     init {
-        // 每次 API 响应若带 Set-Cookie（__puus/__pus），自动合并并落库，保持会话始终新鲜
-        api.cookieSink = { merged ->
+        // 每次 API 响应若带 Set-Cookie（__puus/__pus），自动合并并落库，保持会话始终新鲜。
+        // ★ 只回写「本次请求所用 Cookie 所属的那一行」：多账号下载（实验性 C1/C2）会拿别的账号取链，
+        //   把它的 __puus 合并进主账号那一行会让主账号的会话签名与 uid 对不上（取链/直链 403/412）。
+        api.cookieSink = { merged, requestCookie ->
             sinkScope.launch {
-                dao.getAccount()?.let { acc ->
-                    if (acc.cookie != merged) {
-                        dao.upsert(acc.copy(cookie = merged, updatedAt = System.currentTimeMillis()))
-                    }
+                val target = dao.getAccounts().firstOrNull { it.cookie == requestCookie } ?: return@launch
+                if (target.cookie != merged) {
+                    dao.upsert(target.copy(cookie = merged, updatedAt = System.currentTimeMillis()))
                 }
             }
         }
@@ -62,6 +63,26 @@ class UCAccountRepository(
     fun observeAccount(): Flow<UCAccountEntity?> = dao.observeAccount()
 
     suspend fun getAccount(): UCAccountEntity? = dao.getAccount()
+
+    /**
+     * 该平台全部账号可用的 Cookie（主账号在前）：多账号下载（实验性 C1）轮换取链用。
+     * 每条都经 [cookieFor] 保证 __puus 新鲜 —— 直链签名绑定取链那一刻的 Cookie，取链与下载必须同一份。
+     */
+    suspend fun allCredentials(): List<String> =
+        dao.getAccounts().map { cookieFor(it) }.filter { it.isNotBlank() }
+
+    /**
+     * 只对主账号做 __puus 刷新：传入的 Cookie 就是主账号那一份时返回刷新后的（等价于 [getFreshCookie]），
+     * 否则原样返回。
+     *
+     * ★ 多账号下载轮换到非主账号时必须保留它自己的 Cookie：换成主账号的 Cookie 会让
+     *   直链与身份配成两个账号，CDN 直接 403/412（与「取链和下载必须同一份 Cookie」是同一条约束）。
+     */
+    suspend fun refreshIfPrimary(cookie: String): String {
+        val primary = dao.getAccount() ?: return cookie
+        if (primary.cookie != cookie) return cookie
+        return getFreshCookie() ?: cookie
+    }
 
     /**
      * 返回「保证 __puus 未过期」的 Cookie（取链/下载前调用）：
@@ -82,24 +103,37 @@ class UCAccountRepository(
         }
     }
 
-    suspend fun logoutUC() {
-        withContext(Dispatchers.IO) {
-            runCatching {
-                CookieManager.getInstance().removeAllCookies(null)
-                CookieManager.getInstance().flush()
-            }
+    /**
+     * 取指定账号可用的 Cookie（多账号下载轮到非主账号时用）。
+     * 主账号沿用 [getFreshCookie] 的时间节流刷新；其他账号按需刷新一次并落库。
+     */
+    suspend fun cookieFor(account: UCAccountEntity): String {
+        if (account.isPrimary) return getFreshCookie() ?: account.cookie
+        val refreshed = api.refreshSession(account.cookie)
+        return if (refreshed != null) {
+            dao.upsert(account.copy(cookie = refreshed, updatedAt = System.currentTimeMillis()))
+            refreshed
+        } else {
+            account.cookie
         }
-        dao.clear()
     }
 
-    suspend fun saveUCAccount(cookie: String): Boolean {
+    /**
+     * 保存 UC Cookie。
+     * @param newAccount true = 网盘页「添加账号」进来的，落成新的一行；false = 覆盖当前主账号那一行
+     *                   （日常重新登录、会话过期后重登都走这条，避免次次重登都堆出一个失效账号）
+     */
+    suspend fun saveUCAccount(cookie: String, newAccount: Boolean = false): Boolean {
         if (!UCConstants.isValidCookie(cookie)) return false
         val nickname = api.fetchNickname(cookie) ?: "UC用户"
+        val slot = resolveAccountSlot(DownloadPlatform.UC, dao.getAccount(), newAccount)
         dao.upsert(
             UCAccountEntity(
-                id = "uc",
+                id = slot.id,
                 cookie = cookie,
-                nickname = nickname
+                nickname = nickname,
+                isPrimary = slot.isPrimary,
+                remark = slot.remark
             )
         )
         // 重置刷新计时：新登录的 __puus 是新鲜的，避免立刻触发一次无谓刷新
