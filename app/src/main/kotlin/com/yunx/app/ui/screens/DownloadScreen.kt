@@ -532,7 +532,9 @@ private fun FolderDownloadGroup(
     downloadDebug: Boolean = false,
     onOpenDebug: (Long) -> Unit = {}
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    // 用 rememberSaveable：LazyColumn 的 item 滚出屏幕会被销毁，remember 会把它复位成「展开」，
+    // 用户收起的文件夹一滚动就又弹开了（saveable 状态按 item key 保存，滚回来仍是收起）
+    var expanded by rememberSaveable { mutableStateOf(true) }
     val completed = tasks.count { it.status == DownloadTaskEntity.STATUS_COMPLETED }
     val totalSize = tasks.sumOf { it.totalSize }
     // 聚合显示钳制：任何单项竞态残留都不会让"已下载 > 总大小"

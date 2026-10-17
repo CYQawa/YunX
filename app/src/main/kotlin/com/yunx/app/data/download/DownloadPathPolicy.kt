@@ -33,10 +33,15 @@ internal object DownloadPathPolicy {
         if (rawParts.any { it == "." || it == ".." }) return null
 
         val parts = rawParts.filter { it.isNotBlank() }
-        val rawName = parts.lastOrNull().orEmpty()
+        // ★ 以 '/' 结尾 = 只给了目录、没给文件名（批量下载拼出 "文件夹A/" 就是这种形态）。
+        //   此时最后一段是**目录名**，不能当文件名用：否则文件会平铺到下载目录根、还顶着文件夹的名字，
+        //   表现为「整个文件夹下载后只有一个文件进了文件夹，其余散落在下载目录」。
+        //   名字用 fallback，目录照旧保留。
+        val nameMissing = normalized.endsWith('/')
+        val rawName = if (nameMissing) "" else parts.lastOrNull().orEmpty()
         val safeName = sanitizeName(rawName).ifBlank { fallbackName }
-        val safeDirectory = parts.dropLast(1)
-            .joinToString("/") { sanitizeName(it) }
+        val dirParts = if (nameMissing) parts else parts.dropLast(1)
+        val safeDirectory = dirParts.joinToString("/") { sanitizeName(it) }
         return SafePath(safeName, safeDirectory)
     }
 

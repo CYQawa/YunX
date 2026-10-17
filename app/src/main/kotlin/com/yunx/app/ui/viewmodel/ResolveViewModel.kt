@@ -549,6 +549,8 @@ class ResolveViewModel(
                     return@launch
                 }
                 var okCount = 0
+                var failCount = 0
+                var firstFailReason: String? = null
                 var interrupted = false
                 for ((index, task) in tasks.withIndex()) {
                     // 用户点击「中断」：停止剩余项，已入队的任务保留下载
@@ -567,15 +569,29 @@ class ResolveViewModel(
                         } else {
                             resolveShareLink(currentRepo(), s, file, quarkCred)
                         }
-                        linkResult.getOrNull()?.let { link ->
-                            // 文件夹内文件用相对路径（保持目录结构）；根目录文件用取链返回的文件名
-                            enqueueDownload(link, quarkCred, if (relPath.isBlank()) link.filename else relPath)
-                            okCount++
-                        }
+                        // ★ 取链失败必须抛出（而不是 getOrNull() 后什么都不做）：批量下载里静默跳过会
+                        //   表现为「整个文件夹只加入了几个文件，其余像没发生一样」，用户只会看到下载目录里
+                        //   少文件 / 混着上一次的残留，根本不知道是失败了
+                        val link = linkResult.getOrNull()
+                            ?: throw IllegalStateException(linkResult.exceptionOrNull()?.message ?: "未获取到下载直链")
+                        // 文件夹内文件用相对路径（保持目录结构）；根目录文件用取链返回的文件名
+                        enqueueDownload(link, quarkCred, if (relPath.isBlank()) link.filename else relPath)
+                        okCount++
+                    }.onFailure { e ->
+                        // 协程取消不是「失败」：原样抛出去，否则会被记成一条假的失败原因
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        failCount++
+                        val reason = e.message ?: e.javaClass.simpleName
+                        if (firstFailReason == null) firstFailReason = reason
+                        android.util.Log.w("YunX-Resolve", "批量下载跳过 ${file.fname}：$reason")
                     }
                 }
                 if (!interrupted) {
-                    downloadError = if (okCount > 0) "已加入 $okCount 个下载任务" else "获取下载链接失败"
+                    downloadError = when {
+                        failCount == 0 -> if (okCount > 0) "已加入 $okCount 个下载任务" else "获取下载链接失败"
+                        else -> "已加入 $okCount 个，$failCount 个失败" +
+                            (firstFailReason?.let { "（原因：$it）" } ?: "")
+                    }
                     // 全部获取完再一次性切到下载页
                     if (okCount > 0) downloadStarted = true
                 }

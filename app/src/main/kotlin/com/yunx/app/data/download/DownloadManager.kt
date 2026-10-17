@@ -751,14 +751,31 @@ class DownloadManager(
                 if (GopeedEngine.state.value != GopeedEngine.State.RUNNING) {
                     GopeedEngine.start(context, dir)
                 }
+                // ★ 目录结构必须拆成「saveDir + 纯文件名」两段交给引擎，不能把带斜杠的相对路径
+                //   整串塞进 opts.name：引擎按纯文件名处理时（取 basename / 净化非法字符）斜杠会被吃掉，
+                //   整批文件就平铺到引擎目录根 —— 表现为「整个文件夹下载后只有一个文件进了文件夹，
+                //   其余散落在下载目录」。桌面版一直是这样拆的，Android 这边之前漏了。
+                val safe = DownloadPathPolicy.sanitize(
+                    fileName,
+                    "download_${System.currentTimeMillis()}"
+                )
+                val destDir = if (safe != null && safe.relativeDirectory.isNotBlank()) {
+                    File(dir, safe.relativeDirectory)
+                } else {
+                    dir
+                }
+                // 引擎不会替我们建目录：目录不存在就把任务建在了一个不存在的路径上
+                if (!destDir.exists() && !destDir.mkdirs()) {
+                    throw java.io.IOException("无法创建目录：$destDir")
+                }
                 GopeedEngine.createTask(
                     url = url,
-                    saveDir = dir,
+                    saveDir = destDir,
                     headers = headers,
                     // 磁力（BT）不吃连接数：那是 http 协议的分片并发参数
                     connections = if (platform == DownloadPlatform.MAGNET) 0 else threadProvider(platform),
                     // 磁力在元数据到手前没有名字：交给引擎自己命名（种子名稍后写回本地记录）
-                    name = if (platform == DownloadPlatform.MAGNET) "" else fileName,
+                    name = if (platform == DownloadPlatform.MAGNET) "" else (safe?.fileName ?: fileName),
                     labels = mapOf("yunxTaskId" to id.toString())
                 )
             }
@@ -890,8 +907,21 @@ class DownloadManager(
         val detail = runCatching { withContext(Dispatchers.IO) { GopeedEngine.taskDetail(task.engineTaskId) } }
             .onFailure { Log.w(TAG, "读取引擎任务详情失败，用本地文件名兜底：id=${task.id} ${it.message}") }
             .getOrNull()
+        val isMagnetTask = task.platform == DownloadPlatform.MAGNET
         val realName = detail?.name?.takeIf { it.isNotBlank() } ?: task.fileName
-        val savedPath = File(dir, realName).absolutePath
+        // ★ 非磁力任务的实际落盘位置 = 引擎目录 + 相对子目录 + 文件名（子目录是作为 saveDir 下发的，
+        //   见 startViaEngine）。只用「引擎目录 + 引擎报的名字」拼会丢掉子目录 ⇒ 记录指向一个
+        //   不存在的文件，之后「打开 / 删除本地文件」都会找错地方。磁力例外：落盘结构由种子决定。
+        val savedPath = if (isMagnetTask) {
+            File(dir, realName).absolutePath
+        } else {
+            val safe = DownloadPathPolicy.sanitize(task.fileName, "download_${task.id}")
+            if (safe != null) {
+                File(File(dir, safe.relativeDirectory), safe.fileName).absolutePath
+            } else {
+                File(dir, realName).absolutePath
+            }
+        }
         // 平均速度 = 引擎给出的总大小 ÷ 本段运行时长（暂停/继续会重置起点，与内置下载器口径一致）
         val startedAt = taskStartTimes.remove(task.id) ?: 0L
         val avgSpeed = if (startedAt > 0L && size > 0L) {
@@ -909,8 +939,9 @@ class DownloadManager(
             size = size,
             summary = "path=$savedPath 文件数=${detail?.fileCount ?: -1} 目录=${detail?.folder ?: false}"
         )
-        if (realName != task.fileName) {
-            // 磁力：把界面上占位的显示名换成真正的种子名（失败只记日志，不影响已完成状态）
+        if (isMagnetTask && realName != task.fileName) {
+            // 磁力：把界面上占位的显示名换成真正的种子名（失败只记日志，不影响已完成状态）。
+            // ★ 非磁力不要回写：task.fileName 里带着相对目录，用引擎报的纯文件名覆盖会把目录丢掉。
             runCatching { dao.updateFileName(task.id, realName) }
                 .onFailure { Log.w(TAG, "回写种子名失败：id=${task.id} ${it.message}") }
         }

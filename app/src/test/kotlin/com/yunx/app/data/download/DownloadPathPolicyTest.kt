@@ -43,6 +43,19 @@ class DownloadPathPolicyTest {
     }
 
     @Test
+    fun trailingSlashMeansDirectoryWithoutFileName() {
+        // 批量下载拼出的 "文件夹A/"（该项拿不到文件名）不能把最后一段**目录名**当文件名，
+        // 否则文件会平铺到下载目录根、还顶着文件夹的名字（用户报的「只有一个文件进了文件夹」）。
+        val nested = DownloadPathPolicy.sanitize("folder/sub/", "fallback.bin")
+        assertEquals("folder/sub", nested?.relativeDirectory)
+        assertEquals("fallback.bin", nested?.fileName)
+
+        val oneLevel = DownloadPathPolicy.sanitize("folder/", "fallback.bin")
+        assertEquals("folder", oneLevel?.relativeDirectory)
+        assertEquals("fallback.bin", oneLevel?.fileName)
+    }
+
+    @Test
     fun canonicalContainmentRejectsSibling() {
         val base = File("build/policy-test/downloads")
         assertTrue(DownloadPathPolicy.isContained(base, File(base, "folder/file.bin")))
