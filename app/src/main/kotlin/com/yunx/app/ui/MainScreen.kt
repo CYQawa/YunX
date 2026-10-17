@@ -157,6 +157,7 @@ import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
 import com.yunx.app.ui.screens.DownloadEngineScreen
+import com.yunx.app.ui.screens.LinkOpenScreen
 import com.yunx.app.ui.screens.OnboardingScreen
 import com.yunx.app.ui.screens.ResolveScreen
 import com.yunx.app.ui.screens.SettingsScreen
@@ -215,6 +216,9 @@ internal const val OVERLAY_KEY_GOPEED = "overlay-gopeed"
 /** 公告页：源是顶栏那个公告图标（与收藏页同一手法 —— 图标本身当"源"，长成整页） */
 internal const val OVERLAY_KEY_ANNOUNCEMENTS = "overlay-announcements"
 
+/** 链接唤起（深链接注册项）设置页：从设置页那一行进入，整行长成整页 */
+internal const val OVERLAY_KEY_LINK_OPEN = "overlay-link-open"
+
 /**
  * 主页框架：
  * - 顶部可折叠标题（MediumFlexibleTopAppBar，Expressive 柔性顶栏），切换 Tab 时标题文字随 Tab 变化，折叠状态不受影响；
@@ -232,7 +236,15 @@ fun MainScreen(
     /** 外部来源请求直接打开的 Tab（如点击实况通知 → 下载页）；null = 用默认「解析」页 */
     openTab: MainTab? = null,
     /** [openTab] 被消费后回调：调用方负责清空它，避免旋转/重组时重复切页 */
-    onOpenTabConsumed: () -> Unit = {}
+    onOpenTabConsumed: () -> Unit = {},
+    /** 深链接 / 外部分享拿到的待解析文本（分享链接、中文口令、带链接的文案都行）；null = 没有 */
+    incomingLink: String? = null,
+    /** [incomingLink] 被解析页接手后回调（调用方清空，避免重组时重复解析） */
+    onIncomingLinkConsumed: () -> Unit = {},
+    /** 深链接拿到的直链 / 磁力：走下载页「添加下载任务」弹窗预填（磁力只有 Gopeed 引擎能下，不能走解析链路） */
+    incomingAddUrl: String? = null,
+    /** [incomingAddUrl] 被下载页接手后回调 */
+    onIncomingAddUrlConsumed: () -> Unit = {}
 ) {
     var currentTab by rememberSaveable { mutableStateOf(MainTab.Resolve) }
 
@@ -260,6 +272,7 @@ fun MainScreen(
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
+    var showLinkOpen by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
     var showGopeed by rememberSaveable { mutableStateOf(false) }
     var showAnnouncements by rememberSaveable { mutableStateOf(false) }
@@ -917,6 +930,7 @@ fun MainScreen(
         showAbout -> OVERLAY_KEY_ABOUT
         showSupport -> OVERLAY_KEY_SUPPORT
         showTheme -> OVERLAY_KEY_THEME
+        showLinkOpen -> OVERLAY_KEY_LINK_OPEN
         showBookmarks -> OVERLAY_KEY_BOOKMARKS
         showGopeed -> OVERLAY_KEY_GOPEED
         showAnnouncements -> OVERLAY_KEY_ANNOUNCEMENTS
@@ -981,6 +995,11 @@ fun MainScreen(
                 // 「下载引擎」行 → 下载引擎页：和上面三行同样走容器变换（整行长成整页）
                 val engineRowModifier = Modifier.sharedBounds(
                     rememberSharedContentState(OVERLAY_KEY_GOPEED),
+                    animatedVisibilityScope = sourceScope
+                )
+                // 「链接唤起」行 → 链接唤起设置页：同样走容器变换
+                val linkOpenRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_LINK_OPEN),
                     animatedVisibilityScope = sourceScope
                 )
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1099,7 +1118,10 @@ fun MainScreen(
                                     pan115CloudViewModel,
                                     guangyaCloudViewModel,
                                     bookmarkViewModel = bookmarkViewModel,
-                                    onOpenBookmarks = { showBookmarks = true }
+                                    onOpenBookmarks = { showBookmarks = true },
+                                    // 深链接 / 分享进来的链接：解析页填进输入框并自动发起解析
+                                    incomingLink = incomingLink,
+                                    onIncomingLinkConsumed = onIncomingLinkConsumed
                                 )
                                 MainTab.Drive -> DriveScreen(
                                     scrollBehavior = scrollBehavior,
@@ -1167,7 +1189,10 @@ fun MainScreen(
                                     scrollBehavior,
                                     downloadViewModel,
                                     // 下载调试开关（开发调试菜单）：开启后下载页长按任务可进「调试信息」页
-                                    downloadDebug = ThemeController.downloadDebug
+                                    downloadDebug = ThemeController.downloadDebug,
+                                    // 深链接进来的直链 / 磁力：预填「添加下载任务」弹窗，由用户确认后入队
+                                    incomingAddUrl = incomingAddUrl,
+                                    onIncomingAddUrlConsumed = onIncomingAddUrlConsumed
                                 )
                                 MainTab.Settings -> SettingsScreen(
                                     scrollBehavior = scrollBehavior,
@@ -1175,10 +1200,12 @@ fun MainScreen(
                                     aboutRowModifier = aboutRowModifier,
                                     supportRowModifier = supportRowModifier,
                                     engineRowModifier = engineRowModifier,
+                                    linkOpenRowModifier = linkOpenRowModifier,
                                     onThemeClick = { showTheme = true },
                                     onAboutClick = { showAbout = true },
                                     onSupportClick = { showSupport = true },
                                     onGopeedClick = { showGopeed = true },
+                                    onLinkOpenClick = { showLinkOpen = true },
                                     backupManager = backupManager,
                                     // 手动检查更新与开发调试预览都复用 MainScreen 的更新弹窗状态
                                     onCheckUpdate = checkForUpdate,
@@ -1289,6 +1316,7 @@ fun MainScreen(
                             )
                             OVERLAY_KEY_SUPPORT -> SupportScreen(onBack = { showSupport = false })
                             OVERLAY_KEY_THEME -> ThemeScreen(onBack = { showTheme = false })
+                            OVERLAY_KEY_LINK_OPEN -> LinkOpenScreen(onBack = { showLinkOpen = false })
                             OVERLAY_KEY_GOPEED -> DownloadEngineScreen(onBack = { showGopeed = false })
                             OVERLAY_KEY_ANNOUNCEMENTS -> AnnouncementScreen(
                                 viewModel = announcementViewModel,

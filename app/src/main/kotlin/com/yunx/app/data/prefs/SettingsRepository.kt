@@ -260,6 +260,18 @@ class SettingsRepository(context: Context) {
             prefs.edit().putInt("proxy_port", value.coerceIn(1, 65535)).apply()
         }
 
+    /**
+     * 某个深链接注册项是否启用（默认开）。
+     *
+     * ★ 这里只存「用户意愿」，真正的生效方式是启停清单里对应的 activity-alias ——
+     *   改完必须立刻调 [com.yunx.app.util.LinkOpener.apply]，否则要等下次启动才同步。
+     */
+    fun linkOpen(target: LinkOpenTarget): Boolean = prefs.getBoolean(target.prefKey, true)
+
+    fun setLinkOpen(target: LinkOpenTarget, enabled: Boolean) {
+        prefs.edit().putBoolean(target.prefKey, enabled).apply()
+    }
+
     companion object {
         const val DEFAULT_DOWNLOAD_THREADS = 32
 

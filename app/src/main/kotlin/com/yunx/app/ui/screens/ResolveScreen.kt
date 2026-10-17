@@ -149,6 +149,10 @@ fun ResolveScreen(
     bookmarkViewModel: BookmarkViewModel,
     /** 打开「收藏网盘链接」页（主页快捷方式区块的「管理」入口） */
     onOpenBookmarks: () -> Unit,
+    /** 深链接 / 外部分享进来的待解析文本（分享链接、中文口令、带链接的文案都行）；null = 没有 */
+    incomingLink: String? = null,
+    /** [incomingLink] 被接手后回调（宿主清空，避免重组时重复解析） */
+    onIncomingLinkConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state = viewModel.uiState
@@ -168,6 +172,24 @@ fun ResolveScreen(
     var link by rememberSaveable { mutableStateOf("") }
     var pwd by rememberSaveable { mutableStateOf("") }
     var pwdEdited by rememberSaveable { mutableStateOf(false) }
+
+    // 深链接 / 外部分享进来：与「剪贴板建议」走同一套解析入口（先 GitHub 再通用分享解析），
+    // 但**直接发起解析**——用户是明确点了链接/分享了链接，不该再让他手动点一次「解析」。
+    LaunchedEffect(incomingLink) {
+        val text = incomingLink?.trim().orEmpty()
+        if (text.isEmpty()) return@LaunchedEffect
+        val githubParsed = GitHubLinkParser.parse(text)
+        val shareParsed = ShareLinkParser.parse(text)
+        link = text
+        pwd = shareParsed?.pwd.orEmpty()
+        pwdEdited = true
+        if (githubParsed != null) {
+            viewModel.startGitHubResolve(githubParsed)
+        } else {
+            viewModel.startResolve(text, shareParsed?.pwd)
+        }
+        onIncomingLinkConsumed()
+    }
 
     // 剪贴板分享链接提示状态：待提示的剪贴板文本 + 已忽略的文本
     // 用 rememberSaveable：切换 Tab 后返回仍保留（避免「忽略后切页回来又弹」）

@@ -102,6 +102,8 @@ class SettingsDirectoryPickerTest {
                                 onAboutClick = {},
                                 onGopeedClick = {},
                                 onSupportClick = {},
+                                // 链接唤起页入口（深链接注册项开关页），此用例不涉及
+                                onLinkOpenClick = {},
                                 backupManager = backupManager,
                                 onCheckUpdate = {},
                                 onPreviewUpdateSheet = {}

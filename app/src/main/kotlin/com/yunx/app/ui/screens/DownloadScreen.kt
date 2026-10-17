@@ -129,6 +129,10 @@ fun DownloadScreen(
     viewModel: DownloadViewModel,
     /** 下载调试开关（设置 → 关于云析 → 长按 → 开发调试）：开启后长按任务菜单里出现「调试信息」 */
     downloadDebug: Boolean = false,
+    /** 深链接进来的直链 / 磁力：预填「添加下载任务」弹窗，用户确认后入队；null = 没有 */
+    incomingAddUrl: String? = null,
+    /** [incomingAddUrl] 被接手后回调（宿主清空，避免重组时重复弹窗） */
+    onIncomingAddUrlConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -168,6 +172,22 @@ fun DownloadScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
                 PackageManager.PERMISSION_GRANTED
         } else true
+    }
+
+    // 深链接进来的直链 / 磁力：只是**预填**弹窗，不直接入队 —— 磁力只有 Gopeed 引擎能下、
+    // 低版本还可能缺存储权限，让用户在自己看得见的弹窗里点一次确认更稳妥。
+    var addDialogInitialUrl by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(incomingAddUrl) {
+        val url = incomingAddUrl?.trim().orEmpty()
+        if (url.isEmpty()) return@LaunchedEffect
+        addDialogInitialUrl = url
+        if (needLegacyPermission && !hasPermission) {
+            // 与右下角「+」同一条路：先申请存储权限，授权成功后弹窗会自动打开（见 permissionLauncher）
+            permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            showAddDialog = true
+        }
+        onIncomingAddUrlConsumed()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -256,9 +276,14 @@ fun DownloadScreen(
 
     if (showAddDialog) {
         AddDownloadDialog(
-            onDismiss = { showAddDialog = false },
+            initialUrl = addDialogInitialUrl,
+            onDismiss = {
+                showAddDialog = false
+                addDialogInitialUrl = ""
+            },
             onConfirm = { url, name ->
                 showAddDialog = false
+                addDialogInitialUrl = ""
                 viewModel.enqueue(url, name)
             }
         )
@@ -1227,11 +1252,22 @@ private fun installApk(context: android.content.Context, savePath: String, fileN
 
 @Composable
 private fun AddDownloadDialog(
+    /** 深链接预填的直链 / 磁力（空 = 用户自己输入） */
+    initialUrl: String = "",
     onDismiss: () -> Unit,
     onConfirm: (url: String, name: String) -> Unit
 ) {
-    var url by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf(initialUrl) }
+    // 预填时把落盘名一起算好（与下面 onValueChange 同一套规则：磁力取 dn=，其余取路径末段）
+    var name by remember {
+        mutableStateOf(
+            when {
+                initialUrl.isBlank() -> ""
+                MagnetLink.isMagnet(initialUrl) -> MagnetLink.displayName(initialUrl)
+                else -> initialUrl.substringAfterLast('/').take(80)
+            }
+        )
+    }
     val isMagnet = MagnetLink.isMagnet(url)
 
     AlertDialog(

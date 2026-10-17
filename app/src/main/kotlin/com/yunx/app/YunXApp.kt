@@ -107,6 +107,10 @@ class YunXApp : Application() {
         com.yunx.app.util.DiagnosticLog.install(this)
         // 下载调试：读开关（默认关）。必须在任何下载开始之前装配，否则开关打开后先建的任务收不到事件
         com.yunx.app.data.download.DownloadDebugLog.install(this)
+        // 链接唤起（深链接）：把用户设置刷到清单里那些 activity-alias 的启停状态。
+        // 设置里改开关是即时同步的，这里兜安装后首次启动与「改过开关又重装/清数据」的对齐；
+        // 任何异常都只记日志，绝不影响启动。
+        runCatching { com.yunx.app.util.LinkOpener.syncAll(this) }
         // 选了 Gopeed 引擎且已导入内核：启动就把它加载起来（失败只记日志，绝不影响应用启动）
         autoStartGopeedIfSelected(this)
     }

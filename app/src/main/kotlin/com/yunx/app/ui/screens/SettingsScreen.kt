@@ -64,6 +64,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Power
@@ -210,11 +211,15 @@ fun SettingsScreen(
     aboutRowModifier: Modifier = Modifier,
     supportRowModifier: Modifier = Modifier,
     engineRowModifier: Modifier = Modifier,
+    /** 「链接唤起」行的容器变换源侧修饰符（同上，由 MainScreen 构造） */
+    linkOpenRowModifier: Modifier = Modifier,
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
     /** 打开下载引擎页（两套下载器切换、导入内核、引擎启停与状态） */
     onGopeedClick: () -> Unit,
+    /** 打开「链接唤起」页（深链接注册项的逐个开关） */
+    onLinkOpenClick: () -> Unit,
     backupManager: AuthBackupManager,
     /** 手动检查更新（弹窗与下载逻辑都由 MainScreen 统一持有，设置页不再自己实现一份） */
     onCheckUpdate: () -> Unit,
@@ -714,6 +719,18 @@ fun SettingsScreen(
             title = "导入网盘认证",
             description = "选择加密或明文的认证备份文件，恢复网盘登录",
             onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        SectionLabel("链接唤起")
+        SettingsItem(
+            icon = Icons.Outlined.Link,
+            shape = listGroupShape(ListGroupPos.SINGLE),
+            title = "网盘链接一键唤起",
+            description = "点分享链接（或分享到云析）直接进来解析；可按平台逐个开关",
+            modifier = linkOpenRowModifier,
+            onClick = onLinkOpenClick
         )
 
         Spacer(modifier = Modifier.height(24.dp))
