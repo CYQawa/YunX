@@ -105,6 +105,7 @@ import com.yunx.app.ui.components.ScrollToTopButton
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
+import com.yunx.app.ui.preview.PreviewTypes
 import com.yunx.app.ui.screens.AddToBookmarkDialog
 import com.yunx.app.ui.screens.BaiduSaveContent
 import com.yunx.app.ui.screens.C139SaveContent
@@ -563,6 +564,16 @@ fun ShareDetailScreen(
                 actionFile = null
                 // 百度分享 >300MB 限速提示（与原来直接点击文件时一致）
                 checkBaiduLimit(file) { viewModel.fetchDownloadLink(file) }
+            },
+            // 在线预览：仅「可预览类型且非目录」才给入口 —— 可见性统一由 PreviewTypes 判断
+            // （压缩包/安装包/未知类型返回 null 不显示，避免点了必然失败的菜单项）
+            onPreview = if (!file.isdir && PreviewTypes.kindOf(file.fname) != null) {
+                {
+                    actionFile = null
+                    viewModel.openPreview(file)
+                }
+            } else {
+                null
             },
             onDownloadFolder = {
                 actionFile = null

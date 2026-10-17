@@ -18,6 +18,7 @@
 
 <resources>
     <string name="app_name">云析</string>
-    <!-- 长按选中文本后，系统文本选择菜单里这一项的名字（ACTION_PROCESS_TEXT 的动作名） -->
+    <!-- 系统「选中文本 → 更多」菜单里显示的条目名（见 AndroidManifest 的 ProcessTextLink）：
+         比光秃秃一个「云析」更清楚要干什么 -->
     <string name="process_text_action">用云析解析</string>
 </resources>

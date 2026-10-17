@@ -39,6 +39,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -288,6 +290,7 @@ private fun BlobBackground(modifier: Modifier = Modifier) {
 
 // ==================== 第 1 页：简洁欢迎 ====================
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WelcomePage(context: Context) {
     val versionName = remember {
@@ -346,15 +349,20 @@ private fun WelcomePage(context: Context) {
         )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "网盘分享链接解析与高速下载",
+            text = "网盘与视频链接解析 · 在线预览 · 高速下载",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(26.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // ★ 用 FlowRow 而不是 Row：标签数量与字数都会随功能增加，Row 在窄屏上会挤出去（这里会自动换行）
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             FactChip("10 大网盘")
+            FactChip("7 大视频平台")
             FactChip("分片下载")
             FactChip("完全免费")
         }

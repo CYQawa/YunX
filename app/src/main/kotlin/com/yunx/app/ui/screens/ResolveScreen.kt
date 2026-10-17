@@ -21,6 +21,7 @@ package com.yunx.app.ui.screens
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -32,6 +33,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -83,7 +85,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -96,11 +100,13 @@ import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.SharePlatform
+import com.yunx.app.data.network.video.VideoLinkParser
 import com.yunx.app.ui.SnackbarController
 import com.mikepenz.markdown.m3.Markdown
 import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.components.GitHubMarkdownImageTransformer
 import com.yunx.app.ui.components.compactMarkdownTypography
+import com.yunx.app.ui.items.logoRes
 import com.yunx.app.ui.resolve.DownloadLinkDialog
 import com.yunx.app.ui.resolve.ShareDetailScreen
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
@@ -173,21 +179,16 @@ fun ResolveScreen(
     var pwd by rememberSaveable { mutableStateOf("") }
     var pwdEdited by rememberSaveable { mutableStateOf(false) }
 
-    // 深链接 / 外部分享进来：与「剪贴板建议」走同一套解析入口（先 GitHub 再通用分享解析），
+    // 深链接 / 外部分享进来：走统一解析入口（先试视频、再试 GitHub / 网盘），
     // 但**直接发起解析**——用户是明确点了链接/分享了链接，不该再让他手动点一次「解析」。
     LaunchedEffect(incomingLink) {
         val text = incomingLink?.trim().orEmpty()
         if (text.isEmpty()) return@LaunchedEffect
-        val githubParsed = GitHubLinkParser.parse(text)
         val shareParsed = ShareLinkParser.parse(text)
         link = text
         pwd = shareParsed?.pwd.orEmpty()
         pwdEdited = true
-        if (githubParsed != null) {
-            viewModel.startGitHubResolve(githubParsed)
-        } else {
-            viewModel.startResolve(text, shareParsed?.pwd)
-        }
+        viewModel.startVideoResolve(text, shareParsed?.pwd)
         onIncomingLinkConsumed()
     }
 
@@ -204,7 +205,8 @@ fun ResolveScreen(
             text.isNotBlank() &&
             text != link &&
             text != ignoredClipboard &&
-            (ShareLinkParser.parse(text) != null || GitHubLinkParser.parse(text) != null)
+            (ShareLinkParser.parse(text) != null || GitHubLinkParser.parse(text) != null ||
+                VideoLinkParser.looksLikeVideoLink(text))
         ) {
             clipboardSuggestion = text
         }
@@ -375,6 +377,14 @@ fun ResolveScreen(
                     refreshing = viewModel.githubRefreshing
                 )
                 is ResolveUiState.Loading -> LoadingContent()
+                // 视频解析结果：顶部返回与 Detail 一致（回到输入页，输入框内容保留）
+                is ResolveUiState.Video -> VideoResultSection(
+                    result = s.result,
+                    onDownloadMedia = { viewModel.downloadVideoMedia(it) },
+                    onDownloadAll = { viewModel.downloadAllVideoMedia() },
+                    onDownloadSelected = { viewModel.downloadVideoMedias(it) },
+                    onBack = { viewModel.backToInput() }
+                )
                 else -> ResolveInputContent(
                     viewModel = viewModel,
                     scrollBehavior = scrollBehavior,
@@ -403,7 +413,8 @@ fun ResolveScreen(
                         if (github != null) {
                             viewModel.startGitHubResolve(github)
                         } else {
-                            viewModel.startResolve(bookmark.link, bookmark.pwd)
+                            // 统一入口：先试视频、再试网盘（GitHub 已在上方处理）
+                            viewModel.startVideoResolve(bookmark.link, bookmark.pwd)
                         }
                     },
                     onOpenBookmarks = onOpenBookmarks,
@@ -436,23 +447,29 @@ fun ResolveScreen(
             animatedSuggestion?.let { suggestion ->
                 val shareParsed = ShareLinkParser.parse(suggestion)
                 val githubParsed = GitHubLinkParser.parse(suggestion)
+                val videoParsed = VideoLinkParser.parse(suggestion)
+                val platformName = when {
+                    videoParsed != null -> videoParsed.platform.displayName
+                    githubParsed != null -> "GitHub"
+                    shareParsed != null -> shareParsed.platform.displayName
+                    else -> "网盘"
+                }
+                val platformLogo = when {
+                    videoParsed != null -> videoParsed.platform.logoRes()
+                    githubParsed != null -> SharePlatform.GITHUB.logoRes()
+                    shareParsed != null -> shareParsed.platform.logoRes()
+                    else -> null
+                }
                 ClipboardSuggestCard(
-                    platformName = when {
-                        githubParsed != null -> "GitHub"
-                        shareParsed != null -> platformLabel(shareParsed.platform)
-                        else -> "网盘"
-                    },
+                    platformName = platformName,
+                    platformLogo = platformLogo,
                     onPaste = {
                         link = suggestion
                         pwd = shareParsed?.pwd.orEmpty()
                         pwdEdited = true
                         clipboardSuggestion = null
-                        // GitHub 链接走 ViewModel 的 GitHub 解析入口（复用 ShareDetailScreen 框架）
-                        if (githubParsed != null) {
-                            viewModel.startGitHubResolve(githubParsed)
-                        } else {
-                            viewModel.startResolve(suggestion, shareParsed?.pwd)
-                        }
+                        // 统一入口：先试视频、再试 GitHub、最后网盘
+                        viewModel.startVideoResolve(suggestion, shareParsed?.pwd)
                     },
                     onDismiss = {
                         ignoredClipboard = suggestion
@@ -566,13 +583,8 @@ private fun ResolveInputContent(
 
         Button(
             onClick = {
-                // 优先识别 GitHub 链接（仓库 / 账号 / 文件直链），走 ViewModel 的 GitHub 解析入口
-                val github = GitHubLinkParser.parse(link)
-                if (github != null) {
-                    viewModel.startGitHubResolve(github)
-                } else {
-                    viewModel.startResolve(link, pwd)
-                }
+                // 统一入口：先试视频、再试 GitHub / 网盘（分流在 ViewModel 内完成）
+                viewModel.startVideoResolve(link, pwd)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -871,25 +883,12 @@ private fun readClipboardSafely(context: Context): String? = runCatching {
         ?.toString()
 }.getOrNull()
 
-/** 平台名称（提示卡片展示） */
-private fun platformLabel(platform: SharePlatform): String = when (platform) {
-    SharePlatform.QUARK -> "夸克网盘"
-    SharePlatform.UC -> "UC 网盘"
-    SharePlatform.XUNLEI -> "迅雷网盘"
-    SharePlatform.BAIDU -> "百度网盘"
-    SharePlatform.C139 -> "139 网盘"
-    SharePlatform.PAN123 -> "123云盘"
-    SharePlatform.PAN115 -> "115网盘"
-    SharePlatform.GUANGYA -> "光鸭云盘"
-    SharePlatform.ILANZOU -> "蓝奏云优享版"
-    SharePlatform.LANZOU -> "蓝奏云"
-    SharePlatform.GITHUB -> "GitHub"
-}
-
 /** 剪贴板分享链接提示卡片：检测到分享链接时，询问是否粘贴解析 */
 @Composable
 private fun ClipboardSuggestCard(
     platformName: String,
+    /** 平台 Logo；识别不出平台时为 null，退回原来的链接图标 */
+    @DrawableRes platformLogo: Int?,
     onPaste: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -903,11 +902,20 @@ private fun ClipboardSuggestCard(
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Outlined.Link,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                if (platformLogo != null) {
+                    Image(
+                        painter = painterResource(platformLogo),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Link,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(

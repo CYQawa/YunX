@@ -30,8 +30,8 @@ import com.yunx.app.data.security.CredentialStore
 import com.yunx.app.util.DiagnosticLog
 
 @Database(
-    entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, GuangYaAccountEntity::class, ILanzouAccountEntity::class, LanzouAccountEntity::class, BookmarkEntity::class],
-    version = 20,
+    entities = [QuarkAccountEntity::class, DownloadTaskEntity::class, UCAccountEntity::class, XunleiAccountEntity::class, BaiduAccountEntity::class, C139AccountEntity::class, Pan123AccountEntity::class, Pan115AccountEntity::class, GuangYaAccountEntity::class, ILanzouAccountEntity::class, LanzouAccountEntity::class, BookmarkEntity::class, VideoAccountEntity::class],
+    version = 22,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -60,6 +60,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun bookmarkDao(): BookmarkDao
 
+    /** 视频解析账号：原始 DAO（未加密），对外请用 [videoAccountDao] */
+    abstract fun rawVideoAccountDao(): VideoAccountDao
+
     private lateinit var credentialCipher: CredentialCipher
 
     fun quarkAccountDao(): QuarkAccountDao = SecureAccountDaos.quark(rawQuarkAccountDao(), credentialCipher)
@@ -72,6 +75,9 @@ abstract class AppDatabase : RoomDatabase() {
     fun guangyaAccountDao(): GuangYaAccountDao = SecureAccountDaos.guangya(rawGuangYaAccountDao(), credentialCipher)
     fun ilanzouAccountDao(): ILanzouAccountDao = SecureAccountDaos.ilanzou(rawILanzouAccountDao(), credentialCipher)
     fun lanzouAccountDao(): LanzouAccountDao = SecureAccountDaos.lanzou(rawLanzouAccountDao(), credentialCipher)
+
+    /** 视频解析账号：Cookie 与网盘凭证同等加密后落库 */
+    fun videoAccountDao(): VideoAccountDao = SecureAccountDaos.videoAccount(rawVideoAccountDao(), credentialCipher)
 
     companion object {
         @Volatile
@@ -95,7 +101,9 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_16_17,
                         MIGRATION_17_18,
                         MIGRATION_18_19,
-                        MIGRATION_19_20
+                        MIGRATION_19_20,
+                        MIGRATION_20_21,
+                        MIGRATION_21_22
                     )
                     // 早期开发版（1-8）无可靠 schema；从 v9 起必须保留凭证和下载任务
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8)
@@ -301,6 +309,43 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE `download_task` ADD COLUMN `altSourcesJson` TEXT NOT NULL DEFAULT ''"
                 )
+            }
+        }
+
+        /**
+         * v21：视频解析账号。
+         *
+         * 视频平台（抖音/小红书/快手/微博/AcFun/哔哩哔哩/Pixiv）的凭证都是一个完整 Cookie，
+         * 结构与语义一致，所以**所有平台共用一张表**、用 `platform` 列区分 —— 以后新增视频平台
+         * 不需要再写迁移（与网盘「一平台一表」不同，那里各平台凭证字段差异很大）。
+         * 列定义必须与 [VideoAccountEntity] 完全一致（类型/非空），否则 Room 打开时会校验失败。
+         */
+        private val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `video_account` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`platform` TEXT NOT NULL, " +
+                        "`cookie` TEXT NOT NULL, " +
+                        "`nickname` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`isPrimary` INTEGER NOT NULL, " +
+                        "`remark` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+            }
+        }
+
+        /**
+         * v22：哔哩哔哩 DASH 音视频合轨。
+         *
+         * 高清是**音视频分离**的两路流，需要先各自下载再用 mp4parser 合轨，所以下载任务要多记
+         * 「音轨直链 + 音轨请求头」。两列默认空 = 单文件下载，升级后既有任务与行为完全不变。
+         */
+        private val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `download_task` ADD COLUMN `mergeAudioUrl` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `download_task` ADD COLUMN `mergeAudioHeadersJson` TEXT NOT NULL DEFAULT ''")
             }
         }
     }

@@ -44,13 +44,11 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -79,7 +77,11 @@ import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
 import android.content.Intent
 import android.net.Uri
+import androidx.annotation.DrawableRes
 import com.yunx.app.R
+import com.yunx.app.data.network.SharePlatform
+import com.yunx.app.data.network.video.VideoPlatform
+import com.yunx.app.ui.items.logoRes
 import com.yunx.app.util.AppLinks
 
 /**
@@ -133,8 +135,9 @@ fun AboutScreen(
             InfoCard(
                 icon = Icons.Outlined.Cloud,
                 title = "应用简介",
-                description = "云析（YunX）是一款网盘分享链接解析与高速下载工具。" +
-                    "粘贴分享链接，登录网盘账号后即可浏览分享内容并直接高速下载文件。"
+                description = "云析（YunX）是一款网盘 / 视频分享链接解析与高速下载工具。" +
+                    "粘贴链接即可：网盘分享能浏览内容并高速下载，视频链接能解析出直链与原图，" +
+                    "图片 / 视频 / 音频都支持在线预览播放。"
             )
             
 
@@ -225,7 +228,7 @@ private fun AppHeader(versionName: String, versionCode: Int) {
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "网盘链接解析与高速下载",
+            text = "网盘 / 视频链接解析与高速下载",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -257,22 +260,19 @@ private fun InfoCard(icon: ImageVector, title: String, description: String) {
     }
 }
 
-/** 支持平台卡片 */
+/** 平台胶囊数据：官方 logo + 名字 */
+private data class PlatformChip(@DrawableRes val logoRes: Int, val name: String)
+
+/** 支持平台卡片：网盘与视频平台各一组，图标用各家官方 logo（见 `PlatformLogos`） */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PlatformCard() {
-    val platforms = listOf(
-        "夸克网盘" to Icons.Outlined.Cloud,
-        "UC 网盘" to Icons.Outlined.Storage,
-        "迅雷网盘" to Icons.Outlined.Speed,
-        "百度网盘" to Icons.Outlined.Link,
-        "139 网盘" to Icons.Outlined.Cloud,
-        "123云盘" to Icons.Outlined.Cloud,
-        "115网盘" to Icons.Outlined.Cloud,
-        "光鸭云盘" to Icons.Outlined.Cloud,
-        "蓝奏云优享版" to Icons.Outlined.Cloud,
-        "蓝奏云" to Icons.Outlined.Cloud
-    )
+    // GitHub 是「当网盘浏览」的附加项，不算网盘平台，不列进这一组
+    val drives = SharePlatform.entries
+        .filter { it != SharePlatform.GITHUB }
+        .map { PlatformChip(it.logoRes(), it.displayName) }
+    val videos = VideoPlatform.entries.map { PlatformChip(it.logoRes(), it.displayName) }
+
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardIcon(Icons.Outlined.Storage)
@@ -284,32 +284,48 @@ private fun PlatformCard() {
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            platforms.forEach { (name, icon) ->
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.secondaryContainer
+        PlatformChipGroup(label = "网盘", chips = drives)
+        Spacer(modifier = Modifier.height(12.dp))
+        PlatformChipGroup(label = "视频解析", chips = videos)
+    }
+}
+
+/** 一组平台胶囊（标题 + 会自动换行的胶囊流） */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PlatformChipGroup(label: String, chips: List<PlatformChip>) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        chips.forEach { chip ->
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(15.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
+                    // 官方图标按自身形状原样画（不裁圆、不垫底色），理由见 PlatformLogos 的 KDoc
+                    Image(
+                        painter = painterResource(chip.logoRes),
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Spacer(modifier = Modifier.width(7.dp))
+                    Text(
+                        text = chip.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 }
             }
         }
@@ -320,7 +336,10 @@ private fun PlatformCard() {
 @Composable
 private fun FeatureCard() {
     val features = listOf(
-        "一键解析分享链接" to "夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 / 光鸭 / 蓝奏云 / 蓝奏云优享版 分享直链识别",
+        "网盘分享解析" to "夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 / 光鸭 / 蓝奏云 / 蓝奏云优享版 直链识别",
+        "视频链接解析" to "抖音 / 小红书 / 快手 / 微博 / AcFun 免登录；哔哩哔哩登录后画质更高，Pixiv 未登录只能解析部分公开作品、粘贴浏览器 Cookie 后可解析全部作品",
+        "在线预览与播放" to "图片 / 视频 / 音频在线看（自动带请求头），网盘里的文本文件也能打开",
+        "音视频合轨" to "哔哩哔哩高清是音视频分轨的，应用内部合轨，不需要额外装 ffmpeg",
         "高速分片下载" to "多线程并发 + 断点续传，充分利用带宽",
         "取链即删" to "转存后立即清理，不留残留",
         "凭证本地化" to "Cookie 加密落库，仅存本机"
@@ -366,7 +385,10 @@ private fun FeatureCard() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TechCard() {
-    val techs = listOf("Kotlin", "Jetpack Compose", "Material 3", "Room", "OkHttp", "KSP")
+    val techs = listOf(
+        "Kotlin", "Jetpack Compose", "Material 3", "Room", "OkHttp", "KSP",
+        "Media3 ExoPlayer", "Coil 3", "mp4parser"
+    )
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardIcon(Icons.Outlined.Code)

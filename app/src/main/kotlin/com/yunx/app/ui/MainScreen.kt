@@ -114,6 +114,7 @@ import com.yunx.app.data.network.QuarkApi
 import com.yunx.app.data.network.TokenCheck
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.XunleiApi
+import com.yunx.app.data.network.video.VideoPlatform
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.security.CredentialStore
 import com.yunx.app.data.update.UpdateChecker
@@ -138,6 +139,8 @@ import com.yunx.app.data.repository.UCAccountRepository
 import com.yunx.app.data.repository.UCResolveRepository
 import com.yunx.app.data.repository.XunleiAccountRepository
 import com.yunx.app.data.repository.XunleiResolveRepository
+import com.yunx.app.data.repository.VideoAccountRepository
+import com.yunx.app.data.repository.VideoParseRepository
 import com.yunx.app.ui.login.BaiduLoginScreen
 import com.yunx.app.ui.login.C139LoginScreen
 import com.yunx.app.ui.login.GuangYaLoginScreen
@@ -150,7 +153,10 @@ import com.yunx.app.ui.login.UCLoginScreen
 import com.yunx.app.ui.login.XunleiLoginScreen
 import com.yunx.app.ui.login.XunleiVerifyWebViewScreen
 import com.yunx.app.ui.login.XunleiWebLoginScreen
+import com.yunx.app.ui.login.VideoLoginScreen
 import com.yunx.app.ui.navigation.MainTab
+import com.yunx.app.ui.preview.MediaPreviewScreen
+import com.yunx.app.ui.preview.PreviewLauncher
 import com.yunx.app.ui.screens.AboutScreen
 import com.yunx.app.ui.screens.AnnouncementPopupDialog
 import com.yunx.app.ui.screens.AnnouncementScreen
@@ -193,6 +199,7 @@ import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.UCAccountViewModel
 import com.yunx.app.ui.viewmodel.XunleiAccountViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import com.yunx.app.ui.viewmodel.VideoAccountViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
@@ -229,9 +236,9 @@ internal const val OVERLAY_KEY_MULTI_ACCOUNT = "overlay-multi-account"
 /**
  * 主页框架：
  * - 顶部可折叠标题（MediumFlexibleTopAppBar，Expressive 柔性顶栏），切换 Tab 时标题文字随 Tab 变化，折叠状态不受影响；
- * - 导航 Tab（解析 / 网盘 / 下载 / 设置）：竖屏为底部导航条（ShortNavigationBar），横屏切换为侧边导航栏（NavigationRail）；
+ * - 导航 Tab（解析 / 账号 / 下载 / 设置）：竖屏为底部导航条（ShortNavigationBar），横屏切换为侧边导航栏（NavigationRail）；
  * - 通过 SaveableStateHolder 保存各页面状态，切换 Tab 再切回来不会重置；
- * - 夸克登录页全屏覆盖展示。
+ * - 各平台登录页（含视频平台的通用 WebView 登录页）全屏覆盖展示。
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -276,6 +283,10 @@ fun MainScreen(
     var showGuangYaLogin by rememberSaveable { mutableStateOf(false) }
     var showILanzouLogin by rememberSaveable { mutableStateOf(false) }
     var showLanzouLogin by rememberSaveable { mutableStateOf(false) }
+    // 视频平台登录页：null = 不展示；否则为正在登录的平台（枚举是 Serializable，可直接交给 rememberSaveable）
+    var videoLoginPlatform by rememberSaveable { mutableStateOf<VideoPlatform?>(null) }
+    // 本次视频登录是否算「新增账号」（账号弹窗点「添加账号」时为 true，登录后落成新的一行）
+    var videoLoginAsNewAccount by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showSupport by rememberSaveable { mutableStateOf(false) }
     var showTheme by rememberSaveable { mutableStateOf(false) }
@@ -538,6 +549,13 @@ fun MainScreen(
     val multiAccountViewModel: MultiAccountViewModel = viewModel(
         factory = MultiAccountViewModel.Factory(AccountDirectory(db))
     )
+    // 视频解析账号：账号页「视频解析」区的登录态与账号管理（所有视频平台共用一张表、一个 Cookie）
+    val videoAccountViewModel: VideoAccountViewModel = viewModel(
+        factory = VideoAccountViewModel.Factory(context)
+    )
+    // 视频区需要的两份数据：各平台当前账号（决定「未登录 / 昵称 / 备注」）与全部账号（多账号计数、弹窗列表）
+    val videoLoginState by videoAccountViewModel.loginState.collectAsState()
+    val videoAccounts by videoAccountViewModel.accounts.collectAsState()
     // 各平台「账号是否已登录」流：云盘浏览 VM 在启动期（未登录）init 加载会残留「请先登录…」错误态，
     // 首次登录成功后由 VM 监听该流自动重载根目录（见各 XxxCloudViewModel init）
     val quarkLoginState = remember { repository.observeAccount().map { it != null } }
@@ -718,6 +736,10 @@ fun MainScreen(
     val ilanzouResolveRepository = remember {
         ILanzouResolveRepository(ilanzouApi, ilanzouRepository)
     }
+    // 视频解析仓库：解析页「视频解析」入口使用（与视频账号页共用同一份 Cookie 账号表）
+    val videoParseRepository = remember {
+        VideoParseRepository(VideoAccountRepository(db.videoAccountDao()))
+    }
     val resolveViewModel: ResolveViewModel = viewModel(
         factory = ResolveViewModel.Factory(
             repository,
@@ -748,7 +770,9 @@ fun MainScreen(
             // 多账号下载 / 单文件多源分片（两个实验性开关）：实时读设置，改完立即生效
             multiAccountDownloadProvider = { settings.multiAccountDownload },
             // 用 multiSourceActive()：C2 依赖 C1，关掉 C1 后这里也自动为 false（见 SettingsRepository）
-            multiSourceDownloadProvider = { settings.multiSourceActive() }
+            multiSourceDownloadProvider = { settings.multiSourceActive() },
+            // 视频解析仓库（抖音/小红书/快手/微博/AcFun/B站/Pixiv）
+            videoParseRepository = videoParseRepository
         )
     )
     val downloadViewModel: DownloadViewModel = viewModel(
@@ -973,6 +997,41 @@ fun MainScreen(
                 lanzouViewModel.cancelAddAccount()
             },
             onSaved = { showLanzouLogin = false }
+        )
+        return
+    }
+
+    // 视频平台登录页：全屏覆盖（通用 WebView Cookie 登录页，按 platform 参数化）
+    val videoLoginTarget = videoLoginPlatform
+    if (videoLoginTarget != null) {
+        VideoLoginScreen(
+            platform = videoLoginTarget,
+            viewModel = videoAccountViewModel,
+            newAccount = videoLoginAsNewAccount,
+            onBack = {
+                videoLoginPlatform = null
+                videoLoginAsNewAccount = false
+            },
+            // 保存成功后登录态 Flow 会自动刷新账号页，这里只需关掉登录页
+            onSaved = {
+                videoLoginPlatform = null
+                videoLoginAsNewAccount = false
+            }
+        )
+        return
+    }
+
+    // ★ 在线预览页：全屏覆盖，优先级最高。
+    //   放在这条 return 链的**最后**：它要盖住所有页面（主界面、各叠加页，甚至正开着的叠加页），
+    //   而这里的 return 会让 MainScreen 整棵树（含下面 SharedTransitionLayout 里的叠加页 AnimatedVisibility）
+    //   完全不组合，天然满足「预览一旦打开就独占屏幕」；排在登录页之后是为了让登录流程不被预览打断
+    //   （登录是更长的事务，用户点开登录页时不该被一次预览请求顶掉）。
+    //   预览页自己带 Scaffold + BackHandler，关闭即 PreviewLauncher.dismiss() → request 变 null → 回到原页面。
+    val previewRequest by PreviewLauncher.request.collectAsState()
+    if (previewRequest != null) {
+        MediaPreviewScreen(
+            request = previewRequest!!,
+            onClose = { PreviewLauncher.dismiss() }
         )
         return
     }
@@ -1276,7 +1335,32 @@ fun MainScreen(
                                         }
                                     },
                                     // 更多菜单「清除 Token」：先二次确认再清除
-                                    onGitHubClearToken = { showGitHubClearConfirm = true }
+                                    onGitHubClearToken = { showGitHubClearConfirm = true },
+                                    // 视频解析区：登录态 + 账号管理（弹窗里的操作全部落到 VideoAccountViewModel）
+                                    videoLoginState = videoLoginState,
+                                    videoAccounts = videoAccounts,
+                                    onVideoLogin = { platform ->
+                                        // 普通登录：覆盖当前账号那一行，不新增记录
+                                        videoLoginAsNewAccount = false
+                                        videoLoginPlatform = platform
+                                    },
+                                    onVideoAddAccount = { platform ->
+                                        // 先清一次 WebView 登录态：否则登录页会自动检测出旧账号，
+                                        // 「添加账号」加进来的还是同一个账号（与网盘的 prepareAddAccount 同因）
+                                        multiAccountViewModel.prepareAddAccount()
+                                        videoLoginAsNewAccount = true
+                                        videoLoginPlatform = platform
+                                    },
+                                    onVideoSetPrimary = { platform, id ->
+                                        videoAccountViewModel.setPrimary(platform, id)
+                                    },
+                                    onVideoRename = { id, remark ->
+                                        videoAccountViewModel.updateRemark(id, remark)
+                                    },
+                                    onVideoRemove = { id -> videoAccountViewModel.remove(id) },
+                                    onVideoRemoveAll = { platform ->
+                                        videoAccountViewModel.removeAll(platform)
+                                    }
                                 )
                                 MainTab.Download -> DownloadScreen(
                                     scrollBehavior,
@@ -1682,7 +1766,7 @@ private fun OverlayPage(modifier: Modifier = Modifier, content: @Composable () -
 }
 
 /**
- * 底部导航条（竖屏）：4 个主 Tab（解析 / 网盘 / 下载 / 设置）。
+ * 底部导航条（竖屏）：4 个主 Tab（解析 / 账号 / 下载 / 设置）。
  * 用 Expressive 的 ShortNavigationBar（选中项带形状指示器 + 弹簧动效，item 由组件内部按 EqualWeight 均分，
  * 不需要自己加 weight）。
  * ★ 高度：Expressive 规范高度是 64dp（NavigationBarTokens.ContainerHeight），比经典 NavigationBar 的

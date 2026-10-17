@@ -18,8 +18,26 @@
 
 package com.yunx.app.data.network
 
-/** 网盘平台 */
-enum class SharePlatform { QUARK, UC, XUNLEI, BAIDU, C139, PAN123, PAN115, GUANGYA, ILANZOU, LANZOU, GITHUB }
+/**
+ * 网盘平台。
+ *
+ * [displayName] 是给界面用的人类可读名（解析页的识别提示、关于页/引导页的平台列表都用它）——
+ * 与 `VideoPlatform.displayName` 同一套做法，**别再在 UI 层各写一份 `when`**（旧代码里
+ * `ResolveScreen.platformLabel` 就是这样，容易和这里说的不一样）。
+ */
+enum class SharePlatform(val displayName: String) {
+    QUARK("夸克网盘"),
+    UC("UC 网盘"),
+    XUNLEI("迅雷网盘"),
+    BAIDU("百度网盘"),
+    C139("139 网盘"),
+    PAN123("123云盘"),
+    PAN115("115网盘"),
+    GUANGYA("光鸭云盘"),
+    ILANZOU("蓝奏云优享版"),
+    LANZOU("蓝奏云"),
+    GITHUB("GitHub")
+}
 
 /**
  * 解析结果：share_id + 提取码 + 平台。

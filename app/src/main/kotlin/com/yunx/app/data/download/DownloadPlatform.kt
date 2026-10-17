@@ -42,4 +42,7 @@ object DownloadPlatform {
     const val GITHUB = "github"
     /** 通用/未知来源（手动添加、应用更新下载等） */
     const val GENERIC = "generic"
+
+    /** 视频平台（抖音/小红书/快手/微博/AcFun/B站/Pixiv）：统一用通用线程设置，不做平台细分 */
+    const val VIDEO = "video"
 }

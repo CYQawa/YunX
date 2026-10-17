@@ -66,6 +66,16 @@ data class DownloadTaskEntity(
      */
     @ColumnInfo(defaultValue = "''")
     val altSourcesJson: String = "",
+    /**
+     * 需要合轨的**音轨直链**（哔哩哔哩 DASH：高清是音视频分离的两路流）。
+     * 非空 = 这条任务要先下视频轨（[url]）与音轨（本字段）再用 mp4parser 合轨成一个 mp4；
+     * 空 = 单文件下载，与其它平台完全一致。
+     */
+    @ColumnInfo(defaultValue = "''")
+    val mergeAudioUrl: String = "",
+    /** 音轨的请求头 JSON（落库前按 `download.mergeAudioHeaders` 加密） */
+    @ColumnInfo(defaultValue = "''")
+    val mergeAudioHeadersJson: String = "",
     /** 下载完成时的平均速度（字节/秒）；完成态展示用，进行中为 0 */
     @ColumnInfo(defaultValue = "0")
     val avgSpeed: Long = 0,

@@ -80,7 +80,7 @@ app/src/main/kotlin/com/yunx/app/
     ├── login/                   # 各平台登录页
     ├── viewmodel/               # 每个功能一个 ViewModel + 内嵌 Factory
     ├── components/ items/       # 可复用小组件
-    │   └── RemoteImageLoader.kt / RemoteImage.kt   # ★ 全项目唯一的网络图片加载器（OkHttp，**不用 Coil**，见 §3.35）
+    │   └── RemoteImageLoader.kt / RemoteImage.kt   # ★ 列表/公告/Markdown 的网络图片加载器（OkHttp，见 §3.35；预览另有 Coil，见 §3.42）
     └── theme/                   # Color / Type / Theme / ThemeController
 ```
 
@@ -1337,7 +1337,8 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
 `RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），
 Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正文图集）**共用同一份缓存**；
 `GitHubMarkdownImageTransformer` 现在只是「渲染器适配层」（`mirrorPrefix` 转发给加载器）。
-项目里**没有 Coil**，这是既定选择（见 `RemoteImageLoader` 的文件注释与本节），不要再引第二个图片库。
+列表 / 公告 / Markdown 的图片**一律走这套**，不要再引别的图片库。**唯一例外是 §3.42 的在线预览**：
+`ui/preview` 用 Coil 3 加载带逐请求请求头的原图与多图翻页，那是用户拍板的选型（见 `MediaPreviewScreen`）。
 ★ `RemoteImage` 的尺寸只有两种给法，别混：
 1. **固定尺寸**（头像 / 列表缩略图 / **弹窗封面**）：调用方传 `Modifier.size(...)` 或 `height(...)`，
    宽高必须**都有界**（`Image` 在无界高度下会退化成图片固有尺寸，长图糊一屏）；
@@ -1713,6 +1714,276 @@ operation = 入队/暂停/删除等用户关键操作。
 
 
 ---
+
+### 3.41 视频解析（多平台链接 → 直链/图集）
+
+解析页除了网盘，还能识别**视频平台**链接：粘贴/分享/选中文本进来的链接会先试视频解析（`VideoLinkParser`），
+识别不到才回落到网盘解析。产出的每条媒体都有自己的请求头，交给现有下载引擎入队，落地为普通下载任务。
+
+**支持的平台与手法**（全部是纯 Kotlin + OkHttp，**不依赖 yt-dlp / ffmpeg / gallery-dl / curl_cffi**）：
+
+| 平台 | 数据来源 | 产出 | 登录 |
+|---|---|---|---|
+| 抖音 | 分享页 SSR 的 `window._ROUTER_DATA`（+ 匿名 `ttwid` 注册 + play 端点探测最高码率） | 单文件 mp4（`playwm`→`play`）/ 图集 | 不需要 |
+| 小红书 | 分享页 SSR 的 `window.__INITIAL_STATE__`（**裸 `undefined` 必须先换成 `null`**）；**先 explore（桌面 UA）、失败再 discovery（iOS UA + XHR 头）**，两条路径都要带上分享链接里的 `xsec_token` | 单文件 mp4（h265→h264→av1→h266）/ 图集 | **必须登录**（实测 2026-10：未登录 explore 跳 `/login`、discovery 跳 `/website-login/captcha`，页面里都没有 INIT_STATE） |
+| 快手 | 分享页 SSR 的 `window.INIT_STATE` | 单文件 mp4 | 不需要 |
+| 微博 | `m.weibo.cn/statuses/show`（伪装 XHR、**不跟随重定向**）、`h5.video.weibo.com/api/component` | 单文件 mp4（720p 优先）/ 九宫格原图 | 不需要（提高成功率） |
+| AcFun | `?quickViewId=videoInfo_new&ajaxpipe=1` 的 `window.videoInfo` | **m3u8** → 自动走 HLS 路径 | 不需要 |
+| 哔哩哔哩 | `x/web-interface/view` + `x/player/playurl?fnval=1&platform=html5` | **单文件低清**（见下方 TODO） | 可选（登录后画质更高） |
+| Pixiv | `ajax/illust/{id}` + `ajax/illust/{id}/pages` | 每页**原图**直链 | **要全量必须登录，但只支持手动填 Cookie**（实测 2026-10：未登录也能解析**一部分公开作品**，R18 / 受限作品与其余部分必须登录；网页登录在 WebView 里过不了它的风控，见 §3.44） |
+
+**刻意不做的**：YouTube / TikTok / Instagram（依赖 yt-dlp、gallery-dl）、知乎（curl_cffi TLS 指纹 + bs4）、
+Twitter / 视频号 / QQ空间 / Metube（数据要经过第三方服务）、Pixiv 动图（需要 GIF 合成）。这些要么在
+Android 上无法闭环，要么要把用户链接交给外部服务，宁可不做。**不做任何内容过滤/年龄门槛**，能否看到
+受限内容取决于平台与账号设置。
+
+**关键实现约定**：
+
+- **平台标识**：`VideoPlatform` 枚举（`name` 用于落库 / `displayName` / `loginUrl` / `cookieDomain`），
+  新增平台改这一个枚举 + `VideoParsers` 注册表即可，**账号页的平台列表由枚举驱动，不要硬编码**。
+- **链接识别**：`VideoLinkParser` 只认**链接**，**故意不支持「裸数字 ID」**（参考实现允许，但那样会把网盘
+  提取码、迅雷口令里的数字一起吃掉）。短链（`v.douyin.com` / `xhslink.com` / `b23.tv`）先由
+  `VideoParseRepository` 展开重定向再重新识别，所以**解析器只需要处理规范化后的链接**。
+- **错误分类**：各解析器失败必须抛 `VideoParseException(kind)`，由 `userMessage()` 决定给用户看什么
+  （403/418/429 → 「平台风控拦截，请稍后重试」）。**不要静默失败**——微博匿名解析被风控是常态。
+  更要紧的是**别把「登录墙」报成「内容已删除」**：小红书未登录时会被 302 到登录页/验证码页，
+  解析器要按**最终地址**（`RawResponse.finalUrl`）识别出来，给出「请先到账号页登录」这种可操作提示
+  （`XhsParser.fetchPage` 就是范例）。
+- **账号**：`video_account` **单表 + platform 列**（DB v21）。与网盘「一平台一表」不同，视频平台凭证都是
+  一个完整 Cookie、结构一致，单表的直接好处是**以后新增视频平台不需要再写 Room 迁移**。
+  Cookie 同样经 `SecureAccountDaos.videoAccount` 字段级加密；`isPrimary`/`remark`/`resolveAccountSlot`
+  复用网盘多账号那套（重复登录不会堆出失效账号）。登录走通用的 `VideoLoginScreen`（复用
+  `rememberWebLoginAutoDetect` 与 WebView 诊断客户端），保存前用 `VideoParser.validateCookie` 校验。
+  **登录页的 WebView 一律用桌面 UA**（`VideoHttp.UA_CHROME`）——Android WebView 默认 UA 是带 `wv` 的移动 UA，
+  而 B站 / 小红书的登录页只在桌面 UA 下才是登录页。**别给某个平台换移动 UA**：小红书换成移动 UA 后
+  `/login` 直接 404（「你访问的页面不见了」），H5 首页又只有「打开 App」没有登录入口 —— 表现就是
+  「点了登录但没有登录页」。**`loginUrl` 要直指登录页、不要给站点根地址**：小红书的根地址会被 302 到
+  `/explore`（桌面信息流）再叠登录弹窗，手机上看到的是被裁切的信息流。
+  **窄屏会把登录表单裁掉的平台，用 `VideoPlatform.loginViewportWidth` 强制覆盖成桌面宽度**（小红书 = 1280）：
+  `VideoLoginScreen` 在 `onPageFinished` 里注入脚本改写 viewport 并派发 `resize`（与 `BaiduLoginScreen` 同一套，
+  即用户说的「像百度网盘那样渲染整个电脑端网页，可左右拖动 + 双指缩放」）。小红书登录页是**固定 440px 宽
+  容器**，又自带 `maximum-scale=1, user-scalable=no`、`overflow-x: hidden` —— 手机布局宽度只有 360~412px，
+  右侧的「继续」（确认）按钮被裁掉且**缩不了也滚不到**，用户看到的现象就是「有二维码和手机号，但手机号
+  根本用不了，因为没有确认按钮」。覆盖成桌面宽度后它会切到桌面双栏登录页（二维码 + 手机号 + 获取验证码 +
+  登录），整页按 `loadWithOverviewMode` 缩放可见，用户可双指缩放、左右拖动。
+  登录态**一律用行为探测**，别按 Cookie 名字判断：小红书网页端 JS 会自种**游客态 `web_session`**、
+  Pixiv 对游客也会下发 `PHPSESSID`（游客会话令牌），只按名字判定会把「未登录」误报成「已登录」——
+  后果不只是显示错，而是**登录页刚打开就被自动保存并关闭，用户根本没机会登录**。
+  范例：`XhsParser.validateCookie` 请求 `/explore`、`PixivParser.validateCookie` 请求 `/dashboard/works`，
+  被 302 到登录页即视为未登录。
+  ★ **判据要实测**：Pixiv 未登录请求 `/dashboard/works` 的 302 目标是
+  `http://www.pixiv.net/?return_to=%2Fdashboard%2Fworks`（注意是**明文 http**、带 `return_to` 回跳参数），
+  **不是**跳 `accounts.pixiv.net` —— 第一版判错了域名，第二版踩了明文策略：跟随这个 http 跳转会被
+  `network_security_config` 拦下抛错，于是「探测失败就放行」的兜底把游客判成已登录。
+  **这类探测一律 `followRedirects = false`，只看 3xx 的 `Location`**，不要真的跳过去。
+  另外 `ajax/user/extra` 对游客直接 400（`不正なリクエストです`），不能拿它当登录态接口。
+  ★ **探测本身失败（网络不通 / 被墙 / 超时）时一律放行，不要拦**：`validateCookie` 是保存账号的闸门，
+  判死有效 Cookie 会让用户永远存不上账号；真有问题留到解析那一步由服务端报错（提示更准确）。
+  ★ Pixiv **已经没有网页登录页了**（`manualCookieOnly`，见 §3.44）：它的网页登录在 WebView 里必然失败，
+  不要再把 `accounts.pixiv.net/login` 加回来。
+  ★ **游客基线闸门**（`VideoLoginScreen`）：加载完成后隔 2.5s 取一次 Cookie 作为基线，
+  自动保存只在 **Cookie 与基线不同** 时才触发。这是对付「游客令牌」的第一道闸 —— 省掉一次无意义的
+  网络校验，也避免登录页刚打开就被判成已登录（真正的判定仍由 `validateCookie` 负责；基线没取到不限制）。
+  ★ **登录页加载失败要看得见**（`VideoLoginScreen` 的 `onReceivedError`，只认主文档）：需要代理才能访问的
+  站点直连必然失败，以前只留个转圈或白屏，用户不知道发生了什么；现在给错误卡片 + 重试 + 「可能要连代理」。
+  子资源（CDN 图、验证码 iframe）失败不提示，否则会误报。
+  ★ **登录页必须允许第三方 Cookie**（`CookieManager.setAcceptThirdPartyCookies(webView, true)`）：登录页里嵌的
+  reCAPTCHA / SSO 都是第三方 iframe，WebView 默认拦掉它们的 Cookie，验证码流程会**悄悄失败**（拿不到有效 token）。
+  顶栏同时给了「刷新」入口：平台自己就会提示「请刷新网页」，以前只能返回再进来。
+  ★ **二段验证 / 风控类登录在 WebView 里可能怎么都过不去**（reCAPTCHA 会识别 WebView）。Pixiv 就是实例，
+  已经退回「只支持手动填 Cookie」（`manualCookieOnly`，见 §3.44）。「手动粘贴 Cookie」是可靠兜底
+  （桌面浏览器登录后把整串 Cookie 粘进来），别把它当次要功能。
+  账号页的平台顺序由 `VideoParsers.supportedPlatforms` 决定（`sortedBy { it.needsLogin }`：
+  免登录的在前、需要登录的三个聚在最后），**不要靠 `all` 的手写顺序**，新增平台才不会再散开。
+- **下载**：只加了**一个** `DownloadPlatform.VIDEO` 常量（不给 7 个平台各加），它们共用通用线程设置。
+  m3u8 **不需要额外参数**：`DownloadManager` 按 URL 是否含 `.m3u8` 自动走 HLS 路径。媒体的 `headers`
+  （Referer/UA/Cookie）随任务加密落库，与网盘任务同一机制。
+- **直链一律归一化成 https**（`VideoParseRepository.withSecureMediaUrls` → `VideoHttp.secureUrl`）。
+  ★ 这不是洁癖：小红书 SSR 里的图片直链是**明文 http**（`http://sns-webpic-qc.xhscdn.com/...`），
+  而 `network_security_config.xml` 的 `base-config` 全局禁止明文，OkHttp 会直接抛
+  `CLEARTEXT communication ... not permitted by network security policy` ——
+  **预览和下载会同时失败**（Coil 与下载器都走 OkHttp），且光看解析结果完全看不出问题。
+  归一化只放在仓库这一处出口，新增平台不必各自记得处理。
+- **平台图标用内置 drawable，作品封面/头像仍然不加载**：`res/drawable/logo_*.png` 是各平台官方图标
+  （200×200，用户整理），映射表在 `ui/items/PlatformLogos.kt`（`SharePlatform.logoRes()` /
+  `VideoPlatform.logoRes()` / `drivePlatformLogoRes(id)`）。**别把 drawable 资源 id 塞进 `VideoPlatform`
+  这类数据模型**——数据层不依赖 `R`，图标表归 UI 层。渲染一律**按 Logo 自身形状原样画**（不裁圆、
+  不垫底色）：这些图标有的是带底色的圆角方块、有的是透明底图形，统一裁形会裁掉前者的边、给后者糊一圈
+  假底色；「未登录」用整体压暗（`alpha`）表示，别再加圆形底色。而**作品封面/作者头像（外来内容）依旧
+  不加载**——那是网络图，不是内置资产；只有**图片笔记（图集）例外**：要求直接把图铺出来（见下条），
+  缩略图必须带与全屏预览完全相同的请求头。
+- ★ 新增平台或换图标：把 PNG 放进 `res/drawable/logo_*.png`（**资源名只能是小写 ASCII**，中文文件名
+  用不了），再在 `PlatformLogos.kt` 补一行；图标与资源名的对应关系写在该文件的 KDoc 里。
+- ★ **平台的人类可读名只有一个来源**：`SharePlatform.displayName` / `VideoPlatform.displayName`。
+  解析页的识别提示、关于页与引导页的平台列表都拿它，**别再在 UI 层各写一份 `when`**
+  （旧代码里的 `ResolveScreen.platformLabel` 已删掉）。
+- **图片笔记的结果页形态**：`result.medias` 全是图片时走**两列缩略图网格**（`LazyVerticalGrid`），
+  不再是一条条「图片」行 + 眼睛图标；点缩略图进全屏预览（可翻页/放大/下载）。每页
+  `IMAGE_PAGE_SIZE = 10` 张并给分页条，避免一屏几百张。**「全部下载」固定在底部**（两种布局共用），
+  不要再放回列表末尾 —— 图集一长就够不着了。
+  缩略图上的交互按「照片选择器」的通行约定来：**左上角序号角标 + 右下角单个下载按钮**（点一下就把
+  这一张入队）；**长按进入多选**（多选态下右下角的下载按钮让位给勾选框，底部换成 `MultiSelectBar`
+  的「下载所选」，顶栏换成「已选 N 张 / 全选」，系统返回键先退出多选 —— 与网盘多选同一套措辞）。
+  多选态要给网格加大底部内边距（96dp），否则最后一行被悬浮工具栏压住。
+- **批量下载的图片在下载页要收纳成一个文件夹组**：下载页是按 `fileName` 里的 `/` 归组的
+  （`DownloadScreen` 的 `folderGroups`，即网盘「整个文件夹下载」那套）——所以批量入口
+  （`ResolveViewModel.downloadVideoMedias`）给多张媒体的文件名加 `作品标题/` 前缀，
+  下载页就自然出现一个可折叠分组，而不是几十张散落的图片任务。**单张不加前缀**
+  （一个只有一张图的「文件夹」没有意义），所以「下载全部 / 下载所选」走批量入口、单张下载走
+  `downloadVideoMedia`。批量入口同时负责传合轨音轨，别再退回只传 `url` 的写法。
+
+**TODO（改动前先读）**：
+
+1. **B站 DASH 合并**：`fnval=1` 只能拿到单文件（未登录画质很低）。高清是音视频分离的 DASH，Android 侧
+   需要 mux 方案（自研或引入原生库）才能合并，属于独立课题；
+2. **B站 playurl 若被要求 WBI 签名**：现在用的是公开的 `x/player/playurl`，一旦该接口开始强制签名，
+   需要实现 WBI 签名或改用其它公开接口；
+3. **Pixiv 动图**（ugoira，zip + 帧时长表）与**小说**未支持，识别层会给出明确提示而不是产出打不开的文件；
+4. 抖音的**图文（slides）**走的是分享页而非 `slidesinfo` 接口，个别图文可能拿不到全部图片。
+
+### 3.42 在线预览与播放（含 B 站 DASH 合轨）
+
+网盘文件与视频解析结果都能**在线预览**：图片/视频/音频直接播放，**常见文本文件（仅网盘）**直接看内容。
+
+**入口是一个全局启动器**：`ui/preview/PreviewLauncher.kt`（与 `SnackbarController` 同一思路）。能调起预览
+的地方很分散（分享解析文件列表、各网盘云盘浏览、视频解析结果），把回调一层层往下传会牵动十几个文件的
+参数表，所以做成「发一条请求 → MainScreen 观察到就挂载预览页」。`PreviewTypes.kindOf(fileName)` 是**唯一**
+的「能不能预览」判据（压缩包/未知类型返回 null，菜单项根本不显示）。
+
+**请求头是刚需**：网盘直链与 B站/微博/Pixiv 直链都校验 `Referer`/`Cookie`/`UA`，少一个就是 403 ——
+所以 `PreviewMedia` 必带 `headers`，播放器与图片加载器都必须把它带上。
+
+**预览页可带「下载」**：`PreviewRequest.onDownload`（`(当前页下标) -> Unit`）非空时顶栏出现下载按钮，
+下的是**正在看的那一条**（翻页后随之变化）。用「下标回调」而不是把 `VideoMedia` 塞进 `PreviewMedia`：
+预览只关心能播能看的字段，下载还要 `fileName`/合轨音轨 —— 让调用方拿下标回自己那份列表取原始条目。
+网盘预览不传它，于是网盘预览页**行为不变**（没有下载按钮）。
+
+| 类型 | 实现 | 要点 |
+|---|---|---|
+| 图片 | Coil 3（`coil-compose` + `coil-network-okhttp`） | 多图用 `HorizontalPager` 翻页；请求头必须逐请求带上 |
+| 视频/音频 | Media3 ExoPlayer + `PlayerView`（`AndroidView`） | `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)`；`DefaultMediaSourceFactory` 按 URI 自动识别 m3u8；`DisposableEffect` 里 `player.release()` |
+| 文本（仅网盘） | OkHttp + `Range: bytes=0-524287` | **只读前 512KB**，不整文件下载；UTF-8 严格解码失败回退 GBK 再回退 ISO-8859-1；`.md` 走已有 mikepenz 渲染，其余等宽纯文本 + 可复制 |
+
+**新增的三个依赖**（`gradle/libs.versions.toml`）：`media3 1.4.1`（1.4.x 用 Kotlin 1.9 编译，与项目
+Kotlin 2.1.0 兼容；别随手升到需要更高 Kotlin 的版本）、`coil 3.0.4`、`mp4parser(isoparser) 1.1.22`。
+
+**B 站 DASH 音视频合轨**（`DashMuxer`，纯 Java 搬 box，不重编码、不需要 ffmpeg）：
+
+1. B 站解析器在**已登录**时优先取 DASH（`playurl?fnval=4048&qn=120`）：视频轨取清晰度最高、音轨取码率
+   最高，产出一条 `VideoMedia`，`audioUrl`/`audioHeaders` 承载音轨（未登录不试 —— 匿名 DASH 也是最低清，
+   不值得引入这条更长的链路，直接用 `fnval=1` 的单文件低清）；
+2. `ResolveViewModel.downloadVideoMedia` 把 `mergeAudioUrl`/`mergeAudioHeaders` 传给 `DownloadManager.enqueue`；
+3. 落库多两列（`mergeAudioUrl` / `mergeAudioHeadersJson`，**DB v22**，默认空 = 单文件，升级零影响），
+   音轨头与主请求头同样加密（purpose `download.mergeAudioHeaders`）；
+4. `runTask` 里有一条与 HLS 并列的分支：`dashMergeDownload` → 两条轨道各自流式下载到 cache 临时目录 →
+   `DashMuxer.mux` → 保存 → 清理。**带合轨的任务强制走内置下载器**（`shouldUseEngine(needMerge=true)`），
+   引擎没有合轨能力；
+5. 合轨失败**不做降级**：任务以可见错误结束（提示可改用未登录的单文件低清）。静默留一个无声视频比报错
+   更难排查。
+
+★ 预览侧的限制要如实告知用户：**DASH 分轨项预览只有画面没有声音**（音轨是另一路，下载后才合轨），
+预览页会显示明确提示（`SplitTrackNotice`），不要让它看起来像播放器坏了。
+
+### 3.43 支持开发页：赞助码用「循环轮播」的堆叠卡片
+
+页面上有**两张**赞助码（作者 `weixin` / 协作者 `sponsor_tidain_weixin`），当前这张在最前，另一张缩到
+`0.93`、往一侧露出 `38dp`、再倾斜 `4°`（像 Android / iOS 的堆叠后台），下方有页码点 + 「左右滑动切换」。
+
+**默认就要是「往左滑了一半」的堆叠态**：进页面时顶牌左移半个露出量、底牌在**右边**带倾斜和缩放露出来，
+一眼能看出下面还压着一张牌。所以 `backSide` 初值是 `+1`（右），别改成 -1 或 0。
+
+**切换动画必须是循环轮播，不是回弹**：顶牌顺着滑动方向**滑出屏幕**，再从对侧**绕回并落到后位**；
+底牌同时前移放大到满血。用户明确说过「不是滑过去就闪回来」——别再做成「松手后弹回原位」。
+
+实现要点（改之前先读，很容易改出跳变）：
+
+- **只有一个驱动量** `travel`（**带符号的像素行进量**）：`t ≤ W` 时 `x = dir * t`（**跟手与滑出屏幕是
+  同一段直线**），`t > W` 时 `x = dir * (t - 2W)`（在屏幕外从另一侧绕回），终点 `t = 2W - P` 正好是后位
+  （`W` = 牌堆宽度，`P` = 露出量）。用像素而不是「进度百分比」是因为三段行程的像素长度不同，
+  按百分比驱动会让速度在段与段之间跳一下；按像素驱动则全程匀速。
+  别再引入第二个进度量或 `backReveal` 之类的淡入遮丑 —— 那正是「切换动画不好」的来源。
+- **`travel` 必须是普通 state，不能是 `Animatable`**：`Animatable` 只能在协程里改（`snapTo`），于是会写成
+  「每个拖动增量起一个协程去 snapTo」—— **快滑时排在后面的 `snapTo` 会在松手之后才执行，把换牌动画
+  打断**，而换牌（`onCurrentIndexChange`）写在动画之后 → 动画被取消就永远不执行，表现就是
+  「滑得快就切换失败」。正确做法：拖动增量同步写 state；松手那段用 `animate(...)` + `animJob`；
+  重新抓住卡片时 `animJob.cancel()` 并 **`fingerX = travel`（从停住的位置接着拖）**，否则下一个增量
+  会把 travel 从半路拽回 0（肉眼是「跳一下」）。
+- **松手后必须把手速当初始速度传给弹簧**（`initialVelocity = velocity`）：用 `tween` 时起始速度恒为 0，
+  手指还在动就松手会「顿」一下。弹簧见 `SWITCH_SPRING`：**偏软 + 略欠阻尼**（`stiffness = 120f` 比
+  `StiffnessLow` 还软、`dampingRatio = 0.95f` 留一点回弹），卡片被甩出去/绕回来时才带惯性；
+  `visibilityThreshold = 1f`（像素量级下别用默认的 0.01f，尾巴会拖很久）。
+- **绕回的「瞬移」必须发生在屏幕外**（`+W ↔ -W` 两侧都完全出画），所以整段动画是一条连续曲线，
+  不需要任何淡入淡出来掩盖。
+- 换牌结束那一刻（`t = 2W - P`）的视觉，**必须恰好等于**「`travel=0` 且换了牌」的状态：
+  位移 / 缩放 / 前后感 / 倾斜 / 层序五项都要对上，然后**同一帧内**改 `currentIndex` + `backSide` +
+  `travel = 0`，才不闪。
+- **层序靠 `Modifier.zIndex` 翻转**（不是调换组合顺序）：退场牌要到 `t ≥ W`（完全出画）才沉到后面。
+- **露出的那一侧 `backSide` 每次换牌翻到「绕回来的那一侧」**（`backSide = -拖动方向`）：往左滑 → 牌从左
+  飞出、从右绕回，停在右边（与初始一致）；**往右滑 → 停在左边「接住」从左边绕回来的那张**。
+  这条是用户点名要的视觉逻辑（「底牌的露出方向和滑动方向、回位方向要一致」），别固定成一边。
+- **顺着底牌那一侧滑最自然，逆着滑必须压后底牌的前移**：底牌在右边却往右滑时，飞出的顶牌与往前挪的
+  底牌会**对穿**。所以 `dir == backSide` 时底牌的前移进度整体压后 `REVERSAL_APPROACH_DELAY`（先等顶牌
+  走掉再前移），否则看着像两张牌互相穿过去。改这一段前先想清楚两张牌各自的速度方向。
+- **跟手不要夹在换牌阈值内**，要一路跟到「完全滑出屏幕」（±牌宽）：夹在阈值里的话，拖过阈值卡片就
+  停住不动了，用户报的就是「滑不动」。`travel` 管跟手（上限 ±牌宽），`fingerX` 另记**不夹**的原始
+  位移用于判定（拖过头再往回拖时卡片位置才和手指对得上）。
+  ★ 在 `rememberDraggableState` 的那个 lambda 里**只能读 state**（如 `stackWidthPx`）——它只在首次
+  组合时捕获一次，读组合体里 `val` 算出来的阈值会拿到「牌宽还没测到」时的错误值。
+- **换牌判定要松**：距离取 `min(88dp, 牌宽 × 18%)`（写死 88dp 在 1080p 上约 260px ≈ 屏宽的四分之一，
+  随手一划根本到不了）、甩速阈值 `800px/s`。这两个都别再调严。
+- **换牌动画越过阈值后再被抓住，要先「落定」再接管**（`onDragStarted`）：动画后半段底牌已前移到顶位、
+  `zIndex` 也翻过来了，这时就地接着拖会出现「手指按着上面那张、跟手动的是另一张」。做法是立刻换牌 +
+  `travel = 0`，被取消的那段动画停在 `animate` 里（不会再执行后面的换牌，所以不会重复换）；还没到阈值
+  时仍允许拖回去取消换牌。
+- **底牌必须和顶牌长得不一样**：底色暗一档（`surfaceContainerHighest` ↔ `surfaceContainerLow`）+
+  描边 + 更重的投影。三者都随 `backness` 连续插值，**别用 `if (isFront)` 硬切**（换牌那帧会闪）。
+- 牌堆整体要**朝「底牌露出的反方向」挪半个露出量**（`deckShiftPx`）：底牌探出的那一截否则会被屏幕
+  边缘切掉（页面父级只有 20dp 内边距）。★ **必须跟着 `backSide` 的符号走**：早先写死往左挪（只照顾
+  右侧），底牌露在**左边**时那半截就被推出屏幕外了（用户的原话：「往右滑回来那张本该露在左边，
+  却被顶牌挡住了」）。用跟手进度在「旧侧 → 新侧」之间插值，换牌落定那一刻两端一致，所以不会跳。
+- 注意「露出量」是位移，**实际看得见的边条要减掉缩放的内缩**：可见宽度 ≈ 露出量 − (1 − 缩放) × 卡宽 / 2。
+  早先露出 16dp + 缩放 0.94（可见仅 ~5dp）、颜色还一样，用户的原话是「看不出有堆叠效果，就旁边一点点」。
+- 手搓 `Animatable` + `draggable`，**不要换成 `HorizontalPager`**：Pager 的相邻页在屏外、也不循环。
+- **当前下标必须由 `SupportScreen` 持有**并往下传：底部「保存到相册」要存的是**当前展示的那张**，
+  否则会把作者的码存成协作者的（按钮文案也带角色名，别只写「保存到相册」）。
+- 卡片数据集中在 `sponsorCards`（角色名 / drawable / 存图文件名标记 / 扫码提示），加人只改这一处。
+- `saveQrToGallery(context, drawableRes, fileTag)` 按当前卡片决定存哪张、文件名带谁的标记。
+
+### 3.44 视频平台登录：UA 要对齐内核版本；Pixiv 改用「手动填 Cookie」
+
+**① 登录页 UA 里的 Chrome 大版本必须等于 WebView 内核的真实版本。** 平台 UA 模板里写死的是 `131`，而设备
+内核可能早已升到 155 ——「UA 说 131、内核是 155」是一条典型的**伪装指纹**（服务端做一次能力探测就能看出来），
+登录页风控会据此降分。`VideoLoginScreen` 用 `engineChromeMajor(context)`（从 `WebSettings.getDefaultUserAgent()`
+里抽大版本）把模板版本号换成真实值，再用 `alignClientHintsWith(ua)` 把 `Sec-CH-UA` 系列与
+`navigator.userAgentData` 一并对齐 —— **只改 UA 不改 client hints 同样是矛盾指纹**（WebView 默认那套带
+`"Android WebView"` 品牌、平台写死 Android）。新增平台时**不要再手写一个固定版本号**。
+
+**② `X-Requested-With: <包名>` 去不掉，别指望 `suppressRequestedWithHeader()`。** Google 原计划把该头从
+WebView 移除、改成按 allow list 发送，**该计划已取消**（androidx.webkit 1.14.0 起 allowlist API 已废弃），
+该头现在**默认发给所有请求**且无公开 API 可关。实测：设成空 allow list 后，登录页 XHR 仍带着
+`x-requested-with: com.yunx.app`。`DiagnosticWebViewClient.suppressRequestedWithHeader` 的 KDoc 已写明这一点，
+不要再按老注释去"修"它。
+
+**③ Pixiv 不给网页登录，只支持手动填 Cookie（`VideoPlatform.manualCookieOnly`）。** 它的登录页背后是
+reCAPTCHA Enterprise 风控，在 App 的 WebView 里**走不完**：实测（2026-10）密码步正常，到二段验证提交时
+服务端固定返回 `{"error":false,...,"errors":{"other":"common:error.general.pleaseReloadAndRetry"}}`
+（页面显示「服务器错误。请刷新网页。」）。抓包（CDP）确认：会话 Cookie（`PHPSESSID`）与
+`recaptcha_enterprise_score_token` 都正常发出、`Origin`/`Referer` 正确、client hints 已与 UA 对齐、
+reCAPTCHA 的 `_GRECAPTCHA` Cookie 也在、**没有任何 Cookie 被拦** —— 是**服务端在验码之前就拒了**，
+且与验证码内容无关（随便填一个码，响应一模一样）。同机系统浏览器（Edge）能正常登录。
+换 UA、对齐 client hints、放开第三方 Cookie 都没能绕过，所以**不再摆一个永远失败的人口**。
+
+于是 `VideoPlatform` 加了 `manualCookieOnly`：
+
+- `needsLogin` = `loginUrl.isNotBlank() || manualCookieOnly`（Pixiv 的 `loginUrl` 是空的）；
+- `VideoLoginScreen` 一见到它就**转交 `ManualCookieLoginScreen`，一个 WebView 都不建**（不加载网页、
+  不碰 WebView 的 Cookie 库），页面只做「说明为什么没有网页登录 + 粘贴 Cookie」；
+- 校验与落库仍走 `VideoAccountViewModel.save` → 解析器的 `validateCookie`，与网页登录**同一条路**，
+  不要另写一套判断；`Cookie:` 前缀的处理统一用 `normalizePastedCookie()`。
+
+**通用结论**：`X-Requested-With` / reCAPTCHA 这类「WebView 里过不去的登录」，兜底就是**手动粘贴 Cookie**
+（桌面浏览器登录后复制整串）。哪些平台走这条路由 `manualCookieOnly` 声明，`needsLogin` 决定它是否还出现在
+账号页的「需要登录」那一组里。
 
 ## 4. 验证
 

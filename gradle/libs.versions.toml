@@ -13,6 +13,10 @@ ksp = "2.1.0-1.0.29"
 material = "1.14.0"   # 官方 Material 主库，自带 com.google.android.material.color.utilities 包
 markdownRenderer = "0.35.0"   # mikepenz/multiplatform-markdown-renderer（GFM 渲染；0.35.0 用 Kotlin 2.1.x 编译，与项目 Kotlin 2.1.0 兼容；0.39+ 需 Kotlin 2.3）
 
+media3 = "1.4.1"      # 在线预览/播放（ExoPlayer + PlayerView）。1.4.x 用 Kotlin 1.9 编译，与项目 Kotlin 2.1.0 兼容
+coil = "3.0.4"        # 图片加载（含网络模块，见 androidx-coil-network-okhttp）
+mp4parser = "1.1.22"  # mp4 分轨合并（哔哩哔哩 DASH 音视频合轨）；纯 Java，无需 ffmpeg
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
@@ -40,3 +44,13 @@ room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 # GFM Markdown 渲染（Material3 变体，不含图片加载器；图片相对链接在渲染前预处理为绝对 URL）
 markdownRenderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
+
+# 在线预览/播放：ExoPlayer 内核 + 官方 View 播放器（自带播放/暂停/进度/全屏）
+androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
+androidx-media3-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
+# 图片加载（预览图集/封面；网络层走 OkHttp，可逐请求带 Referer/Cookie）
+androidx-coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+androidx-coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+# mp4 分轨合并（B 站 DASH：视频轨 + 音轨 各自下载后合轨成一个 mp4）
+mp4parser = { group = "com.googlecode.mp4parser", name = "isoparser", version.ref = "mp4parser" }

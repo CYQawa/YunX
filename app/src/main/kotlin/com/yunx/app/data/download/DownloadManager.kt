@@ -28,6 +28,8 @@ import com.yunx.app.data.gopeed.GopeedEngine
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
 import com.yunx.app.data.security.CredentialCipher
+import com.yunx.app.data.network.HttpClients
+import okhttp3.Request
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -540,6 +542,12 @@ class DownloadManager(
     /** 任务下载完成后的清理回调（如删除网盘临时转存文件；下载成功后才触发） */
     private val taskCallbacks = ConcurrentHashMap<Long, suspend () -> Unit>()
 
+    /**
+     * DASH 合轨任务的**音轨请求头**：与 [taskHeaders] 同寿命（入队写入、终态清理），
+     * 重启恢复时从 `download_task.mergeAudioHeadersJson` 读回（见 [loadPersistedMergeAudioHeaders]）。
+     */
+    private val taskMergeAudioHeaders = ConcurrentHashMap<Long, Map<String, String>>()
+
     /** 实时下载统计（速度/剩余时间/线程数） */
     private val _stats = MutableStateFlow<Map<Long, DownloadStats>>(emptyMap())
     val stats: StateFlow<Map<Long, DownloadStats>> = _stats.asStateFlow()
@@ -646,6 +654,14 @@ class DownloadManager(
          * 空 = 单源，行为与未开启该功能时完全一致；只对内置分片下载器生效，Gopeed 引擎任务忽略它。
          */
         altSources: List<DownloadSource> = emptyList(),
+        /**
+         * 需要合轨的**音轨直链**（哔哩哔哩 DASH 高清：音视频分离成两路）。
+         * 非空 = 先下视频轨（[url]）与音轨（本字段）再用 mp4parser 合轨成一个 mp4；
+         * 空 = 普通单文件下载。带合轨的任务**强制走内置下载器**（Gopeed 引擎没有合轨能力）。
+         */
+        mergeAudioUrl: String = "",
+        /** 音轨的请求头（与 [headers] 一样加密落库；各平台校验 Referer/Cookie） */
+        mergeAudioHeaders: Map<String, String> = emptyMap(),
         /** 下载成功完成后的清理回调（如删除网盘临时转存文件）；失败/取消不触发。
          * 注意：必须是最后一个参数（调用点有大量尾随 lambda 用法，放它之后会编译失败）。 */
         onComplete: suspend () -> Unit = {}
@@ -671,6 +687,8 @@ class DownloadManager(
                     fileName = safeName,
                     requestHeadersJson = encodeHeaders(headers),
                     altSourcesJson = encodeAltSources(altSources),
+                    mergeAudioUrl = mergeAudioUrl,
+                    mergeAudioHeadersJson = if (mergeAudioUrl.isNotBlank()) encodeHeaders(mergeAudioHeaders) else "",
                     platform = taskPlatform
                 )
             )
@@ -696,6 +714,7 @@ class DownloadManager(
         if (altSources.isNotEmpty()) taskAltSources[id] = altSources
         if (size > 0) taskSizes[id] = size
         if (fallbackUrl.isNotBlank()) taskFallbackUrls[id] = fallbackUrl
+        if (mergeAudioUrl.isNotBlank()) taskMergeAudioHeaders[id] = mergeAudioHeaders
         taskCallbacks[id] = onComplete
         // 磁力但引擎不可用：立刻落一条**带原因的失败任务**并结束。若照常走内置下载器，
         // 它会把 magnet: 当普通 URL 发 HTTP 请求，最后抛一个和「该去导入内核」毫无关系的协议错误。
@@ -707,6 +726,7 @@ class DownloadManager(
             // 不会有下载协程来消费这几份内存数据了，直接清掉
             taskHeaders.remove(id)
             taskAltSources.remove(id)
+            taskMergeAudioHeaders.remove(id)
             taskSizes.remove(id)
             taskFallbackUrls.remove(id)
             dao.updateStatus(id, DownloadTaskEntity.STATUS_FAILED)
@@ -716,7 +736,7 @@ class DownloadManager(
             )
             return id
         }
-        if (shouldUseEngine(taskPlatform)) {
+        if (shouldUseEngine(taskPlatform, needMerge = mergeAudioUrl.isNotBlank())) {
             // 任务登记、下载页展示、完成清理回调都与内置下载器完全一致，只有「执行」交给 Gopeed 引擎
             startViaEngine(id, url, safeName, headers, taskPlatform)
         } else {
@@ -725,9 +745,13 @@ class DownloadManager(
         return id
     }
 
-    /** 是否把任务交给 Gopeed 引擎：设置里选了引擎 + 引擎已导入；GitHub 走镜像回退（引擎不支持），始终用内置下载器 */
-    private fun shouldUseEngine(platform: String): Boolean =
-        platform != DownloadPlatform.GITHUB &&
+    /**
+     * 是否把任务交给 Gopeed 引擎：设置里选了引擎 + 引擎已导入；GitHub 走镜像回退（引擎不支持），
+     * **DASH 合轨任务**（引擎没有合轨能力）也始终用内置下载器。
+     */
+    private fun shouldUseEngine(platform: String, needMerge: Boolean = false): Boolean =
+        !needMerge &&
+            platform != DownloadPlatform.GITHUB &&
             settings.downloadEngine == SettingsRepository.ENGINE_GOPEED &&
             GopeedEngine.isInstalled(context)
 
@@ -1377,6 +1401,13 @@ class DownloadManager(
             DownloadDebugLog.record(id, "网络环境", DownloadDebugLog.environmentSnapshot(context))
         }
 
+        // DASH 分轨合轨（哔哩哔哩高清）：视频轨 + 音轨各自下载 → mp4parser 合轨，不走 Range 分片
+        if (task.mergeAudioUrl.isNotBlank()) {
+            Log.d(TAG, "runTask: id=$id DASH 分轨合轨 音轨=${LogRedactor.url(task.mergeAudioUrl)}")
+            dashMergeDownload(id, task, headers)
+            return
+        }
+
         // HLS（m3u8 转码流，如 UC play）：不走 Range 分片，直接拉分片合并
         if (task.url.contains(".m3u8", true) || task.url.contains(".m3u", true)) {
             Log.d(TAG, "runTask: id=$id HLS 转码流下载 origin=${LogRedactor.url(task.url)}")
@@ -1950,6 +1981,112 @@ class DownloadManager(
         _stats.update { it - id }
         hlsFile.delete()
     }
+
+    /**
+     * DASH 分轨合轨下载（哔哩哔哩高清）：视频轨 + 音轨各自下载 → mp4parser 合轨 → 保存 → 完成回调。
+     *
+     * ★ 为什么不用分片下载：合轨要求两轨都是完整文件，分片只会再叠一层临时文件、放大峰值占用与
+     *   失败面；这两条轨道通常几十 MB，单连接流式下载足够。
+     * ★ 全程只在 cache 下的临时目录里操作，**合轨成功且保存成功后**才清理；任何一步失败都抛错，
+     *   由上层落成「带原因的失败任务」，绝不把半个文件当成品留在下载目录。
+     */
+    private suspend fun dashMergeDownload(id: Long, task: DownloadTaskEntity, headers: Map<String, String>) {
+        if (!isTaskActive()) return
+        _stats.update { it + (id to DownloadStats(0L, -1L, 1)) }
+        val workDir = File(context.cacheDir, "dash_$id")
+        workDir.deleteRecursively()
+        if (!workDir.mkdirs()) throw IllegalStateException("无法创建合轨临时目录")
+        val videoFile = File(workDir, "video.m4s")
+        val audioFile = File(workDir, "audio.m4s")
+        val mergedFile = File(workDir, "merged.mp4")
+        val progress = AtomicLong(0L)
+        val lastAt = AtomicLong(0L)
+        try {
+            // 重启恢复时内存里没有音轨头，回查数据库（与主请求头同样的加密存储）
+            val audioHeaders = taskMergeAudioHeaders[id] ?: loadPersistedMergeAudioHeaders(id)
+            streamUrlToFile(task.url, headers, videoFile, id, task.fileName, progress, lastAt)
+            streamUrlToFile(task.mergeAudioUrl, audioHeaders, audioFile, id, task.fileName, progress, lastAt)
+            if (!DashMuxer.mux(videoFile, audioFile, mergedFile)) {
+                throw IllegalStateException("分轨合轨失败（音视频轨道不配套或文件不完整），可改用未登录的单文件低清")
+            }
+            // Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
+            if (!storagePermissionProvider()) {
+                throw IllegalStateException("未授予存储权限，无法保存到下载目录")
+            }
+            val savedPath = withContext(Dispatchers.IO) {
+                DownloadSaver.save(context, task.fileName, mergedFile, saveDirProvider())
+            } ?: throw IllegalStateException("保存到下载目录失败")
+            val total = mergedFile.length()
+            completeWithAvg(id, savedPath, total)
+            Log.d(TAG, "dashMergeDownload: id=$id 合轨完成 savedPath=$savedPath size=$total")
+            DownloadService.notifyResult(
+                context, id, task.fileName, success = true, promote = showSpeedProvider()
+            )
+            taskCallbacks.remove(id)?.let { cb -> runCatching { cb() } }
+            _stats.update { it - id }
+        } finally {
+            // 成功、失败、取消一律清临时文件：几份完整轨道占的空间很可观
+            workDir.deleteRecursively()
+        }
+    }
+
+    /**
+     * 把整段响应流式写入文件，并按写入量上报进度（合轨的两条轨道各调一次）。
+     *
+     * 任务被取消/暂停时直接抛 [CancellationException] 结束下载（临时目录由调用方 finally 清理）。
+     */
+    private suspend fun streamUrlToFile(
+        url: String,
+        headers: Map<String, String>,
+        target: File,
+        id: Long,
+        fileName: String,
+        progress: AtomicLong,
+        lastAt: AtomicLong
+    ) = withContext(Dispatchers.IO) {
+        val headerBuilder = okhttp3.Headers.Builder()
+        headers.forEach { (name, value) -> if (value.isNotBlank()) headerBuilder.add(name, value) }
+        val request = Request.Builder().url(url).headers(headerBuilder.build()).build()
+        HttpClients.downloadClient().newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("分轨下载失败：HTTP ${response.code}（${LogRedactor.url(url)}）")
+            }
+            val body = response.body ?: throw IllegalStateException("分轨响应为空")
+            body.byteStream().use { input ->
+                target.outputStream().use { out ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        if (!isTaskActive()) throw CancellationException("任务已取消")
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        speedLimiter.awaitAllow(read.toLong())
+                        out.write(buffer, 0, read)
+                        val total = progress.addAndGet(read.toLong())
+                        persistProgressIfDue(id, total, 0, force = false, lastAt = lastAt)
+                        notifyProgress(id, fileName, total, 0)
+                    }
+                }
+            }
+        }
+    }
+
+    /** 从库里读回合轨任务的音轨请求头（重启恢复用）；解不开就返回空表并**保留原值** */
+    private suspend fun loadPersistedMergeAudioHeaders(id: Long): Map<String, String> =
+        withContext(Dispatchers.IO) {
+            val stored = dao.get(id)?.mergeAudioHeadersJson.orEmpty()
+            if (stored.isBlank()) return@withContext emptyMap()
+            runCatching {
+                val json = JSONObject(credentialCipher.decrypt(stored, "download.mergeAudioHeaders"))
+                buildMap {
+                    json.keys().asSequence().forEach { key ->
+                        json.optString(key).takeIf { it.isNotBlank() }?.let { put(key, it) }
+                    }
+                }
+            }.getOrElse {
+                Log.w(TAG, "loadPersistedMergeAudioHeaders: id=$id 音轨请求头解密失败，保留原值：${it.message}")
+                emptyMap()
+            }
+        }
 
     /**
      * 分片流式合并 → **直接写入最终保存位置** → 完成后清空分片目录。

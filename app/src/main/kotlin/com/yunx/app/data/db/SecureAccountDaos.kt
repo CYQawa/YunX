@@ -328,6 +328,70 @@ internal object SecureAccountDaos {
             plain
         }
 
+    /**
+     * 视频解析账号（所有视频平台共用一张表，用 platform 列区分）。
+     *
+     * 与网盘账号同一套安全口径：Cookie 字段级加密；解密失败**只返回 null、绝不删数据**；
+     * 观测流逐条兜住，不让一条坏记录把整个账号列表熔断（见 [decryptOrNull]）。
+     */
+    fun videoAccount(raw: VideoAccountDao, cipher: CredentialCipher): VideoAccountDao = object : VideoAccountDao {
+        override fun observeAccounts(): Flow<List<VideoAccountEntity>> = raw.observeAccounts().map { list ->
+            // 逐条兜住：坏的这一条跳过，其它平台的账号照常显示（见 decryptOrNull）
+            list.mapNotNull { decryptOrNull { decryptVideoAccount(raw, cipher, it) } }
+        }.catch { emit(emptyList()) }
+
+        override suspend fun getAccounts(): List<VideoAccountEntity> = decryptOrNull {
+            raw.getAccounts().mapNotNull { decryptOrNull { decryptVideoAccount(raw, cipher, it) } }
+        } ?: emptyList()
+
+        override fun observeAccountsOf(platform: String): Flow<List<VideoAccountEntity>> =
+            raw.observeAccountsOf(platform).map { list ->
+                // 逐条兜住：同平台其他账号照常显示，也不能让 Flow 终止（见 decryptOrNull）
+                list.mapNotNull { decryptOrNull { decryptVideoAccount(raw, cipher, it) } }
+            }.catch { emit(emptyList()) }
+
+        override suspend fun getActive(platform: String): VideoAccountEntity? = decryptOrNull {
+            raw.getActive(platform)?.let { decryptVideoAccount(raw, cipher, it) }
+        }
+
+        override suspend fun countOf(platform: String): Int = raw.countOf(platform)
+
+        override suspend fun upsert(account: VideoAccountEntity) = withContext(Dispatchers.IO) {
+            raw.upsert(encryptVideoAccount(cipher, account))
+        }
+
+        override suspend fun setPrimary(platform: String, id: String) = raw.setPrimary(platform, id)
+
+        override suspend fun updateRemark(id: String, remark: String) = raw.updateRemark(id, remark)
+
+        override suspend fun deleteById(id: String) = raw.deleteById(id)
+
+        override suspend fun clearPlatform(platform: String) = raw.clearPlatform(platform)
+    }
+
+    private suspend fun decryptVideoAccount(
+        raw: VideoAccountDao,
+        cipher: CredentialCipher,
+        stored: VideoAccountEntity
+    ): VideoAccountEntity = withContext(Dispatchers.IO) {
+        // ★ 空 Cookie 直接原样返回：空串不是合法密文，交给 cipher 解会抛异常，
+        //   而 [decryptOrNull] 会因此把整条账号跳过（账号页看起来「凭空少了一条」）。
+        if (stored.cookie.isBlank()) return@withContext stored
+        val plain = stored.copy(cookie = cipher.decrypt(stored.cookie, "video.cookie"))
+        // 明文残留（导入/老数据）：顺手补加密，与网盘账号一致的自愈
+        if (!cipher.isEncrypted(stored.cookie)) raw.upsert(encryptVideoAccount(cipher, plain))
+        plain
+    }
+
+    private suspend fun encryptVideoAccount(
+        cipher: CredentialCipher,
+        account: VideoAccountEntity
+    ): VideoAccountEntity = withContext(Dispatchers.IO) {
+        account.copy(
+            cookie = if (account.cookie.isBlank()) "" else cipher.encrypt(account.cookie, "video.cookie")
+        )
+    }
+
     private suspend fun decryptQuark(raw: QuarkAccountDao, cipher: CredentialCipher, stored: QuarkAccountEntity): QuarkAccountEntity =
         withContext(Dispatchers.IO) {
             val plain = stored.copy(cookie = cipher.decrypt(stored.cookie, "quark.cookie"))
