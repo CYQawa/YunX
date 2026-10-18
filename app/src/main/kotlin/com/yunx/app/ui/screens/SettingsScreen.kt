@@ -214,6 +214,8 @@ fun SettingsScreen(
     engineRowModifier: Modifier = Modifier,
     /** 「链接唤起」行的容器变换源侧修饰符（同上，由 MainScreen 构造） */
     linkOpenRowModifier: Modifier = Modifier,
+    /** 「多账号下载」行的容器变换源侧修饰符（同上，由 MainScreen 构造） */
+    multiAccountRowModifier: Modifier = Modifier,
     onThemeClick: () -> Unit,
     onAboutClick: () -> Unit,
     onSupportClick: () -> Unit,
@@ -428,6 +430,7 @@ fun SettingsScreen(
             shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "多账号下载",
             description = "实验性：同一网盘多个账号轮流取链 / 单文件多源提速",
+            modifier = multiAccountRowModifier,
             onClick = onMultiAccountDownloadClick
         )
 

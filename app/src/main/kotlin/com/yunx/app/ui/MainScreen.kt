@@ -1114,6 +1114,11 @@ fun MainScreen(
                     rememberSharedContentState(OVERLAY_KEY_LINK_OPEN),
                     animatedVisibilityScope = sourceScope
                 )
+                // 「多账号下载」行 → 多账号下载设置页：同样走容器变换
+                val multiAccountRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_MULTI_ACCOUNT),
+                    animatedVisibilityScope = sourceScope
+                )
                 Box(modifier = Modifier.fillMaxSize()) {
                 // 顶部可折叠标题（竖屏 / 横屏共用）：Expressive 的「中号柔性顶栏」
                 val topBarContent: @Composable () -> Unit = {
@@ -1378,6 +1383,7 @@ fun MainScreen(
                                     supportRowModifier = supportRowModifier,
                                     engineRowModifier = engineRowModifier,
                                     linkOpenRowModifier = linkOpenRowModifier,
+                                    multiAccountRowModifier = multiAccountRowModifier,
                                     onThemeClick = { showTheme = true },
                                     onAboutClick = { showAbout = true },
                                     onSupportClick = { showSupport = true },

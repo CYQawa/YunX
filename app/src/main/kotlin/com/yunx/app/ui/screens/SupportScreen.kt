@@ -396,11 +396,20 @@ private const val REVERSAL_APPROACH_DELAY = 0.45f
  * ★ 注意「露出量」是位移，**实际看得见的边条要减掉缩放带来的内缩**：
  *   可见宽度 ≈ 露出量 − (1 − 缩放) × 卡片宽 / 2。
  */
-private val BACK_PEEK = 38.dp
+private val BACK_PEEK = 42.dp
 private const val BACK_TILT_DEG = 4f
 
-/** 底牌的静止缩放：比顶牌小一圈即可，缩太多反而把上面那条「可见边条」吃掉了 */
-private const val BACK_SCALE = 0.93f
+/** 底牌的静止缩放（近大远小：底牌小一圈、顶牌满血）。缩太多会把上面那条「可见边条」吃掉 */
+private const val BACK_SCALE = 0.90f
+
+/**
+ * 牌堆左右各留出的内边距。
+ *
+ * ★ 顶牌要**居中**（用户要求「上方卡牌在中间」），同时底牌又要从一侧露出来 —— 那截露出必须落在
+ *   屏幕内，否则会被边缘切掉（父级只有 16dp 内边距）。靠这个内边距腾地方：牌因此比容器窄一点
+ *   （略小一圈），换来「顶牌居中 + 底牌探出的边条完整可见」。
+ */
+private val CARD_INSET = 12.dp
 
 /**
  * 赞助码堆叠卡片（**循环轮播**）：当前这张在最前，另一张缩到 [BACK_SCALE]、往一侧露出 [BACK_PEEK]、
@@ -438,8 +447,8 @@ private fun SponsorCardStack(
     val density = LocalDensity.current
     val peekPx = with(density) { BACK_PEEK.toPx() }
 
-    // 底牌停在哪一侧（-1 左 / +1 右）。**初始 +1**：一进页面就是「往左滑了一半」的堆叠态 ——
-    // 顶牌左移、底牌在右边明显露出来（带倾斜和缩放），一眼能看出下面还压着一张牌。
+    // 底牌停在哪一侧（-1 左 / +1 右）。**初始 +1**：一进页面就是堆叠态 —— 顶牌**居中**，
+    // 底牌在右边明显露出来（带倾斜 + 缩小一圈），一眼能看出下面还压着一张牌。
     // 每次换牌后翻到「绕回来的那一侧」：往左滑 → 牌从左飞出、从右绕回，停在右边（与初始一致）；
     // 往右滑 → 停在左边「接住」从左边绕回来的那张。
     var backSide by remember { mutableFloatStateOf(1f) }
@@ -476,18 +485,13 @@ private fun SponsorCardStack(
     // 拖拽进度 0..1（到阈值即 1）：只用来驱动「谁在前谁在后」那套形变
     val dragProgress = (t / switchThresholdPx).coerceIn(0f, 1f)
     /**
-     * 整个牌堆的横向挪动量：朝「底牌露出的反方向」挪半个露出量。
+     * 牌堆**不再横向挪动**：顶牌静止时必须落在正中（「上方卡牌在中间」）。
      *
-     * ★ 为什么必须挪：父级只有 20dp 内边距，底牌探出的那一截否则会被屏幕边缘切掉。
-     * ★ **必须跟着露出的一侧走**（`backSide` 的符号）：早先写死 `+peek/2`（只会往左挪，只照顾右侧），
-     *   于是底牌露在**左边**时那半截被推出屏幕外 —— 用户看到的就是「往右滑回来那张本该露在左边，
-     *   却被顶牌挡住了」。
-     * ★ 用跟手进度插值「旧的一侧 → 新的一侧」：换牌落定那一刻 [dragProgress] 恰好是 1（等于新值）、
-     *   落定后归 0（`backSide` 已翻成新值），两端一致，所以换牌瞬间不会跳（见 KDoc 第 3 条）。
+     * ★ 早先这里有一份 `deckShiftPx`（把整副牌朝「底牌露出的反方向」挪半个露出量），目的是让底牌
+     *   探出的那截不被屏幕边缘切掉 —— 代价是顶牌整体偏了半个露出量，看起来不在中间。
+     * ★ 现在改由 [CARD_INSET] 腾地方：牌比容器窄一圈，顶牌居中时底牌探出的边条仍在屏幕内，
+     *   所以挪动量恒为 0 —— 直接删掉，留着常量只会让人以为还有这段逻辑。
      */
-    val deckShiftFromPx = backSide * peekPx / 2f
-    val deckShiftToPx = -dir * peekPx / 2f
-    val deckShiftPx = deckShiftFromPx + (deckShiftToPx - deckShiftFromPx) * dragProgress
 
     val otherIndex = (currentIndex + 1) % cards.size
     // 退场牌（当前顶牌）的位移：跟手 + 滑出屏幕 → 屏幕外换边 → 从对侧绕回后位
@@ -510,6 +514,9 @@ private fun SponsorCardStack(
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { stackWidthPx = it.width }
+                // ★ 左右内缩 [CARD_INSET]：两张牌都比容器窄一圈，于是「顶牌居中 + 底牌从一侧露出」
+                //   两者可以同时成立，而露出的边条仍在屏幕内。拖动热区随之等于卡片区域。
+                .padding(horizontal = CARD_INSET)
                 .draggable(
                     orientation = Orientation.Horizontal,
                     // 同步累加：不启协程（原因见 travel 的说明）
@@ -593,7 +600,7 @@ private fun SponsorCardStack(
                         val scale = BACK_SCALE + (1f - BACK_SCALE) * approachProgress
                         scaleX = scale
                         scaleY = scale
-                        translationX = backSide * peekPx * (1f - approachProgress) - deckShiftPx
+                        translationX = backSide * peekPx * (1f - approachProgress)
                         rotationZ = backSide * BACK_TILT_DEG * (1f - approachProgress)
                     }
             )
@@ -608,7 +615,7 @@ private fun SponsorCardStack(
                         val scale = 1f - (1f - BACK_SCALE) * dragProgress
                         scaleX = scale
                         scaleY = scale
-                        translationX = exitX - deckShiftPx
+                        translationX = exitX
                         rotationZ = -dir * BACK_TILT_DEG * dragProgress
                     }
             )
