@@ -1042,7 +1042,10 @@ class ResolveViewModel(
         viewModelScope.launch {
             uiState = ResolveUiState.Loading
             try {
-                uiState = ResolveUiState.Video(repo.parse(link))
+                val result = repo.parse(link)
+                // 解析成功但内容有降级（如小红书去水印原图不可用、已回退到平台地址）：弹一次非致命提示
+                result.notice.takeIf { it.isNotBlank() }?.let { SnackbarController.show(it) }
+                uiState = ResolveUiState.Video(result)
             } catch (e: VideoParseException) {
                 uiState = ResolveUiState.Error(e.userMessage())
             } catch (e: Exception) {

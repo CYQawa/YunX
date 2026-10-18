@@ -20,6 +20,9 @@ package com.yunx.app.data.network.video
 
 import android.util.Log
 import com.yunx.app.data.download.DownloadPathPolicy
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -37,10 +40,15 @@ import org.json.JSONObject
  *   重建两条路径的地址时都带上。
  *
  * ★ 分享页有两种形态，内嵌 JSON 的结构**完全不同**：
- *   - `/explore/<id>`：`note.noteDetailMap[<id>].note`（无时间戳字段，图片用 `urlDefault`，作者名用 `nickname`）；
- *   - `/discovery/item/<id>`：`noteData.data.noteData`（有 `time`，图片用 `url`（带水印），作者名用 `nickName`），
- *     另有 `noteData.normalNotePreloadData.imagesList`（无水印但只有一张，参考实现只拿它当视频封面）。
+ *   - `/explore/<id>`：`note.noteDetailMap[<id>].note`（无时间戳字段，图片字段是 `urlDefault`，作者名用 `nickname`）；
+ *   - `/discovery/item/<id>`：`noteData.data.noteData`（有 `time`，图片字段是 `url`，作者名用 `nickName`），
+ *     另有 `noteData.normalNotePreloadData.imagesList`（只有一张，参考实现只拿它当视频封面）。
  *   参考实现是先请求 explore、失败再落到 discovery；这里保持同样的顺序与各自的请求头。
+ *
+ * ★ 两条路径的图片字段**都不能直接拿来下载**：`urlDefault` / `url` 指向的是带网页处理规格的图
+ *   （形如 `...!nd_dft_wlteh_webp_3`），叠不叠水印还会随登录会话变化（用户实测「退出重登后图中间多了
+ *   小红书水印」）。一律经 [resolveImages] 换算成去水印原图；换算后的地址若返回 404（图片 ID 在
+ *   原图 CDN 上不存在），**回退到原始地址并用 [VideoParseResult.notice] 提示用户**。
  */
 object XhsParser : VideoParser {
 
@@ -54,6 +62,15 @@ object XhsParser : VideoParser {
             "application/signed-exchange;v=b3;q=0.7"
 
     private const val XHS_HOME = "https://www.xiaohongshu.com"
+
+    /**
+     * 原图 CDN：`https://sns-img-bd.xhscdn.com/<图片ID>` 直接返回原始图 ——
+     * 不带网页处理规格（无水印、不二次压成 webp），是图集去水印的关键。
+     */
+    private const val XHS_IMAGE_CDN = "https://sns-img-bd.xhscdn.com"
+
+    /** 探测去水印原图时视为「图已不存在」的状态码（实测该 CDN 对无效 ID 返回 404） */
+    private val MISSING_IMAGE_STATUS = setOf(404, 410)
 
     /** 登录态探测地址：未登录访问首页会被 302 到 /login（与解析时同一道门，口径一致） */
     private const val EXPLORE_PROBE_URL = "$XHS_HOME/explore"
@@ -212,7 +229,7 @@ object XhsParser : VideoParser {
         Result.failure(e)
     }
 
-    private fun buildFromExplore(
+    private suspend fun buildFromExplore(
         note: JSONObject,
         link: DetectedVideoLink,
         cookie: String
@@ -221,15 +238,16 @@ object XhsParser : VideoParser {
         val title = note.str("title")
         val base = fileBase(title, link)
 
-        // explore 的图片列表字段是 urlDefault（原图）
-        val images = imageUrls(note.optJSONArray("imageList")) { it.str("urlDefault").ifBlank { it.str("url") } }
+        // 原始字段（explore 是 urlDefault）：带水印，图集要经 resolveImages 换算+探测
+        val rawImages = imageUrls(note.optJSONArray("imageList")) { rawImageUrlOf(it) }
         val video = pickVideo(note)
 
         val medias = mutableListOf<VideoMedia>()
         var cover = ""
+        var notice = ""
         if (video != null) {
-            // 参考实现用首图当视频封面
-            cover = images.firstOrNull().orEmpty()
+            // 参考实现用首图当视频封面；封面只是展示用，不逐张探测可用性
+            cover = watermarkFreeOrRaw(rawImages.firstOrNull().orEmpty())
             medias += VideoMedia(
                 url = video.url,
                 kind = VideoMediaKind.VIDEO,
@@ -245,7 +263,8 @@ object XhsParser : VideoParser {
                 "小红书视频笔记没有取到视频直链（笔记里有 video 字段，但 media.stream 里没有可用地址）"
             )
         } else {
-            images.forEachIndexed { index, url ->
+            val images = resolveImages(rawImages, mediaHeaders)
+            images.urls.forEachIndexed { index, url ->
                 medias += VideoMedia(
                     url = url,
                     kind = VideoMediaKind.IMAGE,
@@ -254,6 +273,7 @@ object XhsParser : VideoParser {
                     quality = "原图"
                 )
             }
+            notice = images.notice
         }
 
         return VideoParseResult(
@@ -266,11 +286,12 @@ object XhsParser : VideoParser {
             // note.time 是毫秒
             timestampSeconds = note.optLong("time", 0L) / 1000,
             url = link.url,
-            medias = medias
+            medias = medias,
+            notice = notice
         )
     }
 
-    private fun buildFromDiscovery(
+    private suspend fun buildFromDiscovery(
         state: JSONObject,
         link: DetectedVideoLink,
         cookie: String
@@ -285,8 +306,8 @@ object XhsParser : VideoParser {
         val title = note.str("title")
         val base = fileBase(title, link)
 
-        // 笔记图带水印；preload 的图无水印但只有一张，参考实现只拿它当视频封面
-        val noteImages = imageUrls(note.optJSONArray("imageList")) { it.str("url") }
+        // 原始字段（discovery 是 url、preload 是 urlSizeLarge）：都带水印，图集要经 resolveImages 换算+探测
+        val rawNoteImages = imageUrls(note.optJSONArray("imageList")) { rawImageUrlOf(it) }
         val preloadImages = imageUrls(noteRoot.optJSONObject("normalNotePreloadData")?.optJSONArray("imagesList")) {
             it.str("urlSizeLarge").ifBlank { it.str("url") }
         }
@@ -295,8 +316,10 @@ object XhsParser : VideoParser {
 
         val medias = mutableListOf<VideoMedia>()
         var cover = ""
+        var notice = ""
         if (video != null) {
-            cover = (preloadImages.ifEmpty { noteImages }).firstOrNull().orEmpty()
+            // 封面只是展示用（preload 只有一张、最干净），不单独探测可用性
+            cover = watermarkFreeOrRaw((preloadImages.ifEmpty { rawNoteImages }).firstOrNull().orEmpty())
             medias += VideoMedia(
                 url = video.url,
                 kind = VideoMediaKind.VIDEO,
@@ -305,7 +328,8 @@ object XhsParser : VideoParser {
                 quality = video.quality
             )
         } else {
-            noteImages.forEachIndexed { index, url ->
+            val images = resolveImages(rawNoteImages, mediaHeaders)
+            images.urls.forEachIndexed { index, url ->
                 medias += VideoMedia(
                     url = url,
                     kind = VideoMediaKind.IMAGE,
@@ -314,6 +338,7 @@ object XhsParser : VideoParser {
                     quality = "原图"
                 )
             }
+            notice = images.notice
         }
 
         return VideoParseResult(
@@ -326,7 +351,8 @@ object XhsParser : VideoParser {
             text = note.str("desc"),
             timestampSeconds = note.optLong("time", 0L) / 1000,
             url = link.url,
-            medias = medias
+            medias = medias,
+            notice = notice
         )
     }
 
@@ -361,6 +387,91 @@ object XhsParser : VideoParser {
             if (url.isNotBlank()) result += url
         }
         return result
+    }
+
+    /**
+     * 图集里一张图的**原始**地址（两个形态字段名不同：explore 是 `urlDefault`、discovery 是 `url`）。
+     *
+     * ★ 这个地址**带水印**，只当换算的输入 —— 必须再过 [resolveImages] 才有可用的直链。
+     */
+    private fun rawImageUrlOf(item: JSONObject): String =
+        item.str("urlDefault").ifBlank { item.str("url") }
+
+    /** 一批图集图片的解析结果：[urls] 是最终使用的地址（与入参等长同序），[fallbackCount] 是回退条数 */
+    private class ImageResolution(val urls: List<String>, val fallbackCount: Int) {
+        /** 回退过就给一句面向用户的提示；一张都没回退则空串（界面据此决定弹不弹） */
+        val notice: String
+            get() = if (fallbackCount <= 0) "" else
+                "$fallbackCount 张图片没有可用的去水印原图，已改用平台地址（可能带水印）"
+    }
+
+    /**
+     * 把图集的原始地址逐张换算成**去水印原图**，并探测它是否真的可用。
+     *
+     * ★ 为什么要探测（2026-10-18）：`sns-img-bd.xhscdn.com/<图片ID>` 对无效 ID 返回 404
+     *   （实测 HEAD/GET 一致），不校验就会把一张打不开的图交给用户；这时**回退到原始地址** ——
+     *   宁可带水印，也要能看能下。回退条数写进 [ImageResolution.notice]，由界面提示一次。
+     * ★ 并行探测：图集可能十几张，串行 HEAD 会把解析拖慢；每张一次 HEAD 本身很轻。
+     *
+     * @param rawItems 原始（带水印）地址
+     * @param headers 媒体请求头（Referer/Cookie，CDN 也按它校验）
+     */
+    private suspend fun resolveImages(
+        rawItems: List<String>,
+        headers: Map<String, String>
+    ): ImageResolution {
+        if (rawItems.isEmpty()) return ImageResolution(emptyList(), 0)
+        val resolved: List<Pair<String, Boolean>> = coroutineScope {
+            rawItems.map { raw ->
+                async {
+                    val clean = watermarkFreeOrRaw(raw)
+                    when {
+                        // 取不到图片 ID（本来就是原图地址）：没有换算空间，也无需探测
+                        clean == raw -> raw to false
+                        // 去水印原图确实不存在 → 回退原始地址并记一次降级
+                        probeMissing(clean, headers) -> raw to true
+                        else -> clean to false
+                    }
+                }
+            }.awaitAll()
+        }
+        return ImageResolution(resolved.map { it.first }, resolved.count { it.second })
+    }
+
+    /**
+     * 探测去水印原图是否**已不存在**。
+     *
+     * ★ 只认 404/410（与 [VideoHttp.requireSuccess] 对「不存在」的口径一致）：探测超时、网络抖动、
+     *   405（CDN 不支持 HEAD）都不是「图没了」—— 把它们算作失效，用户会白白拿到带水印的图。
+     */
+    private suspend fun probeMissing(url: String, headers: Map<String, String>): Boolean = try {
+        VideoHttp.request(url, method = "HEAD", headers = headers).status in MISSING_IMAGE_STATUS
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "小红书去水印原图探测失败（按可用处理）：${e.message}")
+        false
+    }
+
+    /**
+     * 把带处理规格的图片地址换算成去水印原图；取不到图片 ID 时原样返回。
+     *
+     * ★ 为什么必须换算：`urlDefault` / `url` 是带网页处理规格的图（形如 `...!nd_dft_wlteh_webp_3`），
+     *   叠不叠水印由服务端按会话决定 —— 实测「退出重新登录后，解析出的图片中间多出小红书水印」。
+     *   原图要拿**图片 ID** 换域名取：`https://sns-img-bd.xhscdn.com/<图片ID>`（不带任何处理规格）。
+     *   取法照搬 XHS-Downloader（JoeanAmier）的 `Image.__extract_image_token`：丢掉 scheme/host
+     *   之后的前两段路径（时间戳桶 + 散列），再截掉 `!` 起的水印处理规格。
+     */
+    private fun watermarkFreeOrRaw(raw: String): String {
+        if (raw.isBlank()) return raw
+        // "host/202501011200/0f5e/<图片ID>!<处理规格>" → 丢掉前两段路径，再截掉 "!" 之后
+        val id = raw.substringAfter("://", "")
+            .substringAfter('/', "")
+            .split('/')
+            .drop(2)
+            .joinToString("/")
+            .substringBefore('!')
+        return if (id.isBlank()) raw else "$XHS_IMAGE_CDN/$id"
     }
 
     private fun mediaHeaders(cookie: String): Map<String, String> = buildMap {

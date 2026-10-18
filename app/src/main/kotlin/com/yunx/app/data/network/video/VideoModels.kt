@@ -41,8 +41,9 @@ data class VideoMedia(
     /**
      * 需要合轨的**音轨地址**（哔哩哔哩 DASH：高清是音视频分离的两路流）。
      *
-     * 非空表示这条媒体是分轨的：下载器会把 [url] 当视频轨、本字段当音轨各自下载后用 mp4parser
-     * 合轨成一个 mp4（见 `DashMuxer`）。预览时只有画面没有声音，界面必须如实提示。
+     * 非空表示这条媒体是分轨的：下载器会把 [url] 当视频轨、本字段当音轨各自下载后合轨成一个 mp4
+     * （见 `DashMuxer`，MediaExtractor + MediaMuxer 逐样本重封装）。预览端用 media3 的
+     * `MergingMediaSource` 把两路流式合并，所以**预览也有声音**，界面无需再挂「无声」提示。
      * 空 = 单文件直链，与其它平台行为一致。
      */
     val audioUrl: String = "",
@@ -67,7 +68,14 @@ data class VideoParseResult(
     val timestampSeconds: Long = 0L,
     /** 作品原始网页地址 */
     val url: String = "",
-    val medias: List<VideoMedia> = emptyList()
+    val medias: List<VideoMedia> = emptyList(),
+    /**
+     * 非致命提示：解析成功、但部分内容降级了（如小红书去水印原图不可用、已回退到平台地址）。
+     *
+     * 空串 = 一切正常。界面据此**弹一次**提示即可，不要去改 [medias] 里已有的地址 ——
+     * 降级与否在解析阶段就已定好，这里只是把原因告诉用户。
+     */
+    val notice: String = ""
 ) {
     val videoCount: Int get() = medias.count { it.kind == VideoMediaKind.VIDEO }
     val imageCount: Int get() = medias.count { it.kind == VideoMediaKind.IMAGE }

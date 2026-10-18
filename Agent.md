@@ -1804,6 +1804,17 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
   `CLEARTEXT communication ... not permitted by network security policy` ——
   **预览和下载会同时失败**（Coil 与下载器都走 OkHttp），且光看解析结果完全看不出问题。
   归一化只放在仓库这一处出口，新增平台不必各自记得处理。
+- **小红书图集的图片必须换算成去水印原图**：`urlDefault` / `url` 是**带网页处理规格**的图
+  （形如 `...!nd_dft_wlteh_webp_3`），叠不叠水印由服务端按会话决定 —— 实测「退出重新登录后，
+  解析出的图片中间多出小红书水印」。要用路径里的**图片 ID** 换域名取：
+  `https://sns-img-bd.xhscdn.com/<图片ID>`（见 `XhsParser.resolveImages` / `watermarkFreeOrRaw`，
+  取法照搬 XHS-Downloader 的 `Image.__extract_image_token`：丢掉 host 后的前两段路径、
+  截掉 `!` 规格）。**注意图片 ID 前还有一段场景目录**，真实形状是
+  `sns-webpic-qc.xhscdn.com/<日期桶>/<散列>/notes_pre_post/<图片ID>!<规格>` ——
+  所以「取路径最后一段」是错的，必须按前两段之后的整段取。
+  换算完要**逐个 HEAD 探测**：该 CDN 对无效 ID 返回 404（实测），404/410 时回退到原始地址，
+  并通过 `VideoParseResult.notice` 提示用户「若干张回退、可能带水印」。
+  **别图省事直接拿 URL 字段当直链** —— 那等于把「有没有水印」交给平台决定。
 - **平台图标用内置 drawable，作品封面/头像仍然不加载**：`res/drawable/logo_*.png` 是各平台官方图标
   （200×200，用户整理），映射表在 `ui/items/PlatformLogos.kt`（`SharePlatform.logoRes()` /
   `VideoPlatform.logoRes()` / `drivePlatformLogoRes(id)`）。**别把 drawable 资源 id 塞进 `VideoPlatform`
