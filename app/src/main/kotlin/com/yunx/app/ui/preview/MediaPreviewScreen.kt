@@ -43,7 +43,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -83,6 +82,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
@@ -415,8 +415,20 @@ internal fun MediaPlayerPane(
         }
     }
 
-    LaunchedEffect(player, media.url) {
-        player.setMediaItem(MediaItem.fromUri(media.url))
+    LaunchedEffect(player, media.url, media.audioUrl) {
+        if (media.audioUrl.isNotBlank()) {
+            // ★ 音视频分轨（哔哩哔哩 DASH 高清）：两路各自带请求头，流式合并播放
+            //   MergingMediaSource 按同一 timeline 播放视频轨 + 音轨，声音随画面同步
+            val videoSource = DefaultMediaSourceFactory(
+                httpDataSourceFactory(media.headers)
+            ).createMediaSource(MediaItem.fromUri(media.url))
+            val audioSource = DefaultMediaSourceFactory(
+                httpDataSourceFactory(media.audioHeaders.ifEmpty { media.headers })
+            ).createMediaSource(MediaItem.fromUri(media.audioUrl))
+            player.setMediaSource(MergingMediaSource(videoSource, audioSource))
+        } else {
+            player.setMediaItem(MediaItem.fromUri(media.url))
+        }
         player.prepare()
     }
     // 只有当前页在播：翻到别的媒体时先停住（页面被移出组合时上面的 release 会接手）
@@ -425,10 +437,6 @@ internal fun MediaPlayerPane(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // 哔哩哔哩 DASH 分轨：这条媒体只有画面，音轨单独一路（下载后才合轨），必须如实提示
-        if (media.audioUrl.isNotBlank()) {
-            SplitTrackNotice()
-        }
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -451,47 +459,29 @@ internal fun MediaPlayerPane(
     }
 }
 
-/** 分轨无声提示（画面有、声音在另一路），条状横幅压在播放器上方 */
-@Composable
-private fun SplitTrackNotice(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.tertiaryContainer
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.VolumeOff,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "该清晰度为音视频分轨，预览无声；下载后会自动合并音轨",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-        }
-    }
-}
-
 /** 建播放器：把请求头与 UA 装进数据源工厂，其余交给 ExoPlayer 的默认数据源选择 */
 @androidx.annotation.OptIn(UnstableApi::class)
 private fun buildPlayer(context: Context, media: PreviewMedia): ExoPlayer {
+    return ExoPlayer.Builder(context)
+        .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory(media.headers)))
+        .build()
+}
+
+/**
+ * 把请求头与 UA 拆成 `DefaultHttpDataSource.Factory`（预览合并播放的两路各建一个）。
+ * - `User-Agent` 单独走 `setUserAgent`（media3 特殊处理 UA，不走普通请求属性）；
+ * - 其余头（Referer/Cookie 等）进 `setDefaultRequestProperties`，随每个请求带上。
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun httpDataSourceFactory(headers: Map<String, String>): DefaultHttpDataSource.Factory {
     var userAgent: String? = null
     val requestProperties = LinkedHashMap<String, String>()
-    media.headers.forEach { (name, value) ->
+    headers.forEach { (name, value) ->
         if (name.equals("User-Agent", ignoreCase = true)) userAgent = value else requestProperties[name] = value
     }
-    val dataSourceFactory = DefaultHttpDataSource.Factory()
+    return DefaultHttpDataSource.Factory()
         .setDefaultRequestProperties(requestProperties)
         .setUserAgent(userAgent?.takeIf { it.isNotBlank() } ?: VideoHttp.UA_CHROME)
-    return ExoPlayer.Builder(context)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-        .build()
 }
 
 // ---------------------------------------------------------------------------

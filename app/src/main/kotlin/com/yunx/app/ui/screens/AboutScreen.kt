@@ -387,7 +387,7 @@ private fun FeatureCard() {
 private fun TechCard() {
     val techs = listOf(
         "Kotlin", "Jetpack Compose", "Material 3", "Room", "OkHttp", "KSP",
-        "Media3 ExoPlayer", "Coil 3", "mp4parser"
+        "Media3 ExoPlayer", "Coil 3"
     )
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {

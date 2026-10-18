@@ -144,9 +144,6 @@ dependencies {
     // 图片加载（封面/图集；网络走 OkHttp，可逐请求带 Referer/Cookie）
     implementation(libs.androidx.coil.compose)
     implementation(libs.androidx.coil.network.okhttp)
-    // mp4 分轨合并（B 站 DASH 音视频合轨）：纯 Java 实现，不需要 ffmpeg
-    implementation(libs.mp4parser)
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.webkit)   // 登录 WebView 关闭 X-Requested-With（见 DiagnosticWebViewClient.suppressRequestedWithHeader）
     implementation(libs.androidx.lifecycle.runtime.ktx)

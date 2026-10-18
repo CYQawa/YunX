@@ -83,6 +83,8 @@ import com.yunx.app.ui.viewmodel.VideoAccountViewModel
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 视频平台通用登录页：WebView 打开平台官网，登录完成后自动提取 Cookie 并保存。
@@ -666,10 +668,57 @@ private fun ManualCookieLoginScreen(
 }
 
 /**
- * 去掉从 DevTools / 抓包工具复制 Cookie 时常见的 `Cookie:` 前缀。
+ * 把用户粘贴的 Cookie 文本整理成请求头可用的 `k=v; k2=v2` 形式；整理不出来时原样返回。
  *
- * 用户往往把整行 `Cookie: a=b; c=d` 一起粘进来，前缀会被当成 Cookie 值的一部分发出去
- * （最后变成 `Cookie: Cookie: a=b...`），服务端直接不认。
+ * 兼容的输入：
+ * 1. 标准请求头 `Cookie: a=b; c=d`（带 `Cookie:` 前缀，常见于从抓包工具复制整行 Headers）；
+ * 2. 纯 `a=b; c=d`；
+ * 3. JSON 对象 `{"a":"b","c":"d"}`（浏览器 Cookie 导出 / 剪贴板整理工具的常见格式）；
+ * 4. JSON 数组 `[{"name":"a","value":"b",...},...]`（EditThisCookie 类插件的导出格式）。
+ *
+ * ★ JSON 格式必须先转成 `k=v` 再拼接：否则整段 JSON 会被原样塞进 Cookie 头，服务端不认，
+ *   校验必然失败（表现就是「Cookie 无效或已过期」）。
  */
-private fun normalizePastedCookie(raw: String): String =
-    raw.trim().replace(Regex("^cookie\\s*:\\s*", RegexOption.IGNORE_CASE), "")
+private fun normalizePastedCookie(raw: String): String {
+    val withoutPrefix = raw.trim()
+        .replace(Regex("^cookie\\s*:\\s*", RegexOption.IGNORE_CASE), "")
+        .trim()
+    val pairs = cookiePairsFromJson(withoutPrefix)
+    if (!pairs.isNullOrEmpty()) return pairs.joinToString("; ")
+    return withoutPrefix
+}
+
+/** 尝试把 JSON 格式的 Cookie 解析成 `name=value` 列表；不是可解析的 JSON 时返回 null */
+private fun cookiePairsFromJson(text: String): List<String>? {
+    val trimmed = text.trim()
+    // JSON 对象：{"name":"value",...}
+    if (trimmed.startsWith("{")) {
+        val obj = runCatching { JSONObject(trimmed) }.getOrNull() ?: return null
+        return buildList {
+            obj.keys().forEach { key ->
+                cookieScalarText(obj.opt(key))?.let { add("$key=$it") }
+            }
+        }
+    }
+    // JSON 数组：[{"name":"...","value":"...",...},...]
+    if (trimmed.startsWith("[")) {
+        val arr = runCatching { JSONArray(trimmed) }.getOrNull() ?: return null
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val item = arr.optJSONObject(i) ?: continue
+                val name = item.optString("name")
+                if (name.isBlank()) continue
+                cookieScalarText(item.opt("value"))?.let { add("$name=$it") }
+            }
+        }
+    }
+    return null
+}
+
+/** Cookie 值只接受标量（字符串/数字/布尔）：null、嵌套对象、数组都跳过 */
+private fun cookieScalarText(value: Any?): String? = when (value) {
+    is String -> value
+    is Number -> value.toString()
+    is Boolean -> if (value) "true" else "false"
+    else -> null
+}

@@ -15,7 +15,6 @@ markdownRenderer = "0.35.0"   # mikepenz/multiplatform-markdown-renderer（GFM �
 
 media3 = "1.4.1"      # 在线预览/播放（ExoPlayer + PlayerView）。1.4.x 用 Kotlin 1.9 编译，与项目 Kotlin 2.1.0 兼容
 coil = "3.0.4"        # 图片加载（含网络模块，见 androidx-coil-network-okhttp）
-mp4parser = "1.1.22"  # mp4 分轨合并（哔哩哔哩 DASH 音视频合轨）；纯 Java，无需 ffmpeg
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -52,5 +51,3 @@ androidx-media3-hls = { group = "androidx.media3", name = "media3-exoplayer-hls"
 # 图片加载（预览图集/封面；网络层走 OkHttp，可逐请求带 Referer/Cookie）
 androidx-coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 androidx-coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
-# mp4 分轨合并（B 站 DASH：视频轨 + 音轨 各自下载后合轨成一个 mp4）
-mp4parser = { group = "com.googlecode.mp4parser", name = "isoparser", version.ref = "mp4parser" }

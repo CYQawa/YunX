@@ -65,13 +65,19 @@ object BilibiliParser : VideoParser {
         if (cookie.isNotBlank()) put("Cookie", cookie)
     }
 
-    /** 登录态校验：`nav` 接口顺带返回用户名，可以直接作为昵称存下来 */
+    /**
+     * 登录态校验：`nav` 接口顺带返回用户名，可以直接作为昵称存下来。
+     *
+     * ★ `isLogin` 是 JSON 布尔值（`"isLogin":true`），必须用 `optBoolean` 读：
+     *   Android 的 org.json 不会把 Boolean 转成 int，`optInt("isLogin")` 恒得 0，
+     *   会让所有合法 Cookie 都被判「校验不通过」（网页登录与手动填写一起失败）。
+     */
     override suspend fun validateCookie(cookie: String): String? {
         if (cookie.isBlank()) return null
         val json = runCatching { VideoHttp.getJson(NAV_URL, apiHeaders(cookie), "B站登录态校验") }.getOrNull()
             ?: return null
         val data = json.optJSONObject("data") ?: return null
-        if (data.optInt("isLogin") != 1) return null
+        if (!data.optBoolean("isLogin")) return null
         return data.optString("uname")
     }
 

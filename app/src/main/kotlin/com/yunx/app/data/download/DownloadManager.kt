@@ -57,6 +57,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
 import java.security.DigestOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -160,6 +162,9 @@ private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
 
 /** RANGE_IGNORED 容忍次数：CDN 偶发 200（限流中间态）前 N 次不触发整任务回退，继续领新片；超过才回退单流 */
 private const val RANGE_IGNORED_TOLERANCE = 3
+
+/** DASH 分轨断流续传最大重试次数：B 站 CDN 偶发 unexpected end of stream，带 Range 从断点续写，超过才抛错交给整任务重跑兜底 */
+private const val MAX_STREAM_RETRIES = 3
 
 /** 暂停/删除时等待任务协程退出的上限（毫秒）：阻塞式 IO 不响应取消，不能无限等，否则按钮「点不动」 */
 private const val JOB_EXIT_WAIT_MS = 10_000L
@@ -2001,12 +2006,44 @@ class DownloadManager(
         val mergedFile = File(workDir, "merged.mp4")
         val progress = AtomicLong(0L)
         val lastAt = AtomicLong(0L)
+        // ★ 两轨 Content-Length 累加作为任务总大小（2026-10-18：此前恒 0，进度条/速度都不显示）
+        val totalBytes = AtomicLong(0L)
+        val streamRecorder = SpeedRecorder()
         try {
             // 重启恢复时内存里没有音轨头，回查数据库（与主请求头同样的加密存储）
             val audioHeaders = taskMergeAudioHeaders[id] ?: loadPersistedMergeAudioHeaders(id)
-            streamUrlToFile(task.url, headers, videoFile, id, task.fileName, progress, lastAt)
-            streamUrlToFile(task.mergeAudioUrl, audioHeaders, audioFile, id, task.fileName, progress, lastAt)
-            if (!DashMuxer.mux(videoFile, audioFile, mergedFile)) {
+            streamUrlToFile(task.url, headers, videoFile, id, task.fileName, progress, lastAt, totalBytes, streamRecorder)
+            streamUrlToFile(task.mergeAudioUrl, audioHeaders, audioFile, id, task.fileName, progress, lastAt, totalBytes, streamRecorder)
+            // ★ 合轨阶段上报「合并中 n%」：两轨下完进度条已经 100%，合轨还要逐样本重封装（几十秒），
+            //   不报进度会停在 100% 像卡死。进度只走内存态 stats、不写 DB —— 进程被杀时合轨本就中断。
+            var mergeLastPercent = -1
+            var mergeLastAtMs = 0L
+            fun reportDashMergeProgress(percent: Int) {
+                val now = System.currentTimeMillis()
+                if (percent == mergeLastPercent && now - mergeLastAtMs < mergeReportIntervalMs) return
+                mergeLastPercent = percent
+                mergeLastAtMs = now
+                _stats.update { it + (id to DownloadStats(mergePercent = percent)) }
+                // 诊断日志：回调很密，按 10% 采样（高频日志必须降频，见 DiagnosticLog 的限流说明）
+                if (percent % 10 == 0) {
+                    DiagnosticLog.log(
+                        DiagnosticLog.DOWNLOAD, "merge_progress", taskId = id, status = "merging",
+                        summary = "percent=$percent%"
+                    )
+                    DownloadDebugLog.record(id, "合并进度", "$percent%")
+                }
+                // 通知沿用下载中那条 2 秒节流（回调很密，别把系统通知刷爆）
+                if (now - lastNotifyTs.get() >= notifyThrottleMs) {
+                    lastNotifyTs.set(now)
+                    DownloadService.update(context, task.fileName, percent, DownloadService.MERGE_TEXT, showSpeedProvider())
+                }
+            }
+            // 同步合轨是 IO 密集（逐样本重封装），切 IO 线程跑，避免占满 Default 下载协程（同 finishDownload 的处理）
+            reportDashMergeProgress(0)
+            val muxOk = withContext(Dispatchers.IO) {
+                DashMuxer.mux(videoFile, audioFile, mergedFile) { reportDashMergeProgress(it) }
+            }
+            if (!muxOk) {
                 throw IllegalStateException("分轨合轨失败（音视频轨道不配套或文件不完整），可改用未登录的单文件低清")
             }
             // Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
@@ -2033,6 +2070,16 @@ class DownloadManager(
     /**
      * 把整段响应流式写入文件，并按写入量上报进度（合轨的两条轨道各调一次）。
      *
+     * ★ 断点续传（2026-10-18）：B 站 CDN 中途断流（unexpected end of stream）时，
+     *   此前整个 DASH 任务重跑（workDir 清空、两轨重下），浪费流量且看着像卡住。
+     *   现在断流后带 `Range: bytes=<已写>-` 从断点继续写，最多重试 [MAX_STREAM_RETRIES] 次；
+     *   超过或服务器不支持 Range（返回 200 全量）才抛错交给上层整任务重跑兜底。
+     *
+     * ★ 进度上报：此前 total 恒传 0，DB 里 totalSize=0 → 下载页进度条永远 0%、
+     *   `_stats` 从不更新 → 速度恒 0，界面看起来像「下载不动」，即使数据在下。
+     *   现在从响应头读 Content-Length 累加为 [totalBytes]（两轨之和），速度走 [SpeedRecorder] 采样，
+     *   UI/通知都能看到真实速度与百分比。
+     *
      * 任务被取消/暂停时直接抛 [CancellationException] 结束下载（临时目录由调用方 finally 清理）。
      */
     private suspend fun streamUrlToFile(
@@ -2042,30 +2089,76 @@ class DownloadManager(
         id: Long,
         fileName: String,
         progress: AtomicLong,
-        lastAt: AtomicLong
+        lastAt: AtomicLong,
+        totalBytes: AtomicLong,
+        speedRecorder: SpeedRecorder
     ) = withContext(Dispatchers.IO) {
-        val headerBuilder = okhttp3.Headers.Builder()
-        headers.forEach { (name, value) -> if (value.isNotBlank()) headerBuilder.add(name, value) }
-        val request = Request.Builder().url(url).headers(headerBuilder.build()).build()
-        HttpClients.downloadClient().newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("分轨下载失败：HTTP ${response.code}（${LogRedactor.url(url)}）")
-            }
-            val body = response.body ?: throw IllegalStateException("分轨响应为空")
-            body.byteStream().use { input ->
-                target.outputStream().use { out ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        if (!isTaskActive()) throw CancellationException("任务已取消")
-                        val read = input.read(buffer)
-                        if (read <= 0) break
-                        speedLimiter.awaitAllow(read.toLong())
-                        out.write(buffer, 0, read)
-                        val total = progress.addAndGet(read.toLong())
-                        persistProgressIfDue(id, total, 0, force = false, lastAt = lastAt)
-                        notifyProgress(id, fileName, total, 0)
+        var attempt = 0
+        while (true) {
+            // 已写字节作为断点：从头下载不带 Range；续传才带，服务器应回 206
+            val offset = target.length()
+            val headerBuilder = okhttp3.Headers.Builder()
+            headers.forEach { (name, value) -> if (value.isNotBlank()) headerBuilder.add(name, value) }
+            if (offset > 0) headerBuilder.add("Range", "bytes=$offset-")
+            val request = Request.Builder().url(url).headers(headerBuilder.build()).build()
+            try {
+                HttpClients.downloadClient().newCall(request).execute().use { response ->
+                    // 续传时服务器若忽略 Range 返回 200 全量，append 会重复写入 → 视为不支持续传，抛错兜底
+                    if (offset > 0 && response.code != 206) {
+                        throw IllegalStateException(
+                            "分轨续传失败：服务器未按 Range 响应（HTTP ${response.code}，${LogRedactor.url(url)}）"
+                        )
                     }
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("分轨下载失败：HTTP ${response.code}（${LogRedactor.url(url)}）")
+                    }
+                    val body = response.body ?: throw IllegalStateException("分轨响应为空")
+                    // 只有从头下载（offset==0）才把本轨完整长度累加进总大小；续传的 Content-Length 只是剩余部分
+                    val declared = body.contentLength()
+                    if (offset == 0L && declared > 0) totalBytes.addAndGet(declared)
+                    DiagnosticLog.log(
+                        DiagnosticLog.DOWNLOAD, "stream_start", taskId = id, status = "downloading",
+                        summary = "code=${response.code} 断点=${diagSize(offset)} " +
+                            "本轨长度=${if (declared > 0) diagSize(declared) else "未知"} " +
+                            "累计=${diagSize(totalBytes.get())} url=${LogRedactor.url(url)}"
+                    )
+                    body.byteStream().use { input ->
+                        // append = 断点续传时从文件末尾接着写（offset>0）；从头下载正常覆盖
+                        FileOutputStream(target, offset > 0).use { out ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                if (!isTaskActive()) throw CancellationException("任务已取消")
+                                val read = input.read(buffer)
+                                if (read <= 0) break
+                                speedLimiter.awaitAllow(read.toLong())
+                                out.write(buffer, 0, read)
+                                val new = progress.addAndGet(read.toLong())
+                                val total = totalBytes.get()
+                                // 速度采样进 _stats：UI 与通知栏都能显示实时速度（此前恒 0，看着像卡死）
+                                speedRecorder.onBytes(new)?.let { speed ->
+                                    val remain = if (speed > 0 && total > 0) (total - new) * 1000 / speed else -1L
+                                    _stats.update { it + (id to DownloadStats(speed, remain, 1)) }
+                                }
+                                persistProgressIfDue(id, new, total, force = false, lastAt = lastAt)
+                                notifyProgress(id, fileName, new, total)
+                            }
+                        }
+                    }
+                    DiagnosticLog.log(
+                        DiagnosticLog.DOWNLOAD, "stream_finish", taskId = id, status = "downloading",
+                        summary = "本轨完成=${diagSize(target.length())} 累计=${diagSize(progress.get())} url=${LogRedactor.url(url)}"
+                    )
                 }
+                return@withContext
+            } catch (e: IOException) {
+                attempt++
+                if (attempt >= MAX_STREAM_RETRIES || !isTaskActive()) throw e
+                DiagnosticLog.warn(
+                    DiagnosticLog.DOWNLOAD, "stream_retry",
+                    "task=$id | 断流续传 $attempt/$MAX_STREAM_RETRIES：${e.message} 已写=${diagSize(target.length())}"
+                )
+                DownloadDebugLog.record(id, "断流续传", "第 $attempt/$MAX_STREAM_RETRIES 次：${e.message}")
+                delay(1200L * attempt)
             }
         }
     }
