@@ -19,7 +19,7 @@
 package com.yunx.app.ui.screens
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,10 +27,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -84,50 +82,87 @@ internal fun VideoAccountSection(
     // 每个平台已登录的账号数：只有多账号时才需要在状态里补「共 N 个账号」
     val counts = remember(accounts) { accounts.groupingBy { it.platform }.eachCount() }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        Column {
-            platforms.forEachIndexed { index, platform ->
-                if (index > 0) HorizontalDivider()
-                VideoPlatformRow(
-                    platform = platform,
-                    account = loginState[platform],
-                    accountCount = counts[platform.name] ?: 0,
-                    onLogin = onLogin,
-                    onManage = onManage
-                )
-            }
+    // ★ 一个平台一张卡片（与「网盘账号」区的 DriveAccountCard 同款：一样的 shape / 底色 / 边距 / 字号）。
+    //   早先是「全部平台挤在一张卡片里、用分隔线隔开」，两个区上下相邻，一眼就能看出不统一。
+    //   卡片之间的 12dp 与 DriveScreen 里 LazyColumn 的 item 间距相同，所以整页节奏一致。
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        platforms.forEach { platform ->
+            VideoPlatformCard(
+                platform = platform,
+                account = loginState[platform],
+                accountCount = counts[platform.name] ?: 0,
+                onLogin = onLogin,
+                onManage = onManage
+            )
         }
     }
 }
 
-/** 单个视频平台行：圆形徽标 + 平台名/状态 + 右侧「登录 / 管理」动作 */
+/**
+ * 单个视频平台的卡片外壳：刻意与 [com.yunx.app.ui.screens.DriveScreen] 里的 `DriveAccountCard` 同款
+ * （shape = large、containerColor = surfaceContainerLow、可点则用带 onClick 的 Card）。
+ * 免登录平台没有任何可操作项，所以用不带 onClick 的 Card（不是「可点但无动作」）。
+ */
 @Composable
-private fun VideoPlatformRow(
+private fun VideoPlatformCard(
     platform: VideoPlatform,
     account: VideoAccountEntity?,
     accountCount: Int,
     onLogin: (VideoPlatform) -> Unit,
     onManage: (VideoPlatform) -> Unit
 ) {
-    // 免登录平台整行不可点、也没有按钮：它对用户没有任何可操作项
-    val enabled = platform.needsLogin
-    val rowClick: (() -> Unit)? = when {
-        !enabled -> null
+    val onClick: (() -> Unit)? = when {
+        !platform.needsLogin -> null
         account != null -> { { onManage(platform) } }
         else -> { { onLogin(platform) } }
     }
+    val cardShape = MaterialTheme.shapes.large
+    val cardColors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    )
+    val content: @Composable () -> Unit = {
+        VideoPlatformCardContent(
+            platform = platform,
+            account = account,
+            accountCount = accountCount,
+            onLogin = onLogin,
+            onManage = onManage
+        )
+    }
+
+    if (onClick != null) {
+        Card(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = cardShape,
+            colors = cardColors
+        ) { content() }
+    } else {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = cardShape,
+            colors = cardColors
+        ) { content() }
+    }
+}
+
+/** 单个视频平台卡片的内容行（卡片外壳见 [VideoPlatformCard]）：版式与网盘卡片的内容行对齐 */
+@Composable
+private fun VideoPlatformCardContent(
+    platform: VideoPlatform,
+    account: VideoAccountEntity?,
+    accountCount: Int,
+    onLogin: (VideoPlatform) -> Unit,
+    onManage: (VideoPlatform) -> Unit
+) {
+    val enabled = platform.needsLogin
 
     Row(
+        // ★ 与网盘卡片一致：整行 16dp 内边距（原来是 top/bottom 10dp，比网盘那张紧一档）。
+        // ★ 这里不再自己 clickable：点击手势由外层 Card 承担，否则会叠出两层涟漪。
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (rowClick != null) Modifier.clickable(onClick = rowClick) else Modifier)
-            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 平台 Logo：按图标自身形状原样画（不裁圆、不垫底色，理由见 PlatformLogos 的 KDoc）。
@@ -141,18 +176,22 @@ private fun VideoPlatformRow(
             contentScale = ContentScale.Fit
         )
 
-        Spacer(modifier = Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
+        // ★ 与网盘卡片一致：文字列左右各 16dp（原来靠一个 14dp 的 Spacer 顶开），字号也统一到
+        //   titleMedium / bodyMedium —— 两种卡片同页混排才不会一大一小。
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp)
+        ) {
             Text(
                 text = platform.displayName,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = videoStatusText(platform, account, accountCount),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

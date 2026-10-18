@@ -874,19 +874,21 @@ private fun DriveAccountCardContent(
         // 品牌图标：**按 Logo 自身形状原样画**（不裁圆、不垫底色）——这些图标有的是带底色的圆角
         // 方块、有的是透明底图形，统一裁形会裁掉前者的边、给后者糊一圈假底色。
         // 未登录整体压暗，替代原来靠圆形底色区分登录态的做法。
+        // ★ 尺寸 40dp = 同一页里视频平台图标的大小（见 VideoAccountSection）：两组混在一页里，
+        //   48dp 会让「网盘」这组明显比「视频」那组大一圈（用户反馈「网盘图标有点大了」）。
         val logoRes = drivePlatformLogoRes(account.id)
         if (logoRes != null) {
             Image(
                 painter = painterResource(logoRes),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(40.dp)
                     .alpha(if (account.isLoggedIn) 1f else 0.45f),
                 contentScale = ContentScale.Fit
             )
         } else {
             Surface(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(40.dp),
                 shape = CircleShape,
                 color = if (account.isLoggedIn) {
                     MaterialTheme.colorScheme.primaryContainer
