@@ -339,7 +339,7 @@ abstract class AppDatabase : RoomDatabase() {
         /**
          * v22：哔哩哔哩 DASH 音视频合轨。
          *
-         * 高清是**音视频分离**的两路流，需要先各自下载再用 mp4parser 合轨，所以下载任务要多记
+         * 高清是**音视频分离**的两路流，需要先各自下载再合轨（见 `DashMuxer`），所以下载任务要多记
          * 「音轨直链 + 音轨请求头」。两列默认空 = 单文件下载，升级后既有任务与行为完全不变。
          */
         private val MIGRATION_21_22 = object : Migration(21, 22) {

@@ -1875,10 +1875,11 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 | 视频/音频 | Media3 ExoPlayer + `PlayerView`（`AndroidView`） | `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)`；`DefaultMediaSourceFactory` 按 URI 自动识别 m3u8；`DisposableEffect` 里 `player.release()` |
 | 文本（仅网盘） | OkHttp + `Range: bytes=0-524287` | **只读前 512KB**，不整文件下载；UTF-8 严格解码失败回退 GBK 再回退 ISO-8859-1；`.md` 走已有 mikepenz 渲染，其余等宽纯文本 + 可复制 |
 
-**新增的三个依赖**（`gradle/libs.versions.toml`）：`media3 1.4.1`（1.4.x 用 Kotlin 1.9 编译，与项目
-Kotlin 2.1.0 兼容；别随手升到需要更高 Kotlin 的版本）、`coil 3.0.4`、`mp4parser(isoparser) 1.1.22`。
+**新增的两个依赖**（`gradle/libs.versions.toml`）：`media3 1.4.1`（1.4.x 用 Kotlin 1.9 编译，与项目
+Kotlin 2.1.0 兼容；别随手升到需要更高 Kotlin 的版本）、`coil 3.0.4`。
 
-**B 站 DASH 音视频合轨**（`DashMuxer`，纯 Java 搬 box，不重编码、不需要 ffmpeg）：
+**B 站 DASH 音视频合轨**（`DashMuxer`：Android 原生 `MediaExtractor` + `MediaMuxer` **逐样本重封装**，
+不重编码、不需要 ffmpeg）：
 
 1. B 站解析器在**已登录**时优先取 DASH（`playurl?fnval=4048&qn=120`）：视频轨取清晰度最高、音轨取码率
    最高，产出一条 `VideoMedia`，`audioUrl`/`audioHeaders` 承载音轨（未登录不试 —— 匿名 DASH 也是最低清，
@@ -1892,8 +1893,9 @@ Kotlin 2.1.0 兼容；别随手升到需要更高 Kotlin 的版本）、`coil 3.
 5. 合轨失败**不做降级**：任务以可见错误结束（提示可改用未登录的单文件低清）。静默留一个无声视频比报错
    更难排查。
 
-★ 预览侧的限制要如实告知用户：**DASH 分轨项预览只有画面没有声音**（音轨是另一路，下载后才合轨），
-预览页会显示明确提示（`SplitTrackNotice`），不要让它看起来像播放器坏了。
+★ 预览侧用 media3 的 `MergingMediaSource` 把视频轨与音轨**流式合并**，所以**预览也有声音**；
+不合并就只有画面。因此预览页不需要「无声」提示 —— 2026-10-18 起 `SplitTrackNotice` 已删除，
+不要因为「分轨」就再挂一个无声横幅。
 
 ### 3.43 支持开发页：赞助码用「循环轮播」的堆叠卡片
 

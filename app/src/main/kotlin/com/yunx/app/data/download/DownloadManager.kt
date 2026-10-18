@@ -661,7 +661,7 @@ class DownloadManager(
         altSources: List<DownloadSource> = emptyList(),
         /**
          * 需要合轨的**音轨直链**（哔哩哔哩 DASH 高清：音视频分离成两路）。
-         * 非空 = 先下视频轨（[url]）与音轨（本字段）再用 mp4parser 合轨成一个 mp4；
+         * 非空 = 先下视频轨（[url]）与音轨（本字段）再合轨成一个 mp4（见 `DashMuxer`）；
          * 空 = 普通单文件下载。带合轨的任务**强制走内置下载器**（Gopeed 引擎没有合轨能力）。
          */
         mergeAudioUrl: String = "",
@@ -1406,7 +1406,7 @@ class DownloadManager(
             DownloadDebugLog.record(id, "网络环境", DownloadDebugLog.environmentSnapshot(context))
         }
 
-        // DASH 分轨合轨（哔哩哔哩高清）：视频轨 + 音轨各自下载 → mp4parser 合轨，不走 Range 分片
+        // DASH 分轨合轨（哔哩哔哩高清）：视频轨 + 音轨各自下载 → 合轨（DashMuxer），不走 Range 分片
         if (task.mergeAudioUrl.isNotBlank()) {
             Log.d(TAG, "runTask: id=$id DASH 分轨合轨 音轨=${LogRedactor.url(task.mergeAudioUrl)}")
             dashMergeDownload(id, task, headers)
@@ -1988,7 +1988,7 @@ class DownloadManager(
     }
 
     /**
-     * DASH 分轨合轨下载（哔哩哔哩高清）：视频轨 + 音轨各自下载 → mp4parser 合轨 → 保存 → 完成回调。
+     * DASH 分轨合轨下载（哔哩哔哩高清）：视频轨 + 音轨各自下载 → 合轨（DashMuxer）→ 保存 → 完成回调。
      *
      * ★ 为什么不用分片下载：合轨要求两轨都是完整文件，分片只会再叠一层临时文件、放大峰值占用与
      *   失败面；这两条轨道通常几十 MB，单连接流式下载足够。

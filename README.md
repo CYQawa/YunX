@@ -123,7 +123,7 @@
 | 持久化 | Room（KSP 注解处理）+ SharedPreferences |
 | 网络  | OkHttp 4.12.0（请求 + 分片下载）          |
 | 预览播放 | Media3 ExoPlayer / Coil 3         |
-| 音视频合轨 | mp4parser（纯 Java 搬 box，不重编码）      |
+| 音视频合轨 | MediaExtractor + MediaMuxer（系统原生，逐样本重封装不重编码） |
 | 构建  | Gradle + KSP                      |
 
 ## 构建

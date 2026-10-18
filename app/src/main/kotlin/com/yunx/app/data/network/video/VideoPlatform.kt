@@ -33,7 +33,7 @@ package com.yunx.app.data.network.video
  * 能力边界见 Agent.md「视频解析」一节：
  * - 抖音/小红书/快手/微博/AcFun 匿名可解析（抖音/小红书/快手读分享页 SSR，微博读 m 站 JSON API，
  *   AcFun 是 m3u8，交给已有 HLS 下载路径）；
- * - 哔哩哔哩登录后取高清（DASH 音视频分离，下载时用 mp4parser 合轨）；
+ * - 哔哩哔哩登录后取高清（DASH 音视频分离，下载时由 DashMuxer 合轨）；
  * - Pixiv 需要登录态（`PHPSESSID`）才能拿全量，但**不提供网页登录**、只支持手动填 Cookie
  *   （见 [manualCookieOnly]）；未登录仍能解析一部分公开作品。
  */

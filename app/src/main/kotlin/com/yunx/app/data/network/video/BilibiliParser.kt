@@ -106,7 +106,7 @@ object BilibiliParser : VideoParser {
         val title = data.optString("title")
         val fileBase = fileNameBase(title, "bilibili_$bvid")
 
-        // ① 已登录才试 DASH 高清：音视频分离的两路流，下载时由 mp4parser 合轨（见 DashMuxer）。
+        // ① 已登录才试 DASH 高清：音视频分离的两路流，下载时由 DashMuxer 合轨。
         //    ★ 未登录不试：匿名拿到的 DASH 往往也是最低清，不值得为它引入更长、更易失败的合轨链路。
         if (cookie.isNotBlank()) {
             dashQuality(bvid, cid, cookie)?.let { dash ->

@@ -40,8 +40,8 @@ data class PreviewMedia(
     val isHls: Boolean = false,
     /**
      * 合并音轨地址（哔哩哔哩 DASH 分轨）。
-     * 非空表示这条媒体是「音视频分离」的：**预览时只有画面没有声音**，下载后才会用 mp4parser 合轨。
-     * 界面必须如实提示，不能让用户以为播放器坏了。
+     * 非空表示这条媒体是「音视频分离」的：预览端用 media3 的 `MergingMediaSource` 把两路流式合并播放
+     * （所以**预览也有声音**），下载端由 `DashMuxer` 合轨成一个 mp4。
      */
     val audioUrl: String = "",
     val audioHeaders: Map<String, String> = emptyMap()

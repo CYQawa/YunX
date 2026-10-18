@@ -68,7 +68,7 @@ data class DownloadTaskEntity(
     val altSourcesJson: String = "",
     /**
      * 需要合轨的**音轨直链**（哔哩哔哩 DASH：高清是音视频分离的两路流）。
-     * 非空 = 这条任务要先下视频轨（[url]）与音轨（本字段）再用 mp4parser 合轨成一个 mp4；
+     * 非空 = 这条任务要先下视频轨（[url]）与音轨（本字段）再合轨成一个 mp4（见 `DashMuxer`）；
      * 空 = 单文件下载，与其它平台完全一致。
      */
     @ColumnInfo(defaultValue = "''")
