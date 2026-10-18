@@ -237,6 +237,13 @@ object XhsParser : VideoParser {
                 headers = mediaHeaders,
                 quality = video.quality
             )
+        } else if (isVideoNote(note)) {
+            // ★ 是视频笔记却没取到直链：**明确报错，不要退回图片** —— 把封面图当成作品图返回
+            //   比报错更误导（用户会以为这条笔记本来就只解析出图）。
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                "小红书视频笔记没有取到视频直链（笔记里有 video 字段，但 media.stream 里没有可用地址）"
+            )
         } else {
             images.forEachIndexed { index, url ->
                 medias += VideoMedia(
@@ -325,14 +332,21 @@ object XhsParser : VideoParser {
 
     private data class VideoPick(val url: String, val quality: String)
 
+    /**
+     * 这条笔记是不是**视频笔记**。
+     *
+     * ★ 判据是「有没有 `video` 对象」，**不是** `type == "video"`：`type` 在不同路径/版本下取值不一致，
+     *   拿它当闸门一旦判错就会静默退化成只解析封面图（用户看到的就是「只解析了图片、没有视频」）。
+     */
+    private fun isVideoNote(note: JSONObject): Boolean = note.optJSONObject("video") != null
+
     /** 取视频直链：`<note>.video.media.stream` 按 h265 → h264 → av1 → h266 取第一条 masterUrl */
     private fun pickVideo(note: JSONObject): VideoPick? {
-        // 参考实现要求 type == "video" 才认视频
-        if (note.str("type") != "video") return null
         val stream = note.optJSONObject("video")?.optJSONObject("media")?.optJSONObject("stream") ?: return null
         for ((key, label) in streamOrder) {
             val first = stream.optJSONArray(key)?.optJSONObject(0) ?: continue
-            val url = first.str("masterUrl")
+            // 字段名历史上出现过两种写法，都认
+            val url = first.str("masterUrl").ifBlank { first.str("master_url") }
             if (url.isNotBlank()) return VideoPick(url, label)
         }
         return null

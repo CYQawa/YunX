@@ -384,11 +384,13 @@ internal fun previewNetworkHeaders(headers: Map<String, String>): NetworkHeaders
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-private fun MediaPlayerPane(
+internal fun MediaPlayerPane(
     media: PreviewMedia,
     active: Boolean,
     onFullscreenChanged: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 内联（结果页）用：不给全屏按钮 —— 全屏要宿主页面配合，内联场景没有对应 UI */
+    allowFullscreen: Boolean = true
 ) {
     val context = LocalContext.current
     // 换媒体就换播放器：`remember(media.url)` 之外的重组不会重建，翻页时旧实例随组合销毁（见下 release）
@@ -432,7 +434,10 @@ private fun MediaPlayerPane(
                 PlayerView(ctx).apply {
                     useController = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                    setFullscreenButtonClickListener { isFullScreen -> onFullscreenChanged(isFullScreen) }
+                    // ★ 只有设过监听器，media3 才会显示全屏按钮 —— 内联场景不设，按钮自然不出现
+                    if (allowFullscreen) {
+                        setFullscreenButtonClickListener { isFullScreen -> onFullscreenChanged(isFullScreen) }
+                    }
                     // ★ 必须写 this.player：块内 `player` 会先解析成外层的局部 val（局部变量优先于
                     // 隐式接收者成员），写成 `player = player` 会被判成给 val 赋值而编译失败
                     this.player = player

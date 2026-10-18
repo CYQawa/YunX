@@ -83,6 +83,7 @@ import com.yunx.app.data.network.video.VideoParseResult
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.items.logoRes
+import com.yunx.app.ui.preview.MediaPlayerPane
 import com.yunx.app.ui.preview.PreviewKind
 import com.yunx.app.ui.preview.PreviewLauncher
 import com.yunx.app.ui.preview.PreviewMedia
@@ -192,6 +193,18 @@ fun VideoResultSection(
                         verticalArrangement = Arrangement.spacedBy(ListGroupGap)
                     ) {
                         item { VideoMetaBlock(result) }
+
+                        // 视频结果：**直接把第一条视频内联出来** —— 和图片笔记直接铺图同一个道理，
+                        // 不必先点小眼睛才知道里面是什么。默认 `active = false`（不自动播放）：
+                        // 一进页面就出声很唐突，用户点播放按钮才播。
+                        firstVideoOf(result)?.let { video ->
+                            item(key = "inline_video") {
+                                InlineVideoPlayer(
+                                    media = video.toPreviewMedia(result.title),
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
+                        }
 
                         itemsIndexed(result.medias) { index, media ->
                             VideoMediaRow(
@@ -569,6 +582,37 @@ private fun VideoMetaBlock(result: VideoParseResult, modifier: Modifier = Modifi
                 )
             }
         }
+    }
+}
+
+/** 结果里的第一条视频（内联播放器只放一条；多条视频时其余仍在下面的列表里，各自可预览） */
+private fun firstVideoOf(result: VideoParseResult): VideoMedia? =
+    result.medias.firstOrNull { it.kind == VideoMediaKind.VIDEO && it.url.isNotBlank() }
+
+/**
+ * 内联视频播放器：结果页里直接放一个播放器，**默认停住不播**（`active = false`）。
+ *
+ * ★ 高度按 16:9 固定：结果页在滚动容器里，播放器必须有确定高度；实际画面按内容等比缩放（留黑边），
+ *   不猜视频的真实比例。
+ * ★ 不给全屏按钮（`allowFullscreen = false`）：全屏要宿主页面配合，内联场景没有对应 UI；
+ *   要看全屏走上面那条媒体行的「预览」进全屏预览页。
+ */
+@Composable
+private fun InlineVideoPlayer(media: PreviewMedia, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(MaterialTheme.shapes.large),
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        MediaPlayerPane(
+            media = media,
+            active = false,
+            onFullscreenChanged = {},
+            allowFullscreen = false,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
