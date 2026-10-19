@@ -28,7 +28,7 @@
 
 > **云析使用AGPL-3.0开源协议** 如果你使用了云析的代码，未经授权请遵守协议，同样以AGPL-3.0开放源代码
 
-> 本仓库为仅安卓端app，PC端可见 [YunX-Desktop](https://github.com/tidain/YunX-Desktop)
+> 本仓库为 Android 端 App；PC 端见 [YunX-Desktop](https://github.com/tidain/YunX-Desktop)
 
 ## 截图
 
@@ -116,15 +116,15 @@
 
 ## 技术栈
 
-| 分类  | 选型                                |
-| --- | --------------------------------- |
-| 语言  | Kotlin                            |
-| UI  | Jetpack Compose + Material 3      |
-| 持久化 | Room（KSP 注解处理）+ SharedPreferences |
-| 网络  | OkHttp 4.12.0（请求 + 分片下载）          |
-| 预览播放 | Media3 ExoPlayer / Coil 3         |
+| 分类    | 选型                                           |
+| ----- | -------------------------------------------- |
+| 语言    | Kotlin                                       |
+| UI    | Jetpack Compose + Material 3                 |
+| 持久化   | Room（KSP 注解处理）+ SharedPreferences            |
+| 网络    | OkHttp 4.12.0（请求 + 分片下载）                     |
+| 预览播放  | Media3 ExoPlayer / Coil 3                    |
 | 音视频合轨 | MediaExtractor + MediaMuxer（系统原生，逐样本重封装不重编码） |
-| 构建  | Gradle + KSP                      |
+| 构建    | Gradle + KSP                                 |
 
 ## 构建
 
@@ -145,16 +145,16 @@ git clone https://github.com/CYQawa/YunX.git
 <details>
 <summary><b>百度网盘下载/转存不了？</b></summary>
 
-你的账号被风控了，见issue #9
+你的账号被风控了，见[issue #9](https://github.com/CYQawa/YunX/issues/9)
 
 </details>
 
 <details>
-<summary><b>能否开发PC端？</b></summary>
+<summary><b>有PC端吗？</b></summary>
 
-我个人没有电脑，故无法开发pc端。
+有。官方 PC 端由协作者 雑魚（[tidain](https://github.com/tidain)）开发维护：[YunX-Desktop](https://github.com/tidain/YunX-Desktop)
 
-社区内已有人开发PC移植， 如 [YunX-Desktop](https://github.com/tidain/YunX-Desktop)
+由于作者没有电脑、无法开发 PC 端，**PC 端的开发与维护由 雑魚 独立负责，作者不参与**；PC 端相关的功能与问题请到对应仓库反馈。
 
 </details>
 
