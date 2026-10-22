@@ -135,8 +135,11 @@ fun VideoResultSection(
         selectionMode = false
         selectedUrls = emptySet()
     }
-    // 多选时系统返回键先退出多选，而不是直接离开解析结果页
-    BackHandler(enabled = selectionMode) { exitSelection() }
+    // 系统返回键：多选时先退出多选，否则离开解析结果页回到输入页（输入框内容保留，与网盘详情页一致）
+    // ★ 必须一直 enabled：此前只拦多选态，非多选时按返回键没人接 → Activity 被结束、直接退回桌面
+    BackHandler {
+        if (selectionMode) exitSelection() else onBack()
+    }
 
     Surface(
         modifier = modifier.fillMaxSize(),

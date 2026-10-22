@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -100,6 +101,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -325,13 +327,29 @@ fun DownloadScreen(
                     )
                     if (hasCompletedFile) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // 整行可点：只让复选框可点则命中范围太小（行内自带 48dp 最小触摸目标）
+                                .clip(RoundedCornerShape(10.dp))
+                                .toggleable(
+                                    value = deleteAllLocal,
+                                    role = Role.Checkbox,
+                                    onValueChange = { deleteAllLocal = it }
+                                ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Checkbox(
-                                checked = deleteAllLocal,
-                                onCheckedChange = { deleteAllLocal = it }
-                            )
+                            // 48dp 容器补回最小触摸目标的尺寸：onCheckedChange = null 的复选框不再自带
+                            // 那层 48dp 内边距，直接放会让图标和整行都变矮（视觉上「复选框变小了」）
+                            Box(
+                                modifier = Modifier.size(48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Checkbox(
+                                    checked = deleteAllLocal,
+                                    // null = 只作展示，点击统一由整行处理，避免两处各响应一次
+                                    onCheckedChange = null
+                                )
+                            }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "同时删除本地文件",
@@ -438,13 +456,29 @@ private fun DeleteConfirmDialog(
                 )
                 if (hasLocalFile) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // 整行可点：只让复选框可点则命中范围太小（行内自带 48dp 最小触摸目标）
+                            .clip(RoundedCornerShape(10.dp))
+                            .toggleable(
+                                value = deleteLocal,
+                                role = Role.Checkbox,
+                                onValueChange = { deleteLocal = it }
+                            ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
-                            checked = deleteLocal,
-                            onCheckedChange = { deleteLocal = it }
-                        )
+                        // 48dp 容器补回最小触摸目标的尺寸：onCheckedChange = null 的复选框不再自带
+                        // 那层 48dp 内边距，直接放会让图标和整行都变矮（视觉上「复选框变小了」）
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Checkbox(
+                                checked = deleteLocal,
+                                // null = 只作展示，点击统一由整行处理，避免两处各响应一次
+                                onCheckedChange = null
+                            )
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "同时删除本地文件",
