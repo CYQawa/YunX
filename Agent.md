@@ -1815,6 +1815,26 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
   换算完要**逐个 HEAD 探测**：该 CDN 对无效 ID 返回 404（实测），404/410 时回退到原始地址，
   并通过 `VideoParseResult.notice` 提示用户「若干张回退、可能带水印」。
   **别图省事直接拿 URL 字段当直链** —— 那等于把「有没有水印」交给平台决定。
+- **动图（Live Photo）要合成成一张「动态照片」**：微博的 `pics[].videoSrc`（`.mov`）、抖音的
+  `images[].video.playAddr`（mp4）才是「会动的那一半」，解析时落进 `VideoMedia.motionUrl`、
+  随任务存进 `download_task.motionUrl`（**DB v23**）。下载器把静图与该视频合成一个
+  **Motion Photo 单文件**（`MotionPhotoWriter`）：静图 JPEG 里插一段 APP1 XMP
+  （`GCamera:MotionPhoto` + `Container:Directory`：`Primary` 静图 + `MotionPhoto` 视频两项），
+  后面直接追加 mp4，产物仍是 `.jpg`。
+  ★ 字段与字节结构**照抄真机产物**（realme / ColorOS 相机拍的动态照片，2026-10-22 逆向）：
+  真机**只写新式字段、没有 `MicroVideo` 那套老字段**；读取方按「文件末尾 − XMP 里声明的 Length」
+  回推视频起点，所以静图长度与中间的填充都不参与定位（我们省略填充）。真机还有 `Semantic=GainMap`
+  一项（Ultra HDR 增益图），我们没有，不写。
+  ★ 视频必须声明成 `video/mp4`，微博给的是 `.mov` → 先 `DashMuxer.remuxToMp4` 换封装（不重编码）。
+  ★★ **只写 XMP 是不够的**（2026-10-22 实测）：小米相册认 XMP，而 **OPPO/realme 相册只认 Exif
+  `UserComment`（0x9286）里的标记串 `oplus_8388608`** —— 只写 XMP 的产物在 realme 相册里就是一张
+  静图（用户实测反馈）。所以 JPEG 里要插**两段 APP1**：XMP 在前、这段 116 字节的 Exif
+  （`MotionPhotoWriter.OPPO_EXIF_HEX` 模板，宽高按静图回填）紧跟其后，然后才是图像数据。
+  ★ 插入点别算错：有 APP0(JFIF) 时下一段起点 = **`4 + APP0 长度字段的值`**（该值含长度字段自身），
+  写成 `2 + 值` 会少 2 字节、把两个 APP1 塞进 JFIF 段内部被它的声明长度吞掉 ——
+  表现正是「字节结构看着对、相册却当静图」（2026-10-22 踩过，用真实静图核对过插入点）。
+  ★ 只有安卓系相册（小米 / OPPO / vivo）认这个格式；iPhone 拿到手只是普通图片
+  （苹果的 Live Photo 是「静图 + 配对 MOV」两个文件，两套格式不通用）。
 - **平台图标用内置 drawable，作品封面/头像仍然不加载**：`res/drawable/logo_*.png` 是各平台官方图标
   （200×200，用户整理），映射表在 `ui/items/PlatformLogos.kt`（`SharePlatform.logoRes()` /
   `VideoPlatform.logoRes()` / `drivePlatformLogoRes(id)`）。**别把 drawable 资源 id 塞进 `VideoPlatform`

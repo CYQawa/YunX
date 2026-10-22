@@ -48,7 +48,19 @@ data class VideoMedia(
      */
     val audioUrl: String = "",
     /** 音轨的请求头（各平台校验 Referer/Cookie，缺了直接 403） */
-    val audioHeaders: Map<String, String> = emptyMap()
+    val audioHeaders: Map<String, String> = emptyMap(),
+    /**
+     * 动图（Live Photo）的**动图资源直链**：微博是 `pics[].videoSrc`（`.mov`），抖音是
+     * `images[].video.playAddr`（mp4），快手目前拿不到。
+     *
+     * 非空表示这张「照片」其实是会动的：下载时把它与 [url] 的静图合成为一张**动态照片**
+     * （Motion Photo 单文件：静图 JPEG + 尾部追加 MP4 + XMP，见 `MotionPhotoWriter`），
+     * 产物仍是 `.jpg` —— 安卓相册（小米/OPPO/vivo 系）会显示成会动的照片，iPhone 上只是普通图片。
+     *
+     * 媒体类型保持 [VideoMediaKind.IMAGE]，所以结果页的网格/多选/批量下载都不受影响；
+     * 空 = 普通静图。
+     */
+    val motionUrl: String = ""
 )
 
 /**

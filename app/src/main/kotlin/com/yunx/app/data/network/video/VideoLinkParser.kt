@@ -65,6 +65,12 @@ object VideoLinkParser {
             VideoPlatform.DOUYIN, "video",
             Regex("""(?:www\.)?douyin\.com/(video|note)/(\d{10,})""", RegexOption.IGNORE_CASE)
         ),
+        // 从「用户页弹层」打开作品时，分享出来的链接是 /user/self?...&modal_id=<作品id>
+        // （抖音 PC 版分享面板给的形态；`jingxuan?modal_id=` 同理）。作品 id 在 modal_id 里。
+        Rule(
+            VideoPlatform.DOUYIN, "video",
+            Regex("""douyin\.com/[^\s]*[?&]modal_id=(\d{10,})""", RegexOption.IGNORE_CASE)
+        ),
         Rule(
             VideoPlatform.DOUYIN, "video",
             Regex("""iesdouyin\.com/share/(?:slides|video|note)/(\d{10,})""", RegexOption.IGNORE_CASE)

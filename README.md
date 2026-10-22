@@ -28,7 +28,7 @@
 
 > **云析使用AGPL-3.0开源协议** 如果你使用了云析的代码，未经授权请遵守协议，同样以AGPL-3.0开放源代码
 
-> 本仓库为 Android 端 App；PC 端见 [YunX-Desktop](https://github.com/tidain/YunX-Desktop)
+> 本仓库为 Android 端 App；官方 PC 端见 [YunX-Desktop](https://github.com/tidain/YunX-Desktop)
 
 ## 截图
 

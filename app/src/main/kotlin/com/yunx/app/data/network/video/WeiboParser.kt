@@ -191,19 +191,26 @@ object WeiboParser : VideoParser {
             )
         }
         // 图片取九宫格原图：pics[].large.url
+        // ★ 动图（Live Photo）：`type == "livephoto"` 的条目另有 `videoSrc` —— 那是「会动的那一半」
+        //   （`https://video.weibo.com/media/play?livephoto=<.mov>` 中转链，实测可下；直连
+        //   `livephoto.us.sinaimg.cn` 反而 403，所以必须原样用它）。下载时由 `MotionPhotoWriter`
+        //   把它与静图合成为一张「动态照片」，见 `VideoMedia.motionUrl`。
         val pics = data.optJSONArray("pics")
         if (pics != null) {
             var imageIndex = 0
             for (i in 0 until pics.length()) {
-                val url = pics.optJSONObject(i)?.optJSONObject("large")?.str("url").orEmpty()
+                val pic = pics.optJSONObject(i) ?: continue
+                val url = pic.optJSONObject("large")?.str("url").orEmpty()
                 if (url.isBlank()) continue
+                val motionUrl = pic.str("videoSrc")
                 imageIndex += 1
                 medias += VideoMedia(
                     url = url,
                     kind = VideoMediaKind.IMAGE,
                     fileName = "${base}_$imageIndex.jpg",
                     headers = mediaHeaders,
-                    quality = "原图"
+                    quality = if (motionUrl.isNotBlank()) "动图" else "原图",
+                    motionUrl = motionUrl
                 )
             }
         }

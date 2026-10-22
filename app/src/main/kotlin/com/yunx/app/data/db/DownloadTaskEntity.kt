@@ -76,6 +76,13 @@ data class DownloadTaskEntity(
     /** 音轨的请求头 JSON（落库前按 `download.mergeAudioHeaders` 加密） */
     @ColumnInfo(defaultValue = "''")
     val mergeAudioHeadersJson: String = "",
+    /**
+     * 动图（Live Photo）的**动图资源直链**（微博 `.mov` / 抖音 mp4）。
+     * 非空 = 这条任务要把 [url] 的静图与它合成为一张「动态照片」（Motion Photo 单文件，见
+     * `MotionPhotoWriter`），产物仍是 `.jpg`；空 = 普通单文件下载，行为完全一致。
+     */
+    @ColumnInfo(defaultValue = "''")
+    val motionUrl: String = "",
     /** 下载完成时的平均速度（字节/秒）；完成态展示用，进行中为 0 */
     @ColumnInfo(defaultValue = "0")
     val avgSpeed: Long = 0,

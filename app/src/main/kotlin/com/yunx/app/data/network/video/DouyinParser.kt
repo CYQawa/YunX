@@ -44,8 +44,9 @@ import java.io.IOException
  *   [VideoMediaKind.IMAGE] 原图。二者互斥（与参考实现的 `if/elif` 一致）。
  *
  * 已知限制：
- * 1. `slides`（幻灯片）在参考实现里走独立的 `slidesinfo` 接口，本期未实现：识别层已把它归一化成
- *    `video`，这里会退化成按 `note` 分享页解析，可能拿不到数据；
+ * 1. `slides`（幻灯片 / 动图集）：不再单列一条路 —— `www.douyin.com/video/<id>` 会被抖音 302 到真正的
+ *    作品页（图文/动图落到 `/note/<id>`），详情从 SSR 的 `#RENDER_DATA`（`app.videoDetail`）取，
+ *    动图资源在 `images[].video.playAddr`（2026-10-22 实测可用）；
  * 2. `ttwid` 用进程内缓存（见 [ensureTtwid]）；缓存那枚被风控标记时由 [fetchWorkData] 自动重注册
  *    重试一次（**不需要用户重启 App**）。
  *
@@ -216,7 +217,9 @@ object DouyinParser : VideoParser {
         val author: String,
         val images: List<String>,
         val video: String,
-        val cover: String
+        val cover: String,
+        /** 与 [images] 一一对应的**动图资源**（Live Photo 的短视频）；没有动图时是等长的空串 */
+        val motions: List<String> = emptyList()
     )
 
     /**
@@ -232,7 +235,7 @@ object DouyinParser : VideoParser {
         val json = HeadlessWebView.loadAndExtract(
             url = url,
             userAgent = VideoHttp.UA_CHROME,
-            readyCheckJs = readyCheckJs(type),
+            readyCheckJs = readyCheckJs(),
             extractJs = EXTRACT_JS,
             // 页面要在 WebView 里跑完 acrawler 挑战 → 重载 → 挂载 → 再自己发详情请求才拿到数据，
             // 实测视频页冷启动要 25s 上下，所以留足余量（比默认值大）
@@ -245,9 +248,16 @@ object DouyinParser : VideoParser {
             DiagnosticLog.warn(DiagnosticLog.NETWORK, "douyin_webview_extract_failed", err)
             return null
         }
-        // 图文的作品图优先用详情里的（结构干净），详情没有（图文页不走那个 XHR）再用 DOM 里挑出来的
+        // 图片与动图资源由脚本**成对**产出（同一个数据源、下标一致）
         val images = obj.optJSONArray("images")?.toStringList().orEmpty()
-            .ifEmpty { obj.optJSONArray("domImages")?.toStringList().orEmpty() }
+        val motions = obj.optJSONArray("motions")?.toStringList().orEmpty()
+        // 诊断：用了哪个数据源、拿到几张图/几张动图、SSR 状态、首项字段名 —— 排查「为什么没有动图」全靠这一行
+        DiagnosticLog.warn(
+            DiagnosticLog.NETWORK, "douyin_webview_media",
+            "src=${obj.optString("src")} images=${images.size} motions=${obj.optString("motionCount")} " +
+                "ssr=${obj.optString("ssr")} imgKeys=${obj.optString("imgKeys")} " +
+                "videoKeys=${obj.optString("videoKeys")}"
+        )
         val video = obj.optString("video").takeIf { it.isNotBlank() && it != "null" }.orEmpty()
         if (images.isEmpty() && video.isBlank()) {
             DiagnosticLog.warn(DiagnosticLog.NETWORK, "douyin_webview_no_media", "页面没有给出可用的图/视频直链")
@@ -258,7 +268,8 @@ object DouyinParser : VideoParser {
             author = obj.optString("author").takeIf { it != "null" }.orEmpty(),
             images = images,
             video = video,
-            cover = obj.optString("cover").takeIf { it != "null" }.orEmpty()
+            cover = obj.optString("cover").takeIf { it != "null" }.orEmpty(),
+            motions = motions
         )
     }
 
@@ -273,11 +284,18 @@ object DouyinParser : VideoParser {
         val medias = mutableListOf<VideoMedia>()
         if (payload.images.isNotEmpty()) {
             payload.images.forEachIndexed { index, url ->
+                val motionUrl = payload.motions.getOrNull(index).orEmpty()
+                val isMotion = motionUrl.isNotBlank()
                 medias += VideoMedia(
                     url = url,
                     kind = VideoMediaKind.IMAGE,
-                    fileName = "${base}_${index + 1}${imageExtension(url)}",
-                    headers = mediaHeaders
+                    // 动图下载后是「动态照片」JPEG（静图会由 MotionPhotoWriter 转码），扩展名要按产物给，
+                    // 否则会存成 `xxx_1.webp` 再被 MediaStore 补一个扩展名，看着很别扭
+                    fileName = "${base}_${index + 1}${if (isMotion) ".jpg" else imageExtension(url)}",
+                    headers = mediaHeaders,
+                    // 动图（Live Photo）：带上「会动的那一半」，下载时合成动态照片
+                    quality = if (isMotion) "动图" else "",
+                    motionUrl = motionUrl
                 )
             }
         } else {
@@ -357,19 +375,19 @@ object DouyinParser : VideoParser {
 """
 
     /**
-     * 就绪判断，**按页面类型分开**：两条路的「数据到了」长得完全不一样（实测 2026-10）。
+     * 就绪判断：**两条路任一条成立即可**。
      *
-     * - `video`：等**钩子拿到详情响应**。视频直链只在那份 JSON 里，DOM 里可能是 MSE 的 `blob:`。
-     * - `note`（图文）：等**作品图出现在 DOM 里**。图文的详情是页面直出的、根本不走那个 XHR
-     *   （实测：图文页 `detailStashed=false`，但 DOM 里已有几十张图）。
+     * ★ 不能按链接里的类型分支（2026-10-22 修）：`/video/<id>`、`?modal_id=<id>` 这类链接抖音会自行
+     *   302 到真正的作品页（图文 / 动图会落到 `/note/<id>`），于是「按链接判类型」必然判错 ——
+     *   视频那条判据（等 XHR 钩子）在图文页上**永远不会成立**，只能干等到 40s 超时后整条解析失败。
+     * ★ DOM 那条判据只认**真正的作品图**：`biz_tag=aweme_images` 或 `tplv-dy-aweme-images`。
+     *   封面是 `biz_tag=pcweb_cover`、「相关推荐」带 `WEBPC_RELATED`，两者都不算 —— 否则视频页会
+     *   刚渲染出封面就「就绪」，拿回一堆封面当作品图（视频直链只在钩子数据里，早退就丢了）。
      */
-    private fun readyCheckJs(type: String): String = if (type == "video") """
+    private fun readyCheckJs(): String = """
 (function () {
   var raw = window.__yunxAwemeDetail;
-  return (typeof raw === 'string' && raw.length > 0) ? 'true' : 'false';
-})()
-""" else """
-(function () {
+  if (typeof raw === 'string' && raw.length > 0) return 'true';
   var imgs = document.querySelectorAll('img');
   for (var i = 0; i < imgs.length; i++) {
     if (isWorkImage(imgs[i].src || '')) return 'true';
@@ -378,32 +396,27 @@ object DouyinParser : VideoParser {
   function isWorkImage(s) {
     if (!s || s.indexOf('douyinpic.com') < 0) return false;
     if (s.indexOf('WEBPC_RELATED') >= 0) return false;
-    return s.indexOf('tplv-dy-aweme-images') >= 0 || s.indexOf('PackSourceEnum_AWEME_DETAIL') >= 0;
+    return s.indexOf('biz_tag=aweme_images') >= 0 || s.indexOf('tplv-dy-aweme-images') >= 0;
   }
 })()
 """
 
     /**
-     * 取数：**两条路都试**，返回一个**小对象**（`evaluateJavascript` 会把它序列化成 JSON）。
+     * 取数：**多条数据源都试**，返回一个**小对象**（`evaluateJavascript` 会把它序列化成 JSON）。
      *
-     * - 视频/详情的结构化数据：来自钩住的那份 detail JSON（`aweme_detail`）；
-     * - 图文的作品图：来自 **DOM**（图文不走那个 XHR，实测详情是页面直出的）。
+     * ★ 关键取舍（2026-10-22 修：动图资源一直取不到）：**图片与动图资源必须成对、来自同一个源**，
+     *   否则下标会错位。优先级：
+     *   1. **SSR**（`<script id="RENDER_DATA">` 里 URL 编码的 `app.videoDetail`）—— 图文/动图的
+     *      完整清单与每张的动图资源（`images[].video.playAddr[].src`）都在这里，**动图只有这条路能拿到**；
+     *   2. **XHR 钩子**（`window.__yunxAwemeDetail`）—— 视频页的详情，视频直链在这里；
+     *   3. **DOM** 里的作品图 —— 最后兜底，**拿不到动图资源**（所以动图会退化成静态图）。
      *
-     * ★ 不把整份详情（100KB+）回传：`evaluateJavascript` 传大字符串又慢又容易出问题，只回传必要字段。
-     * ★ 没有钩子数据**不算错**：图文本来就没有，继续走 DOM 那条。
+     * ★ 不把整份详情（100KB+）回传：`evaluateJavascript` 传大字符串又慢又容易出问题，只回传必要字段；
+     *   同时回传用了哪个源（`src`）与动图条数，排查「为什么没动图」时一眼可见。
      */
     private const val EXTRACT_JS = """
 (function () {
   try {
-    var raw = window.__yunxAwemeDetail || '';
-    var d = null;
-    if (raw) {
-      try {
-        var root = JSON.parse(raw);
-        d = root.aweme_detail || root.awemeDetail || (root.data && root.data.aweme_detail) || null;
-      } catch (e) { d = null; }
-    }
-
     function firstUrl(node) {
       if (!node) return '';
       var list = node.url_list || node.urlList || null;
@@ -411,7 +424,130 @@ object DouyinParser : VideoParser {
       return '';
     }
 
-    var v = (d && d.video) || null;
+    function keysOf(node) {
+      if (!node || typeof node !== 'object') return '';
+      var keys = [];
+      for (var p in node) keys.push(p);
+      return keys.join(',');
+    }
+
+    // 动图资源：每张图各自的短视频（Live Photo 的「会动的那一半」）。两种数据源形态不同：
+    // - 网页 SSR：`video.playAddr` 是 [{src: '...'}]
+    // - 接口 JSON（XHR 钩子）：`video.play_addr` 是 {uri, url_list: [...]}（snake_case）
+    function motionUrl(item) {
+      if (!item) return '';
+      var v = item.video;
+      if (!v) return '';
+      var direct = firstUrl(v.playAddr) || firstUrl(v.play_addr)
+          || firstUrl(v.playApi) || firstUrl(v.play_addr_h264)
+          || firstUrl(v.downloadAddr) || firstUrl(v.download_addr);
+      if (direct) return direct;
+      var list = v.playAddr || v.play_addr || null;
+      if (list && list.length) {
+        var first = list[0];
+        if (first) return String(first.src || first.url || '');
+      }
+      return '';
+    }
+
+    // 钩子那份详情（视频/图文页页面自己会请求 aweme/v1/web/aweme/detail）
+    function hookDetail() {
+      var raw = window.__yunxAwemeDetail || '';
+      if (!raw) return null;
+      try {
+        var root = JSON.parse(raw);
+        return root.aweme_detail || root.awemeDetail || (root.data && root.data.aweme_detail) || null;
+      } catch (e) { return null; }
+    }
+
+    // SSR 详情：抖音把作品详情 URL 编码后塞在 <script id="RENDER_DATA"> 里（app.videoDetail）。
+    // 记录失败原因（ssrNote），下次「为什么没走到 SSR」直接看日志即可。
+    var ssrNote = 'none';
+    function readSsrDetail() {
+      var node = document.querySelector('#RENDER_DATA');
+      if (node && node.textContent) {
+        try {
+          var app = JSON.parse(decodeURIComponent(node.textContent)).app;
+          if (app && app.videoDetail) { ssrNote = 'rd-ok'; return app.videoDetail; }
+          ssrNote = 'rd-no-videoDetail';
+        } catch (e) {
+          ssrNote = 'rd-' + (e && e.name ? e.name : 'parse-fail');
+        }
+      } else {
+        ssrNote = 'rd-missing';
+      }
+      try {
+        var ssr = window.SSR_RENDER_DATA;
+        if (ssr && ssr.app && ssr.app.videoDetail) { ssrNote += '+global-ok'; return ssr.app.videoDetail; }
+        ssrNote += '+global-' + (typeof ssr);
+      } catch (e) {}
+      return null;
+    }
+
+    // 图片 + 动图资源**成对**抽取（保证下标一致）；同时带上首项的字段名，便于排查字段改版
+    function imagesFrom(node) {
+      if (!node || !node.length) return null;
+      var list = [];
+      var mlist = [];
+      for (var i = 0; i < node.length; i++) {
+        var item = node[i];
+        var u = firstUrl(item);
+        if (!u && item.display_image) u = firstUrl(item.display_image);
+        if (!u && item.owner_watermark_image) u = firstUrl(item.owner_watermark_image);
+        if (u) {
+          list.push(u);
+          mlist.push(motionUrl(item));
+        }
+      }
+      if (!list.length) return null;
+      return {
+        images: list,
+        motions: mlist,
+        imgKeys: keysOf(node[0]),
+        videoKeys: keysOf(node[0] && node[0].video)
+      };
+    }
+
+    // DOM 里的作品图兜底（只认 aweme_images / tplv-dy-aweme-images，排除封面与「相关推荐」）
+    function domWorkImages() {
+      var result = [];
+      var all = document.querySelectorAll('img');
+      for (var i = 0; i < all.length; i++) {
+        var src = all[i].src || '';
+        if (src.indexOf('douyinpic') < 0) continue;
+        if (src.indexOf('WEBPC_RELATED') >= 0) continue;
+        var isWork = src.indexOf('biz_tag=aweme_images') >= 0 || src.indexOf('tplv-dy-aweme-images') >= 0;
+        if (isWork && result.indexOf(src) < 0) result.push(src);
+      }
+      return result;
+    }
+
+    var hooked = hookDetail();
+    var ssr = readSsrDetail();
+
+    var images = [];
+    var motions = [];
+    var src = '';
+    var picked = imagesFrom(ssr && ssr.images);
+    if (picked) { src = 'ssr'; }
+    if (!picked) {
+      picked = imagesFrom(hooked && hooked.images);
+      if (picked) { src = 'hook'; }
+    }
+    if (!picked) {
+      picked = imagesFrom(hooked && hooked.image_post_info && hooked.image_post_info.images);
+      if (picked) { src = 'hook'; }
+    }
+    if (picked) {
+      images = picked.images;
+      motions = picked.motions;
+    } else {
+      images = domWorkImages();
+      src = images.length ? 'dom' : 'none';
+    }
+
+    // 视频直链：钩子优先（视频页的详情在这里），其次 SSR
+    var v = (hooked && hooked.video) || (ssr && ssr.video) || null;
     var video = '';
     if (v) {
       video = firstUrl(v.play_addr) || firstUrl(v.playAddr) || firstUrl(v.play_addr_h264);
@@ -424,34 +560,13 @@ object DouyinParser : VideoParser {
       video = video.replace('/playwm/', '/play/');
     }
 
-    var images = [];
-    var imgSrc = (d && (d.images || (d.image_post_info && d.image_post_info.images))) || null;
-    if (imgSrc && imgSrc.length) {
-      for (var j = 0; j < imgSrc.length; j++) {
-        var item = imgSrc[j];
-        var url = firstUrl(item);
-        if (!url && item.display_image) url = firstUrl(item.display_image);
-        if (!url && item.owner_watermark_image) url = firstUrl(item.owner_watermark_image);
-        if (url) images.push(url);
-      }
-    }
-
-    // 图文：从 DOM 里取作品图（排除头像、「相关推荐」封面）
-    var domImages = [];
-    var all = document.querySelectorAll('img');
-    for (var k = 0; k < all.length; k++) {
-      var src = all[k].src || '';
-      if (src.indexOf('douyinpic') < 0) continue;
-      if (src.indexOf('WEBPC_RELATED') >= 0) continue;
-      var isWork = src.indexOf('tplv-dy-aweme-images') >= 0 || src.indexOf('PackSourceEnum_AWEME_DETAIL') >= 0;
-      if (isWork && domImages.indexOf(src) < 0) domImages.push(src);
-    }
-
+    var d = hooked || ssr;
     var author = '';
     if (d && d.author) author = d.author.nickname || d.author.unique_id || '';
+    if (!author && d && d.authorInfo) author = d.authorInfo.nickname || d.authorInfo.nickName || '';
 
-    // 标题：优先详情里的 desc；图文没有详情（不走那个 XHR），退到 document.title —— 抖音的
-    // 详情页标题就是「<文案> - 抖音」，去掉尾巴即可，实测与 desc 等价。
+    // 标题：优先详情里的 desc；没有就退到 document.title —— 抖音详情页标题就是「<文案> - 抖音」，
+    // 去掉尾巴即可，实测与 desc 等价。
     var title = (d && d.desc) || '';
     if (!title) {
       var pageTitle = document.title || '';
@@ -460,12 +575,23 @@ object DouyinParser : VideoParser {
       title = pageTitle;
     }
 
+    var motionCount = 0;
+    for (var m = 0; m < motions.length; m++) {
+      if (motions[m]) motionCount++;
+    }
+
     return {
       title: title,
       author: author,
       video: video,
       images: images,
-      domImages: domImages,
+      motions: motions,
+      src: src,
+      motionCount: motionCount,
+      // 诊断字段：没取到动图时靠它们定位（数据源、SSR 状态、图片项与 video 节点的字段名）
+      ssr: ssrNote,
+      imgKeys: picked ? picked.imgKeys : '',
+      videoKeys: picked ? picked.videoKeys : '',
       cover: (v && (firstUrl(v.cover) || firstUrl(v.origin_cover))) || ''
     };
   } catch (e) {
@@ -474,7 +600,8 @@ object DouyinParser : VideoParser {
 })()
 """
 
-    /** 作品页类型（`note` = 图文 / `video` = 视频）：slides 未实现，退化成 `video`（见类注释的已知限制） */
+    /** 作品页类型（`note` = 图文 / `video` = 视频）：其它形态（slides/弹层 id）都先按 `video` 打开 —— */
+    /** 抖音会自己 302 到真正的作品页（图文/动图落到 `/note/<id>`），详情统一从 SSR 取数。 */
     private fun pathType(link: DetectedVideoLink): String =
         if (TYPE_REGEX.find(link.url)?.groupValues?.getOrNull(1) == "note") "note" else "video"
 

@@ -112,6 +112,93 @@ object DashMuxer {
         }
     }
 
+    /**
+     * 把 [input]（任意 ISO BMFF：`.mov` / `.m4s` / `.mp4`）的**全部轨道**原样重封装成标准 mp4。
+     *
+     * 用途：微博的动图是 `.mov`（QuickTime 封装），而「动态照片」里内嵌的那段要声明成 `video/mp4`
+     * （见 [MotionPhotoWriter]），所以先换成标准 mp4 容器 —— 只搬样本，不重编码。
+     *
+     * @return 成功与否；输入没有可用轨道、或写出为空时返回 false
+     */
+    fun remuxToMp4(input: File, outFile: File): Boolean {
+        val trackCount = runCatching {
+            MediaExtractor().let { probe ->
+                try {
+                    probe.setDataSource(input.absolutePath)
+                    probe.trackCount
+                } finally {
+                    probe.release()
+                }
+            }
+        }.getOrElse {
+            Log.e(TAG, "DashMuxer.remuxToMp4: 读取轨道失败 ${it.message}")
+            return false
+        }
+        if (trackCount <= 0) return false
+
+        val muxer = try {
+            MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        } catch (e: Throwable) {
+            Log.e(TAG, "DashMuxer.remuxToMp4: 创建 MediaMuxer 失败 ${e.message}")
+            return false
+        }
+        val tracks = mutableListOf<Pair<Track, Int>>()
+        try {
+            // 所有轨道必须在 start() 之前登记完
+            for (index in 0 until trackCount) {
+                val track = selectTrackAt(input, index) ?: continue
+                val muxerIndex = muxer.addTrack(track.format)
+                tracks += track to muxerIndex
+                if (track.format.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true) {
+                    // 竖屏素材的旋转角要写进 moov（MediaMuxer 只认 start 之前设置）
+                    muxer.setOrientationHint(track.format.getInteger(MediaFormat.KEY_ROTATION, 0))
+                }
+            }
+            if (tracks.isEmpty()) {
+                Log.w(TAG, "DashMuxer.remuxToMp4: 没有可搬运的轨道")
+                return false
+            }
+            muxer.start()
+            // 重封装不需要进度（本地文件、秒级完成）
+            val noProgress = ProgressTracker(0L) { }
+            tracks.forEach { (track, muxerIndex) -> copySamples(track, muxer, muxerIndex, noProgress) }
+            muxer.stop()
+            val ok = outFile.length() > 0
+            Log.d(
+                TAG,
+                "DashMuxer.remuxToMp4: 轨道=${tracks.size} in=${input.length()} out=${outFile.length()} ok=$ok"
+            )
+            return ok
+        } catch (e: Throwable) {
+            Log.e(TAG, "DashMuxer.remuxToMp4: 重封装失败 ${e.message}", e)
+            return false
+        } finally {
+            runCatching { muxer.release() }
+            tracks.forEach { (track, _) -> track.release() }
+            // 失败产物不留半成品（同 mux）
+            if (!outFile.exists() || outFile.length() == 0L) runCatching { outFile.delete() }
+        }
+    }
+
+    /** 抽出 [file] 的第 [index] 条轨道（已 selectTrack）；失败返回 null 并释放抽取器 */
+    private fun selectTrackAt(file: File, index: Int): Track? {
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(file.absolutePath)
+            if (index >= extractor.trackCount) {
+                extractor.release()
+                return null
+            }
+            val format = extractor.getTrackFormat(index)
+            extractor.selectTrack(index)
+            return Track(extractor, format)
+        } catch (e: Throwable) {
+            Log.e(TAG, "DashMuxer: 读取第 $index 条轨道失败 ${e.message}")
+        }
+        extractor.release()
+        return null
+    }
+
     /** 从 [file] 抽第一条 mime 前缀匹配 [want]（"video"/"audio"）的轨道；失败返回 null 并释放抽取器 */
     private fun readTrack(file: File, want: String): Track? {
         val extractor = MediaExtractor()

@@ -667,6 +667,13 @@ class DownloadManager(
         mergeAudioUrl: String = "",
         /** 音轨的请求头（与 [headers] 一样加密落库；各平台校验 Referer/Cookie） */
         mergeAudioHeaders: Map<String, String> = emptyMap(),
+        /**
+         * 动图（Live Photo）的**动图资源直链**（微博 `.mov` / 抖音 mp4）。
+         * 非空 = 先下 [url] 的静图与该资源，再合成为一张「动态照片」（Motion Photo 单文件，
+         * 见 `MotionPhotoWriter`），产物仍是 `.jpg`；空 = 普通单文件下载。
+         * 带动图的任务同样**强制走内置下载器**（引擎不支持合成）。
+         */
+        motionUrl: String = "",
         /** 下载成功完成后的清理回调（如删除网盘临时转存文件）；失败/取消不触发。
          * 注意：必须是最后一个参数（调用点有大量尾随 lambda 用法，放它之后会编译失败）。 */
         onComplete: suspend () -> Unit = {}
@@ -694,6 +701,7 @@ class DownloadManager(
                     altSourcesJson = encodeAltSources(altSources),
                     mergeAudioUrl = mergeAudioUrl,
                     mergeAudioHeadersJson = if (mergeAudioUrl.isNotBlank()) encodeHeaders(mergeAudioHeaders) else "",
+                    motionUrl = motionUrl,
                     platform = taskPlatform
                 )
             )
@@ -741,7 +749,7 @@ class DownloadManager(
             )
             return id
         }
-        if (shouldUseEngine(taskPlatform, needMerge = mergeAudioUrl.isNotBlank())) {
+        if (shouldUseEngine(taskPlatform, needMerge = mergeAudioUrl.isNotBlank() || motionUrl.isNotBlank())) {
             // 任务登记、下载页展示、完成清理回调都与内置下载器完全一致，只有「执行」交给 Gopeed 引擎
             startViaEngine(id, url, safeName, headers, taskPlatform)
         } else {
@@ -752,7 +760,7 @@ class DownloadManager(
 
     /**
      * 是否把任务交给 Gopeed 引擎：设置里选了引擎 + 引擎已导入；GitHub 走镜像回退（引擎不支持），
-     * **DASH 合轨任务**（引擎没有合轨能力）也始终用内置下载器。
+     * **需要本地后处理的任务**（DASH 合轨、动图合成 —— 引擎都没有这些能力）也始终用内置下载器。
      */
     private fun shouldUseEngine(platform: String, needMerge: Boolean = false): Boolean =
         !needMerge &&
@@ -1413,6 +1421,13 @@ class DownloadManager(
             return
         }
 
+        // 动图（Live Photo）：静图 + 动图资源各自下载 → 合成「动态照片」，同样不走 Range 分片
+        if (task.motionUrl.isNotBlank()) {
+            Log.d(TAG, "runTask: id=$id 动图合成 动图=${LogRedactor.url(task.motionUrl)}")
+            motionPhotoDownload(id, task, headers)
+            return
+        }
+
         // HLS（m3u8 转码流，如 UC play）：不走 Range 分片，直接拉分片合并
         if (task.url.contains(".m3u8", true) || task.url.contains(".m3u", true)) {
             Log.d(TAG, "runTask: id=$id HLS 转码流下载 origin=${LogRedactor.url(task.url)}")
@@ -2068,7 +2083,62 @@ class DownloadManager(
     }
 
     /**
-     * 把整段响应流式写入文件，并按写入量上报进度（合轨的两条轨道各调一次）。
+     * 动图（Live Photo）合成下载：静图 + 动图资源各自下载 → 合成一张「动态照片」→ 保存 → 完成回调。
+     *
+     * ★ 产物是**一个 `.jpg`**，内部是 Motion Photo 单文件（静图 + 尾部追加 MP4 + XMP，见
+     *   [MotionPhotoWriter]）：安卓相册（小米/OPPO/vivo 系）会显示成「会动的照片」；
+     *   换到 iPhone 上只是普通图片（苹果的 Live Photo 是另一种「静图 + 配对 MOV」两文件格式）。
+     * ★ 动图资源不是 mp4 时（微博的动图是 `.mov`）先 [DashMuxer.remuxToMp4] 换封装 —— 不重编码。
+     * ★ 与 [dashMergeDownload] 同样的取舍：**单连接流式下载**（两段都不切片），全程只在 cache
+     *   临时目录里操作、成功保存后才清理；任何一步失败都抛错，由上层落成带原因的失败任务，
+     *   绝不把半个文件当成品留在下载目录。
+     */
+    private suspend fun motionPhotoDownload(id: Long, task: DownloadTaskEntity, headers: Map<String, String>) {
+        if (!isTaskActive()) return
+        _stats.update { it + (id to DownloadStats(0L, -1L, 1)) }
+        val workDir = File(context.cacheDir, "motion_$id")
+        workDir.deleteRecursively()
+        if (!workDir.mkdirs()) throw IllegalStateException("无法创建动图临时目录")
+        val stillFile = File(workDir, "still.img")
+        val motionFile = File(workDir, "motion.bin")
+        val remuxedFile = File(workDir, "motion.mp4")
+        val mergedFile = File(workDir, "motion_photo.jpg")
+        val progress = AtomicLong(0L)
+        val lastAt = AtomicLong(0L)
+        // 静图与动图两段的 Content-Length 累加作为任务总大小（与 DASH 合轨同一口径）
+        val totalBytes = AtomicLong(0L)
+        val streamRecorder = SpeedRecorder()
+        try {
+            streamUrlToFile(task.url, headers, stillFile, id, task.fileName, progress, lastAt, totalBytes, streamRecorder)
+            streamUrlToFile(task.motionUrl, headers, motionFile, id, task.fileName, progress, lastAt, totalBytes, streamRecorder)
+            // 动图资源在容器里声明为 video/mp4：微博给的是 .mov，先换封装；换封装失败则退回原文件再试
+            val video = if (DashMuxer.remuxToMp4(motionFile, remuxedFile)) remuxedFile else motionFile
+            if (!MotionPhotoWriter.write(stillFile, video, mergedFile)) {
+                throw IllegalStateException("动图合成失败（静图不是 JPEG，或动图轨道不可用）")
+            }
+            // Android 9- 保存前检查存储权限（与其它路径一致）
+            if (!storagePermissionProvider()) {
+                throw IllegalStateException("未授予存储权限，无法保存到下载目录")
+            }
+            val savedPath = withContext(Dispatchers.IO) {
+                DownloadSaver.save(context, task.fileName, mergedFile, saveDirProvider())
+            } ?: throw IllegalStateException("保存到下载目录失败")
+            val total = mergedFile.length()
+            completeWithAvg(id, savedPath, total)
+            Log.d(TAG, "motionPhotoDownload: id=$id 动图合成完成 savedPath=$savedPath size=$total")
+            DownloadService.notifyResult(
+                context, id, task.fileName, success = true, promote = showSpeedProvider()
+            )
+            taskCallbacks.remove(id)?.let { cb -> runCatching { cb() } }
+            _stats.update { it - id }
+        } finally {
+            // 成功、失败、取消一律清临时文件
+            workDir.deleteRecursively()
+        }
+    }
+
+    /**
+     * 把整段响应流式写入文件，并按写入量上报进度（DASH 合轨的两条轨道、动图合成的静图与动图各调一次）。
      *
      * ★ 断点续传（2026-10-18）：B 站 CDN 中途断流（unexpected end of stream）时，
      *   此前整个 DASH 任务重跑（workDir 清空、两轨重下），浪费流量且看着像卡住。

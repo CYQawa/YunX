@@ -1071,7 +1071,9 @@ class ResolveViewModel(
                     platform = DownloadPlatform.VIDEO,
                     // B站 DASH 高清是音视频分离的两路流：带上音轨地址，由下载器下完两轨再合轨
                     mergeAudioUrl = media.audioUrl,
-                    mergeAudioHeaders = media.audioHeaders
+                    mergeAudioHeaders = media.audioHeaders,
+                    // 动图（Live Photo）：带上动图资源，由下载器合成为一张「动态照片」
+                    motionUrl = media.motionUrl
                 )
                 downloadStarted = true
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1122,7 +1124,9 @@ class ResolveViewModel(
                         // B站 DASH 分轨：音轨一起交给下载器合轨（与逐条下载保持一致，
                         // 少了这个「全部下载」会下出一个没有声音的视频）
                         mergeAudioUrl = media.audioUrl,
-                        mergeAudioHeaders = media.audioHeaders
+                        mergeAudioHeaders = media.audioHeaders,
+                        // 动图同理：不带动图资源就会下成一张不会动的静图
+                        motionUrl = media.motionUrl
                     )
                     okCount++
                 }
