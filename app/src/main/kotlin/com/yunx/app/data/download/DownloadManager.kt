@@ -101,6 +101,8 @@ data class ChunkDebug(
     /** 看门狗上一次采样算出的瞬时速度（字节/秒） */
     val bps: Long,
     val elapsedMs: Long,
+    /** 距上一次「收到字节」过去了多久（毫秒）：0 附近=正在推进，持续增大=连接被挂住 */
+    val idleMs: Long,
     /** 已被「慢连接抢占」换连接的次数 */
     val preemptCount: Int,
     /** 是否已置位抢占标志（下一次检查点会断开换连接） */
@@ -256,6 +258,16 @@ private class InflightChunk(val start: Long, val size: Long, val worker: Int) {
 
     /** 本次快照算出的瞬时速度（只由看门狗协程读写） */
     var lastBps = 0L
+
+    /**
+     * 最近一次「收到字节」的时刻（只由看门狗协程读写）。
+     * ★ 它是判断连接是否真的卡住的**直接**证据（见 [idleMs]）：瞬时速度低只说明慢，
+     *   而「多久一个字节都没收到」才是连接被 CDN 挂住的判据（2026-10-23 用户实测需要）。
+     */
+    var lastProgressAtMs = startedAtMs
+
+    /** 距上次收到字节过去了多久（毫秒）—— 0 附近表示在正常推进 */
+    val idleMs: Long get() = System.currentTimeMillis() - lastProgressAtMs
 
     /** ★ 慢连接抢占标志：置位后 ChunkDownloader 断开当前连接、换新连接从已收字节续传（不丢数据） */
     val preempt = AtomicBoolean(false)
@@ -418,7 +430,10 @@ class DownloadManager(
         val now = System.currentTimeMillis()
         for (d in diag.values) {
             val bytes = d.bytes.get()
-            d.lastBps = (bytes - d.lastBytes).coerceAtLeast(0L) * 1000 / (now - d.lastAtMs).coerceAtLeast(1L)
+            val delta = bytes - d.lastBytes
+            d.lastBps = delta.coerceAtLeast(0L) * 1000 / (now - d.lastAtMs).coerceAtLeast(1L)
+            // 本周期有增长才刷新「最近收到字节」时刻：idleMs 由此得出，日志/调试页据此说「多少秒没有数据」
+            if (delta > 0) d.lastProgressAtMs = now
             d.lastBytes = bytes
             d.lastAtMs = now
         }
@@ -464,13 +479,19 @@ class DownloadManager(
             d.preemptCount++
             d.lastPreemptAtMs = now
             d.preempt.set(true)
+            // ★ 必须主动掐断在飞连接：只置标志位时，连接被 CDN 挂住（read 阻塞）就永远轮不到检查标志，
+            //   日志里就会看到「标了卡死 / 记了抢占，但那条连接一直不换」（2026-10-23 实测）
+            downloader.cancelChunkCall(id, d.start.toString())
             taken++
             Log.w(TAG, "runTask: id=$id 抢占慢连接 分片=$chunkKey(worker#${d.worker}) 起点=${d.start} 块=${diagSize(d.size)} 已收=${diagSize(d.bytes.get())} " +
                 "瞬时=${diagSpeed(d.lastBps)} 阈值=${diagSpeed(floor)} 第${d.preemptCount}/$PREEMPT_MAX 次（换连接续传）")
             DownloadDebugLog.record(
-                id, "抢占慢连接",
+                id, "自动重连",
                 "分片=$chunkKey worker#${d.worker} 起点=${d.start} 块=${diagSize(d.size)} 已收=${diagSize(d.bytes.get())} " +
-                    "瞬时=${diagSpeed(d.lastBps)} 阈值=${diagSpeed(floor)} 第${d.preemptCount}/$PREEMPT_MAX 次"
+                    "瞬时=${diagSpeed(d.lastBps)} 阈值=${diagSpeed(floor)} 已跑=${d.elapsedMs / 1000}s " +
+                    "无数据=${d.idleMs / 1000}s " +
+                    "第${d.preemptCount}/$PREEMPT_MAX 次 → 已掐断当前连接、换新连接从已收字节续传" +
+                    (if (d.preemptCount >= PREEMPT_MAX) "（已达自动重连上限，之后不再重连，直到该片重新排队）" else "")
             )
         }
     }
@@ -606,6 +627,7 @@ class DownloadManager(
                 received = d.bytes.get(),
                 bps = d.lastBps,
                 elapsedMs = d.elapsedMs,
+                idleMs = d.idleMs,
                 preemptCount = d.preemptCount,
                 preempting = d.preempt.get()
             )
@@ -615,8 +637,16 @@ class DownloadManager(
     /** 下载调试：手动把某一路标记为「慢连接、换连接续传」（调试页的「强制重连」） */
     fun forcePreemptChunk(taskId: Long, key: String): Boolean {
         val d = activeChunkMaps[taskId]?.get(key) ?: return false
-        DownloadDebugLog.record(taskId, "手动抢占", "调试页强制重连 key=$key")
+        DownloadDebugLog.record(
+            taskId, "手动重连",
+            "key=$key 起点=${d.start} 已收=${diagSize(d.bytes.get())}/${diagSize(d.size)} " +
+                "瞬时=${diagSpeed(d.lastBps)} 已跑=${d.elapsedMs / 1000}s 无数据=${d.idleMs / 1000}s " +
+                "已抢占${d.preemptCount}/$PREEMPT_MAX 次 → 已掐断当前连接、换新连接从已收字节续传"
+        )
         d.preempt.set(true)
+        // ★ 必须真的掐断在飞连接：只置标志位时，连接被 CDN 挂住（read 阻塞）就永远轮不到检查标志，
+        //   界面表现就是「点了重连没反应」（2026-10-23 实测）
+        downloader.cancelChunkCall(taskId, d.start.toString())
         return true
     }
 
@@ -1461,7 +1491,8 @@ class DownloadManager(
             DiagnosticLog.DOWNLOAD, "task_size_probed", taskId = id, status = "downloading", size = total,
             summary = "已有进度=${task.downloadedSize} url=${LogRedactor.url(task.url)}"
         )
-        dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, task.downloadedSize, total)
+        // ★ 钳制后再回写：库里可能残留旧版本写下的虚高进度（> total），别把它原样再写一遍
+        dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, minOf(task.downloadedSize, total), total)
         // 取到大小后再次检查取消（暂停可能发生在 getTotalSize 期间）
         if (!isTaskActive()) return
 
@@ -1539,18 +1570,35 @@ class DownloadManager(
         // 注册实时统计：线程数 = 实际并发（受安全上限与内存预算约束）
         _stats.update { it + (id to DownloadStats(0L, -1L, actualWorkers)) }
 
-        // 统计已有 part/seg 大小（断点续传起点；主池 + 弹性区均按磁盘真实长度）
+        // 统计已有 part/seg 大小（断点续传起点）。
+        // ★★ 必须按「当前计划」逐片校验，不能直接按磁盘长度求和（2026-10-23 修「下载卡百分百」）：
+        //    旧 job 残留的分片可能与当前计划重叠（分片数/片大小改过就必然错位），
+        //    求和会得到「比总大小还大」的进度 → 被钳到 100% → 界面永远卡 100% 但任务下不完。
+        //    规则：主池第 i 片只认 part_i 且长度不超过该片区间长度；弹性区只认位于弹性起点
+        //    （= mainPoolCount × chunkSize）之后的 seg，且长度不超过「到文件末尾」的剩余量。
         val downloaded = AtomicLong(0)
         (0 until mainPoolCount).forEach { i ->
-            downloaded.addAndGet(File(chunkDir, "part_$i").length())
+            val begin = i * chunkSize
+            val end = minOf(begin + chunkSize, total)
+            val len = File(chunkDir, "part_$i").length()
+            downloaded.addAndGet(len.coerceIn(0L, (end - begin).coerceAtLeast(0L)))
         }
+        // 弹性区起点：主池覆盖 [0, mainPoolCount × chunkSize)，弹性 seg 只应落在这之后
+        val segRegionStart = mainPoolCount.toLong() * chunkSize
         chunkDir.listFiles { f -> f.name.startsWith("seg_") && f.name.endsWith(".part") }
-            ?.forEach { downloaded.addAndGet(it.length()) }
-        // ★ 钳制到 total：防旧 job 残留累加导致显示"已下载 > 总大小"
+            ?.forEach { f ->
+                val segStart = f.name.removePrefix("seg_").removeSuffix(".part").toLongOrNull()
+                // 落在主池区间里的 seg 属于旧计划残留：不计入（否则与主池的 part 重复计数）
+                if (segStart != null && segStart >= segRegionStart) {
+                    downloaded.addAndGet(f.length().coerceIn(0L, (total - segStart).coerceAtLeast(0L)))
+                }
+            }
+        // 双重保险：即使仍有竞态，显示也绝不越过总大小
         val init = minOf(downloaded.get(), total)
         downloaded.set(init)
-        // ★ 恢复时 DB 旧值可能滞后于磁盘（暂停瞬间未上报的字节）：以磁盘真实大小为准回写，避免进度回跳
-        if (init > task.downloadedSize) {
+        // ★★ 双向校正：原先只「变大时回写」，于是旧版本写下的虚高值（69.2GB > total 67.7GB，实测）
+        //    永远留在库里，任务每次恢复都直接从 100% 起跳、再也下不完。现在只要与磁盘真实进度不一致就压回来。
+        if (init != task.downloadedSize) {
             dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, init, total)
         }
         val lastPersistAt = AtomicLong(0L)
@@ -1624,6 +1672,8 @@ class DownloadManager(
                                 downloader.downloadChunk(
                                     taskId = id, url = src.url, start = start, end = end,
                                     partFile = partFile, headers = src.headers,
+                                    // ★ chunkKey = 该片的起点：让「重连」/抢占能据此主动掐断这条连接
+                                    chunkKey = diag.start.toString(),
                                     preempt = diag.preempt,
                                     contentDigest = partDigest
                                 ) { bytes ->
@@ -1658,7 +1708,9 @@ class DownloadManager(
                                 DownloadDebugLog.record(
                                     id, "抢占结果",
                                     "分片=$diagKey worker#$workerIndex 结果=${res.name} " +
-                                        "已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
+                                        // ★「本轮已收」= 这一轮 pass 从网络收到的字节，**不含**磁盘上已有的续传前缀；
+                                    //   所以「已收=0B 结果=OK」表示这一片早就在磁盘上齐了，不是误判
+                                    "本轮已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
                                         "用时=${diag.elapsedMs / 1000}s 共抢占${diag.preemptCount}次"
                                 )
                             }
@@ -1697,6 +1749,7 @@ class DownloadManager(
                                 downloader.downloadChunk(
                                     taskId = id, url = src.url, start = s, end = e,
                                     partFile = segFile, headers = src.headers,
+                                    chunkKey = diag.start.toString(),
                                     preempt = diag.preempt,
                                     contentDigest = segDigest
                                 ) { bytes ->
@@ -1730,7 +1783,9 @@ class DownloadManager(
                             DownloadDebugLog.record(
                                 id, "抢占结果",
                                 "分片=$diagKey worker#$workerIndex 结果=${res.name} " +
-                                    "已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
+                                    // ★「本轮已收」= 这一轮 pass 从网络收到的字节，**不含**磁盘上已有的续传前缀；
+                                    //   所以「已收=0B 结果=OK」表示这一片早就在磁盘上齐了，不是误判
+                                    "本轮已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
                                     "用时=${diag.elapsedMs / 1000}s 共抢占${diag.preemptCount}次"
                             )
                         }
@@ -1822,6 +1877,7 @@ class DownloadManager(
                                     downloader.downloadChunk(
                                         taskId = id, url = src.url, start = m.start, end = m.end,
                                         partFile = m.file, headers = src.headers,
+                                        chunkKey = diag.start.toString(),
                                         preempt = diag.preempt,
                                         contentDigest = retryDigest
                                     ) { bytes ->
@@ -1849,7 +1905,9 @@ class DownloadManager(
                                 DownloadDebugLog.record(
                                     id, "抢占结果",
                                     "分片=$diagKey worker#$retryWorkerIndex 结果=${res.name} " +
-                                        "已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
+                                        // ★「本轮已收」= 这一轮 pass 从网络收到的字节，**不含**磁盘上已有的续传前缀；
+                                    //   所以「已收=0B 结果=OK」表示这一片早就在磁盘上齐了，不是误判
+                                    "本轮已收=${diagSize(diag.bytes.get())}/${diagSize(diag.size)} " +
                                         "用时=${diag.elapsedMs / 1000}s 共抢占${diag.preemptCount}次"
                                 )
                             }

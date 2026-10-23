@@ -198,7 +198,7 @@ private fun openUrl(context: Context, url: String) {
 }
 
 /**
- * 设置页：下载线程数设置 + 主题外观 + 检查更新 + 日志与网盘认证。
+ * 设置页：下载线程数设置 + 主题外观 + 检查更新 + 日志与认证信息。
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -234,9 +234,9 @@ fun SettingsScreen(
 ) {
     var showThreadsDialog by remember { mutableStateOf(false) }
     var showLogDialog by remember { mutableStateOf(false) }
-    // 网盘认证导出弹窗（AES 加密 + 导出范围）
+    // 认证信息导出弹窗（AES 加密 + 导出范围）
     var showExportAuthDialog by remember { mutableStateOf(false) }
-    // 网盘认证导入：加密文件内容（非空时弹解密密码框）
+    // 认证信息导入：加密文件内容（非空时弹解密密码框）
     var pendingImportContent by remember { mutableStateOf<String?>(null) }
     var showImportAuthDialog by remember { mutableStateOf(false) }
     // 导出/导入处理中（PBKDF2 21万次迭代派生密钥，偶发 1~3s，期间显示加载弹窗）
@@ -352,7 +352,7 @@ fun SettingsScreen(
             }
         }
     }
-    // 导入网盘认证文件选择器：选择后先判断是否加密备份，加密则弹密码框
+    // 导入认证信息文件选择器：选择后先判断是否加密备份，加密则弹密码框
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -721,12 +721,12 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        SectionLabel("网盘认证")
+        SectionLabel("认证备份")
         SettingsItem(
             icon = Icons.Outlined.Backup,
             shape = listGroupShape(ListGroupPos.FIRST),
-            title = "导出网盘认证",
-            description = "使用至少 8 位口令加密 Cookie/JWT 后导出",
+            title = "导出认证信息",
+            description = "使用至少 8 位口令加密网盘与视频平台的 Cookie/JWT 后导出",
             onClick = { showExportAuthDialog = true }
         )
 
@@ -734,8 +734,8 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Outlined.Restore,
             shape = listGroupShape(ListGroupPos.LAST),
-            title = "导入网盘认证",
-            description = "选择加密或明文的认证备份文件，恢复网盘登录",
+            title = "导入认证信息",
+            description = "选择加密或明文的认证备份文件，恢复网盘与视频平台登录",
             onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) }
         )
 
@@ -1205,7 +1205,7 @@ fun SettingsScreen(
         )
     }
 
-    // 导出网盘认证弹窗（AES 加密密码 + 导出范围）
+    // 导出认证信息弹窗（AES 加密密码 + 导出范围）
     if (showExportAuthDialog) {
         ExportAuthDialog(
             onDismiss = { showExportAuthDialog = false },
@@ -1653,7 +1653,7 @@ fun SettingsScreen(
     }
 }
 
-/** 导出网盘认证弹窗：AES 加密密码 + 导出范围（仅已登录 / 全部绑定） */
+/** 导出认证弹窗：AES 加密密码 + 导出范围（仅已登录 / 全部绑定） */
 @Composable
 private fun ExportAuthDialog(
     onDismiss: () -> Unit,
@@ -1663,7 +1663,7 @@ private fun ExportAuthDialog(
     var onlyLoggedIn by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("导出网盘认证") },
+        title = { Text("导出认证信息") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -1694,7 +1694,7 @@ private fun ExportAuthDialog(
                         onClick = { onlyLoggedIn = true }
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("仅导出当前已登录的网盘", style = MaterialTheme.typography.bodyMedium)
+                    Text("仅导出当前已登录的账号", style = MaterialTheme.typography.bodyMedium)
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1705,7 +1705,7 @@ private fun ExportAuthDialog(
                         onClick = { onlyLoggedIn = false }
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("导出全部绑定的网盘", style = MaterialTheme.typography.bodyMedium)
+                    Text("导出全部绑定的账号", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         },
@@ -1730,7 +1730,7 @@ private fun ImportAuthDialog(
     var password by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("导入网盘认证") },
+        title = { Text("导入认证信息") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(

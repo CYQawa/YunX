@@ -44,7 +44,10 @@ import com.yunx.app.data.db.UCAccountDao
 import com.yunx.app.data.db.UCAccountEntity
 import com.yunx.app.data.db.XunleiAccountDao
 import com.yunx.app.data.db.XunleiAccountEntity
+import com.yunx.app.data.db.VideoAccountDao
+import com.yunx.app.data.db.VideoAccountEntity
 import com.yunx.app.data.network.GitHubTokenStore
+import com.yunx.app.data.network.video.VideoPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -56,8 +59,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 网盘认证信息备份：把已登录的平台（夸克/UC/迅雷/百度/139/123/115/光鸭/蓝奏云优享版/蓝奏云）凭证打包为 JSON，
- * 可导出到下载目录并在另一台设备导入恢复。
+ * 认证信息备份：把已登录的平台（网盘：夸克/UC/迅雷/百度/139/123/115/光鸭/蓝奏云优享版/蓝奏云；
+ * 视频解析：哔哩哔哩/小红书/Pixiv 等）凭证打包为 JSON，可导出到下载目录并在另一台设备导入恢复。
  */
 class AuthBackupManager(
     private val quarkDao: QuarkAccountDao,
@@ -69,16 +72,24 @@ class AuthBackupManager(
     private val pan115Dao: Pan115AccountDao,
     private val guangyaDao: GuangYaAccountDao,
     private val ilanzouDao: ILanzouAccountDao,
-    private val lanzouDao: LanzouAccountDao
+    private val lanzouDao: LanzouAccountDao,
+    private val videoAccountDao: VideoAccountDao
 ) {
 
     private companion object {
         const val APP_TAG = "yunx_auth_backup"
         const val VERSION = 1
+
+        /**
+         * 视频解析平台在备份里的前缀：哔哩哔哩存成 `video:BILIBILI`。
+         * 视频账号与网盘账号是**两张表**（见 VideoAccountEntity），靠这个前缀在同一个 `accounts`
+         * 数组里区分；它也不会和任何网盘的 platform 值撞名。
+         */
+        const val VIDEO_PREFIX = "video:"
     }
 
     /**
-     * 导出网盘认证（强制 AES-GCM 加密）：
+     * 导出认证信息（网盘 + 视频解析平台；强制 AES-GCM 加密）：
      * @param password 至少 8 位的备份口令
      * @param onlyLoggedIn true=仅导出凭证可用的已登录平台；false=导出数据库里全部绑定记录
      * @param context 用于读取 GitHub Token（Keystore 解密）
@@ -200,6 +211,21 @@ class AuthBackupManager(
                     .put("updatedAt", a.updatedAt)
             )
         }
+        // ★ 视频解析平台（哔哩哔哩/小红书/Pixiv…）：登录态同样只在手机本地，换机后要逐个重登，
+        //   所以和网盘一起备份（2026-10-23 用户反馈「那三个视频平台没有进去」）。
+        //   一张表存全部平台、允许同平台多账号，所以逐行导出，靠 id 还原「主账号/备注」这些行级状态。
+        videoAccountDao.getAccounts().forEach { a ->
+            if (a.cookie.isNotBlank()) accounts.put(
+                JSONObject()
+                    .put("platform", VIDEO_PREFIX + a.platform)
+                    .put("id", a.id)
+                    .put("cookie", a.cookie)
+                    .put("nickname", a.nickname)
+                    .put("isPrimary", a.isPrimary)
+                    .put("remark", a.remark)
+                    .put("updatedAt", a.updatedAt)
+            )
+        }
         val root = JSONObject()
             .put("app", APP_TAG)
             .put("version", VERSION)
@@ -237,7 +263,30 @@ class AuthBackupManager(
         var count = 0
         for (i in 0 until accounts.length()) {
             val obj = accounts.optJSONObject(i) ?: continue
-            when (obj.optString("platform")) {
+            val platform = obj.optString("platform")
+            // 视频解析平台（video:BILIBILI 这种）：与网盘同一张 accounts 数组，靠前缀分流
+            if (platform.startsWith(VIDEO_PREFIX)) {
+                val name = platform.removePrefix(VIDEO_PREFIX)
+                // 只恢复本版本仍认识的平台：枚举被改名/删除后，旧备份不会写进谁也读不到的孤儿行
+                if (VideoPlatform.fromName(name) == null) continue
+                val c = obj.optString("cookie")
+                if (c.isNotBlank()) {
+                    videoAccountDao.upsert(
+                        VideoAccountEntity(
+                            // 多账号靠 id 定位原来的行；旧备份没有 id 时退回平台名（即该平台的主行）
+                            id = obj.optString("id").ifBlank { name },
+                            platform = name,
+                            cookie = c,
+                            nickname = obj.optString("nickname"),
+                            updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                            isPrimary = obj.optBoolean("isPrimary", false),
+                            remark = obj.optString("remark")
+                        )
+                    ); count++
+                }
+                continue
+            }
+            when (platform) {
                 "quark" -> {
                     val c = obj.optString("cookie")
                     if (c.isNotBlank()) {

@@ -153,4 +153,18 @@ class XunleiWebCredentialTest {
         assertFalse(XunleiWebCredential.DESKTOP_SEC_CH_UA.contains('\\'))
         assertFalse(XunleiWebCredential.DESKTOP_SEC_CH_UA_PLATFORM.contains('\\'))
     }
+
+    /**
+     * 网页版 captcha_sign 的已知向量（抓包验证过的那一组）。
+     *
+     * 锁死 9 条盐的**内容与顺序**、client_version、host 拼接方式与 `1.` 前缀：
+     * 任何一处被误改都会立刻失败，避免「盐轮换时手改成错的」这种线上事故。
+     */
+    @Test
+    fun computesWebCaptchaSignForKnownVector() {
+        assertEquals(
+            "1.4181a24198c7edfbbba2afbcf1f4fab0",
+            XunleiWebCredential.computeCaptchaSign("550cfe136e9d74e95be5393738639de7", 1792243618981L)
+        )
+    }
 }

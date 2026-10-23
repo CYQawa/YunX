@@ -22,10 +22,16 @@ import com.yunx.app.data.db.XunleiAccountDao
 import com.yunx.app.data.db.XunleiAccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
 import com.yunx.app.data.download.DownloadPlatform
+import com.yunx.app.data.network.PanCaptcha
+import com.yunx.app.data.network.QuarkApiException
+import com.yunx.app.data.network.WebCaptchaInit
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.XunleiLoginStep
 import com.yunx.app.data.network.XunleiWebCredential
+import com.yunx.app.data.network.video.HeadlessWebView
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 迅雷账号仓库：账号+密码登录（可能触发短信验证）→ 换 token 落库。
@@ -34,6 +40,12 @@ class XunleiAccountRepository(
     private val dao: XunleiAccountDao,
     private val api: XunleiApi
 ) {
+
+    /**
+     * 网页会话回退的互斥锁：并发解析会同时发现本地签名被拒，不加锁会同时开出多个隐藏
+     * WebView，既浪费资源又可能互相覆盖 localStorage 里的会话。
+     */
+    private val mutex = Mutex()
 
     fun observeAccount(): Flow<XunleiAccountEntity?> = dao.observeAccount()
 
@@ -164,5 +176,72 @@ class XunleiAccountRepository(
             )
         )
         return true
+    }
+
+    /**
+     * 网页会话回退（本地签名被拒时用）：用隐藏 WebView 重开 pan.xunlei.com，等网页自己
+     * 刷新出有效 captcha 后，把 access/refresh/device/captcha 一并取回落库。
+     *
+     * @return 拿到新的 captcha_token 才算成功；非网页账号 / 超时 / 会话已失效都返回 false
+     */
+    suspend fun refreshWebSession(): Boolean {
+        val acc = dao.getAccount() ?: return false
+        if (acc.authType != XunleiWebCredential.AUTH_TYPE) return false
+        return mutex.withLock {
+            val raw = HeadlessWebView.loadAndExtract(
+                url = XunleiWebCredential.LOGIN_URL,
+                userAgent = XunleiWebCredential.DESKTOP_UA,
+                readyCheckJs = XunleiWebCredential.REFRESH_READY_JS,
+                extractJs = XunleiWebCredential.READ_SCRIPT,
+                timeoutMs = 12_000L
+            ) ?: return@withLock false
+            // READ_SCRIPT 交回的是 encodeURIComponent 过的 JSON（与登录页 evaluateJsEncoded 的约定一致），
+            // HeadlessWebView 只解 JSON 引号不做百分号解码，这里补上，否则 parse 会当成裸 token 判失败
+            val decoded = runCatching { java.net.URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
+            val tokens = XunleiWebCredential.parse(decoded) ?: return@withLock false
+            // WebView 期间账号可能被退出/换号：重新读一次再落库，避免把旧会话写回新账号
+            val latest = dao.getAccount() ?: return@withLock false
+            dao.upsert(
+                latest.copy(
+                    accessToken = tokens.accessToken.ifBlank { latest.accessToken },
+                    refreshToken = tokens.refreshToken.ifBlank { latest.refreshToken },
+                    deviceId = tokens.deviceId.ifBlank { latest.deviceId },
+                    captchaToken = tokens.captchaToken.ifBlank { latest.captchaToken },
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            tokens.captchaToken.isNotBlank()
+        }
+    }
+
+    /**
+     * 网页账号取 captcha（[XunleiApi.webCaptchaRefresher] 的落地实现）。
+     *
+     * 顺序：本地 9 盐签名现换 token（几百毫秒、后台也能用）→ 签名被拒才回退网页会话（隐藏 WebView）。
+     * 只有主账号且确实是网页登录才处理：网页会话只有一份，拿它去刷别的账号会把 captcha 串用。
+     *
+     * @return 带过期时间的 captcha；非网页账号返回 null（调用方继续走 App 通道 captcha_sign 重签）
+     * @throws QuarkApiException client_id 配错（回退也没用）、或网页会话已失效
+     */
+    suspend fun refreshWebCaptcha(deviceId: String, action: String): PanCaptcha? {
+        val main = dao.getAccount() ?: return null
+        if (main.authType != XunleiWebCredential.AUTH_TYPE) return null
+        val byDevice = dao.getAccounts().firstOrNull { it.deviceId == deviceId }
+        // 指定的是另一个账号的设备号：这份网页会话不属于它，不能拿主账号 captcha 顶替
+        if (byDevice != null && byDevice.id != main.id) return null
+        when (val local = api.initWebCaptcha(deviceId, action)) {
+            is WebCaptchaInit.Ok -> return local.captcha
+            // 签名没问题但 client_id 对不上：网页会话同样只认网页 client_id，回退只会白等十几秒
+            WebCaptchaInit.ClientIdMismatch ->
+                throw QuarkApiException("验证码与当前登录方式不匹配，请重新登录迅雷网页版")
+            // 盐/版本轮换导致签名被拒：回退网页会话自签
+            WebCaptchaInit.Failed -> Unit
+        }
+        if (!refreshWebSession()) {
+            throw QuarkApiException("迅雷网页登录已过期，请在迅雷登录页重新登录")
+        }
+        val token = dao.getAccount()?.captchaToken?.takeIf { it.isNotBlank() } ?: return null
+        // 网页会话里的 token 同样是 300s 的短命 token，按保守有效期返回
+        return PanCaptcha(token, System.currentTimeMillis() + XunleiWebCredential.WEB_CAPTCHA_TOKEN_TTL_MS)
     }
 }

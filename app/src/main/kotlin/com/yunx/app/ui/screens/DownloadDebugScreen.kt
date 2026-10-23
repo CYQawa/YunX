@@ -86,9 +86,8 @@ import kotlinx.coroutines.withContext
 /** 调试页刷新间隔（毫秒）：拉取式快照，页面关掉即停 */
 private const val DEBUG_REFRESH_MS = 1000L
 
-/** 「疑似卡死」判定：已跑够久、瞬时速度低于阈值且还没下完（与 DownloadManager 的抢占下限同一口径 12KB/s） */
+/** 「疑似卡死」判定：已跑够久、这一轮采样零字节（连接被挂住）、且还没下完（见 ChunkRow 的说明） */
 private const val STUCK_MIN_AGE_MS = 30_000L
-private const val STUCK_MIN_BPS = 12 * 1024L
 
 /**
  * 下载调试页（下载页长按任务 → 「调试信息」）。
@@ -389,9 +388,13 @@ private fun ChunkRow(chunk: ChunkDebug, onForceReconnect: () -> Unit) {
         if (chunk.preemptCount > 0) append(" · 已抢占 ${chunk.preemptCount} 次")
         if (chunk.preempting) append(" · 待换连接")
     }
-    // 「疑似卡死」：跑得够久、又慢得离谱且没下完（多半是连接被 CDN 挂住，可用右侧「重连」换一条）
+    // 「多久没收到字节」是判断卡死最直接的证据：不足 1s 不显示，免得满屏噪音
+    val idleNote = if (chunk.idleMs >= 1000L) " · 已 ${chunk.idleMs / 1000}s 无数据" else ""
+    // 「疑似卡死」：跑得够久、这一轮采样**一个字节都没收到**（bps==0，直接证据是连接被挂住）、且还没下完。
+    // ★ 不能用「速度低于某阈值」来判：512 路 + 慢链路下每路都可能长时间跑在 12KB/s 以下却仍在推进，
+    //   那种判法会把几乎所有正常分片都标成卡死（2026-10-23 用户实测：全部被标卡死）。真正该报警的是「零字节」。
     val stuck = chunk.elapsedMs >= STUCK_MIN_AGE_MS &&
-        chunk.bps < STUCK_MIN_BPS &&
+        chunk.bps <= 0L &&
         chunk.received < chunk.size
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -416,7 +419,7 @@ private fun ChunkRow(chunk: ChunkDebug, onForceReconnect: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "瞬时 ${formatSpeed(chunk.bps)} · 已跑 ${chunk.elapsedMs / 1000}s$preemptNote" +
+                    text = "瞬时 ${formatSpeed(chunk.bps)} · 已跑 ${chunk.elapsedMs / 1000}s$idleNote$preemptNote" +
                         if (stuck) " · 疑似卡死" else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (stuck) {

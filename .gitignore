@@ -26,3 +26,6 @@ keystore.properties
 # 发版说明：只在本地维护，不进仓库（要发布时把内容粘到 GitHub Release 正文即可）
 Releases.md
 
+# 迅雷网页端签名盐研究资料：仅本地开发研究，不进仓库
+1017-xunlei-captcha/
+

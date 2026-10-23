@@ -79,6 +79,58 @@ object XunleiWebCredential {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
     /**
+     * 网页版 captcha 签名参数：本地算 captcha_sign → 直接换 token，不再依赖隐藏 WebView。
+     *
+     * ⚠️ 这是网页版的私有实现，且与 App 通道**不是一套**：网页端 client_version 会被强制更新、
+     * 9 条盐随 bundle 轮换（约 20 天一次），签名一旦被服务端拒绝就只能回退网页会话
+     * （见 `XunleiAccountRepository.refreshWebCaptcha`）。替换时版本与盐必须整组更新，盐顺序敏感。
+     */
+    const val WEB_CLIENT_VERSION = "1.93.10"
+    const val WEB_PACKAGE_NAME = "pan.xunlei.com"
+    private const val WEB_SIGN_HOST = "pan.xunlei.com"
+    private const val WEB_ALG_VERSION = "1"
+
+    /** 9 条盐，顺序敏感（来自网页版 public-key 链） */
+    private val WEB_CAPTCHA_SALTS = listOf(
+        "DVM8BRQfJWDsIE0JbH5GCUM0z0jU1yGymBTj4Eyloazv1F+w0G7ig",
+        "T",
+        "a1fUxfjOO1/dW++DpGupRgw9P93L",
+        "aktKbp+/lQc3MvlMHIupt65LjAgJOL6ttMFvTKK+7+WKubSf9rT",
+        "SB/ne9FQUnQmWz4Wuv9KqKfGOBOCUubpHpECxOHfD4hNoMclYA2Yq",
+        "sOZFBQ8IMFy3OFjAIf/eA65iqFvS9TIKzLyrhiT6",
+        "ZhJdLgL7MGh2GanboB0yk",
+        "Osf",
+        "v"
+    )
+
+    /** 网页 captcha_token 的保守有效期：服务端 expires_in=300s，页面本身再提前 30s 视为过期 */
+    const val WEB_CAPTCHA_TOKEN_TTL_MS = 270_000L
+
+    /**
+     * 网页版 captcha_sign（纯函数，便于单测）：
+     * `raw = client_id + version + host + device_id + timestamp_ms` → 9 层 `md5(raw + salt)`，前缀 `1.`。
+     *
+     * 与 App 通道的区别：App 是 10 层、raw 里放 package_name；网页是 9 层、raw 里放 host。
+     */
+    fun computeCaptchaSign(deviceId: String, timestampMs: Long): String {
+        var h = CLIENT_ID + WEB_CLIENT_VERSION + WEB_SIGN_HOST + deviceId + timestampMs
+        WEB_CAPTCHA_SALTS.forEach { salt -> h = md5Hex(h + salt) }
+        return "$WEB_ALG_VERSION.$h"
+    }
+
+    private const val HEX = "0123456789abcdef"
+
+    private fun md5Hex(text: String): String {
+        val digest = java.security.MessageDigest.getInstance("MD5")
+            .digest(text.toByteArray(Charsets.UTF_8))
+        val out = StringBuilder(digest.size * 2)
+        digest.forEach { b ->
+            out.append(HEX[(b.toInt() shr 4) and 0x0f]).append(HEX[b.toInt() and 0x0f])
+        }
+        return out.toString()
+    }
+
+    /**
      * 与 [DESKTOP_UA] 配套的客户端提示头（Sec-CH-UA 系，版本号必须与 UA 里的 Chrome 大版本一致）。
      * 桌面 UA 若不同步这些头，服务端会按移动端 client hints 判定，与 UA 冲突导致页面降级/被拒。
      *
@@ -187,6 +239,21 @@ object XunleiWebCredential {
           }catch(e){}
           return encodeURIComponent(JSON.stringify(data));
         }catch(e){return ''}})()
+    """.trimIndent()
+
+    /**
+     * 网页会话保活的就绪判据：页面加载完成，且网页自己已经把 `captcha_<clientId>` 刷新成有效 token。
+     *
+     * 为什么不能只看 `readyState`：页面刚加载完时 localStorage 里可能还是**已过期**的旧 token，
+     * 它的 JS 要再发一次 captcha/init 才会更新。这里直接等有效 token，等到即取，
+     * 等不到就让调用方超时失败（说明网页会话本身已失效，只能重新登录）。
+     */
+    val REFRESH_READY_JS: String = """
+        (function(){try{
+          if(document.readyState!=='complete')return false;
+          var c=JSON.parse(localStorage.getItem('$CAPTCHA_KEY')||'{}');
+          return !!(c&&c.token&&Date.parse(c.expires_at)>Date.now());
+        }catch(e){return false}})()
     """.trimIndent()
 
     /** WebView 是否允许停留在该 URL：仅 https 的 xunlei.com 及其子域、443 端口（about:blank 放行） */

@@ -23,6 +23,7 @@ import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -60,6 +61,28 @@ data class XunleiLoginStep(
 )
 
 /**
+ * 一次 captcha/init 的结果：token + 过期时间。
+ *
+ * ★ 必须带过期时间：网页 token 只有 300s，缓存里拿死 token 去请求会先吃一次 `captcha_invalid`，
+ * 等于每次解析都先失败一次再重试。
+ */
+data class PanCaptcha(val token: String, val expiresAtMs: Long) {
+    fun isValid(now: Long = System.currentTimeMillis()): Boolean = token.isNotBlank() && expiresAtMs > now
+}
+
+/**
+ * 网页签名换 captcha 的结果。
+ *
+ * ★ 必须区分「签名被拒（盐/版本轮换）」与「client_id 配错」：后者回退隐藏 WebView 也救不回来
+ * （网页会话同样只认网页 client_id），只会白等十几秒再失败。
+ */
+sealed interface WebCaptchaInit {
+    data class Ok(val captcha: PanCaptcha) : WebCaptchaInit
+    data object ClientIdMismatch : WebCaptchaInit
+    data object Failed : WebCaptchaInit
+}
+
+/**
  * 迅雷 API 封装（OkHttp）：
  * - 登录：captcha/init → v3/login（密码，可能触发短信）→ sendsms → smslogin → v1/auth/token
  * - Pan：文件列表 / 分享解析 / 转存 / 直链（Bearer 认证，无需 x-signature，抓包确认）
@@ -73,9 +96,9 @@ class XunleiApi(
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val formMediaType = "application/x-www-form-urlencoded".toMediaType()
 
-    /** captcha_invalid 时刷新出的新 captcha_token（后续请求优先使用） */
-    @Volatile
-    private var refreshedCaptcha: String? = null
+    /** 刷新出的 captcha（按设备号缓存：不同账号的 captcha 不能串用，App 通道与网页通道的
+     *  client_id 也不同，串用会直接得到 client_id not match）。带过期时间，过期的不会被再用 */
+    private val refreshedCaptchas = java.util.concurrent.ConcurrentHashMap<String, PanCaptcha>()
 
     /** 当前有效 access_token（401 自动刷新后更新；pan 请求优先使用，避免刷新后闭包仍用旧值） */
     @Volatile
@@ -83,6 +106,14 @@ class XunleiApi(
 
     /** 401/unauthenticated 时自动刷新：提供 refresh_token 换新 token（由调用方注入并持久化） */
     var refreshTokenProvider: suspend (deviceId: String) -> Pair<String, String>? = { null }
+
+    /**
+     * 网页登录（webToken）captcha 的刷新入口（非网页账号返回 null，调用方走 App 通道重签）。
+     *
+     * 由 `XunleiAccountRepository.refreshWebCaptcha` 实现：本地 9 盐签名优先，被拒才回退网页会话。
+     * 返回值必须带 `expiresAtMs`，调用方据此判断能否复用。
+     */
+    var webCaptchaRefresher: suspend (deviceId: String, action: String) -> PanCaptcha? = { _, _ -> null }
 
     /** 当前用户 ID（从 access_token JWT 解析，captcha init 的 meta 需要） */
     @Volatile
@@ -903,7 +934,15 @@ class XunleiApi(
         build: (String) -> Request,
         parse: (JSONObject) -> T
     ): T {
-        var token = if (anonymous) captchaToken else (refreshedCaptcha ?: captchaToken)
+        // 网页账号的 captcha 只有 300s：缓存里过期的绝不再用，直接换新的（本地签名，几百毫秒）。
+        // 不这么做的话，每次解析都会先拿死 token 撞一次 captcha_invalid 再重试。
+        var token = if (anonymous) {
+            captchaToken
+        } else {
+            val cached = refreshedCaptchas[deviceId]?.takeIf { it.isValid() }
+            (cached ?: webCaptchaRefresher(deviceId, action)?.also { refreshedCaptchas[deviceId] = it })
+                ?.token ?: captchaToken
+        }
         repeat(2) { attempt ->
             val response = client.newCall(build(token)).execute()
             val body = response.use { it.body?.string() ?: throw QuarkApiException("请求失败：响应为空") }
@@ -917,20 +956,30 @@ class XunleiApi(
                     val refreshed = refreshTokenProvider(deviceId)
                     if (refreshed != null) {
                         currentAccessToken = refreshed.first
-                        val newCaptcha = initPanCaptcha(deviceId, action, token)
-                        if (!newCaptcha.isNullOrBlank()) {
-                            refreshedCaptcha = newCaptcha
-                            token = newCaptcha
+                        val newCaptcha = webCaptchaRefresher(deviceId, action)
+                            ?: initPanCaptcha(deviceId, action, token)
+                                ?.let { PanCaptcha(it, Long.MAX_VALUE) }
+                        if (newCaptcha != null) {
+                            refreshedCaptchas[deviceId] = newCaptcha
+                            token = newCaptcha.token
                         }
                         return@repeat
                     }
                 }
                 if (!anonymous && err == "captcha_invalid" && attempt == 0) {
-                    // 用正确 action + captcha_sign 重新 init（携带旧 token），拿 723 长度有效 token 后重试
-                    val newToken = initPanCaptcha(deviceId, action, token)
-                    if (!newToken.isNullOrBlank()) {
-                        refreshedCaptcha = newToken
-                        token = newToken
+                    // client_id 配错：回退网页会话也救不回来（网页会话同样只认网页 client_id），
+                    // 只会白等十几秒再失败，所以直接报错。
+                    if (isClientIdMismatch(json)) {
+                        throw QuarkApiException("验证码与当前登录方式不匹配，请重新登录迅雷网页版")
+                    }
+                    // 网页账号：本地 9 盐签名换 token（被拒时由实现内部回退网页会话）；
+                    // 非网页账号返回 null，继续走原来的 App 通道 captcha_sign 重签。
+                    val newCaptcha = webCaptchaRefresher(deviceId, action)
+                        ?: initPanCaptcha(deviceId, action, token)
+                            ?.let { PanCaptcha(it, Long.MAX_VALUE) }
+                    if (newCaptcha != null) {
+                        refreshedCaptchas[deviceId] = newCaptcha
+                        token = newCaptcha.token
                         return@repeat
                     }
                 }
@@ -942,6 +991,10 @@ class XunleiApi(
         }
         throw QuarkApiException("验证码刷新后仍失败")
     }
+
+    /** 服务端是否明确回了 client_id 配错（`error_details[].detail = "client_id not match"`） */
+    private fun isClientIdMismatch(json: JSONObject): Boolean =
+        json.toString().contains("client_id not match")
 
     /** 用请求对应 action + 正确 captcha_sign 初始化 captcha（pan 专用，alist 算法已验证）。
      * 算法：raw = client_id+client_version+package_name+device_id+timestamp_ms，10 层 md5(raw+salt)，sign="1."+结果 */
@@ -981,6 +1034,73 @@ class XunleiApi(
                     json.optString("captcha_token").takeIf { it.isNotBlank() }
                 }
             }.getOrNull()
+        }
+
+    /**
+     * 网页通道 captcha/init：本地用网页 9 盐签名换 token（不依赖隐藏 WebView）。
+     *
+     * 网页的 `captcha_sign` 约一天有效（每天 00:00 失效），换来的 token 只有 300s，
+     * 所以这里每次需要 token 就现签一次；签名被服务端拒绝（盐/版本轮换）返回 [WebCaptchaInit.Failed]，
+     * 由调用方回退网页会话。`client_id not match` 单独返回：那种情况换谁都救不回来，不能回退。
+     */
+    suspend fun initWebCaptcha(deviceId: String, action: String): WebCaptchaInit =
+        withContext(Dispatchers.IO) {
+            val ts = System.currentTimeMillis()
+            val sign = XunleiWebCredential.computeCaptchaSign(deviceId, ts)
+            val body = JSONObject()
+                .put("client_id", XunleiWebCredential.CLIENT_ID)
+                .put("action", action)
+                .put("device_id", deviceId)
+                .put(
+                    "meta",
+                    JSONObject()
+                        .put("username", "")
+                        .put("phone_number", "")
+                        .put("email", "")
+                        .put("package_name", XunleiWebCredential.WEB_PACKAGE_NAME)
+                        .put("client_version", XunleiWebCredential.WEB_CLIENT_VERSION)
+                        .put("captcha_sign", sign)
+                        .put("timestamp", ts.toString())
+                        .put("user_id", currentUserId)
+                )
+                .toString()
+            val request = Request.Builder()
+                .url(XunleiConstants.CAPTCHA_INIT_URL)
+                .header("Accept", "*/*")
+                .header("Content-Type", "text/plain;charset=UTF-8")
+                .header("Origin", "https://pan.xunlei.com")
+                .header("Referer", "https://pan.xunlei.com/")
+                .header("User-Agent", XunleiConstants.WEB_UA)
+                .post(body.toRequestBody(jsonMediaType))
+                .build()
+            runCatching {
+                client.newCall(request).execute().use { resp ->
+                    val text = resp.body?.string().orEmpty()
+                    val json = runCatching { JSONObject(text) }.getOrNull()
+                    if (json == null) return@use WebCaptchaInit.Failed
+                    val token = json.optString("captcha_token")
+                    if (resp.isSuccessful && token.isNotBlank()) {
+                        // 与网页一致：提前 30s 视为过期，避免踩在边界上刚好失效
+                        val ttl = json.optLong("expires_in", 300L).coerceAtLeast(1L)
+                        val expiresAt = System.currentTimeMillis() + ttl * 1000L - 30_000L
+                        WebCaptchaInit.Ok(PanCaptcha(token, expiresAt))
+                    } else {
+                        DiagnosticLog.warn(
+                            DiagnosticLog.NETWORK,
+                            "xunlei_web_captcha_init_failed",
+                            "status=${resp.code} err=${json.optString("error")} " +
+                                "desc=${json.optString("error_description")} " +
+                                "details=${json.optString("error_details")}"
+                        )
+                        val detail = json.toString()
+                        if (detail.contains("client_id not match")) {
+                            WebCaptchaInit.ClientIdMismatch
+                        } else {
+                            WebCaptchaInit.Failed
+                        }
+                    }
+                }
+            }.getOrElse { WebCaptchaInit.Failed }
         }
 
     /** captcha_sign：client_id+client_version+package_name+device_id+timestamp_ms → 10 层 md5(raw+salt)，前缀 "1." */
