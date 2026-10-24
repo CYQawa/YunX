@@ -50,7 +50,7 @@ import java.io.IOException
  * 2. `ttwid` 用进程内缓存（见 [ensureTtwid]）；缓存那枚被风控标记时由 [fetchWorkData] 自动重注册
  *    重试一次（**不需要用户重启 App**）。
  *
- * ⚠️ **重要现状（2026-10 实测：本机 curl 直连 + 无头浏览器双核对）**：分享页这条路已经走不通 ——
+ * ⚠️ **重要现状（2026-10 上旬实测：本机 curl 直连 + 无头浏览器双核对）**：分享页这条路曾经走不通 ——
  *    - `iesdouyin.com/share/{video|note}/{id}/` 会 **302 到 `www.douyin.com/{video|note}/{id}`**；
  *      纯 HTTP 拿到的是一张 **`byted_acrawler` JS 挑战页**（约 72KB，内容是
  *      `window.byted_acrawler.init({aid:99999999})` + 用 `__ac_nonce` 算出 `__ac_signature` 写回
@@ -68,9 +68,11 @@ import java.io.IOException
  *      `msToken` 与 `x-secsdk-web-signature` + `timestamp`。
  *    - 光带 `ttwid` 解锁不了（实测 ttwid 注册接口当前返回 `{"status_code":1001,"parse params fail"}`）。
  *
- *    结论：要让抖音恢复可用，**得让 JS 跑起来**（用 WebView 打开分享页/详情页，等 acrawler 挑战过完
- *    与页面直出后，从页面里取直链；或者让 WebView 只负责把 `__ac_signature` 等 Cookie 算出来，再交回
- *    OkHttp 走 HTTP）。在本文件里改字段名是没用的。
+ *    结论：**这条路在部分网络环境可用、部分环境被 acrawler 挡住（分 IP 风控）**。2026-10-24
+ *    复测（国内家宽直连）：ttwid 注册正常返回、分享页 200 且 `_ROUTER_DATA` 带完整作品数据、
+ *    play 端点正常 302 到 CDN —— 整条 HTTP 链路可用。因此当前实现把 **HTTP 作为主路线**（快、
+ *    自带换 ttwid 自愈），[fetchViaWebView] 作为被风控网络下的兜底；在此环境下改字段名依然没用，
+ *    但也不必再假设 HTTP 必然失败。
  */
 object DouyinParser : VideoParser {
 
@@ -106,13 +108,19 @@ object DouyinParser : VideoParser {
     private data class ResolvedMedia(val url: String, val size: Long, val headers: Map<String, String>)
 
     override suspend fun parse(link: DetectedVideoLink, cookie: String): VideoParseResult {
-        // ★ 主路线：隐藏 WebView 真跑一遍页面。纯 HTTP 拿不到数据 —— 先要过 byted_acrawler 挑战，
-        //   而真页面里数据又只渲染在 DOM 里（见类注释的「重要现状」）。
-        fetchViaWebView(link)?.let { return buildFromWebView(link, it) }
-
-        // 回退：老的 HTTP + SSR 路线。2026-10 起基本必然拿不到数据，保留只为抖音万一回退回去。
+        // ★ 主路线：HTTP + SSR（2026-10-24 复测）。类注释里「HTTP 必然走不通」的结论是 2026-10 上旬
+        //   在被风控的出口 IP 上得出的；换网络环境复测：ttwid 注册正常（非 1001）、分享页 200 且
+        //   _ROUTER_DATA 带完整作品数据、play 端点正常 302 到 CDN —— 整条 HTTP 链路是通的，且
+        //   分地区/分 IP 存在差异。HTTP 路线快（秒级），且 [fetchWorkData] 自带「换新 ttwid 重试」
+        //   的自愈，所以放主路线；WebView 慢（实测 25s+）且有前台 Activity / 超时等前置条件，作兜底。
         val shareUrl = buildShareUrl(link)
-        val data = fetchWorkData(link, shareUrl, cookie)
+        val data = try {
+            fetchWorkData(link, shareUrl, cookie)
+        } catch (e: VideoParseException) {
+            // HTTP 两条尝试（含换 ttwid）都被风控挡住时，才花 25s+ 走隐藏 WebView
+            fetchViaWebView(link)?.let { return buildFromWebView(link, it) }
+            throw e
+        }
         val mediaHeaders = buildMediaHeaders(shareUrl)
 
         val title = data.optStringAny("desc")
