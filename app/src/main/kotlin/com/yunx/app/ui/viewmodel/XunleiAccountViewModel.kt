@@ -59,6 +59,14 @@ class XunleiAccountViewModel(
     var loginError by androidx.compose.runtime.mutableStateOf<String?>(null)
         private set
 
+    /**
+     * 本次登录是否真的写入了账号（登录页据此自动关闭）。
+     * ★ 不能用「账号非空」代替：「添加账号」时主账号本来就在库里，登录页一渲染就会被判成
+     *   「已登录」并立刻关闭，表现为页面闪一下就没了（详见 [XunleiLoginScreen] 的说明）。
+     */
+    var loginSucceeded by androidx.compose.runtime.mutableStateOf(false)
+        private set
+
     /** 短信验证码是否已发送（进入短信界面不会自动发送；区分「发送验证码」/「重新发送验证码」） */
     var smsSent by androidx.compose.runtime.mutableStateOf(false)
         private set
@@ -141,7 +149,12 @@ class XunleiAccountViewModel(
                     }
                 } else if (step.sessionKey.isNotBlank() && step.sessionId.isNotBlank()) {
                     val ok = repository.finishLogin(step, username.trim(), newAccount = addNewAccount)
-                    if (ok) addNewAccount = false else loginError = "登录失败，无法换取凭证"
+                    if (ok) {
+                        addNewAccount = false
+                        loginSucceeded = true
+                    } else {
+                        loginError = "登录失败，无法换取凭证"
+                    }
                 } else {
                     loginError = step.message.ifBlank { "登录失败，请检查账号密码" }
                 }
@@ -201,7 +214,12 @@ class XunleiAccountViewModel(
                 loginError = "登录失败，请检查网络后重试"
                 return@launch
             }
-            if (ok) addNewAccount = false else loginError = "验证码校验失败"
+            if (ok) {
+                addNewAccount = false
+                loginSucceeded = true
+            } else {
+                loginError = "验证码校验失败"
+            }
         }
     }
 
@@ -211,7 +229,10 @@ class XunleiAccountViewModel(
      */
     suspend fun saveWebCredential(raw: String): Boolean {
         val saved = repository.saveWebCredential(raw, newAccount = addNewAccount)
-        if (saved) addNewAccount = false
+        if (saved) {
+            addNewAccount = false
+            loginSucceeded = true
+        }
         return saved
     }
 
@@ -220,6 +241,9 @@ class XunleiAccountViewModel(
         loginStep = null
         smsSent = false
         loginError = null
+        // 成功标记也是一次性的：登录页每次进入都会调它，否则上一次的成功标记
+        // 会让这次一进页面就自动关闭
+        loginSucceeded = false
     }
 
     class Factory(
