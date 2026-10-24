@@ -53,7 +53,7 @@ app/src/main/kotlin/com/yunx/app/
 │   │   └── {平台}{Account,Resolve}Repository.kt
 │   ├── db/                      # Room：Entity + Dao + AppDatabase
 │   │   ├── AppDatabase.kt       # ★ 版本号与 Migration 集中管理
-│   │   ├── SecureAccountDaos.kt # ★ 凭证 Dao 加密装饰器
+│   │   ├── SecureAccountDaos.kt # ★ 凭证 Dao 装饰器（明文直存，读到旧密文即回写，见 §3.36）
 │   │   └── {平台}Account{Entity,Dao}.kt / DownloadTask* / Bookmark*
 │   ├── download/                # 下载引擎（本项目最复杂的模块，见 §5）
 │   │   ├── DownloadManager.kt   # ★ 任务调度 / 分片规划 / 断点续传
@@ -62,7 +62,7 @@ app/src/main/kotlin/com/yunx/app/
 │   │   ├── HttpRangePolicy.kt / DownloadPathPolicy.kt
 │   │   ├── DownloadSaver.kt / DownloadService.kt（前台服务）
 │   │   └── DownloadPlatform.kt  # ★ 平台标识字符串常量
-│   ├── security/CredentialCipher.kt    # ★ Android Keystore 凭证加解密
+│   ├── security/CredentialCipher.kt    # ★ 凭证读写入口：明文直存 + 旧密文只读解密（见 §3.36）
 │   ├── announcement/            # ★ 应用内公告（远程列表 + 本地已读记录，见 §3.35）
 │   │   ├── AnnouncementApi.kt   # 公开接口客户端（列表 / 详情；列表接口有副作用，勿轮询）
 │   │   ├── AnnouncementReadStore.kt  # 已读口径的唯一真源（服务端没有已读接口）
@@ -161,10 +161,11 @@ speedLimitProvider  = { settings.downloadSpeedLimit }
 
 新增可调参数时**沿用这个模式**，不要在构造时取快照值。
 
-### 3.6 凭证安全：Cookie / JWT 必须加密落库
+### 3.6 凭证存储：明文落库（2026-10 起不再加密）
 
 - 账号 Dao 一律经 `SecureAccountDaos.xxx(rawDao, cipher)` 装饰后使用，**不要直接用 `rawXxxAccountDao()`**。
-- 下载任务的请求头（含 Cookie）经 `CredentialCipher.encrypt(json, "download.requestHeaders")` 加密。
+- 凭证**明文落库**：`CredentialCipher.encrypt` 直通返回原文，不再做任何加密（原因见 §3.36）。
+- 下载任务的请求头（含 Cookie）同样明文落库，读取时经 `CredentialCipher.decrypt(json, "download.requestHeaders")` 兼容旧版本密文。
 - 打日志涉及 URL / Cookie / token 时必须过 `LogRedactor`：`LogRedactor.url(url)`。
 
 ### 3.7 Room 迁移：必须写 Migration，禁止破坏性迁移
@@ -699,7 +700,7 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 | `app/src/main/kotlin/com/yunx/app/data/network/Pan115Crypto.kt` | 电脑端取链协议的 RSA+XOR 编解码（§3.25 规则 5，改这里前先与参考实现核对） |
 | `app/src/main/kotlin/com/yunx/app/data/repository/Pan115ResolveRepository.kt` | 分享解析：snap 列目录（分页）+ downurl 取链 + **转存后回查新 fid** |
 | `app/src/main/kotlin/com/yunx/app/data/repository/Pan115AccountRepository.kt` | Cookie 落库（`/user/info` 校验并取脱敏手机号当昵称）、退出清 CookieManager/WebStorage |
-| `app/src/main/kotlin/com/yunx/app/data/db/Pan115AccountEntity.kt` / `Pan115AccountDao.kt` | `pan115_account` 表（单行 id=`pan115`，Cookie 加密存，见 `SecureAccountDaos.pan115`） |
+| `app/src/main/kotlin/com/yunx/app/data/db/Pan115AccountEntity.kt` / `Pan115AccountDao.kt` | `pan115_account` 表（单行 id=`pan115`，Cookie 明文存，见 `SecureAccountDaos.pan115`） |
 | `app/src/main/kotlin/com/yunx/app/ui/viewmodel/Pan115CloudViewModel.kt` / `Pan115AccountViewModel.kt` | 个人盘浏览（分页/递归收集/下载/重命名/移动/删除/分享）与账号态 |
 | `app/src/main/kotlin/com/yunx/app/ui/login/Pan115LoginScreen.kt` | WebView 登录 `https://115.com/`，自动检测 Cookie（要求 UID + SEID）或手动粘贴 |
 | `app/src/main/kotlin/com/yunx/app/ui/screens/Pan115CloudScreen.kt` / `Pan115AccountSheet.kt` / `Pan115SaveSheet.kt` | 云盘页（`expireOptions = ShareExpire.PAN115_OPTIONS`、`PasscodeMode.SERVER_GENERATED`）、账号弹窗、转存目录选择 |
@@ -1394,90 +1395,52 @@ desugaring），统一走 `AnnouncementTime.kt` 的 `SimpleDateFormat`；`'Z'` �
 
 ---
 
-### 3.36 凭证密钥失效（改锁屏密码必读）
+### 3.36 凭证不再加密（2026-10 起明文落库，改这块前必读）
 
-**症状（1.2.8 线上三份崩溃报告，同一根因三种形态）**：用户在**设置里改了锁屏密码/指纹**、
-或系统/厂商 keystore 升级后，App 冷启动即崩，栈顶落在
-`AndroidKeystoreCredentialCipher` 的 `cipher.init` 上：
+**现状**：账号 Cookie/JWT、GitHub Token、下载任务请求头**一律明文落库**，不再有任何字段级加密。
+`CredentialCipher` 只有一个实现 `PlaintextCredentialCipher`：`encrypt` 原样返回、
+`isEncrypted` 判历史前缀 `yunx:v1:`、`decrypt` 只对历史密文走一次**只读**解密。
+
+**为什么去掉加密**：Android Keystore 的字段级加密带来过真实事故 —— 用户在**设置里改锁屏密码/指纹**、
+或系统/厂商 keystore 升级后，keyblob 会随设备凭证变化而**永久解不开**，App 冷启动即崩，
+栈顶落在 `cipher.init`：
 
 ```
 java.security.InvalidKeyException: Keystore operation failed
 Caused by: android.security.KeyStoreException: Key not found
-Caused by: android.security.KeyStoreException: Invalid key blob（internal code -33，
-            upgrade_keyblob_if_required_with）
 android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently invalidated
 ```
 
-**机制**：密钥建在 `AndroidKeyStore`（别名 `yunx.account.credentials.v1`，AES-GCM，**没有**也不该有
-`setUserAuthenticationRequired(true)`）。但 keyblob 在部分 ROM/系统版本上会随设备凭证变化而
-**永久解不开**——查无此键、blob 无法升级、或被系统直接作废。三种报错都是同一件事：
-**只有这一把密钥能解的密文，全废了**（六个平台账号 + GitHub Token + 下载任务请求头）。
+更严重的是 2026-10 的「划掉后台后账号全丢」事故：一次 Keystore 一过性抖动被过宽的「条目损坏」白名单误判
+→ `deleteEntry` 删掉好密钥 → 建新密钥 → 磁盘上所有旧密文 `AEADBadTagException` → 数据层静默清库
+（六家网盘账号 + GitHub Token + 下载头当场全废）。**收益（防本地取证）与代价（用户凭证可能整体不可恢复）
+不成比例**，因此彻底下线加密体系。
 
-**修复前为什么是「崩」而不是「重新登录」**：两处叠加。
+**必须遵守的口径**：
 
-1. `SecureAccountDaos` 里每处都是 `stored?.let { decryptXxx(...) }`，而 `decryptXxx` 是 **suspend
-   函数** —— **接收者表达式先于 `withContext` 求值**，所以 `key()` 抛的 Keystore 异常
-   **根本没进** `withContext` 里的 `try`，直接从 `getAccount()` 冒到调用方协程（主线程）。
-2. 例外异常类型是 `Error` 系（如 `ProviderException`）或 `KeyStoreException` 时，
-   `catch (error: Exception)` 的旧写法也接不住。
+- **写入直通**：`PlaintextCredentialCipher.encrypt` 返回原文；DAO / Token / 请求头三处都一样，别再引入任何加密。
+- **旧密文只读解密、不重建**：`decrypt` 只在 `isEncrypted(stored)` 为真（`yunx:v1:` 前缀）时用**旧 Keystore 密钥**
+  （别名 `yunx.account.credentials.v1`，AES-GCM）解一次；这条路径**绝不 `generateKey()`、绝不 `deleteEntry()`**。
+  密钥不存在时抛异常，由调用方按「本条读不出来」处理。
+- **读到旧密文即明文回写**：`SecureAccountDaos` / `DownloadManager` / `GitHubTokenStore` 在解密成功后
+  用 `if (cipher.isEncrypted(stored))` 判断并**明文覆盖原行**，之后不再走解密路径，老用户无需重新登录。
+  ★ 注意条件**与旧版相反**：旧版是「没加密就写回」，现在是「**是密文才写回**」，别改回去。
+- **任何解密失败都只返回 null / 空表，绝不删数据**：账号走 `SecureAccountDaos` 的解密兜底，
+  `observeAccount()` / `observeAccounts()` **逐条**兜异常、**不让异常进 `Flow.catch`**（`catch` 会终止长驻订阅，
+  界面会整个会话停在「未登录/空列表」）；GitHub Token `hasToken` = 「已配置**且当前可读**」；
+  下载头走 `runCatching`「读不到就返回空表、保留原值」。`upsert` 覆盖同一主键，残留行不会堆积。
+- **`PlaintextCredentialCipher.shared` 全进程唯一**：DAO（`AppDatabase.get`）、`GitHubTokenStore`、
+  `DownloadManager` 三处共用，保证「读到旧密文 → 第一次就识破」的判断口径一致。
 
-**现在的口径（改这块之前先读）**：
+**已删除的东西（别再找）**：`CredentialStore`、`CredentialKeyException`、`AndroidKeystoreCredentialCipher`、
+`installRecovery` / `onKeyProvisioned` / `isKeyLost` / `markKeyLost` 等自愈与提示机制，
+以及 `MainScreen` 的「本机密钥失效」`AlertDialog` 全部移除（此前 `YunXApp.onCreate` 装配的恢复钩子也一并删掉）。
 
-- `CredentialKeyException` 分**两种**，上层必须区分（`CredentialStore.isKeyLost`）：
-  - `PermanentlyInvalid`：条目永久失效 ⇒ 密文再也解不开 ⇒ **只记提示让用户重登，不清任何数据**；
-  - `Unavailable`：Keystore **暂时**进不去（设备还锁着、进程刚起来时的抖动等）⇒
-    **只返回 null，绝不删数据**，下次读取能拿到键就自动恢复登录态。
-- `AndroidKeystoreCredentialCipher` 自愈：**只有条目确定坏了（铁证，见 `isBrokenEntry`）**
-  才删坏条目 → `generateKey()` 建新密钥 → **整段加解密流程重试一次**。重试必须在 `withRetry`
-  那一层包住整段，不能只重试 `key()`——部分机型把「初始化失败」推迟到 `doFinal` 才报。
-- **删键要过三道闸**（`discardBrokenEntry`，2026-10 事故后加的）：
-  ① 连 `KeyStore.load` 都进不去 ⇒ 抛 `Unavailable`，不删；
-  ② 删之前**再取一次** ⇒ 能取到就说明上次只是一过性抖动，原样保留、不删；
-  ③ 只有「条目确实不在（`getKey` 返回 null）」或「再取一次仍然明确报坏」才删。
-  删与建都在 `key()` 的锁内，避免多线程各自「删 + 建」把密钥来回换。
-- `isBrokenEntry` 只认**两个铁证**：`KeyPermanentlyInvalidatedException`，以及消息为
-  `Key not found` / `Invalid key blob` 的 `KeyStoreException`。**绝不能**把 `ProviderException`、
-  泛化的 `GeneralSecurityException`、「消息里带 keystore 字样」算进来——那些多半只是
-  **一过性抖动**，而误判的代价不可逆（删掉好密钥 ⇒ 磁盘上全部历史密文永久解不开 ⇒ 账号全丢）。
-  判断顺序陷阱仍在：`AEADBadTagException` 是 `GeneralSecurityException` 的子类，必须先排除。
-- `AndroidKeystoreCredentialCipher.shared` 是**全进程唯一实例**：DAO（`AppDatabase.get`）、
-  `GitHubTokenStore`、`DownloadManager` 三处必须共用。分开 new 会让 `cachedKey` 各缓存一份、
-  `onKeyProvisioned` 只被最后一个注册者收到。
-- `onKeyProvisioned` 只在**真的 `generateKey()`** 时回调（不是「失败过」）。接到后由
-  `CredentialStore.onKeyCreated` 判断这次新建是不是坏消息：用 `credential_key_provisioned`
-  标记区分「首次生成」（正常，不提示）与「密钥被替换」（旧密文作废，提示重登）。
-- `key()` 内部对**一过性失败原样重试一次**（`loadKeyWithRepair`）：keystore 冷启动/服务忙这类抖动
-  通常下一次 binder 调用就正常，不重试的话用户会看到「偶发地所有账号显示未登录 / 保存登录报错」，
-  数据虽没丢、观感与真丢一样。重试成功当无事发生，仍失败才按 `Unavailable` 上报。
-- 提示链路：数据层只写一个 SharedPreferences 标记（`CredentialStore.installRecovery` 在
-  `YunXApp.onCreate` 装配，必须早于任何凭证读写），`MainScreen` 弹一次 `AlertDialog`。
-  标记用 `commit()` 而不是 `apply()` —— 同一线程内先写后读，异步落盘的旧值会让提示不弹。
-
-**自愈路径（一律「只失效、不删数据」）**：账号走 `SecureAccountDaos.decryptOrNull`——
-**任何解密失败都只返回 null，绝不删凭证**（老实现在这里清库，于是「一次 Keystore 抖动 + 过宽判定」
-就清空了用户全部账号，见下），而 `upsert` 会覆盖同一个主键，所以残留行既不会堆积、也不会挡住
-重新登录。`observeAccount()` / `observeAccounts()` 都是**逐条**走 `decryptOrNull`，**不能让异常进入
-`Flow.catch`**：`catch` 会终止这条流，而 MainScreen 的 `stateIn` 是长驻订阅 —— 那会让界面
-**整个会话**停在「未登录 / 空列表」。GitHub Token 同样**只失效不删**：`getToken` 读不出来只返回 null，
-`hasToken` 改成「已配置**且当前可读**」（否则界面显示已配置、请求却在静默走匿名限额），
-`setToken` 加密失败返回 false 并**保留原值**，由界面提示「没能保存」。下载请求头走
-`DownloadManager.loadPersistedHeaders` 的 `runCatching`
-（**读不到就返回空表、保留原值**，不再覆盖成空表）。
-**故意不在失钥回调里无差别清空账号表**——判断稍有偏差就不可恢复。
-
-**2026-10 事故（「划掉后台后账号全丢」，改这块前必读）**：链路是「Keystore 一过性失败 →
-被过宽白名单误判成条目损坏 → `deleteEntry` 删掉好密钥 → 建新密钥 → 磁盘上所有密文
-`AEADBadTagException` → 数据层静默清库」。**六道修复**：① 判定收紧（只认铁证）；
-② 删前复查条目确实读不出来；③ `withRetry` 不再自行删键（删键只允许在 `key()` 锁内做）；
-④ 数据层任何解密失败都不再删凭证；⑤ 一过性失败原样重试一次（别把小抖动变成「未登录」）；
-⑥ 观测流逐条兜住、不让 `Flow.catch` 终止长驻订阅。判断不准时一律当作「暂时不可用」——
-本次读不出来，数据照旧留在盘上，下次读取（或重新登录覆盖同一主键）就能恢复。
-
-**落点**：`data/security/CredentialCipher.kt`、`data/db/SecureAccountDaos.kt`、
-`data/db/AppDatabase.kt`、`data/network/GitHubTokenStore.kt`、`data/download/DownloadManager.kt`、
-`ui/MainScreen.kt`、`YunXApp.kt`；回归测试 `app/src/test/kotlin/com/yunx/app/data/db/SecureAccountDaosTest.kt`
-（CI 跑 `./gradlew testDebugUnitTest`，四个用例钉住「不崩 / 永久失效保数据 / 密文损坏保数据 /
-暂时不可用保数据」）。
+**落点**：`data/security/CredentialCipher.kt`、`data/db/SecureAccountDaos.kt`、`data/db/AppDatabase.kt`、
+`data/network/GitHubTokenStore.kt`、`data/download/DownloadManager.kt`、`ui/MainScreen.kt`、`YunXApp.kt`；
+回归测试 `app/src/test/kotlin/com/yunx/app/data/db/SecureAccountDaosTest.kt`
+（CI 跑 `./gradlew testDebugUnitTest`，六个用例钉住「明文读写直通 / 明文读取不回写 / 旧密文解密并明文回写 /
+密文损坏保数据 / 观测流吞掉解密失败 / 密钥不可用时保数据」）。
 
 ---
 
@@ -1695,7 +1658,7 @@ org.json/Uri 空壳条目）、`DownloadPlatform.MAGNET`、`DownloadManager`（`
 重试、合并开始/10% 采样/完成、引擎任务创建/排队/失败/完成）；network = `HttpClients` 两个客户端上的
 `DiagnosticNetworkInterceptor`；webview = `DiagnosticWebViewClient` + 8 个登录页的
 `onPageStarted/onPageFinished/onReceivedError/onReceivedHttpError` + `WebViewJs.evaluateJsEncoded`；
-crypto = `AndroidKeystoreCredentialCipher.encrypt/decrypt`（**只记用途与长度，绝不记明文/密文**）；
+crypto = `PlaintextCredentialCipher.decrypt` 的旧密文解密路径（**只记用途与长度，绝不记明文/密文**）；
 operation = 入队/暂停/删除等用户关键操作。
 
 **⑥ 请求体/响应体的记录条件是刻意收窄的（用户要求）**：只有**非 200/206**（`peekBody` 不消费原流）
@@ -1751,7 +1714,7 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
   （`XhsParser.fetchPage` 就是范例）。
 - **账号**：`video_account` **单表 + platform 列**（DB v21）。与网盘「一平台一表」不同，视频平台凭证都是
   一个完整 Cookie、结构一致，单表的直接好处是**以后新增视频平台不需要再写 Room 迁移**。
-  Cookie 同样经 `SecureAccountDaos.videoAccount` 字段级加密；`isPrimary`/`remark`/`resolveAccountSlot`
+  Cookie 同样经 `SecureAccountDaos.videoAccount` 装饰后**明文落库**（兼容旧密文读取，见 §3.36）；`isPrimary`/`remark`/`resolveAccountSlot`
   复用网盘多账号那套（重复登录不会堆出失效账号）。登录走通用的 `VideoLoginScreen`（复用
   `rememberWebLoginAutoDetect` 与 WebView 诊断客户端），保存前用 `VideoParser.validateCookie` 校验。
   **登录页的 WebView 一律用桌面 UA**（`VideoHttp.UA_CHROME`）——Android WebView 默认 UA 是带 `wv` 的移动 UA，
@@ -1797,7 +1760,7 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
   免登录的在前、需要登录的三个聚在最后），**不要靠 `all` 的手写顺序**，新增平台才不会再散开。
 - **下载**：只加了**一个** `DownloadPlatform.VIDEO` 常量（不给 7 个平台各加），它们共用通用线程设置。
   m3u8 **不需要额外参数**：`DownloadManager` 按 URL 是否含 `.m3u8` 自动走 HLS 路径。媒体的 `headers`
-  （Referer/UA/Cookie）随任务加密落库，与网盘任务同一机制。
+  （Referer/UA/Cookie）随任务**明文落库**，与网盘任务同一机制。
 - **直链一律归一化成 https**（`VideoParseRepository.withSecureMediaUrls` → `VideoHttp.secureUrl`）。
   ★ 这不是洁癖：小红书 SSR 里的图片直链是**明文 http**（`http://sns-webpic-qc.xhscdn.com/...`），
   而 `network_security_config.xml` 的 `base-config` 全局禁止明文，OkHttp 会直接抛
@@ -1906,7 +1869,7 @@ Kotlin 2.1.0 兼容；别随手升到需要更高 Kotlin 的版本）、`coil 3.
    不值得引入这条更长的链路，直接用 `fnval=1` 的单文件低清）；
 2. `ResolveViewModel.downloadVideoMedia` 把 `mergeAudioUrl`/`mergeAudioHeaders` 传给 `DownloadManager.enqueue`；
 3. 落库多两列（`mergeAudioUrl` / `mergeAudioHeadersJson`，**DB v22**，默认空 = 单文件，升级零影响），
-   音轨头与主请求头同样加密（purpose `download.mergeAudioHeaders`）；
+   音轨头与主请求头同样**明文落库**（purpose `download.mergeAudioHeaders`）；
 4. `runTask` 里有一条与 HLS 并列的分支：`dashMergeDownload` → 两条轨道各自流式下载到 cache 临时目录 →
    `DashMuxer.mux` → 保存 → 清理。**带合轨的任务强制走内置下载器**（`shouldUseEngine(needMerge=true)`），
    引擎没有合轨能力；
@@ -2032,9 +1995,9 @@ reCAPTCHA 的 `_GRECAPTCHA` Cookie 也在、**没有任何 Cookie 被拦** —�
      `impcheck` 查不到这类错（符号确实存在、只是访问不到，报的是 `Cannot access ...`）。
      已知两类：① `private companion object` 里放 public 成员（companion 的可见性会连带锁住
      自己的成员，别处 `Foo.shared` 就编译不过）；② 文件 B 里写 `private fun Foo.bar()` 却被
-     文件 A 调用。已用它验证过：把 `AndroidKeystoreCredentialCipher` 的 companion 改回
-     `private`，它会报出与 CI 完全相同的三处调用点（`AppDatabase.kt:91`、
-     `DownloadManager.kt:251`、`GitHubTokenStore.kt:40`）。
+     文件 A 调用。已用它验证过：把 `PlaintextCredentialCipher` 的 companion 改回
+     `private`，它会报出与 CI 完全相同的三处调用点（`AppDatabase.kt:152`、
+     `DownloadManager.kt:314`、`GitHubTokenStore.kt:44`）。
 1. **import 是否齐全**：新用到的 Composable、动画 API、图标、协程 API 都有对应 import。
 2. **实验性 API 注解**：见下方「常见编译坑」表。
 3. **符号一致性**：改了函数签名后，`grep` 一遍旧签名/旧调用点，确认无残留。
@@ -2051,7 +2014,7 @@ reCAPTCHA 的 `_GRECAPTCHA` Cookie 也在、**没有任何 Cookie 被拦** —�
 | `combinedClickable` | 需 `@OptIn(ExperimentalFoundationApi::class)` |
 | `Unresolved reference 'pointerInput'` + 同 lambda 里 `detectTransformGestures` / `size` / `detectTapGestures` 全报 `Cannot infer type for this parameter` | **一个 import 缺失、级联一片**，别一个个改它们。`pointerInput` 在 `androidx.compose.ui.input.pointer`，而手势检测器（`detectTapGestures` / `detectTransformGestures` / `detectDragGestures`）在 `androidx.compose.foundation.gestures` —— 两个包容易记混。pointerInput 解析不出来 ⇒ lambda 收不到 `PointerInputScope` 接收者 ⇒ 里面的成员/扩展全跟着报错。已踩过一次（全屏看图的双指缩放）。用 `impcheck.py` 先定位真正缺的那一个 |
 | 图标找不到 | 已引入 `material-icons-extended`，确认图标名与 `Outlined`/`Filled` 命名空间 |
-| `Cannot access 'companion object Companion: it is private in 'Foo'` | **companion 的可见性会连带限制它自己的成员**：`private companion object { val shared ... }` 里那个 `shared` 在别处一律访问不到（哪怕它自己没写 private）。要么把 companion 前的 `private` 去掉，要么把该成员挪出 companion。本项目 `AndroidKeystoreCredentialCipher.shared` 踩过；交付前用 `vischeck.py` 查 |
+| `Cannot access 'companion object Companion: it is private in 'Foo'` | **companion 的可见性会连带限制它自己的成员**：`private companion object { val shared ... }` 里那个 `shared` 在别处一律访问不到（哪怕它自己没写 private）。要么把 companion 前的 `private` 去掉，要么把该成员挪出 companion。本项目 `PlaintextCredentialCipher.shared` 踩过；交付前用 `vischeck.py` 查 |
 | `rememberSaveable` 报 `Unresolved reference` | 包名是 `androidx.compose.runtime.saveable.rememberSaveable`（**不是** `runtime.rememberSaveable`）；写错会级联出一片 `Unresolved reference 'it'` / `@Composable invocations can only happen…`，别被后面的报错带偏 |
 | `animateColorAsState` 报 `Unresolved reference` | 包是 `androidx.compose.animation.animateColorAsState`（**不是** `androidx.compose.animation.core`）。判断依据：`.animation` 放的是**进出场/内容切换**（`AnimatedVisibility`/`AnimatedContent`/`fadeIn`/`fadeOut`/`slideInVertically`/`togetherWith`/`animateColorAsState`），`.animation.core` 放的是**时间曲线与动画值**（`tween`/`spring`/`Animatable`/`animateFloatAsState`/`animateDpAsState`）。写错包会连带一片 `Cannot infer type for this parameter`（`by` 委托推不出类型） |
 | Room 编译报 schema 错 | 检查 `version` 是否 +1、Migration 是否注册 |
@@ -2230,7 +2193,7 @@ private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
 ### 6.1 动手前
 
 1. **先读同类文件**再写新代码（如加页面先读 `BookmarkScreen.kt` / `AboutScreen.kt`）。
-2. 涉及下载引擎、Room 迁移、凭证加密的改动，**先说明方案并等用户确认**再改。
+2. 涉及下载引擎、Room 迁移、凭证存储（`data/security` 或 `SecureAccountDaos`）的改动，**先说明方案并等用户确认**再改。
 3. 不引入新依赖、新架构（DI 框架、Navigation-Compose、其他网络库）——除非用户明确要求。若必须引入新依赖，请向用户告知，说明必要性，并取得同意
 
 ### 6.2 改动中

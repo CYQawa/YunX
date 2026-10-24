@@ -24,9 +24,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
 import com.yunx.app.data.security.CredentialCipher
-import com.yunx.app.data.security.CredentialStore
+import com.yunx.app.data.security.PlaintextCredentialCipher
 import com.yunx.app.util.DiagnosticLog
 
 @Database(
@@ -60,7 +59,7 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun bookmarkDao(): BookmarkDao
 
-    /** 视频解析账号：原始 DAO（未加密），对外请用 [videoAccountDao] */
+    /** 视频解析账号：原始 DAO（未解密包装），对外请用 [videoAccountDao] */
     abstract fun rawVideoAccountDao(): VideoAccountDao
 
     private lateinit var credentialCipher: CredentialCipher
@@ -76,7 +75,7 @@ abstract class AppDatabase : RoomDatabase() {
     fun ilanzouAccountDao(): ILanzouAccountDao = SecureAccountDaos.ilanzou(rawILanzouAccountDao(), credentialCipher)
     fun lanzouAccountDao(): LanzouAccountDao = SecureAccountDaos.lanzou(rawLanzouAccountDao(), credentialCipher)
 
-    /** 视频解析账号：Cookie 与网盘凭证同等加密后落库 */
+    /** 视频解析账号：与网盘凭证同一套读写口径（明文落库 + 旧密文兼容读取） */
     fun videoAccountDao(): VideoAccountDao = SecureAccountDaos.videoAccount(rawVideoAccountDao(), credentialCipher)
 
     companion object {
@@ -149,14 +148,8 @@ abstract class AppDatabase : RoomDatabase() {
                     })
                     .build()
                     .also { database ->
-                        database.credentialCipher = AndroidKeystoreCredentialCipher.shared
-                        // 密钥若是「新建」的，说明此前存下的密文必然由另一把（已失效的）密钥加密。
-                        // 这里只**记录**这件事（写一个 SharedPreferences 标记），不删任何数据：
-                        // 各存储路径自己按「解密失败 → 清掉这一条」自愈（DAO 的 decryptGuarded、
-                        // GitHubTokenStore.getToken、DownloadManager.loadPersistedHeaders），
-                        // 在这里无差别清空账号表风险太大——判断稍有偏差就会白白抹掉用户的登录态。
-                        // 主装配点在 YunXApp.onCreate（必须早于任何凭证读写），这里再兜一次。
-                        CredentialStore.installRecovery(context)
+                        // 凭证不再加密：写入直通，读取时兼容旧 Keystore 密文并明文回写
+                        database.credentialCipher = PlaintextCredentialCipher.shared
                         instance = database
                     }
             }

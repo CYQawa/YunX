@@ -19,44 +19,46 @@
 package com.yunx.app.data.network
 
 import android.content.Context
-import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
-import com.yunx.app.data.security.CredentialStore
+import android.util.Log
+import com.yunx.app.data.security.CredentialCipher
+import com.yunx.app.data.security.PlaintextCredentialCipher
 
 /**
- * GitHub Token 加密存储。
+ * GitHub Token 存储。
  *
- * 安全说明：
- * - Token 仅用于提升 GitHub API 限额（未认证 60 次/小时/IP，认证后 5000 次/小时）；
- * - **严禁明文存储**：统一经 Android Keystore AES-GCM 加密（不可导出密钥）后落盘；
- * - **严禁输出到日志**，**严禁在 UI 中回显完整 Token**（输入框用 PasswordVisualTransformation）。
+ * 说明：Token 仅用于提升 GitHub API 限额（未认证 60 次/小时/IP，认证后 5000 次/小时）。
+ * ★ 2026-10 起与账号凭证同口径，**不再加密**（Android Keystore 字段级加密带来的失效事故
+ *   远大于收益，见 [PlaintextCredentialCipher]）；读取时若发现旧版本密文则解密后明文回写。
+ * 仍然**严禁输出到日志**、**严禁在 UI 中回显完整 Token**（输入框用 PasswordVisualTransformation）。
  */
 object GitHubTokenStore {
 
+    private const val TAG = "YunX"
     private const val PREFS_NAME = "yunx_settings"
+
+    /** ★ 键名保留历史值（`..._encrypted`）：改名会让已配置的用户丢 Token，现在的值就是明文 */
     private const val KEY_TOKEN = "github_token_encrypted"
     private const val PURPOSE = "github_token"
 
-    /** ★ 必须与其他调用方共用同一个 cipher 实例（见 [AndroidKeystoreCredentialCipher.shared]） */
-    private val cipher = AndroidKeystoreCredentialCipher.shared
+    /** ★ 必须与其他调用方共用同一个 cipher 实例（见 [PlaintextCredentialCipher.shared]） */
+    private val cipher: CredentialCipher = PlaintextCredentialCipher.shared
 
     /**
-     * 读取并解密 Token；未配置或**这次读不出来**均返回 null。
+     * 读取 Token；未配置或读不出来均返回 null。
      *
-     * ★ 读不出来时**不删**存的那份密文（2026-10 起与账号凭证同口径，见 Agent.md §3.36）：
-     *   删了才是真的拿不回来，而留着还有机会 —— Keystore 的失败多数是一过性的（进程刚起来、
-     *   服务正忙、直接启动未解锁），下一次读取往往就好了。
-     *   只有「条目永久失效」才记一次提示（[CredentialStore.markKeyLost]），且**只提示、不删数据**。
-     *   代价是密文可能长期读不出来：界面靠 [hasToken] 如实显示「未配置」，用户重新粘贴一次即覆盖。
+     * ★ 读到旧版本密文时解密并**以明文回写**（只做一次），之后不再走解密路径。
+     * ★ 读不出来时**不删**已存的值：删了才是真的拿不回来，留着还有机会（比如密钥条目只是
+     *   暂时取不到）。界面靠 [hasToken] 如实显示「未配置」，用户重新粘贴一次即覆盖。
      */
     fun getToken(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val stored = prefs.getString(KEY_TOKEN, null) ?: return null
         return try {
-            cipher.decrypt(stored, PURPOSE).takeIf { it.isNotBlank() }
+            val plain = cipher.decrypt(stored, PURPOSE)
+            if (cipher.isEncrypted(stored)) prefs.edit().putString(KEY_TOKEN, plain).apply()
+            plain.takeIf { it.isNotBlank() }
         } catch (error: Throwable) {
-            if (CredentialStore.isKeyLost(error)) {
-                CredentialStore.markKeyLost(context.applicationContext)
-            }
+            Log.w(TAG, "GitHub Token 读取失败（数据原样保留）：${error.message}")
             null
         }
     }
@@ -64,8 +66,7 @@ object GitHubTokenStore {
     /**
      * 设置/更新 Token；传 null 或空串则**清除**（这是用户主动操作，删除是对的）。
      *
-     * @return 是否写入成功。加密失败（本机密钥暂时不可用）时返回 false，并**保留原来存的那份** ——
-     *   它可能还是好的，删掉等于把用户已配置的 Token 一起弄丢；由调用方如实提示「没能保存」。
+     * @return 是否写入成功；目前只有「传空串清除」和「正常写入」两种结果，均为 true。
      */
     fun setToken(context: Context, token: String?): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -74,24 +75,15 @@ object GitHubTokenStore {
             prefs.edit().remove(KEY_TOKEN).apply()
             return true
         }
-        return try {
-            val encrypted = cipher.encrypt(trimmed, PURPOSE)
-            prefs.edit().putString(KEY_TOKEN, encrypted).apply()
-            true
-        } catch (error: Throwable) {
-            if (CredentialStore.isKeyLost(error)) {
-                CredentialStore.markKeyLost(context.applicationContext)
-            }
-            false
-        }
+        prefs.edit().putString(KEY_TOKEN, trimmed).apply()
+        return true
     }
 
     /**
      * 是否「已配置**且当前能读出来**」。
      *
-     * ★ 刻意解密一次，而不是只判断键是否存在：密文读不出来时若仍报「已配置」，
-     *   界面会显示已登录 GitHub，实际每个请求都在静默走匿名限额（60 次/小时），用户完全看不出问题。
-     *   代价是一次 Keystore IPC（30~75ms），所以调用方要 remember 住、别每帧调（见 MainScreen）。
+     * ★ 仍是读一次而不是只看键是否存在：值读不出来时若报「已配置」，界面会显示已登录 GitHub，
+     *   实际每个请求都在静默走匿名限额（60 次/小时），用户完全看不出问题。
      */
     fun hasToken(context: Context): Boolean = getToken(context) != null
 }

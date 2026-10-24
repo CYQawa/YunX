@@ -26,8 +26,8 @@ import com.yunx.app.data.db.DownloadTaskDao
 import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.gopeed.GopeedEngine
 import com.yunx.app.data.prefs.SettingsRepository
-import com.yunx.app.data.security.AndroidKeystoreCredentialCipher
 import com.yunx.app.data.security.CredentialCipher
+import com.yunx.app.data.security.PlaintextCredentialCipher
 import com.yunx.app.data.network.HttpClients
 import okhttp3.Request
 import kotlinx.coroutines.CancellationException
@@ -308,10 +308,10 @@ class DownloadManager(
     private val showSpeedProvider: () -> Boolean = { true }
 ) {
     /**
-     * ★ 必须与其他调用方共用同一个 cipher 实例（见 [AndroidKeystoreCredentialCipher.shared]）：
-     *   实例各自缓存密钥、各自持有失钥监听，分开建会在「密钥刚被重建」时判断错位。
+     * ★ 必须与其他调用方共用同一个 cipher 实例（见 [PlaintextCredentialCipher.shared]）：
+     *   保证「读到旧密文 → 一次性迁移成明文」的判断口径一致。
      */
-    private val credentialCipher: CredentialCipher = AndroidKeystoreCredentialCipher.shared
+    private val credentialCipher: CredentialCipher = PlaintextCredentialCipher.shared
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** 下载引擎开关等设置（DownloadManager 是应用级单例，读一次足够） */
@@ -1311,8 +1311,8 @@ class DownloadManager(
     }
 
     /**
-     * 备选源（实验性 C2）落库：数组 JSON 整体按 `download.altSources` 加密 ——
-     * 里面是各账号的直链与 Cookie，敏感级别与请求头一致，必须加密（见 Agent.md §3.6）。
+     * 备选源（实验性 C2）落库：数组 JSON 整体按 `download.altSources` 处理 ——
+     * 里面是各账号的直链与 Cookie（凭证已不再加密，见 [PlaintextCredentialCipher]）。
      * 空列表存空串，与「从未开启该功能」完全同形。
      */
     private fun encodeAltSources(sources: List<DownloadSource>): String {
@@ -1369,7 +1369,8 @@ class DownloadManager(
             buildMap {
                 json.keys().forEach { name -> put(name, json.getString(name)) }
             }.also {
-                if (!credentialCipher.isEncrypted(stored)) {
+                // 旧版本密文：读到即用明文回写覆盖，之后不再走解密路径
+                if (credentialCipher.isEncrypted(stored)) {
                     dao.updateRequestHeaders(id, encodeHeaders(it))
                 }
             }

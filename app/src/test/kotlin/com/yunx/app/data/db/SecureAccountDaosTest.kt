@@ -19,7 +19,6 @@
 package com.yunx.app.data.db
 
 import com.yunx.app.data.security.CredentialCipher
-import com.yunx.app.data.security.CredentialKeyException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -28,22 +27,48 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * 凭证**不再加密**（2026-10）后，装饰器只负责两件事：写入直通、读到旧密文时解密并明文回写。
+ * 这组测试钉住这两条，以及「读取失败绝不删数据」这条从真实事故里换来的底线。
+ */
 class SecureAccountDaosTest {
+
     @Test
-    fun encryptsWritesAndMigratesLegacyPlaintextOnRead() = runBlocking {
-        val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "legacy-secret"))
+    fun writesPlaintextAndReadsItBackUnchanged() = runBlocking {
+        val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "cookie"))
         val secure = SecureAccountDaos.quark(raw, FakeCipher())
 
-        assertEquals("legacy-secret", secure.getAccount()?.cookie)
-        assertTrue(raw.value()?.cookie?.startsWith("sealed:") == true)
-        assertFalse(raw.value()?.cookie?.contains("legacy-secret") == true)
+        assertEquals("cookie", secure.getAccount()?.cookie)
 
         secure.upsert(QuarkAccountEntity(cookie = "new-secret"))
         assertEquals("new-secret", secure.getAccount()?.cookie)
-        assertFalse(raw.value()?.cookie?.contains("new-secret") == true)
+        // 落库的就是明文本身，不再有密文形态
+        assertEquals("new-secret", raw.value()?.cookie)
+    }
+
+    /** 读明文时不做任何回写（否则每次读取都会多一次 UPDATE） */
+    @Test
+    fun plaintextReadDoesNotRewriteRow() = runBlocking {
+        val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "cookie"))
+        val secure = SecureAccountDaos.quark(raw, FakeCipher())
+
+        assertEquals("cookie", secure.getAccount()?.cookie)
+        assertEquals("cookie", secure.getAccounts().single().cookie)
+        assertEquals(0, raw.upsertCount)
+    }
+
+    /** 旧版本密文：读取时解密返回，并**以明文回写覆盖**（只迁移一次，老用户无需重新登录） */
+    @Test
+    fun legacyCiphertextIsDecryptedAndRewrittenAsPlaintext() = runBlocking {
+        val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "sealed:cookie"))
+        val secure = SecureAccountDaos.quark(raw, FakeCipher())
+
+        assertEquals("cookie", secure.getAccount()?.cookie)
+        assertEquals("cookie", raw.value()?.cookie)
+        assertEquals(1, raw.upsertCount)
+        assertFalse(raw.value()?.cookie?.startsWith("sealed:") == true)
     }
 
     /**
@@ -53,45 +78,30 @@ class SecureAccountDaosTest {
      * 老实现会在这里清库，配合「密钥被误判损坏」就酿成了「划掉后台后账号全丢」（真实事故）。
      */
     @Test
-    fun permanentlyInvalidKeyReturnsNullAndKeepsRow() = runBlocking {
+    fun brokenCiphertextReturnsNullAndKeepsRow() = runBlocking {
         val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "sealed:cookie"))
-        val secure = SecureAccountDaos.quark(raw, ThrowingCipher(keyLost = true))
+        val secure = SecureAccountDaos.quark(raw, CorruptCipher())
 
         assertNull(secure.getAccount())
         // 只返回 null（界面表现即「未登录」），密文原样留在库里：用户重新登录会覆盖同一个主键
         assertEquals("sealed:cookie", raw.value()?.cookie)
     }
 
-    /**
-     * 密文解不开（换过密钥 / 跨版本残留，抛的是非密钥类异常）时同样**只返回 null、不删数据**：
-     * 老实现对这类失败走「静默清理」，一次抖动就能把整表账号清空且不可恢复。
-     */
+    /** 观测流同样不能被异常击穿（这条路径崩的是收集方协程，比 getAccount 更早触发） */
     @Test
-    fun brokenCiphertextReturnsNullAndKeepsRow() = runBlocking {
+    fun observeAccountSwallowsDecryptFailure() = runBlocking {
         val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "sealed:cookie"))
-        val secure = SecureAccountDaos.quark(raw, CorruptCipher())
+        val secure = SecureAccountDaos.quark(raw, ThrowingCipher())
 
-        assertNull(secure.getAccount())
+        assertNull(secure.observeAccount().first())
         assertEquals("sealed:cookie", raw.value()?.cookie)
     }
 
-    /** 观测流同样不能被异常击穿（这条路径崩的是收集方协程，比 getAccount 更早触发） */
-    @Test
-    fun observeAccountSwallowsKeyFailure() = runBlocking {
-        val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "sealed:cookie"))
-        val secure = SecureAccountDaos.quark(raw, ThrowingCipher(keyLost = true))
-
-        assertNull(secure.observeAccount().first())
-    }
-
-    /**
-     * Keystore **暂时**读不到（设备还锁着等）时只能返回 null，**不能删数据**：
-     * 删了等于把用户本来还能解开的账号白白作废。
-     */
+    /** Keystore 暂时读不到（设备还锁着等）时也只能返回 null，**不能删数据** */
     @Test
     fun unavailableKeyKeepsStoredCredential() = runBlocking {
         val raw = FakeQuarkDao(QuarkAccountEntity(cookie = "sealed:cookie"))
-        val secure = SecureAccountDaos.quark(raw, ThrowingCipher(keyLost = false))
+        val secure = SecureAccountDaos.quark(raw, ThrowingCipher())
 
         assertNull(secure.getAccount())
         assertEquals("sealed:cookie", raw.value()?.cookie)
@@ -99,11 +109,20 @@ class SecureAccountDaosTest {
 
     private class FakeQuarkDao(initial: QuarkAccountEntity?) : QuarkAccountDao {
         private val state = MutableStateFlow(initial)
+
+        /** 记录回写次数：用来断言「明文读取不产生多余的写」 */
+        var upsertCount = 0
+            private set
+
         fun value(): QuarkAccountEntity? = state.value
         override fun observeAccount(): Flow<QuarkAccountEntity?> = state
-        override suspend fun upsert(account: QuarkAccountEntity) { state.value = account }
+        override suspend fun upsert(account: QuarkAccountEntity) {
+            upsertCount++
+            state.value = account
+        }
+
         override suspend fun getAccount(): QuarkAccountEntity? = state.value
-        // 多账号（v20）新增的接口：本测试只关心单个账号的加解密，列表/主账号/删除按最小语义实现
+        // 多账号（v20）新增的接口：本测试只关心单个账号的读写，列表/主账号/删除按最小语义实现
         override fun observeAccounts(): Flow<List<QuarkAccountEntity>> =
             state.map { listOfNotNull(it) }
 
@@ -126,16 +145,14 @@ class SecureAccountDaosTest {
         override suspend fun clear() { state.value = null }
     }
 
+    /** 明文 cipher：写入直通，读取兼容 `sealed:` 前缀的历史密文（与 PlaintextCredentialCipher 同形态） */
     private class FakeCipher : CredentialCipher {
-        override fun encrypt(plaintext: String, purpose: String): String =
-            "sealed:${purpose.reversed()}:${plaintext.reversed()}"
+        override fun encrypt(plaintext: String, purpose: String): String = plaintext
 
         override fun decrypt(stored: String, purpose: String): String =
-            if (isEncrypted(stored)) stored.substringAfterLast(':').reversed() else stored
+            if (isEncrypted(stored)) stored.removePrefix("sealed:") else stored
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("sealed:")
-
-        override fun onKeyProvisioned(listener: () -> Unit) = Unit
     }
 
     /**
@@ -143,30 +160,21 @@ class SecureAccountDaosTest {
      * 用来钉住「这类失败也绝不能清库」。
      */
     private class CorruptCipher : CredentialCipher {
-        override fun encrypt(plaintext: String, purpose: String): String = "sealed:$plaintext"
+        override fun encrypt(plaintext: String, purpose: String): String = plaintext
 
         override fun decrypt(stored: String, purpose: String): String =
             throw IllegalStateException("GCM tag mismatch")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("sealed:")
-
-        override fun onKeyProvisioned(listener: () -> Unit) = Unit
     }
 
-    /** 模拟 Keystore 失效：加解密都抛 [CredentialKeyException]（这正是修复前会击穿主线程的形态） */
-    private class ThrowingCipher(private val keyLost: Boolean) : CredentialCipher {
-        override fun encrypt(plaintext: String, purpose: String): String = fail()
+    /** 模拟旧密钥彻底取不到（Keystore 条目没了 / 暂时进不去）：读取必失败，且**不得**删数据 */
+    private class ThrowingCipher : CredentialCipher {
+        override fun encrypt(plaintext: String, purpose: String): String = plaintext
 
-        override fun decrypt(stored: String, purpose: String): String = fail()
+        override fun decrypt(stored: String, purpose: String): String =
+            throw IllegalStateException("旧加密密钥已不存在，无法解密历史凭证")
 
-        override fun isEncrypted(stored: String): Boolean = true
-
-        override fun onKeyProvisioned(listener: () -> Unit) = Unit
-
-        private fun fail(): Nothing = if (keyLost) {
-            throw CredentialKeyException.PermanentlyInvalid("Key permanently invalidated")
-        } else {
-            throw CredentialKeyException.Unavailable("device locked")
-        }
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("sealed:")
     }
 }
