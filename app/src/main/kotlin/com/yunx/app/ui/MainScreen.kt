@@ -579,12 +579,9 @@ fun MainScreen(
         )
     )
     // 迅雷 access_token 过期（401 unauthenticated）自动刷新：refresh_token 换新并持久化（对齐官方 /v1/auth/token 抓包）
+    // 走单飞锁：refresh_token 是轮换制，并发刷新会互相作废（与取链前的 ensureFreshToken 共用一把锁）
     xunleiApi.refreshTokenProvider = { deviceId ->
-        val acc = xunleiRepository.getAccount()
-        if (acc == null || acc.refreshToken.isBlank()) null
-        else xunleiApi.refreshToken(acc.refreshToken, deviceId, acc.authType)?.also { (at, nrt) ->
-            xunleiRepository.updateTokens(at, nrt)
-        }
+        xunleiRepository.refreshTokensSingleFlight(deviceId = deviceId)
     }
     // 网页登录的 captcha：本地 9 盐签名现换（快、后台可用），签名被拒才回退网页会话
     xunleiApi.webCaptchaRefresher = { deviceId, action ->
@@ -687,13 +684,12 @@ fun MainScreen(
             accountProvider = { xunleiRepository.getAccount()?.accessToken },
             deviceIdProvider = { xunleiRepository.getAccount()?.deviceId },
             captchaProvider = { xunleiRepository.getAccount()?.captchaToken },
-            // token 过期（含导入恢复后旧 token 过期）自动用 refresh_token 刷新并持久化
+            // token 过期（含导入恢复后旧 token 过期）自动用 refresh_token 刷新并持久化；
+            // 走单飞锁（与 401 回调共用一把锁），锁内重读账号做双重检查避免并发刷新作废凭据
             refreshProvider = {
                 val acc = xunleiRepository.getAccount()
                 if (acc == null || acc.refreshToken.isBlank()) null
-                else xunleiApi.refreshToken(acc.refreshToken, acc.deviceId, acc.authType)?.also { (at, nrt) ->
-                    xunleiRepository.updateTokens(at, nrt)
-                }
+                else xunleiRepository.refreshTokensSingleFlight(staleAccessToken = acc.accessToken)
             },
             // 多账号下载：按 access_token 反查该账号自己的设备指纹与 captcha —— 迅雷的请求
             // 必须「token + 设备号 + captcha」三件套同属一个账号，否则会被拒（见 identityFor）

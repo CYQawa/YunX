@@ -47,6 +47,14 @@ class XunleiAccountRepository(
      */
     private val mutex = Mutex()
 
+    /**
+     * refresh_token 刷新的单飞锁：迅雷的 refresh_token 是轮换制（一次刷新后旧值立即作废），
+     * 而刷新入口有多个（MainScreen 的 401 回调、取链前的 ensureFreshToken），并发触发时
+     * 两个请求各带一份旧 refresh_token，后完成的那个会拿「已被轮换的凭据」互相作废，
+     * 表现为刚刷新完又掉线。所有刷新统一走 [refreshTokensSingleFlight] 串行化。
+     */
+    private val refreshMutex = Mutex()
+
     fun observeAccount(): Flow<XunleiAccountEntity?> = dao.observeAccount()
 
     suspend fun getAccount(): XunleiAccountEntity? = dao.getAccount()
@@ -145,6 +153,32 @@ class XunleiAccountRepository(
     suspend fun updateTokens(accessToken: String, refreshToken: String) {
         val acc = dao.getAccount() ?: return
         dao.upsert(acc.copy(accessToken = accessToken, refreshToken = refreshToken))
+    }
+
+    /**
+     * refresh_token 刷新的单飞入口：加锁串行 + 锁内重读账号做双重检查。
+     *
+     * - 锁保证同一时刻只有一个网络刷新在飞，避免并发刷新互相作废轮换的凭据；
+     * - 锁内重新读库：如果拿到的 access_token 已经和调用方观察到的不一样，说明别的
+     *   路径刚刷新过，直接返回新凭据，不再重复打刷新接口（旧 refresh_token 已作废）。
+     *
+     * @param deviceId 发请求用的设备号；传 null 时用账号自己的 deviceId
+     * @param staleAccessToken 调用方观察到的 access_token（用于双重检查）；null 表示无从判断，总是刷新
+     * @return 刷新后的 (access_token, refresh_token)；无账号/无 refresh_token/刷新失败返回 null
+     */
+    suspend fun refreshTokensSingleFlight(
+        deviceId: String? = null,
+        staleAccessToken: String? = null
+    ): Pair<String, String>? = refreshMutex.withLock {
+        val acc = dao.getAccount() ?: return null
+        if (acc.refreshToken.isBlank()) return null
+        // 双重检查：别的路径已经刷新过（token 已变化）就不重复刷新
+        if (staleAccessToken != null && acc.accessToken != staleAccessToken) {
+            return acc.accessToken to acc.refreshToken
+        }
+        api.refreshToken(acc.refreshToken, deviceId ?: acc.deviceId, acc.authType)?.also { (at, nrt) ->
+            updateTokens(at, nrt)
+        }
     }
 
     /**

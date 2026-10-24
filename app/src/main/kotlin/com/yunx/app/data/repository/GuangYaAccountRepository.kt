@@ -28,6 +28,8 @@ import com.yunx.app.data.network.GuangYaDevice
 import com.yunx.app.data.network.GuangYaSmsChallenge
 import com.yunx.app.data.network.GuangYaTokens
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 光鸭云盘账号仓库：账号密码登录 → access/refresh token + 设备标识落库（文档 §2）。
@@ -136,11 +138,21 @@ class GuangYaAccountRepository(
     }
 
     /** 取有效 access token：临近或已过期时用 refresh_token 续期并落库（参考实现会刷新后重试）。 */
-    suspend fun ensureAccessToken(): String? {
+    suspend fun ensureAccessToken(): String? = refreshMutex.withLock { ensureAccessTokenLocked() }
+
+    /**
+     * refresh_token 刷新的单飞锁：access/refresh token 过期续期可能被多个路径并发触发
+     * （取链、云盘浏览、容量查询），不加锁会同时发多个刷新请求，后完成的会把先完成
+     * 的凭据覆盖回旧值。所有续期统一走 [ensureAccessToken] 串行化。
+     */
+    private val refreshMutex = Mutex()
+
+    /** 仅在持有 [refreshMutex] 时调用：锁内重读账号，token 已被别处续期就直接复用。 */
+    private suspend fun ensureAccessTokenLocked(): String? {
         val acc = dao.getAccount() ?: return null
         cachedDeviceId = acc.deviceId
         val now = System.currentTimeMillis()
-        // 仍在有效期内（留 60s 缓冲）直接用
+        // 仍在有效期内（留 60s 缓冲）直接用；锁内重读后到期时间已被别处更新时也会命中这里
         if (acc.accessToken.isNotBlank() && accessExpiresAt > now + 60_000L) return acc.accessToken
         // 无 refresh_token 时只能退回现有 access（冷启动未记录到期时间时它可能仍有效）
         if (acc.refreshToken.isBlank()) return acc.accessToken.takeIf { it.isNotBlank() }
