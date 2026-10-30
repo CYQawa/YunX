@@ -125,6 +125,8 @@ fun ILanzouCloudScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showSearch by rememberSaveable { mutableStateOf(false) }
     val scrollPositions = remember { mutableStateMapOf<String, Int>() }
+    // 已应用滚动位置的目录：从在线预览返回时这一项随保存态恢复，同目录不再强制回顶
+    var appliedDirKey by rememberSaveable { mutableStateOf<String?>(null) }
     val loadedState = state as? ILanzouCloudUiState.Loaded
     val displayFiles = remember(loadedState?.files, searchQuery) {
         val files = loadedState?.files ?: emptyList()
@@ -197,6 +199,9 @@ fun ILanzouCloudScreen(
                 is ILanzouCloudUiState.Loaded -> Box(modifier = Modifier.fillMaxSize()) {
                     val loadedKey = remember(s.pathNames) { s.pathNames.joinToString("/") }
                     LaunchedEffect(loadedKey) {
+                        // 切换目录才重置滚动；同目录的重组（如从预览页返回）交给 listState 自己的保存态恢复
+                        if (appliedDirKey == loadedKey) return@LaunchedEffect
+                        appliedDirKey = loadedKey
                         listState.scrollToItem(scrollPositions[loadedKey] ?: 0)
                     }
                     PullToRefreshBox(

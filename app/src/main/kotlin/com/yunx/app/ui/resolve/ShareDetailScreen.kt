@@ -229,8 +229,13 @@ fun ShareDetailScreen(
     }
     // 各目录滚动位置记忆：进入文件夹/返回时按目录路径恢复，避免返回后列表回到顶部
     val currentDirKey = remember(pathNames) { pathNames.joinToString("/") }
+    // 已应用过滚动位置的目录：从在线预览返回时（本页会随预览页一起离开组合）该标记随保存态恢复，
+    // 于是同目录不再被这里强制拉回顶部，位置交给 listState 自己的 rememberSaveable 恢复
+    var appliedDirKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(currentDirKey) {
-        // 恢复该目录上次滚动位置；无记录（如首次进入）则回到顶部
+        // 只有切换目录才重置滚动；无记录（如首次进入）则回到顶部
+        if (appliedDirKey == currentDirKey) return@LaunchedEffect
+        appliedDirKey = currentDirKey
         listState.scrollToItem(scrollPositions[currentDirKey] ?: 0)
     }
     // 多选模式：底部批量操作栏 + 处理中弹窗

@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
@@ -236,6 +237,9 @@ fun DriveScreen(
     // 蓝奏云浏览：网盘 Tab 内切换（非全屏）
     var showLanzouCloud by rememberSaveable { mutableStateOf(false) }
 
+    // 网盘账号列表的滚动状态（与 show*Cloud 同在 DriveScreen 生命周期内；AnimatedContent 切页不会丢）
+    val accountListState = rememberLazyListState()
+
     // 夸克：登录态由数据库驱动；已登录则副标题显示昵称
     val quark = DriveAccount(
         id = "quark",
@@ -414,6 +418,9 @@ fun DriveScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 LazyColumn(
+                // ★ 列表状态**提升到本层**：进入某个网盘页时 AnimatedContent 会把账号列表移出组合，
+                //   状态若留在列表里（隐式 rememberLazyListState）就丢了，返回账号页会回滚到顶部
+                state = accountListState,
                 modifier = modifier
                     .fillMaxSize()
                     .nestedScroll(scrollBehavior.nestedScrollConnection),

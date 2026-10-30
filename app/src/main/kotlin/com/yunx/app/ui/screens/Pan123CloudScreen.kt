@@ -142,6 +142,8 @@ fun Pan123CloudScreen(
     var showSearch by rememberSaveable { mutableStateOf(false) }
     // 各目录滚动位置记忆：进入文件夹/返回时按目录路径恢复，避免返回后列表回到顶部
     val scrollPositions = remember { mutableStateMapOf<String, Int>() }
+    // 已应用滚动位置的目录：从在线预览返回时这一项随保存态恢复，同目录不再强制回顶
+    var appliedDirKey by rememberSaveable { mutableStateOf<String?>(null) }
     val loadedState = state as? Pan123CloudUiState.Loaded
     val displayFiles = remember(loadedState?.files, searchQuery) {
         val files = loadedState?.files ?: emptyList()
@@ -223,6 +225,9 @@ fun Pan123CloudScreen(
                 // 目录加载完成、列表挂载后恢复该目录上次滚动位置（避免 Loading 阶段误触发）
                 val loadedKey = remember(s.pathNames) { s.pathNames.joinToString("/") }
                 LaunchedEffect(loadedKey) {
+                    // 切换目录才重置滚动；同目录的重组（如从预览页返回）交给 listState 自己的保存态恢复
+                    if (appliedDirKey == loadedKey) return@LaunchedEffect
+                    appliedDirKey = loadedKey
                     listState.scrollToItem(scrollPositions[loadedKey] ?: 0)
                 }
                 PullToRefreshBox(

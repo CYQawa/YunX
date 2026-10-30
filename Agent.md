@@ -730,6 +730,20 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 **上传项是占位**：`onUploadFile` 默认 `null`，此时菜单项置灰、文案显示为「上传文件（开发中）」；上传协议落地后把回调传进来即可，不用改组件。
 **别把 `onUploadFile` 传成空 lambda**（那会让菜单项可点但什么都不发生）。
 
+**滚动状态与弹窗高度的坑（2026-10-31 修，改列表页/账号弹窗之前先看）**：
+
+1. `LaunchedEffect(目录) { listState.scrollToItem(scrollPositions[目录] ?: 0) }` **不能无条件执行**。
+   在线预览是 `MainScreen` 里的 early-return：打开预览时整页离开组合，`scrollPositions`（普通 `remember`）
+   已经清空，而 `listState` 是 `rememberSaveable`、恢复出来还是原来的位置 —— 无条件执行就等于把它又拉回顶部。
+   现在用 `rememberSaveable` 的 `appliedDirKey` 标记「这个目录已经应用过一次」，同目录的重组只信任
+   `listState` 自己的保存态（`ShareDetailScreen` 与十个云盘页都是这个写法）。
+2. 账号首页（`DriveScreen`）的 `LazyListState` 必须**提升到 `AnimatedContent` 之外**：进入某个网盘页时，
+   账号列表会被 `AnimatedContent` 移出组合，状态若留在列表内部（隐式 `rememberLazyListState`）就丢了，
+   返回账号首页会回滚到顶部。
+3. 账号弹窗（`*AccountSheet`）的纵向滚动**必须无条件挂**：原来只在「展开全部」时才加 `verticalScroll`，
+   横屏等高度不足时整张弹窗卡死（下方内容在屏幕外又滑不动）。`fillMaxHeight()` 仍只在展开时给 ——
+   无条件给会让弹窗永远占满全屏。
+
 **各平台建目录接口与根目录约定**（根目录取值必须与列目录一致，否则建到别处）：
 
 | 平台 | 调用 | 根目录 | 备注 |

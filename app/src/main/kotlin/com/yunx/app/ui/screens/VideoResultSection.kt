@@ -63,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -344,8 +345,9 @@ private fun ImageNoteContent(
     modifier: Modifier = Modifier
 ) {
     val pageCount = (images.size + IMAGE_PAGE_SIZE - 1) / IMAGE_PAGE_SIZE
-    // 以 images 为 key：换了笔记（新解析结果）就回到第一页，不留在上一个笔记的页码上
-    var page by remember(images) { mutableStateOf(0) }
+    // 以 images 为 key：换了笔记（新解析结果）就回到第一页，不留在上一个笔记的页码上。
+    // ★ 用 rememberSaveable：从全屏看图返回时本页会随预览页一起离开组合，普通 remember 会把页码丢掉
+    var page by rememberSaveable(images) { mutableStateOf(0) }
     val pageImages = remember(page, images) {
         images.drop(page * IMAGE_PAGE_SIZE).take(IMAGE_PAGE_SIZE)
     }
