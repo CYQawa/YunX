@@ -235,7 +235,8 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- 蓝奏云：域名族 lanzou* 的 a-z 轮换域名（bare 与 *. 两种写法都要列，清单通配符只能匹配最左一级）
+        <!-- 蓝奏云：域名族 lanzou* 的 a-z 轮换域名 + lanzn.com（2026-10 起的新族，issue #197）。
+             bare 与 *. 两种写法都要列，清单通配符只能匹配最左一级。
              蓝奏云优享版：ilanzou.com/net/org/cn/s/xxx -->
         <activity-alias
             android:name="com.yunx.app.link.LanzouLink"
@@ -301,6 +302,10 @@
                 <data android:scheme="https" android:host="*.lanzouy.com" />
                 <data android:scheme="https" android:host="lanzouz.com" />
                 <data android:scheme="https" android:host="*.lanzouz.com" />
+                <!-- 新域名族 lanzn（issue #197：https://<用户子域>.lanzn.com/<shareId>）：
+                     ShareLinkParser 已认（见 lanzouShareIdRegex），这里不列就只有「粘贴能解析、点链接却打不开」 -->
+                <data android:scheme="https" android:host="lanzn.com" />
+                <data android:scheme="https" android:host="*.lanzn.com" />
                 <data android:scheme="https" android:host="ilanzou.com" android:pathPrefix="/s/" />
                 <data android:scheme="https" android:host="ilanzou.net" android:pathPrefix="/s/" />
                 <data android:scheme="https" android:host="ilanzou.org" android:pathPrefix="/s/" />
