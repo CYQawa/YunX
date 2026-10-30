@@ -50,8 +50,18 @@ class GuangYaAccountRepository(
     fun cachedDeviceId(): String? = cachedDeviceId
 
     /**
+     * 短信验证码流程里「发码那台设备」。
+     *
+     * 新设备登录时库里还没有账号，[deviceOf] 每次都会随机生成一台新设备；而服务端把 verification
+     * 绑在发码时的 `X-Device-Id` 上 —— 验码/登录再换一台设备就会一直报验证码无效（新用户短信登录必失败）。
+     * 故发码时记下设备，验码与登录沿用同一台。
+     */
+    @Volatile
+    private var pendingSmsDevice: GuangYaDevice? = null
+
+    /**
      * access token 的本地到期时间（毫秒，0 = 未知）。冷启动为 0，会在首次 ensureAccessToken 时
-     * 用 refresh_token 换一次新 token（对齐参考实现 wenxi 的 sessions.fresh 语义）。
+     * 用 refresh_token 换一次新 token（冷启动就当过期处理）。
      */
     @Volatile
     private var accessExpiresAt: Long = 0L
@@ -92,6 +102,8 @@ class GuangYaAccountRepository(
     /** 发送短信验证码（文档 §2.6）：手机号规范化为 "+86 xxx" 后请求。 */
     suspend fun sendSms(phoneNumber: String): Result<GuangYaSmsChallenge> = runCatching {
         val device = deviceOf(dao.getAccount())
+        // 记下发码设备：随后 smsLogin 必须用同一台，否则新用户验码永远无效
+        pendingSmsDevice = device
         api.sendSmsCode(api.normalizeAccount(phoneNumber), device)
     }
 
@@ -108,7 +120,8 @@ class GuangYaAccountRepository(
         newAccount: Boolean = false
     ): Result<GuangYaAccountEntity> = runCatching {
         val existing = dao.getAccount()
-        val device = deviceOf(existing)
+        // 优先沿用发码时的设备（见 pendingSmsDevice 注释）；没有发码记录才现生成
+        val device = pendingSmsDevice ?: deviceOf(existing)
         cachedDeviceId = device.deviceId
         val normalized = api.normalizeAccount(phoneNumber)
         val verificationToken = api.verifySmsCode(verificationId, code, device)
@@ -135,7 +148,7 @@ class GuangYaAccountRepository(
         entity
     }
 
-    /** 取有效 access token：临近或已过期时用 refresh_token 续期并落库（参考实现会刷新后重试）。 */
+    /** 取有效 access token：临近或已过期时用 refresh_token 续期并落库。 */
     suspend fun ensureAccessToken(): String? {
         val acc = dao.getAccount() ?: return null
         cachedDeviceId = acc.deviceId
