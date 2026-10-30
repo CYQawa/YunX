@@ -60,9 +60,18 @@ class GuangYaAccountViewModel(
         if (account.isBlank() || password.isBlank()) {
             false to "请输入光鸭账号和密码"
         } else {
-            val result = repository.login(account, password, newAccount = addNewAccount)
-            if (result.isSuccess) addNewAccount = false
-            true to "登录成功"
+            // ★ 必须按 Result 分流：登录失败时仓库返回的是 failure，不是抛异常。
+            //   旧实现只看了 isSuccess 去清标记，然后无条件回「登录成功」——
+            //   于是随便输个账号密码也提示成功（其实一条账号都没落库，自然没有登录态）。
+            repository.login(account, password, newAccount = addNewAccount).fold(
+                onSuccess = {
+                    addNewAccount = false
+                    true to "登录成功"
+                },
+                onFailure = { e ->
+                    false to (e.message ?: "光鸭登录失败，请检查账号密码，或切换网页登录")
+                }
+            )
         }
     } catch (e: Exception) {
         false to (e.message ?: "光鸭登录失败，请检查账号密码，或切换网页登录")
@@ -100,9 +109,22 @@ class GuangYaAccountViewModel(
         } else if (code.isBlank()) {
             false to "请输入验证码"
         } else {
-            val result = repository.smsLogin(phoneNumber, verificationId, code, isUser, newAccount = addNewAccount)
-            if (result.isSuccess) addNewAccount = false
-            true to "登录成功"
+            // 同上：短信登录失败也是 Result.failure，不能无条件回「登录成功」
+            repository.smsLogin(
+                phoneNumber = phoneNumber,
+                verificationId = verificationId,
+                code = code,
+                isUser = isUser,
+                newAccount = addNewAccount
+            ).fold(
+                onSuccess = {
+                    addNewAccount = false
+                    true to "登录成功"
+                },
+                onFailure = { e ->
+                    false to (e.message ?: "短信验证码错误或已过期，请重新获取")
+                }
+            )
         }
     } catch (e: Exception) {
         false to (e.message ?: "短信验证码错误或已过期，请重新获取")

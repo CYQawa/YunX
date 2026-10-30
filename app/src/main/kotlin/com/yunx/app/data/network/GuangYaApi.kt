@@ -343,7 +343,16 @@ class GuangYaApi(
             .ifBlank { throw IllegalStateException("光鸭分享链接无效") }
     }
 
-    /** 分享列目录（文档 §4.3）：返回 (文件列表, 下一页游标 or null=无更多)。 */
+    /**
+     * 分享列目录（文档 §4.3）：返回 (文件列表, 下一页游标 or null=无更多)。
+     *
+     * ★ 翻页判定必须三级回落（网页端 `more` 的计算口径）：
+     *   ① 有 `hasMore` 就听它的；② 没有 `hasMore` 但有 `total`，就用「下一页游标的数值偏移 < total」
+     *   （这是网页端的真实口径：total 含被过滤条目，拿可见条数去比会永远翻不完或提前停）；
+     *   ③ 两者都没有，才退回「本页满 100 条且给了游标」。
+     *   旧实现只看 `hasMore` —— 服务端不返回该字段时 `optBoolean` 默认 false，**大目录只会出第一页**
+     *   （>100 项的分享合集后续文件看不到也下不了）。
+     */
     suspend fun listShareFiles(
         accessToken: String,
         parentId: String,
@@ -355,17 +364,28 @@ class GuangYaApi(
             .put("orderBy", 0)
             .put("sortType", 0)
             .put("accessToken", accessToken)
-            .apply { if (!cursor.isNullOrBlank()) put("cursor", cursor) }
+            // 游标在网页端是数值偏移，原样回传数字；只有非数字游标才按字符串发
+            .apply {
+                if (!cursor.isNullOrBlank()) put("cursor", cursor.toLongOrNull() ?: cursor)
+            }
         val json = executeJson(
             businessRequest(GuangYaConstants.SHARE_FILES, body.toString(), device = null, token = null).build()
         )
         checkBusiness(json, "获取分享文件列表失败")
         val data = dataOf(json) ?: return@withContext Pair(emptyList(), null)
         val list = parseFileList(listArray(data))
-        val hasMore = data.optBoolean("hasMore", false)
         val next = data.optString("cursor").takeIf { it.isNotBlank() }
-        val effectiveNext = if (hasMore && next != null) next else if (!hasMore) null else next
-        Pair(list, effectiveNext)
+        val hasMore = when {
+            data.has("hasMore") -> data.optBoolean("hasMore")
+            data.has("total") -> {
+                val total = data.optLong("total", 0L)
+                // 下一页的起始偏移：游标是数字就用它，否则用「已取条数」近似
+                val offset = next?.toLongOrNull() ?: list.size.toLong()
+                total > 0 && offset < total
+            }
+            else -> list.size >= GuangYaConstants.PAGE_SIZE && next != null
+        }
+        Pair(list, if (hasMore) next else null)
     }
 
     /** 分享取下载地址（文档 §4.4）；业务码 207 表示需登录并转存。 */
@@ -394,7 +414,7 @@ class GuangYaApi(
 
     /**
      * 转存分享（文档 §4.5）：body 的 `accessToken` 是**分享访问令牌**（session.stoken），
-     * `Authorization` 用**账号 access token**（参考实现 wenxi `_post(session: session)` 同款）；
+     * `Authorization` 用**账号 access token**（与网页端同款）；
      * 返回含 taskId 时用账号 token 轮询任务状态。
      */
     suspend fun restoreShare(
@@ -690,7 +710,7 @@ class GuangYaApi(
         }
     }
 
-    /** 列出阵列字段：光鸭不同接口/版本用 list / items / files / records / content 等多种命名（参考实现同款兼容）。 */
+    /** 列出阵列字段：光鸭不同接口/版本用 list / items / files / records / content 等多种命名（逐个兼容）。 */
     private fun listArray(data: JSONObject): JSONArray? =
         data.optJSONArray("list")
             ?: data.optJSONArray("items")
@@ -773,10 +793,10 @@ class GuangYaApi(
         return code.isBlank() || code == "0"
     }
 
-    private fun dataOf(json: JSONObject): JSONObject? {
-        val data = json.optJSONObject("data") ?: return null
-        return data
-    }
+    private fun dataOf(json: JSONObject): JSONObject? =
+        // 业务响应通常裹在 `data` 里，但少数接口（分享摘要等）把字段直接放在顶层。
+        // 只认 `data` 会让顶层返回的接口静默变空（列表空白 / 「分享链接无效」），故回退顶层。
+        json.optJSONObject("data") ?: json.takeIf { it.length() > 0 }
 
     private fun businessRequest(
         url: String,
@@ -811,7 +831,7 @@ class GuangYaApi(
             .url(url)
             .header("X-Client-Id", GuangYaConstants.CLIENT_ID)
             .header("X-Client-Version", GuangYaConstants.CLIENT_VERSION)
-            // 参考实现（wenxi guangya_login.dart）：X-Device-Id / X-Device-Sign 需 URL 编码
+            // X-Device-Id / X-Device-Sign 需 URL 编码（网页端同款）
             .header("X-Device-Id", URLEncoder.encode(deviceId, "UTF-8"))
             .header("X-Device-Model", GuangYaConstants.DEVICE_MODEL)
             .header("X-Device-Name", GuangYaConstants.DEVICE_NAME)
@@ -821,6 +841,11 @@ class GuangYaApi(
             .header("X-Protocol-Version", GuangYaConstants.PROTOCOL_VERSION)
             .header("X-Sdk-Version", GuangYaConstants.SDK_VERSION)
             .header("Accept", "application/json, text/plain, */*")
+            // 登录/发码/刷新这些账号接口同样要带 Origin、Referer、
+            // Accept-Language —— 只带 User-Agent 时风控严格的线路会直接 403 / 参数错误。
+            .header("Origin", GuangYaConstants.WEB_SITE)
+            .header("Referer", GuangYaConstants.WEB_SITE + "/")
+            .header("Accept-Language", "zh-CN")
             .header("User-Agent", GuangYaConstants.WEB_UA)
         if (!token.isNullOrBlank()) builder.header("Authorization", "Bearer $token")
         return if (body == null) {

@@ -77,13 +77,13 @@ object ShareLinkParser {
     private val pwdIn115UrlRegex = Regex("""[?&]password=([A-Za-z0-9]+)""")
     // 光鸭云盘分享链接（文档 §1.1）：https://www.guangyapan.com/s/{shareId}；shareId 字符集 [A-Za-z0-9_-]+
     private val guangyaShareIdRegex = Regex("""guangyapan\.com/s/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
-    // 蓝奏云优享版分享链接（参考实现 wenxi：ilanzou hosts=[ilanzou.com]，share 路径 /s/<id>）。
+    // 蓝奏云优享版分享链接：域名 ilanzou.com，分享路径 /s/<id>。
     // 单独识别为 ILANZOU，避免与蓝奏云混淆；该平台无分享解析接口，解析入口会给出明确提示。
     private val ilanzouShareIdRegex =
         Regex("""(?:^|[/.])ilanzou\.(?:com|net|org|cn)/s/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
     // 蓝奏云分享链接（文档 §1.1）：域名族 lanzou*、lan[zs]o[ux]、lanzn，后缀 com/net/org/cn；
     // shareId 为路径末段（i... 文件 / b... 文件夹）。
-    // 前置边界 (?:^|[/.]) 参照 wenxi 的 lanzouHostPattern（带 subdomainHostPattern）——
+    // 前置边界 (?:^|[/.]) 用于带子域的域名（如 wwx.lanzoui.com）——
     // 否则 “www.ilanzou.com”（蓝奏云优享版）里的 “lanzou.com” 会被误判为蓝奏云。
     // ★ lanzn 是 2026-10 起在用的新域名族（issue #197：https://<用户子域>.lanzn.com/iXnuF4c8sqmb），
     //   旧族 lanzou*/lan[zs]o[ux] 一个都匹配不上，于是链接直接被判「不支持」。

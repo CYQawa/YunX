@@ -39,11 +39,29 @@ class GuangYaResolveRepository(
     private val tokenProvider: suspend () -> String?
 ) : ShareResolveRepository {
 
+    /**
+     * 分享提取码缓存（shareId → 提取码）。
+     *
+     * 分享访问令牌会过期，**每次列目录/取链都重取一次**（网页端就是这么做的）；
+     * 这里同样按需重取，只有取不到时才退回 session 里那次的老令牌。
+     * 旧实现把令牌一直复用，长时间浏览后取链会被服务端判「需转存/受限」。
+     */
+    private val sharePwdCache = mutableMapOf<String, String>()
+
+    /** 重取分享访问令牌；失败退回 session 里已有的（至少还能试一次）。 */
+    private suspend fun freshShareToken(session: ShareSession): String {
+        val pwd = sharePwdCache[session.shareId].orEmpty()
+        return runCatching { api.getShareAccessToken(session.shareId, pwd) }
+            .getOrDefault(session.stoken)
+    }
+
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
             ?: return Result.failure(IllegalArgumentException("无法识别分享链接"))
         return runCatching {
             val sharePwd = pwd?.takeIf { it.isNotBlank() } ?: parsed.pwd.orEmpty()
+            // 记下提取码：后续每次列目录/取链都要用同一份重取分享令牌
+            sharePwdCache[parsed.shareId] = sharePwd
             val accessToken = api.getShareAccessToken(parsed.shareId, sharePwd)
             val title = api.getShareSummary(parsed.shareId)?.ifBlank { null } ?: "光鸭分享"
             ShareSession(shareId = parsed.shareId, stoken = accessToken, title = title)
@@ -56,8 +74,10 @@ class GuangYaResolveRepository(
             val seen = mutableSetOf<String>()
             var cursor: String? = null
             var page = 0
+            // 每轮列目录先换一次新令牌（见 freshShareToken 注释），翻页过程中沿用同一枚
+            val token = freshShareToken(session)
             do {
-                val (files, next) = api.listShareFiles(session.stoken, dirFid, cursor)
+                val (files, next) = api.listShareFiles(token, dirFid, cursor)
                 files.forEach { if (seen.add(it.fid)) all.add(it) }
                 cursor = next
                 page++
@@ -90,10 +110,11 @@ class GuangYaResolveRepository(
         cookie: String
     ): Result<DownloadLink> = runCatching {
         try {
-            api.getShareDownloadUrl(file, session.stoken)
+            // 取链前重取分享令牌：旧令牌过期时这里拿到的是新鲜的（失败才退回旧值）
+            api.getShareDownloadUrl(file, freshShareToken(session))
                 ?: throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
         } catch (e: GuangYaShareRestrictedException) {
-            // 分享者未开启免登录下载：已登录则转存到临时目录再从个人盘取链（参考实现 wenxi _shareDownload）
+            // 分享者未开启免登录下载：已登录则转存到临时目录再从个人盘取链
             transferAndDownload(session, file, cookie)
         }
     }
@@ -109,11 +130,11 @@ class GuangYaResolveRepository(
     ): DownloadLink {
         val token = cookie.takeIf { it.isNotBlank() } ?: tokenProvider()
             ?: throw IllegalStateException("请先登录光鸭云盘")
-        // 名称规则与参考实现一致，便于识别与清理
+        // 名称规则固定，便于识别与清理
         val folderName = "AsterLink临时转存_${UUID.randomUUID()}"
         val folderId = api.createDir(token, "", folderName)
         try {
-            api.restoreShare(token, session.stoken, listOf(file.fid), folderId)
+            api.restoreShare(token, freshShareToken(session), listOf(file.fid), folderId)
             val target = pollCopiedFile(token, folderId, file)
             val link = api.getDownloadLink(token, target)
                 ?: throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
@@ -159,7 +180,7 @@ class GuangYaResolveRepository(
         file: ShareFile
     ): Result<DownloadLink> = runCatching {
         try {
-            api.getShareDownloadUrl(file, session.stoken)
+            api.getShareDownloadUrl(file, freshShareToken(session))
                 ?: throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
         } catch (e: GuangYaShareRestrictedException) {
             throw IllegalStateException("该光鸭分享需登录并转存后下载，请先登录光鸭云盘")
