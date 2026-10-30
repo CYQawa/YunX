@@ -67,7 +67,7 @@ class LanzouApi(
     private val noRedirect get() = client.newBuilder().followRedirects(false).build()
 
     // 蓝奏可能返回 acw_sc__v2 的 JS 校验页（并下发 down_ip 等 Cookie）：
-    // 按 host 记录 Cookie，遇到校验页时本地计算 Cookie 并重放一次（参考实现 wenxi lanzou.dart / lanzou_protocol.dart）。
+    // 按 host 记录 Cookie，遇到校验页时本地计算 Cookie 并重放一次（acw_sc__v2 的置换算法见本文件）。
     private val cookieJar = java.util.concurrent.ConcurrentHashMap<String, MutableMap<String, String>>()
 
     private fun hostOf(url: String): String = runCatching { URI(url).host }.getOrNull().orEmpty()
@@ -380,7 +380,9 @@ class LanzouApi(
         val origin = "${uri.scheme}://${uri.host}"
         val title = extractTitle(html)
         val needsPwd = html.contains("请输入密码") || html.contains("id=\"pwbox\"") ||
-            html.contains("input_password") || html.contains("密码不正确")
+            html.contains("input_password") || html.contains("密码不正确") ||
+            // 新版模板用 `function down_p(` 标记「这个分享要提取码」，页面上不再有中文提示
+            html.contains("function down_p(")
         val isFolder = html.contains("filemoreajax") || html.contains("class=\"filemore\"") ||
             html.contains("file_more")
         val iframeUrl = Regex("""<iframe[^>]+src=["']([^"']+)["']""").find(html)?.groupValues?.get(1)
@@ -396,7 +398,7 @@ class LanzouApi(
             if (lx != null && t != null && k != null) LanzouFolderParams(lx, fid, t, k) else null
         } else null
         val shareId = uri.path.trim('/').substringAfterLast('/').ifBlank { uri.path.trim('/') }
-        // 单文件分享的展示大小：页面文本「文件大小：1.5 M」（参考 wenxi LanzouPage.displaySize）
+        // 单文件分享的展示大小：从页面文本「文件大小：1.5 M」里读
         val displaySize = Regex("""(?:文件大小|大小)\s*[:：]\s*([\d.]+)\s*([KMGT]?)(?:i?B)?""", RegexOption.IGNORE_CASE)
             .find(html)?.let { parseDisplaySize("${it.groupValues[1]} ${it.groupValues[2]}") } ?: 0L
         val singleFile = if (!isFolder) {
@@ -431,51 +433,54 @@ class LanzouApi(
             val all = mutableListOf<ShareFile>()
             val seen = mutableSetOf<String>()
             var pg = 1
+            var retries = 0
             while (pg <= LanzouConstants.MAX_FOLDER_PAGES) {
-                var attempt = 0
-                var json: JSONObject? = null
-                while (attempt <= 2) {
-                    json = try {
-                        formPost(
-                            url = "${page.baseUrl}/filemoreajax.php",
-                            fields = listOf(
-                                "lx" to params.lx,
-                                "fid" to params.fid,
-                                "t" to params.t,
-                                "k" to params.k,
-                                "pwd" to pwd.orEmpty(),
-                                "pg" to pg.toString()
-                            ),
-                            referer = page.shareUrl,
-                            origin = page.baseUrl,
-                            cookie = null
-                        )
-                        break
-                    } catch (e: Exception) {
-                        attempt++
-                        if (attempt > 2) throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
-                        delay(300)
-                        null
-                    }
+                // 翻页之间退避：蓝奏对连续分页很敏感，实测每页前要等 600ms×(retries+1)。
+                // 旧实现只在抛异常时 delay，正常翻页直接连打，容易触发 zt=4（频繁）。
+                if (pg > 1 || retries > 0) delay(if (retries > 0) 600L * (retries + 1) else 250L)
+                var body: JSONObject? = null
+                try {
+                    body = formPost(
+                        url = "${page.baseUrl}/filemoreajax.php",
+                        fields = listOf(
+                            "lx" to params.lx,
+                            "fid" to params.fid,
+                            "t" to params.t,
+                            "k" to params.k,
+                            "pwd" to pwd.orEmpty(),
+                            "pg" to pg.toString()
+                        ),
+                        referer = page.shareUrl,
+                        origin = page.baseUrl,
+                        cookie = null
+                    )
+                } catch (e: Exception) {
+                    retries++
+                    if (retries > 2) throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
                 }
-                val body = json ?: break
-                val zt = body.optInt("zt", 0)
-                when (zt) {
-                    1 -> {}
-                    2 -> return@withContext all
-                    3 -> throw IllegalStateException("蓝奏提取码错误，请检查后重新解析")
-                    4 -> {
-                        pg--
-                        if (attempt >= 2) throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
-                    }
-                    else -> throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
+                val pageBody = body ?: continue
+                val zt = pageBody.optInt("zt", 0)
+                // zt=4 是「请求太频繁」：不换页、只退避后重试同一页（最多 2 次）
+                if (zt == 4) {
+                    retries++
+                    if (retries > 2) throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
+                    continue
                 }
-                val arr = body.optJSONArray("text")
+                retries = 0
+                if (zt == 2) return@withContext all
+                if (zt == 3) throw IllegalStateException("蓝奏提取码错误，请检查后重新解析")
+                if (zt != 1) throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
+                val arr = pageBody.optJSONArray("text")
                 if (arr == null || arr.length() == 0) break
                 var added = 0
                 for (i in 0 until arr.length()) {
                     val item = arr.optJSONObject(i) ?: continue
-                    val id = item.optString("id")
+                    // 文件夹成员的 id 可能是 `iXXXX?...`（带签名参数）：裸 id 用于去重/匹配，
+                    // 完整地址存进 fidToken —— 取下载参数时要用它二次落地成员自己的分享页，
+                    // 否则文件夹里的文件永远取不到 sign。
+                    val reference = item.optString("id")
+                    if (reference.isBlank()) continue
+                    val id = reference.substringBefore('?')
                     if (id.isBlank() || !seen.add(id)) continue
                     all.add(
                         ShareFile(
@@ -484,7 +489,7 @@ class LanzouApi(
                             fsize = parseDisplaySize(item.optString("size")),
                             isdir = false,
                             pdirFid = "",
-                            fidToken = "",
+                            fidToken = if (reference.contains('?')) "${page.baseUrl}/$reference" else "",
                             modifyTime = item.optString("time")
                         )
                     )
@@ -500,12 +505,20 @@ class LanzouApi(
     suspend fun getShareDownloadLink(page: LanzouSharePage, file: ShareFile, pwd: String?): DownloadLink =
         withContext(Dispatchers.IO) {
             val origin = page.baseUrl
-            // A2：同源 iframe 下载页
-            var html = page.html
-            page.iframeUrl?.let { iframe ->
-                val iframeUri = runCatching { URI(iframe) }.getOrNull()
-                if (iframeUri != null && iframeUri.host.equals(URI(page.shareUrl).host, ignoreCase = true)) {
-                    html = fetchPage(iframe, page.shareUrl, null)
+            // ★ 文件夹分享的成员：落地页里没有该文件的下载参数（没有 ajaxm?file=N，也没有 sign），
+            //   必须先用成员自己的地址（listShareFolder 存在 fidToken 里的 `iXXXX?...`）二次落地，
+            //   再从这个成员页取参（文件夹页本身没有这些参数）。
+            val memberUrl = file.fidToken.takeIf { it.isNotBlank() }
+            var referer = memberUrl ?: page.shareUrl
+            var html = if (memberUrl != null) fetchPageFollowingLanzou(memberUrl) else page.html
+            // A2：同源 iframe 下载页（从当前落地页里取，成员页也走同一套）
+            val iframeSrc = Regex("""<iframe[^>]+src=["']([^"']+)["']""").find(html)?.groupValues?.get(1)
+                ?.let { absolutize(origin, it) }
+            if (iframeSrc != null) {
+                val iframeUri = runCatching { URI(iframeSrc) }.getOrNull()
+                if (iframeUri != null && iframeUri.host.equals(URI(referer).host, ignoreCase = true)) {
+                    html = fetchPage(iframeSrc, referer, null)
+                    referer = iframeSrc
                 } else if (iframeUri != null && iframeUri.host != null) {
                     throw IllegalStateException("蓝奏下载页面地址异常，请检查分享链接")
                 }
@@ -514,15 +527,25 @@ class LanzouApi(
                 ?: Regex("""(?:ajaxm|ajaxfile)\.php\?file=(\d+)""").find(html)?.groupValues?.get(1)
                 ?: Regex("""file=(\d+)""").find(html)?.groupValues?.get(1)
                 ?: throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
-            // A3：取下载参数
-            val withPwd = !pwd.isNullOrBlank()
-            // 下载接口可能在同源，也可能在 apifile.woozooo.com（新版页面用 domain1/domain2 给出完整 URL）
+            // A3：取下载参数（新版模板放在 data 对象里，旧版是 var）
+            // 是否走「带密码」分支要看**页面本身**要不要提取码，不能只看用户填没填：
+            // 不需要密码的分享被塞进 p/kd 分支会直接失败，需要密码的分享填了码也可能被当普通页。
+            val passwordRequired = page.needsPwd || html.contains("function down_p(")
+            if (passwordRequired && pwd.isNullOrBlank()) {
+                throw IllegalStateException("此蓝奏分享需要提取码，请填写后重新解析")
+            }
+            val withPwd = passwordRequired && !pwd.isNullOrBlank()
+            // 下载接口可能在同源，也可能在 apifile.woozooo.com（新版页面用 domain1/domain2 或 url: 给出完整地址）
             val ajaxUrl = resolveAjaxUrl(html, origin, fileId, withPwd)
-            // 新版页面签名变量为 wp_sign（旧版为 sign）
-            val sign = jsVar(html, "wp_sign") ?: jsVar(html, "sign") ?: inputValue(html, "sign")
+            // 新版把参数放在 data:{action:'downprocess',sign:…} 里，旧版才是 var sign / wp_sign
+            val downData = dataObjects(html).lastOrNull {
+                it["action"] == "downprocess" && !it["sign"].isNullOrBlank()
+            }
+            val sign = downData?.get("sign")
+                ?: jsVar(html, "wp_sign")
+                ?: jsVar(html, "sign")
+                ?: inputValue(html, "sign")
                 ?: throw IllegalStateException("蓝奏分享页缺少下载参数，请重新解析")
-            val ajaxData = jsVar(html, "ajaxdata")
-            val kd = jsVarRaw(html, "kdns") ?: "1"
             val fields = mutableListOf<Pair<String, String>>()
             fields += "action" to "downprocess"
             fields += "sign" to sign
@@ -530,15 +553,19 @@ class LanzouApi(
                 fields += "p" to pwd!!
                 fields += "kd" to "1"
             } else {
-                // 新版无密码协议：websignkey/signs 用 ajaxdata，websign 空，kd 用 kdns
-                val key = ajaxData ?: jsVar(html, "websignkey") ?: inputValue(html, "websignkey") ?: ""
-                fields += "signs" to (jsVar(html, "signs") ?: key)
+                // 无密码协议：signs/websignkey 来自 ajaxdata（或 data 对象），websign 原样透传，kd 固定 1。
+                // key 为空时服务端必拒 —— 这时直接报「缺少下载参数」，别把空 key 发出去换一个看不懂的失败。
+                val ajaxData = jsVar(html, "ajaxdata") ?: downData?.get("signs") ?: ""
+                val key = downData?.get("websignkey")?.takeIf { it.isNotBlank() }
+                    ?: ajaxData.ifBlank { jsVar(html, "websignkey") ?: inputValue(html, "websignkey") ?: "" }
+                if (key.isBlank()) throw IllegalStateException("蓝奏分享页缺少下载参数，请重新解析")
+                if (ajaxData.isNotBlank()) fields += "signs" to ajaxData
                 fields += "websignkey" to key
-                fields += "websign" to (jsVar(html, "websign") ?: "")
-                fields += "kd" to kd
+                fields += "websign" to (downData?.get("websign") ?: jsVar(html, "websign") ?: "")
+                fields += "kd" to "1"
                 fields += "ves" to "1"
             }
-            val ajaxJson = formPost(ajaxUrl, fields, page.shareUrl, origin, null)
+            val ajaxJson = formPost(ajaxUrl, fields, referer, origin, null)
             validateAjax(ajaxJson)
             val dom = ajaxJson.optString("dom")
             val rel = ajaxJson.optString("url")
@@ -610,6 +637,9 @@ class LanzouApi(
                         if (challenge != null) {
                             if (!challenges.add(host)) throw IllegalStateException("蓝奏需要进一步验证，请在分享页完成验证后重试")
                             setCookie(host, "acw_sc__v2", challenge)
+                            // 带 Cookie 重放的是**同一个 URL**：要先把它从「已访问」里摘掉，
+                            // 否则下一轮 visited.add 会误判成循环跳转（旧实现就是这么必死的）
+                            visited.remove(url)
                             return@repeat
                         }
                         if (body.contains("验证并下载")) {
@@ -968,26 +998,69 @@ class LanzouApi(
     }
 
     /**
-     * 下载接口 URL：优先页面里的 `domain1`/`domain2`（新版在 apifile.woozooo.com，跨域），
-     * 其次页面中出现的绝对 ajaxm/ajaxfile 地址，最后回退同源。
+     * 下载接口 URL。
+     * 优先级：脚本里 `url : '…/ajaxm.php?file=N'` 显式给出的（新版，可能是跨域 apifile）→
+     * `domain1`/`domain2` → 页面里的绝对地址 → 最后才回退同源。
+     *
+     * ★ 同源回退是最后手段：按「有没有密码」猜端点（带密码 ajaxfile / 不带 ajaxm）实测会把页面打错接口，
+     *   只有页面完全没线索时才用（能确定端点时不做猜测）。
      */
     private fun resolveAjaxUrl(html: String, origin: String, fileId: String, withPwd: Boolean): String {
-        val candidate = jsVar(html, "domain1")?.takeIf { it.contains("/ajax") }
+        val fromScript = Regex(
+            """['"]?url['"]?\s*:\s*['"]((?:\./)?[^'"]*ajax(?:m|file)\.php\?file=\d+[^'"]*)['"]"""
+        ).find(html)?.groupValues?.get(1)
+        val candidate = fromScript?.takeIf { it.isNotBlank() }?.let { absolutize(origin, it) }
+            ?: jsVar(html, "domain1")?.takeIf { it.contains("/ajax") }
             ?: jsVar(html, "domain2")?.takeIf { it.contains("/ajax") }
             ?: Regex("""https?://[^'"\s]+/(?:ajaxm|ajaxfile)\.php\?file=\d+""").find(html)?.value
         if (!candidate.isNullOrBlank()) return candidate
         return if (withPwd) "$origin/ajaxfile.php?file=$fileId" else "$origin/ajaxm.php?file=$fileId"
     }
 
+    /**
+     * 解析页面里 `data : { … }` 形式的 JS 对象（新版蓝奏把下载参数放进 data 对象，不再只是 `var sign = '…'`）。
+     * 返回每个对象的属性表，调用方按出现顺序取最后一个匹配项（页面里常有注释掉的诱饵对象）。
+     */
+    private fun dataObjects(html: String): List<Map<String, String>> =
+        Regex("""\bdata\s*:\s*\{([^{}]*)\}""", RegexOption.DOT_MATCHES_ALL)
+            .findAll(html)
+            .map { jsProperties(it.groupValues[1], html) }
+            .toList()
+
+    /** 解析 JS 对象字面量的属性：值可以是带引号字符串、数字，或同一页面里的 var 变量名。 */
+    private fun jsProperties(source: String, page: String): Map<String, String> {
+        val result = LinkedHashMap<String, String>()
+        Regex(
+            """(?:['"]([A-Za-z_][\w]*)['"]|([A-Za-z_][\w]*))\s*:\s*('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|[A-Za-z_][\w]*|\d+)"""
+        ).findAll(source).forEach { match ->
+            val key = match.groupValues[1].ifBlank { match.groupValues[2] }
+            val raw = match.groupValues[3]
+            val value = when {
+                raw.startsWith("'") || raw.startsWith("\"") -> raw.substring(1, raw.length - 1)
+                raw.all { it.isDigit() } -> raw
+                // 变量引用：到同一页面的 var 定义里找（`sign: sign` 这种赋值）
+                else -> jsVar(page, raw) ?: return@forEach
+            }
+            result[key] = value
+        }
+        return result
+    }
+
     private fun inputValue(html: String, name: String): String? =
         Regex("""<input[^>]*name=["']$name["'][^>]*value=["']([^"']*)["']""").find(html)?.groupValues?.get(1)
             ?: Regex("""<input[^>]*value=["']([^"']*)["'][^>]*name=["']$name["']""").find(html)?.groupValues?.get(1)
 
+    /** 相对地址合并：补全 `//host`、`/path`、`?query`、`./`、`../`（旧实现只认绝对地址和 `/` 开头）。 */
     private fun absolutize(base: String, target: String): String {
         if (target.startsWith("http://") || target.startsWith("https://")) return target
         val uri = runCatching { URI(base) }.getOrNull() ?: return target
         val root = "${uri.scheme}://${uri.host}"
-        return if (target.startsWith("/")) root + target else "$root/$target"
+        return when {
+            target.startsWith("//") -> "${uri.scheme}:$target"
+            target.startsWith("/") -> root + target
+            target.startsWith("?") -> root + uri.path.orEmpty() + target
+            else -> runCatching { URI("$root/").resolve(target).toString() }.getOrDefault("$root/$target")
+        }
     }
 
     private fun parseDisplaySize(text: String): Long {

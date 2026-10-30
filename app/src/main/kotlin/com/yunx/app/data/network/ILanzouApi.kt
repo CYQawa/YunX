@@ -231,7 +231,7 @@ class ILanzouApi(
     ): DownloadLink? = withContext(Dispatchers.IO) {
         val ts = System.currentTimeMillis()
         val encTs = aesHex(ts.toString())
-        // 参考实现（wenxi ilanzou.dart）：downloadId = encrypt('<fileId>|<userId>')，auth = encrypt('<fileId>|<毫秒时间戳>')
+        // 网页端签名：downloadId = encrypt('<fileId>|<userId>')，auth = encrypt('<fileId>|<毫秒时间戳>')
         val params = listOf(
             "enable" to "1",
             "downloadId" to aesHex("$fileId|$userId"),
@@ -350,7 +350,7 @@ class ILanzouApi(
         return builder.build()
     }
 
-    // ---------- 分享（本站分享页协议，见 wenxi 之外由 web JS 反推：/unproved/share/list） ----------
+    // ---------- 分享（按分享页 JS 反推：/unproved/share/list） ----------
 
     /**
      * 分享文件列表（匿名可用）。`folderId` 为空时返回分享根条目；
