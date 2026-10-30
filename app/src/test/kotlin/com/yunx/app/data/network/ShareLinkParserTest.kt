@@ -19,7 +19,9 @@
 package com.yunx.app.data.network
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShareLinkParserTest {
@@ -90,5 +92,25 @@ class ShareLinkParserTest {
         assertEquals("Abc123", ilanzou.shareId)
         val ilanzouBare = ShareLinkParser.parse("https://ilanzou.com/s/Abc123")!!
         assertEquals(SharePlatform.ILANZOU, ilanzouBare.platform)
+    }
+
+    @Test
+    fun parsesLanznHostFamily() {
+        // 新域名族 lanzn（issue #197）：https://<用户子域>.lanzn.com/<shareId>
+        val file = ShareLinkParser.parse("https://wow2333.lanzn.com/iXnuF4c8sqmb")!!
+        assertEquals(SharePlatform.LANZOU, file.platform)
+        assertEquals("iXnuF4c8sqmb", file.shareId)
+
+        val folder = ShareLinkParser.parse("https://aaa.lanzn.com/b0abcd?pwd=1234")!!
+        assertEquals(SharePlatform.LANZOU, folder.platform)
+        assertEquals("b0abcd", folder.shareId)
+        assertEquals("1234", folder.pwd)
+
+        // 域名族改动必须同步到 LanzouConstants：否则会出现「抠得出 shareId、却判不是蓝奏云」
+        assertTrue(LanzouConstants.isLanzouHost("wow2333.lanzn.com"))
+        assertTrue(LanzouConstants.isLanzouHost("lanzn.com"))
+        // 回归：老族与优享版都不能被新规则带跑偏
+        assertTrue(LanzouConstants.isLanzouHost("wwx.lanzoui.com"))
+        assertFalse(LanzouConstants.isLanzouHost("www.ilanzou.com"))
     }
 }
