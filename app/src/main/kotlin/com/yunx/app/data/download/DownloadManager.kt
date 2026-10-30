@@ -21,6 +21,7 @@ package com.yunx.app.data.download
 import android.content.Context
 import android.util.Log
 import com.yunx.app.util.DiagnosticLog
+import com.yunx.app.util.DownloadFileNames
 import com.yunx.app.util.LogRedactor
 import com.yunx.app.data.db.DownloadTaskDao
 import com.yunx.app.data.db.DownloadTaskEntity
@@ -713,7 +714,7 @@ class DownloadManager(
         val taskPlatform = if (isMagnet) DownloadPlatform.MAGNET else platform
         // 文件名兜底：空白时从 URL 推导，避免保存时变成时间戳。
         // 磁力链接走 dn= 里自带的显示名（元数据到手后再换成真正的种子名，见 completeEngineTask）
-        val safeName = fileName.ifBlank {
+        val rawName = fileName.ifBlank {
             if (isMagnet) {
                 MagnetLink.displayName(url)
             } else {
@@ -721,6 +722,10 @@ class DownloadManager(
                     .ifBlank { "download_${System.currentTimeMillis()}" }
             }
         }
+        // ★ 全应用唯一的文件名归一化点（issue #215）：任务文件名都从这里进库，所以内置下载器与
+        //   Gopeed 引擎两条路径一起修。上游会把「同名冲突」写成 `x.apk (1)`（后缀被顶到最后，
+        //   系统按末尾后缀认类型 ⇒ 安装器打不开），也会把 MIME 兜底扩展名叠上去变成 `x.md.txt`。
+        val safeName = DownloadFileNames.normalize(rawName)
         Log.d(TAG, "enqueue: origin=${LogRedactor.url(url)} fileName=$safeName headers=${headers.keys} size=$size")
         val id = DiagnosticLog.dbOp("download_task", "insert", rowsOf = { 1 }) {
             dao.insert(
