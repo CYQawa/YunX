@@ -148,6 +148,18 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("file_name_multi_line", value).apply()
         }
 
+    /**
+     * 列表缩略图：在网盘/分享文件列表里给图片显示小图（默认开启）。
+     *
+     * 关掉后**一个取图请求都不发**（不是加载完再隐藏）：缩略图要走各网盘接口或图床，
+     * 流量与请求数都不该在用户不想看时白花。运行态见 `ThemeController.cloudThumbnails`。
+     */
+    var cloudThumbnails: Boolean
+        get() = prefs.getBoolean("cloud_thumbnails", true)
+        set(value) {
+            prefs.edit().putBoolean("cloud_thumbnails", value).apply()
+        }
+
     /** 自动识别剪贴板分享链接：关闭后完全不读取剪贴板（默认开启） */
     var clipboardSuggestEnabled: Boolean
         get() = prefs.getBoolean("clipboard_suggest_enabled", true)

@@ -1338,8 +1338,9 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
 `RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），
 Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正文图集）**共用同一份缓存**；
 `GitHubMarkdownImageTransformer` 现在只是「渲染器适配层」（`mirrorPrefix` 转发给加载器）。
-列表 / 公告 / Markdown 的图片**一律走这套**，不要再引别的图片库。**唯一例外是 §3.42 的在线预览**：
-`ui/preview` 用 Coil 3 加载带逐请求请求头的原图与多图翻页，那是用户拍板的选型（见 `MediaPreviewScreen`）。
+列表 / 公告 / Markdown 的图片**一律走这套**，不要再引别的图片库。**唯一例外是 §3.42**：
+`ui/preview` 用 Coil 3 加载带逐请求请求头的原图与多图翻页，文件列表行的缩略图（`ShareFile.thumbnail`）
+同样用 Coil —— 两者都要按条目/按图带 `Referer`/`Cookie`/`UA`，`RemoteImageLoader` 那套没有逐请求头。
 ★ `RemoteImage` 的尺寸只有两种给法，别混：
 1. **固定尺寸**（头像 / 列表缩略图 / **弹窗封面**）：调用方传 `Modifier.size(...)` 或 `height(...)`，
    宽高必须**都有界**（`Image` 在无界高度下会退化成图片固有尺寸，长图糊一屏）；
@@ -1843,6 +1844,19 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 的地方很分散（分享解析文件列表、各网盘云盘浏览、视频解析结果），把回调一层层往下传会牵动十几个文件的
 参数表，所以做成「发一条请求 → MainScreen 观察到就挂载预览页」。`PreviewTypes.kindOf(fileName)` 是**唯一**
 的「能不能预览」判据（压缩包/未知类型返回 null，菜单项根本不显示）。
+
+**列表行缩略图**（设置 → 通用 → 列表缩略图，默认开）：图片文件的行首图标换成小图；关掉后
+**一个取图请求都不发**（不是加载完再隐藏）。缩略图信息是 `ShareFile.thumbnail: FileThumbnail?`
+（地址 + 取图请求头），由**列表接口在拿到凭证的那一次**产出 —— 各家字段并不统一：
+百度 `thumbs.url3 > url2 > url1`、139 `thumbnailUrls[]`（优先 style=Large，回退 big/mid/thumbnailURL）、
+迅雷 `thumbnail_link`（个人盘列表请求必须带 `thumbnail_size=SIZE_SMALL`，不带就没有这个字段）、
+光鸭 `thumbnail|thumbnailUrl|thumbnailURL|cover`、123 要从 `DownloadUrl` 里换出 `_70_70` 缩略图变体
+（见 `pan123ThumbnailUrl`，认不出来就返回空，**绝不能把原图当缩略图**），而夸克/UC 的缩略图地址指向
+自家接口、**不带账号 Cookie 不给图**。请求头跟着条目走，是为了让列表行不必回头去问 ViewModel 要凭证；
+**账号 Cookie 按域名分流**（`FileThumbnail.of` 的 authHost 重载：只有 `drive-pc.quark.cn` / `pc-api.uc.cn`
+才带 Cookie，响应把地址指到别的域名时只发 UA/Referer —— 列表响应是外部数据，不能拿登录态去赌）。
+`FileThumbnail.of` 只接受 https（全局禁明文，http 必失败）。115 与蓝奏系的列表接口没有缩略图字段，暂不支持。
+行内用 Coil `AsyncImage` 画小图，失败时不画任何东西、底下垫的文件图标天然成为兜底。
 
 **请求头是刚需**：网盘直链与 B站/微博/Pixiv 直链都校验 `Referer`/`Cookie`/`UA`，少一个就是 403 ——
 所以 `PreviewMedia` 必带 `headers`，播放器与图片加载器都必须把它带上。

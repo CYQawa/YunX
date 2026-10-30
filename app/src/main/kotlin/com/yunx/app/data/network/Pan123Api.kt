@@ -20,6 +20,7 @@ package com.yunx.app.data.network
 
 import android.util.Base64
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
@@ -617,7 +618,9 @@ class Pan123Api(
                         pdirFid = item.optString("ParentFileId"),
                         // 123 下载/转存需要 S3KeyFlag + Etag + StorageNode，编码进 fidToken："S3KeyFlag|Etag|StorageNode"
                         fidToken = "${item.optString("S3KeyFlag")}|${item.optString("Etag")}|${item.optString("StorageNode")}",
-                        modifyTime = item.optString("UpdateAt")
+                        modifyTime = item.optString("UpdateAt"),
+                        // DownloadUrl 可能是原图也可能是 24×24 缩略图变体，只认后者（见 pan123ThumbnailUrl）
+                        thumbnail = FileThumbnail.of(pan123ThumbnailUrl(item.optString("DownloadUrl")))
                     )
                 )
             }
@@ -756,4 +759,34 @@ class Pan123Api(
             return JSONObject(body)
         }
     }
+}
+
+/**
+ * 把 123 列表项里的 `DownloadUrl` 换成「确认是缩略图变体」的地址；认不出来就返回空串。
+ *
+ * ★ 123 的 `DownloadUrl` 既可能是**原图直链**，也可能是 24×24 的缩略图变体（路径以 `_24_24` 结尾）。
+ *   若直接拿它当列表缩略图，等于每一行都去下一张原图 —— 流量和内存都会炸，所以只认两种可识别形态：
+ *   ① 路径以 `_24_24` 结尾：换成 `_70_70` 并补 w/h（40dp 的行用 70px 足够，再大只是浪费）；
+ *   ② query 里已经带 `trade_key=123pan-thumbnail` 的：原样使用。
+ * 其余一律当「没有缩略图」，列表行退回文件图标。
+ */
+internal fun pan123ThumbnailUrl(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return ""
+    val queryIndex = trimmed.indexOf('?')
+    val path = if (queryIndex >= 0) trimmed.substring(0, queryIndex) else trimmed
+    val query = if (queryIndex >= 0) trimmed.substring(queryIndex + 1) else ""
+    val params = query.split('&').filter { it.isNotBlank() }
+    val tradeKey = params.firstOrNull { it.startsWith("trade_key=") }?.substringAfter('=')
+    if (!path.endsWith("_24_24")) {
+        return if (tradeKey == "123pan-thumbnail") trimmed else ""
+    }
+    val sizedPath = path.removeSuffix("_24_24") + "_70_70"
+    val rebuilt = params
+        .filterNot { it.startsWith("w=") || it.startsWith("h=") }
+        .toMutableList()
+    rebuilt += "w=70"
+    rebuilt += "h=70"
+    if (tradeKey == null) rebuilt += "trade_key=123pan-thumbnail"
+    return "$sizedPath?${rebuilt.joinToString("&")}"
 }

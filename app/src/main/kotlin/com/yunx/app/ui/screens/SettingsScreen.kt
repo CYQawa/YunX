@@ -62,6 +62,7 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Link
@@ -629,8 +630,28 @@ fun SettingsScreen(
 
         SectionLabel("通用")
         SettingsItem(
-            icon = Icons.Outlined.ContentPaste,
+            icon = Icons.Outlined.Image,
             shape = listGroupShape(ListGroupPos.FIRST),
+            title = "列表缩略图",
+            description = if (ThemeController.cloudThumbnails) {
+                "图片文件在列表里显示小图（需要向网盘取图，会多花一点流量）"
+            } else {
+                "已关闭，列表只显示文件图标（不发取图请求）"
+            },
+            onClick = {
+                ThemeController.setCloudThumbnails(context, !ThemeController.cloudThumbnails)
+            },
+            checked = ThemeController.cloudThumbnails,
+            trailing = {
+                Switch(checked = ThemeController.cloudThumbnails, onCheckedChange = null)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+
+        SettingsItem(
+            icon = Icons.Outlined.ContentPaste,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
             title = "自动识别剪贴板",
             description = if (ThemeController.clipboardSuggestEnabled) {
                 "复制分享链接后自动提示解析"

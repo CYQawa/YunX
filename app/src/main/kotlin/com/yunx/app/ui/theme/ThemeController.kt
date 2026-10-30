@@ -25,8 +25,8 @@ import androidx.compose.runtime.setValue
 import com.yunx.app.data.prefs.SettingsRepository
 
 /**
- * 主题控制器（单例）：
- * - 内存中持有主题设置（mutableStateOf），修改后 Compose 自动重组、主题即时生效；
+ * 主题与显示设置控制器（单例）：
+ * - 内存中持有主题设置与「列表缩略图」这类纯显示开关（mutableStateOf），修改后 Compose 自动重组；
  * - 读写同时同步 SharedPreferences 持久化；
  * - 由 ComposeEmptyActivityTheme 初始化（幂等），确保任何入口（主界面/崩溃页）都能读到。
  */
@@ -46,6 +46,13 @@ object ThemeController {
 
     /** 文件名显示方式：false=单行跑马灯滚动（默认），true=多行折行显示 */
     var fileNameMultiLine by mutableStateOf(false)
+        private set
+
+    /**
+     * 列表缩略图：网盘/分享文件列表里给图片显示小图（默认开启）。
+     * 关掉后列表行退回文件图标，**不发任何取图请求**（见 `ShareFileRow` / `FileThumbnail`）。
+     */
+    var cloudThumbnails by mutableStateOf(true)
         private set
 
     /** 自动识别剪贴板分享链接：关闭后不再读取剪贴板（默认开启） */
@@ -70,6 +77,7 @@ object ThemeController {
         colorMode = s.themeColorMode
         seedColor = s.themeSeedColor
         fileNameMultiLine = s.fileNameMultiLine
+        cloudThumbnails = s.cloudThumbnails
         clipboardSuggestEnabled = s.clipboardSuggestEnabled
         acceptPrereleaseUpdate = s.acceptPrereleaseUpdate
         downloadDebug = s.downloadDebug
@@ -102,6 +110,12 @@ object ThemeController {
     fun setFileNameMultiLine(context: Context, value: Boolean) {
         fileNameMultiLine = value
         SettingsRepository(context).fileNameMultiLine = value
+    }
+
+    /** 设置列表缩略图开关并持久化（关掉后列表立刻退回文件图标） */
+    fun setCloudThumbnails(context: Context, value: Boolean) {
+        cloudThumbnails = value
+        SettingsRepository(context).cloudThumbnails = value
     }
 
     /** 设置是否自动识别剪贴板分享链接并持久化 */

@@ -20,6 +20,7 @@ package com.yunx.app.data.network
 
 import android.util.Base64
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
@@ -315,6 +316,38 @@ class C139Api(
         val mapping: Map<String, String>
     )
 
+    /** 缩略图请求头：139 的图床同样校验 PC UA 与官方 Referer，缺一个就 403 */
+    private fun thumbnailHeaders(): Map<String, String> = mapOf(
+        "User-Agent" to C139Constants.PC_UA,
+        "Referer" to "https://yun.139.com/"
+    )
+
+    /**
+     * 139 列表项的缩略图地址：优先 `thumbnailUrls[]` 里 style=Large 的那张，其次任意一张，
+     * 最后回退 big/mid/thumbnailURL 三个平铺字段（老接口只在这三个字段里给图）。
+     */
+    private fun thumbnailUrlOf(item: JSONObject): String {
+        val urls = item.optJSONArray("thumbnailUrls")
+        if (urls != null) {
+            var first = ""
+            var large = ""
+            for (i in 0 until urls.length()) {
+                val entry = urls.optJSONObject(i) ?: continue
+                val url = entry.optString("url")
+                if (url.isBlank()) continue
+                if (first.isEmpty()) first = url
+                if (large.isEmpty() && entry.optString("style").equals("large", ignoreCase = true)) {
+                    large = url
+                }
+            }
+            val picked = large.ifEmpty { first }
+            if (picked.isNotEmpty()) return picked
+        }
+        return item.optString("bigthumbnailURL")
+            .ifEmpty { item.optString("midthumbnailURL") }
+            .ifEmpty { item.optString("thumbnailURL") }
+    }
+
     /** 单页列目录（含翻页游标）；返回 (文件列表, 下一页游标 or null=末页) */
     private suspend fun fetchCloudPage(
         parentFileId: String,
@@ -336,6 +369,7 @@ class C139Api(
         val resp = cloudPost(C139Constants.FILE_LIST_URL, req.toString(), authorization)
         checkCloud(resp, "获取文件列表失败")
         val data = resp.optJSONObject("data") ?: return@withContext null
+        val thumbHeaders = thumbnailHeaders()
         val files = buildList {
             data.optJSONArray("items")?.let { arr ->
                 for (i in 0 until arr.length()) {
@@ -348,7 +382,8 @@ class C139Api(
                             isdir = item.optString("type") == "folder",
                             pdirFid = parentFileId,
                             fidToken = item.optString("fileId"),
-                            modifyTime = item.optString("updatedAt")
+                            modifyTime = item.optString("updatedAt"),
+                            thumbnail = FileThumbnail.of(thumbnailUrlOf(item), thumbHeaders)
                         )
                     )
                 }

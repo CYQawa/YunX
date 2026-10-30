@@ -19,6 +19,7 @@
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.PlayLink
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
@@ -691,6 +692,19 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
     ): List<ShareFile>? = withContext(Dispatchers.IO) {
         val all = mutableListOf<ShareFile>()
         var p = page
+        // 同夸克：thumbnail 指向 pc-api.uc.cn 的自家接口，必须带账号 Cookie + 官方 Referer/Origin；
+        // 落在其它域名时只带 UA/Referer，Cookie 不发给平台之外的域名
+        val thumbnailAuthHeaders = mapOf(
+            "Cookie" to cookie,
+            "User-Agent" to UCConstants.CLOUD_UA,
+            "Referer" to "https://drive.uc.cn/",
+            "Origin" to "https://drive.uc.cn"
+        )
+        val thumbnailHeaders = mapOf(
+            "User-Agent" to UCConstants.CLOUD_UA,
+            "Referer" to "https://drive.uc.cn/",
+            "Origin" to "https://drive.uc.cn"
+        )
         while (true) {
             val url = buildString {
                 append(UCConstants.CLOUD_FILE_SORT_URL)
@@ -722,7 +736,13 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
                                 isdir = item.optBoolean("dir", false),
                                 pdirFid = item.optString("pdir_fid"),
                                 fidToken = "",
-                                modifyTime = item.optString("updated_at")
+                                modifyTime = item.optString("updated_at"),
+                                thumbnail = FileThumbnail.of(
+                                    url = item.optString("thumbnail"),
+                                    headers = thumbnailHeaders,
+                                    authHost = UCConstants.THUMBNAIL_HOST,
+                                    authHeaders = thumbnailAuthHeaders
+                                )
                             )
                         )
                     }

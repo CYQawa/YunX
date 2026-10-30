@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
 import kotlinx.coroutines.Dispatchers
@@ -390,6 +391,11 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
      */
     suspend fun listCloudFiles(dir: String, cookie: String): List<ShareFile> = withContext(Dispatchers.IO) {
         val all = mutableListOf<ShareFile>()
+        // 缩略图落在 thumbnail.baidupcs.com（签名地址，不需要 Cookie），但图床按网盘 UA + Referer 防盗链
+        val thumbnailHeaders = mapOf(
+            "User-Agent" to BaiduConstants.UA_NETDISK,
+            "Referer" to "https://yun.baidu.com/"
+        )
         var page = 1
         while (true) {
             val url = "https://yun.baidu.com/api/list?clienttype=0&app_id=${BaiduConstants.APP_ID}" +
@@ -417,7 +423,8 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
                                 isdir = item.optInt("isdir") == 1,
                                 pdirFid = dir,
                                 fidToken = item.optString("path"),
-                                modifyTime = item.optString("server_mtime")
+                                modifyTime = item.optString("server_mtime"),
+                                thumbnail = FileThumbnail.of(thumbnailUrlOf(item), thumbnailHeaders)
                             )
                         )
                     }
@@ -431,6 +438,14 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             page++
         }
         all
+    }
+
+    /** 百度列表项的缩略图地址：thumbs.url3 > url2 > url1（按清晰度降序；没有 thumbs 字段时为空） */
+    private fun thumbnailUrlOf(item: JSONObject): String {
+        val thumbs = item.optJSONObject("thumbs") ?: return ""
+        return thumbs.optString("url3")
+            .ifEmpty { thumbs.optString("url2") }
+            .ifEmpty { thumbs.optString("url1") }
     }
 
     /** 重命名（filemanager opera=rename，按完整路径） */

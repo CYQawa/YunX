@@ -19,6 +19,7 @@
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
@@ -262,6 +263,17 @@ class QuarkApi(
     ): List<ShareFile>? = withContext(Dispatchers.IO) {
         val all = mutableListOf<ShareFile>()
         var p = page
+        // 列表项里的 thumbnail 指向 drive-pc.quark.cn 的自家接口，**不带账号 Cookie 不给图**；
+        // 若响应给的是别的域名（CDN 签名地址），就只带 UA/Referer（见 FileThumbnail.of 的 host 分流）
+        val thumbnailAuthHeaders = mapOf(
+            "Cookie" to cookie,
+            "User-Agent" to QuarkConstants.API_USER_AGENT,
+            "Referer" to "https://pan.quark.cn/"
+        )
+        val thumbnailHeaders = mapOf(
+            "User-Agent" to QuarkConstants.API_USER_AGENT,
+            "Referer" to "https://pan.quark.cn/"
+        )
         while (true) {
             val url = buildString {
                 append(QuarkConstants.CLOUD_FILE_SORT_URL)
@@ -296,7 +308,13 @@ class QuarkApi(
                                 isdir = item.optBoolean("dir", false),
                                 pdirFid = item.optString("pdir_fid"),
                                 fidToken = "",
-                                modifyTime = item.optString("updated_at")
+                                modifyTime = item.optString("updated_at"),
+                                thumbnail = FileThumbnail.of(
+                                    url = item.optString("thumbnail"),
+                                    headers = thumbnailHeaders,
+                                    authHost = QuarkConstants.THUMBNAIL_HOST,
+                                    authHeaders = thumbnailAuthHeaders
+                                )
                             )
                         )
                     }

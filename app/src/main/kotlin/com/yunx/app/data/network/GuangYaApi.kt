@@ -19,6 +19,7 @@
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
@@ -766,9 +767,24 @@ class GuangYaApi(
             isdir = isDir,
             pdirFid = parent,
             fidToken = "",
-            modifyTime = time
+            modifyTime = time,
+            // 光鸭不同接口的缩略图字段名不统一（个人盘/分享各一套），按出现频率依次兜底；
+            // 图床按网页端 UA + 官网 Referer 防盗链，缺了就是 403
+            thumbnail = FileThumbnail.of(
+                url = firstNonBlank(
+                    item.optString("thumbnail"), item.optString("thumbnailUrl"),
+                    item.optString("thumbnailURL"), item.optString("cover")
+                ),
+                headers = thumbnailHeaders
+            )
         )
     }
+
+    /** 光鸭缩略图请求头（与下载同源的网页端 UA + 官网 Referer）；列表项共用同一份，别在循环里现拼 */
+    private val thumbnailHeaders: Map<String, String> = mapOf(
+        "User-Agent" to GuangYaConstants.WEB_UA,
+        "Referer" to GuangYaConstants.DOWNLOAD_REFERER
+    )
 
     private fun checkBusiness(json: JSONObject, fallback: String) {
         if (isSuccess(json)) return

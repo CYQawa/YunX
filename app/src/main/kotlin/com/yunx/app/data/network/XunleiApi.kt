@@ -19,6 +19,7 @@
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
@@ -469,6 +470,8 @@ class XunleiApi(
             append("?parent_id=").append(parentId)
             append("&page_token=").append(java.net.URLEncoder.encode(pageToken, "UTF-8"))
             append("&limit=100&with_audit=true&filters=").append(filters)
+            // 列表行缩略图：不请求这个尺寸的话响应里没有 thumbnail_link（SIZE_SMALL 够 40dp 列表用）
+            append("&thumbnail_size=SIZE_SMALL")
         }
         panCall(captchaToken, deviceId, "GET:/drive/v1/files", { t ->
             panRequest(url, accessToken, deviceId, t)
@@ -825,6 +828,8 @@ class XunleiApi(
     // ---------- 请求构造 ----------
 
     private fun parseFileArray(array: JSONArray): List<ShareFile> = buildList {
+        // 迅雷缩略图落在自家 CDN：只认客户端 UA（浏览器 UA 会被降级成错误图/403）
+        val thumbnailHeaders = mapOf("User-Agent" to XunleiConstants.APP_UA)
         for (i in 0 until array.length()) {
             val item = array.optJSONObject(i) ?: continue
             add(
@@ -835,7 +840,8 @@ class XunleiApi(
                     isdir = item.optString("kind") == "drive#folder",
                     pdirFid = item.optString("parent_id"),
                     fidToken = "",
-                    modifyTime = item.optString("modified_time")
+                    modifyTime = item.optString("modified_time"),
+                    thumbnail = FileThumbnail.of(item.optString("thumbnail_link"), thumbnailHeaders)
                 )
             )
         }

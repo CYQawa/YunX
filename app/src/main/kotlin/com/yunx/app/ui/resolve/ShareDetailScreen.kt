@@ -19,6 +19,7 @@
 package com.yunx.app.ui.resolve
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -39,6 +40,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -83,6 +85,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +94,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import coil3.compose.AsyncImage
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -105,7 +111,9 @@ import com.yunx.app.ui.components.ScrollToTopButton
 import com.yunx.app.ui.components.YunXLoading
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
+import com.yunx.app.ui.preview.PreviewKind
 import com.yunx.app.ui.preview.PreviewTypes
+import com.yunx.app.ui.preview.previewNetworkHeaders
 import com.yunx.app.ui.screens.AddToBookmarkDialog
 import com.yunx.app.ui.screens.BaiduSaveContent
 import com.yunx.app.ui.screens.C139SaveContent
@@ -125,6 +133,7 @@ import com.yunx.app.ui.viewmodel.ResolveViewModel
 import com.yunx.app.ui.viewmodel.UCCoudViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
 import com.yunx.app.ui.theme.ListGroupGap
+import com.yunx.app.ui.theme.ThemeController
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.listGroupShape
@@ -834,28 +843,8 @@ internal fun ShareFileRow(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                     }
-                    Surface(
-                        modifier = Modifier.size(40.dp),
-                        shape = CircleShape,
-                        color = if (file.isdir) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
-                        }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = if (file.isdir) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                    }
+                    // 行首图标 / 缩略图（见 FileLeadingIcon）
+                    FileLeadingIcon(file = file)
                 }
             },
             trailingContent = {
@@ -880,6 +869,83 @@ internal fun ShareFileRow(
             // 底色/选中底色由外层 Card 决定，这里必须透明，否则会盖住卡片颜色
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
+    }
+}
+
+/**
+ * 列表行行首：有缩略图就画小图，否则画文件图标。
+ *
+ * ★ 缩略图信息（地址 + 请求头）由列表接口随条目一起给出（`FileThumbnail`），这里不需要接触账号凭证；
+ *   开关在「设置 → 通用 → 列表缩略图」，关掉后**一个取图请求都不发**（不是画完再藏起来）。
+ *
+ * 为什么把文件图标垫在缩略图下面：Coil 加载失败时什么都不画，占位图标自然成了兜底 ——
+ * 不必再维护一份 error painter，也不会出现「空框」；加载过程中同样露着图标，列表不会一行行跳变。
+ */
+@Composable
+private fun FileLeadingIcon(file: ShareFile) {
+    val thumbnail = file.thumbnail?.takeIf {
+        !file.isdir &&
+            ThemeController.cloudThumbnails &&
+            // 只给图片：视频/文档的缩略图各家给得并不一致，先不放开
+            PreviewTypes.kindOf(file.fname) == PreviewKind.IMAGE
+    }
+    if (thumbnail == null) {
+        FileIconBadge(file = file)
+        return
+    }
+    val context = LocalContext.current
+    val request = remember(thumbnail.url, thumbnail.headers) {
+        ImageRequest.Builder(context)
+            .data(thumbnail.url)
+            .httpHeaders(previewNetworkHeaders(thumbnail.headers))
+            .build()
+    }
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.InsertDriveFile,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        )
+        AsyncImage(
+            model = request,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+/** 行首圆形图标（文件夹 / 没有缩略图的文件）：网盘页、解析页与移动/转存选择器共用同一形态 */
+@Composable
+private fun FileIconBadge(file: ShareFile) {
+    Surface(
+        modifier = Modifier.size(40.dp),
+        shape = CircleShape,
+        color = if (file.isdir) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = if (file.isdir) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
     }
 }
 

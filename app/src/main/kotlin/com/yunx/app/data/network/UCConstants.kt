@@ -42,6 +42,9 @@ object UCConstants {
     /** 业务 API 基础域名 */
     const val API_BASE = "https://pc-api.uc.cn"
 
+    /** 列表缩略图接口所在域名（只有它需要账号 Cookie，见 QuarkConstants.THUMBNAIL_HOST 的说明） */
+    const val THUMBNAIL_HOST = "pc-api.uc.cn"
+
     /** 获取分享 Token（与夸克路径相同，仅域名/pr 不同） */
     const val SHARE_TOKEN_URL = "$API_BASE/1/clouddrive/share/sharepage/token?pr=UCBrowser&fr=pc"
 
