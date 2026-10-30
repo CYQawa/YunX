@@ -323,29 +323,30 @@ class C139Api(
     )
 
     /**
-     * 139 列表项的缩略图地址：优先 `thumbnailUrls[]` 里 style=Large 的那张，其次任意一张，
+     * 139 列表项的缩略图：优先 `thumbnailUrls[]` 里 style=Large 的那张，其次任意一张，
      * 最后回退 big/mid/thumbnailURL 三个平铺字段（老接口只在这三个字段里给图）。
+     *
+     * ★ 逐档校验 https：字段为 JSON null 时 `optString` 给出的是字符串 "null"，
+     *   先挑「非空」再校验会让大图字段被 null 占位、反而丢掉后面本可用的地址。
      */
-    private fun thumbnailUrlOf(item: JSONObject): String {
+    private fun thumbnailOf(item: JSONObject, headers: Map<String, String>): FileThumbnail? {
         val urls = item.optJSONArray("thumbnailUrls")
         if (urls != null) {
-            var first = ""
-            var large = ""
+            var first: FileThumbnail? = null
+            var large: FileThumbnail? = null
             for (i in 0 until urls.length()) {
                 val entry = urls.optJSONObject(i) ?: continue
-                val url = entry.optString("url")
-                if (url.isBlank()) continue
-                if (first.isEmpty()) first = url
-                if (large.isEmpty() && entry.optString("style").equals("large", ignoreCase = true)) {
-                    large = url
+                val thumbnail = FileThumbnail.of(entry.optString("url"), headers) ?: continue
+                if (first == null) first = thumbnail
+                if (large == null && entry.optString("style").equals("large", ignoreCase = true)) {
+                    large = thumbnail
                 }
             }
-            val picked = large.ifEmpty { first }
-            if (picked.isNotEmpty()) return picked
+            (large ?: first)?.let { return it }
         }
-        return item.optString("bigthumbnailURL")
-            .ifEmpty { item.optString("midthumbnailURL") }
-            .ifEmpty { item.optString("thumbnailURL") }
+        return FileThumbnail.of(item.optString("bigthumbnailURL"), headers)
+            ?: FileThumbnail.of(item.optString("midthumbnailURL"), headers)
+            ?: FileThumbnail.of(item.optString("thumbnailURL"), headers)
     }
 
     /** 单页列目录（含翻页游标）；返回 (文件列表, 下一页游标 or null=末页) */
@@ -383,7 +384,7 @@ class C139Api(
                             pdirFid = parentFileId,
                             fidToken = item.optString("fileId"),
                             modifyTime = item.optString("updatedAt"),
-                            thumbnail = FileThumbnail.of(thumbnailUrlOf(item), thumbHeaders)
+                            thumbnail = thumbnailOf(item, thumbHeaders)
                         )
                     )
                 }

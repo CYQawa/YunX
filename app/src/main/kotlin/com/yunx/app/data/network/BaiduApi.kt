@@ -424,7 +424,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
                                 pdirFid = dir,
                                 fidToken = item.optString("path"),
                                 modifyTime = item.optString("server_mtime"),
-                                thumbnail = FileThumbnail.of(thumbnailUrlOf(item), thumbnailHeaders)
+                                thumbnail = thumbnailOf(item, thumbnailHeaders)
                             )
                         )
                     }
@@ -440,12 +440,17 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         all
     }
 
-    /** 百度列表项的缩略图地址：thumbs.url3 > url2 > url1（按清晰度降序；没有 thumbs 字段时为空） */
-    private fun thumbnailUrlOf(item: JSONObject): String {
-        val thumbs = item.optJSONObject("thumbs") ?: return ""
-        return thumbs.optString("url3")
-            .ifEmpty { thumbs.optString("url2") }
-            .ifEmpty { thumbs.optString("url1") }
+    /**
+     * 百度列表项的缩略图：thumbs.url3 > url2 > url1（按清晰度降序）。
+     *
+     * ★ 逐档校验而不是取第一个非空：字段为 JSON null 时 `optString` 会给出字符串 "null"，
+     *   直接当地址用就变成「有一个永远加载不出来的缩略图」，也不会再往后找。
+     */
+    private fun thumbnailOf(item: JSONObject, headers: Map<String, String>): FileThumbnail? {
+        val thumbs = item.optJSONObject("thumbs") ?: return null
+        return FileThumbnail.of(thumbs.optString("url3"), headers)
+            ?: FileThumbnail.of(thumbs.optString("url2"), headers)
+            ?: FileThumbnail.of(thumbs.optString("url1"), headers)
     }
 
     /** 重命名（filemanager opera=rename，按完整路径） */

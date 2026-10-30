@@ -1850,13 +1850,21 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 （地址 + 取图请求头），由**列表接口在拿到凭证的那一次**产出 —— 各家字段并不统一：
 百度 `thumbs.url3 > url2 > url1`、139 `thumbnailUrls[]`（优先 style=Large，回退 big/mid/thumbnailURL）、
 迅雷 `thumbnail_link`（个人盘列表请求必须带 `thumbnail_size=SIZE_SMALL`，不带就没有这个字段）、
-光鸭 `thumbnail|thumbnailUrl|thumbnailURL|cover`、123 要从 `DownloadUrl` 里换出 `_70_70` 缩略图变体
-（见 `pan123ThumbnailUrl`，认不出来就返回空，**绝不能把原图当缩略图**），而夸克/UC 的缩略图地址指向
-自家接口、**不带账号 Cookie 不给图**。请求头跟着条目走，是为了让列表行不必回头去问 ViewModel 要凭证；
+光鸭 `thumbnail|thumbnailUrl|thumbnailURL|cover`、123 的列表只给**原图直链** `DownloadUrl`（必须自己拼成
+缩略图，见下），而夸克/UC 的缩略图地址指向自家接口、**不带账号 Cookie 不给图**。
+请求头跟着条目走，是为了让列表行不必回头去问 ViewModel 要凭证；
 **账号 Cookie 按域名分流**（`FileThumbnail.of` 的 authHost 重载：只有 `drive-pc.quark.cn` / `pc-api.uc.cn`
 才带 Cookie，响应把地址指到别的域名时只发 UA/Referer —— 列表响应是外部数据，不能拿登录态去赌）。
 `FileThumbnail.of` 只接受 https（全局禁明文，http 必失败）。115 与蓝奏系的列表接口没有缩略图字段，暂不支持。
 行内用 Coil `AsyncImage` 画小图，失败时不画任何东西、底下垫的文件图标天然成为兜底。
+
+**123 的缩略图是自己拼的**（`pan123ThumbnailUrl`，2026-10-31 用真实列表响应打 CDN 实测）：
+`DownloadUrl` 是原图直链（`download-cdn.cjjd19.com/.../c-m8007?<签名>`，约一周有效期），在它的 query 上
+追加 `w/h` + **单个** `trade_key=123pan-thumbnail`，同一台 CDN 就返回压缩 JPEG（120×120 约 7KB）。
+三条硬约束，改之前先看：① 少 `trade_key` → 403；② `trade_key` **出现两次**（重复参数）→ 直接回原图，
+所以要先剥掉旧的 `w/h/trade_key` 再各写一次；③ 路径里的尺寸后缀（`_70_70`/`_24_24`）对结果没有影响，别去改路径。
+列表项自带的 `Thumbnail` 字段优先用平台的。**注意**：这条是本项目用真实响应 + 实际请求验证出来的，
+不是从别处抄的结论；改它之前先按上面三条复测，别因为「别处没见过」就删掉。
 
 **请求头是刚需**：网盘直链与 B站/微博/Pixiv 直链都校验 `Referer`/`Cookie`/`UA`，少一个就是 403 ——
 所以 `PreviewMedia` 必带 `headers`，播放器与图片加载器都必须把它带上。

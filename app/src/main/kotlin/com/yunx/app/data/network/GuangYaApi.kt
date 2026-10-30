@@ -769,14 +769,12 @@ class GuangYaApi(
             fidToken = "",
             modifyTime = time,
             // 光鸭不同接口的缩略图字段名不统一（个人盘/分享各一套），按出现频率依次兜底；
+            // 逐档校验而不是取第一个非空：字段为 JSON null 时 optString 会给出 "null" 这个字符串。
             // 图床按网页端 UA + 官网 Referer 防盗链，缺了就是 403
-            thumbnail = FileThumbnail.of(
-                url = firstNonBlank(
-                    item.optString("thumbnail"), item.optString("thumbnailUrl"),
-                    item.optString("thumbnailURL"), item.optString("cover")
-                ),
-                headers = thumbnailHeaders
-            )
+            thumbnail = FileThumbnail.of(item.optString("thumbnail"), thumbnailHeaders)
+                ?: FileThumbnail.of(item.optString("thumbnailUrl"), thumbnailHeaders)
+                ?: FileThumbnail.of(item.optString("thumbnailURL"), thumbnailHeaders)
+                ?: FileThumbnail.of(item.optString("cover"), thumbnailHeaders)
         )
     }
 

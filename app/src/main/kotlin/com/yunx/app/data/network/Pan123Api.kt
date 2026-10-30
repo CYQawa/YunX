@@ -619,8 +619,14 @@ class Pan123Api(
                         // 123 下载/转存需要 S3KeyFlag + Etag + StorageNode，编码进 fidToken："S3KeyFlag|Etag|StorageNode"
                         fidToken = "${item.optString("S3KeyFlag")}|${item.optString("Etag")}|${item.optString("StorageNode")}",
                         modifyTime = item.optString("UpdateAt"),
-                        // DownloadUrl 可能是原图也可能是 24×24 缩略图变体，只认后者（见 pan123ThumbnailUrl）
-                        thumbnail = FileThumbnail.of(pan123ThumbnailUrl(item.optString("DownloadUrl")))
+                        // DownloadUrl 是原图直链，补上 w/h 与单个 trade_key 后 CDN 才回缩略图（见 pan123ThumbnailUrl）；
+                        // 列表项自带的 Thumbnail 字段优先
+                        thumbnail = FileThumbnail.of(
+                            pan123ThumbnailUrl(
+                                downloadUrl = item.optString("DownloadUrl"),
+                                platformThumbnail = item.optString("Thumbnail")
+                            )
+                        )
                     )
                 )
             }
@@ -761,32 +767,45 @@ class Pan123Api(
     }
 }
 
+/** 123 列表缩略图的目标边长（40dp 的列表行，3x 屏 120px 也够，再大只是白花流量） */
+private const val PAN123_THUMB_SIZE = 120
+
 /**
- * 把 123 列表项里的 `DownloadUrl` 换成「确认是缩略图变体」的地址；认不出来就返回空串。
+ * 123 列表缩略图地址（个人盘列表用）。
  *
- * ★ 123 的 `DownloadUrl` 既可能是**原图直链**，也可能是 24×24 的缩略图变体（路径以 `_24_24` 结尾）。
- *   若直接拿它当列表缩略图，等于每一行都去下一张原图 —— 流量和内存都会炸，所以只认两种可识别形态：
- *   ① 路径以 `_24_24` 结尾：换成 `_70_70` 并补 w/h（40dp 的行用 70px 足够，再大只是浪费）；
- *   ② query 里已经带 `trade_key=123pan-thumbnail` 的：原样使用。
- * 其余一律当「没有缩略图」，列表行退回文件图标。
+ * ★ `DownloadUrl` 是**原图直链**（`download-cdn.cjjd19.com/.../c-m8007?<签名参数>`，带一周有效期），
+ *   直接当列表小图用等于每行下载一张原图。实测（2026-10-31 用真实列表响应验证）：
+ *   在同一台 CDN 的地址上追加 `w/h` + **单个** `trade_key=123pan-thumbnail`，服务端就返回压缩过的
+ *   JPEG（120×120 约 7KB），路径里的 `_70_70` / `_24_24` 后缀对结果**没有影响**，不用改写路径。
+ *   两个反例都是实测：
+ *   - 少 `trade_key` → 403；
+ *   - `trade_key` 出现两次（重复参数）→ 直接回原图（105KB 的 octet-stream）。
+ *   所以这里先把原有的 `w/h/trade_key` 去掉，再各追加一次，保证参数不重复。
+ *
+ * 列表项自带 https 的 `Thumbnail` 字段时优先用平台的（省一次拼装，也不依赖上面这条实测结论）。
  */
-internal fun pan123ThumbnailUrl(raw: String): String {
-    val trimmed = raw.trim()
-    if (trimmed.isEmpty()) return ""
-    val queryIndex = trimmed.indexOf('?')
-    val path = if (queryIndex >= 0) trimmed.substring(0, queryIndex) else trimmed
-    val query = if (queryIndex >= 0) trimmed.substring(queryIndex + 1) else ""
-    val params = query.split('&').filter { it.isNotBlank() }
-    val tradeKey = params.firstOrNull { it.startsWith("trade_key=") }?.substringAfter('=')
-    if (!path.endsWith("_24_24")) {
-        return if (tradeKey == "123pan-thumbnail") trimmed else ""
-    }
-    val sizedPath = path.removeSuffix("_24_24") + "_70_70"
-    val rebuilt = params
-        .filterNot { it.startsWith("w=") || it.startsWith("h=") }
+internal fun pan123ThumbnailUrl(downloadUrl: String, platformThumbnail: String = ""): String {
+    // 平台自带字段只在「确实是 https 地址」时采信：JSON null 在这里会变成字符串 "null"，
+    // 直接返回会让后面本可用的 DownloadUrl 拼装被跳过
+    val provided = platformThumbnail.trim()
+    if (provided.startsWith("https://", ignoreCase = true)) return provided
+    val trimmed = downloadUrl.trim()
+    if (!trimmed.startsWith("https://", ignoreCase = true)) return ""
+    // 片段只在末尾，先摘掉，参数要拼在 # 之前
+    val fragmentIndex = trimmed.indexOf('#')
+    val body = if (fragmentIndex >= 0) trimmed.substring(0, fragmentIndex) else trimmed
+    val fragment = if (fragmentIndex >= 0) trimmed.substring(fragmentIndex) else ""
+    val queryIndex = body.indexOf('?')
+    val path = if (queryIndex >= 0) body.substring(0, queryIndex) else body
+    val query = if (queryIndex >= 0) body.substring(queryIndex + 1) else ""
+    val params = query.split('&')
+        .filter { it.isNotBlank() }
+        .filterNot {
+            it.startsWith("w=") || it.startsWith("h=") || it.startsWith("trade_key=")
+        }
         .toMutableList()
-    rebuilt += "w=70"
-    rebuilt += "h=70"
-    if (tradeKey == null) rebuilt += "trade_key=123pan-thumbnail"
-    return "$sizedPath?${rebuilt.joinToString("&")}"
+    params += "w=$PAN123_THUMB_SIZE"
+    params += "h=$PAN123_THUMB_SIZE"
+    params += "trade_key=123pan-thumbnail"
+    return "$path?${params.joinToString("&")}$fragment"
 }
