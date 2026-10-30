@@ -33,6 +33,7 @@ import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -341,6 +342,29 @@ class Pan123CloudViewModel(
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘图片）：123 的直链按 UA/Referer 放行，与下载共用 [downloadHeaders]。
+     * 直链有有效期，必须现取，不能在列表里预存。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val link = api.getDownloadLink(file, token())
+                    ?: throw IllegalStateException("获取下载链接失败")
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }

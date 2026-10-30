@@ -467,6 +467,8 @@ fun C139CloudScreen(
             operating = viewModel.isOperating,
             onDownload = { viewModel.downloadFile() },
             onDownloadFolder = { viewModel.downloadFolder() },
+            // 在线预览（图片）：取链成功后 ViewModel 清空 actionFile，弹窗随之消失；失败则留在弹窗里报错
+            onPreview = { viewModel.openPreview() },
             // 139 的提取码由系统自动生成，不提供自定义入口
             // 139 的提取码由服务端自动生成，不可设置
             passcodeMode = PasscodeMode.SERVER_GENERATED,

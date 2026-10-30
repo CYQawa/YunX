@@ -31,6 +31,7 @@ import com.yunx.app.data.network.QuarkApi
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -382,6 +383,42 @@ class QuarkCloudViewModel(
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘图片）：与 [downloadFile] 取同一条直链、同一份请求头，只是不弹下载确认弹窗。
+     *
+     * ★ 必须现取直链：夸克直链带签名且有时效，预览页的图片加载器需要的是「此刻能读」的地址。
+     *   取链失败（未登录 / 文件已删 / 直链额度用尽）把原因交给页面 Snackbar，不静默。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val cookie = cookieProvider()
+                if (cookie.isNullOrBlank()) {
+                    cloudMessage = "请先登录夸克网盘"
+                    return@launch
+                }
+                val link = api.getDownloadLink(file.fid, cookie)
+                    ?: throw IllegalStateException("获取下载链接失败")
+                // 先清 actionFile 再开预览：预览页是全屏覆盖，不清理的话关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(
+                    file = file,
+                    // 与 downloadFile 走同一个出口：QuarkCdn.fastest 现在是原样返回，将来若真做节点改写，
+                    // 预览与下载的直链也必须同步，否则会出现「能下载、预览白屏」这类只在一侧复现的问题
+                    url = com.yunx.app.data.network.QuarkCdn.fastest(link.downloadUrl, cookie),
+                    headers = downloadHeaders(cookie)
+                )
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }

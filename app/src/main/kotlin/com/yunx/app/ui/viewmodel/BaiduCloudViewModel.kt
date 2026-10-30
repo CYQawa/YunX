@@ -33,6 +33,7 @@ import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -349,6 +350,29 @@ class BaiduCloudViewModel(
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘图片）：BaiduApi.locateDownload(file.fidToken, …) 给的是带 sign/timestamp 的
+     * 临时 dlink，必须配同一份 Cookie + 客户端 UA 才读得到；取链失败照实回报。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val ck = cookie()
+                val url = api.locateDownload(file.fidToken, ck)
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, url, downloadHeaders(ck))
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }

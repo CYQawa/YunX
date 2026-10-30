@@ -34,6 +34,7 @@ import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.repository.GuangYaAccountRepository
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -322,6 +323,29 @@ class GuangYaCloudViewModel(
                 downloadLink = link
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘图片）：光鸭直链要配网页端 UA + 官方 Referer（[downloadHeaders]），
+     * 访问令牌会过期，[token] 每次取链前都会重新确保 —— 别把上一次的直链缓存到预览页。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val link = api.getDownloadLink(token(), file)
+                    ?: throw IllegalStateException("获取下载链接失败")
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }

@@ -33,6 +33,7 @@ import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -351,6 +352,30 @@ class XunleiCloudViewModel(
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘图片）：迅雷直链从 getFileDetail 现取，请求头必须带客户端 UA
+     * （浏览器 UA 会被 CDN 判成网页端拒掉，与下载一致，见 [downloadHeaders]）。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val c = creds() ?: throw IllegalStateException("请先登录迅雷网盘")
+                val link = api.getFileDetail(file.fid, c.first, c.second, c.third)
+                    ?: throw IllegalStateException("获取下载链接失败")
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }

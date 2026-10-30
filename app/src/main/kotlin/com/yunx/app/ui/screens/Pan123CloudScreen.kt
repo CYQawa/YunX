@@ -467,6 +467,8 @@ fun Pan123CloudScreen(
             operating = viewModel.isOperating,
             onDownload = { viewModel.downloadFile() },
             onDownloadFolder = { viewModel.downloadFolder() },
+            // 在线预览（图片）：取链成功后 ViewModel 清空 actionFile，弹窗随之消失；失败则留在弹窗里报错
+            onPreview = { viewModel.openPreview() },
             onShare = { _, pwd, expiredType -> viewModel.shareFile(expiredType, pwd) },
             onRename = { viewModel.renameFile(it) },
             onConfirmDelete = { viewModel.deleteFile() },

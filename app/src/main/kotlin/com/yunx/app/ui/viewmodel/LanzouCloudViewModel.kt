@@ -33,6 +33,7 @@ import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.repository.LanzouAccountRepository
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -356,6 +357,29 @@ class LanzouCloudViewModel(
                 downloadLink = link
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘图片）：个人盘直链要登录 Cookie + uid/vei（[creds]），
+     * 且 Referer 必须落在直链自己的域名上 —— [downloadHeaders] 按直链域名现算，下载与预览共用。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val cred = creds()
+                val link = api.getPersonalDownloadLink(cred.cookie, cred.uid, cred.vei, fileNumeric(file.fid), file.fname)
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(link.downloadUrl))
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }

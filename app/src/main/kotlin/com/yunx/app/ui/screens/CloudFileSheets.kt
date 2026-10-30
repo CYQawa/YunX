@@ -59,6 +59,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -102,6 +103,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.OperationSheet
 import com.yunx.app.ui.components.LocalFileOperationBusy
+import com.yunx.app.ui.preview.CloudPreview
 import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
@@ -138,6 +140,12 @@ internal fun FileActionSheet(
     operating: Boolean,
     onDownload: () -> Unit,
     onDownloadFolder: () -> Unit,
+    /**
+     * 文件：在线预览（各云盘页），null = 不显示该项。
+     * 可见性由 [CloudPreview.canPreview] 统一判断（目前只放开图片），调用方不必自己过滤类型 ——
+     * 否则十个云盘页要各抄一份扩展名判断，改规则时必漏。
+     */
+    onPreview: (() -> Unit)? = null,
     onShare: (withPassword: Boolean, passcode: String, expiredType: Int) -> Unit,
     onRename: (String) -> Unit,
     /** 确认删除后执行（页面的 deleteFile()）：确认步骤在本弹窗内部完成 */
@@ -176,6 +184,9 @@ internal fun FileActionSheet(
                     onShare = { step = ActionStep.SHARE },
                     onMove = { step = ActionStep.MOVE },
                     onRename = { step = ActionStep.RENAME },
+                    // 在线预览：点开即关弹窗（取链成功后 ViewModel 会清空 actionFile，弹窗随之消失）；
+                    // 取链失败时弹窗留在原地，错误经 cloudMessage 走 Snackbar，用户可以直接重试
+                    onPreview = if (onPreview != null && CloudPreview.canPreview(file)) onPreview else null,
                     // 删除是弹窗内的第二级步骤：这样过渡与分享/重命名完全一致，也不会像另开底部弹窗那样
                     // 让本弹窗瞬间消失（页面的确认目标是从 actionFile 推导的，关掉它会把 actionFile 清空）
                     onDelete = { step = ActionStep.DELETE }
@@ -375,6 +386,8 @@ private fun ActionMenu(
     file: ShareFile,
     onDownload: () -> Unit,
     onDownloadFolder: (() -> Unit)? = null,
+    /** 非空时在「下载」之后显示「在线预览」（已由 [FileActionSheet] 按 [CloudPreview.canPreview] 过滤） */
+    onPreview: (() -> Unit)? = null,
     onShare: () -> Unit,
     onMove: () -> Unit,
     onRename: () -> Unit,
@@ -409,6 +422,16 @@ private fun ActionMenu(
                 desc = "递归下载整个文件夹，保持目录结构",
                 tint = MaterialTheme.colorScheme.primary,
                 onClick = onDownloadFolder
+            )
+        }
+        // 在线预览：紧跟「下载」，让「看一眼」排在「存下来」旁边（图片才出现，见 CloudPreview）
+        if (onPreview != null) {
+            ActionItem(
+                icon = Icons.Outlined.Visibility,
+                title = "在线预览",
+                desc = "不下载，直接在应用内查看",
+                tint = MaterialTheme.colorScheme.primary,
+                onClick = onPreview
             )
         }
         ActionItem(

@@ -492,6 +492,8 @@ fun BaiduCloudScreen(
                 }
             },
             onDownloadFolder = { viewModel.downloadFolder() },
+            // 在线预览（图片）：取链成功后 ViewModel 清空 actionFile，弹窗随之消失；失败则留在弹窗里报错
+            onPreview = { viewModel.openPreview() },
             // 百度分享必须带 4 位提取码
             passcodeMode = PasscodeMode.REQUIRED,
             onShare = { _, passcode, expiredType -> viewModel.shareFile(expiredType, passcode) },

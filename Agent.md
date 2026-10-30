@@ -1847,6 +1847,15 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 **请求头是刚需**：网盘直链与 B站/微博/Pixiv 直链都校验 `Referer`/`Cookie`/`UA`，少一个就是 403 ——
 所以 `PreviewMedia` 必带 `headers`，播放器与图片加载器都必须把它带上。
 
+**网盘页的入口在文件操作弹窗里**：`FileActionSheet` 只有调用方传了 `onPreview` 才显示「在线预览」项，
+**可见性统一由 `ui/preview/CloudPreview.kt` 的 `canPreview` 判断**（十个云盘页不要各抄一份扩展名判断）。
+云盘页**目前只放开图片**：直链按次/带时效（夸克每次取链都算一次额度、百度 dlink 会过期），图片是「点开
+看一眼」价值最高、失败代价最小的类型；视频/音频/文本要再逐平台验证 Range 与播放，放开前别顺手打开。
+取链放在各云盘 ViewModel 的 `openPreview()`：**请求头必须复用下载那一份 `downloadHeaders`**，因为
+「下载能通、预览白屏」几乎都是少 Referer/Cookie/UA；成功拿到直链后**先清 `actionFile` 再 `PreviewLauncher`**，
+否则关掉预览时文件操作弹窗会重新弹回来。分享解析页（`ShareDetailScreen`）不受此限，仍按 `PreviewTypes`
+放开全部可预览类型。
+
 **预览页可带「下载」**：`PreviewRequest.onDownload`（`(当前页下标) -> Unit`）非空时顶栏出现下载按钮，
 下的是**正在看的那一条**（翻页后随之变化）。用「下标回调」而不是把 `VideoMedia` 塞进 `PreviewMedia`：
 预览只关心能播能看的字段，下载还要 `fileName`/合轨音轨 —— 让调用方拿下标回自己那份列表取原始条目。

@@ -34,6 +34,7 @@ import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.network.model.ShareToken
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -441,6 +442,36 @@ class UCCoudViewModel(
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘图片）：与 [downloadFile] 同一条直链、同一份请求头。
+     *
+     * ★ UC 的 OSS 直链按 Referer 档位限速：不带官方 Referer/Origin 不会 403，而是被压到 ~100KB/s，
+     *   表现就是图片一直转圈。所以这里必须复用 [downloadHeaders]，别另拼一份。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val cookie = cookieProvider()
+                if (cookie.isNullOrBlank()) {
+                    cloudMessage = "请先登录 UC 网盘"
+                    return@launch
+                }
+                val link = ucDownloadLink(file.fid, cookie, file)
+                    ?: throw IllegalStateException("获取下载链接失败")
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(cookie))
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }

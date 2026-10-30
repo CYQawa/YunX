@@ -468,6 +468,8 @@ fun CloudDriveScreen(
                 operating = viewModel.isOperating,
                 onDownload = { viewModel.downloadFile() },
                 onDownloadFolder = { viewModel.downloadFolder() },
+                // 在线预览（图片）：取链成功后 ViewModel 清空 actionFile，弹窗随之消失；失败则留在弹窗里报错
+                onPreview = { viewModel.openPreview() },
                 onShare = { withPassword, passcode, expiredType ->
                     viewModel.shareFile(
                         urlType = if (withPassword) 2 else 1,
