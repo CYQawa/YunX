@@ -55,8 +55,21 @@ object C139Constants {
     /** 分享标题信息（getOutLinkGeneral → outLinkGeneral[].lkName） */
     const val SHARE_GENERAL_URL = "$SHARE_BASE/yun-share/richlifeApp/devapp/IOutLink/getOutLinkGeneral"
 
+    /** 个人云盘口令第一段查询：口令 → 分享基本信息与服务端提取码（XML 协议） */
+    const val SHARE_CODE_INFO_URL = "$SHARE_BASE/yun-share/richlifeApp/devapp/IOutLink"
+
+    /** 个人云盘口令第二段查询：口令 → 真实分享链接（XML 协议） */
+    const val SHARE_CODE_GENERAL_URL =
+        "$SHARE_BASE/yun-share/richlifeApp/devapp/saes_CYOutLink.IOutLink"
+
     /** §14 分享接口 AES-CBC 固定密钥（16 字节，所有账号共用） */
     const val SHARE_AES_KEY = "PVGDwmcvfs1uV3d1"
+
+    /**
+     * 口令 XML 接口的 App release 加密密钥（24 字节，AES-192-CBC）。
+     * 普通分享 JSON 接口继续使用 [SHARE_AES_KEY]；两者不能混用。
+     */
+    const val SHARE_CODE_AES_KEY = "2olBaQGYnEKoStYomsd1n7ax"
 
     // ---------- 个人网盘管理（§1：明文 JSON，无 Cookie；host personal-kd-njs） ----------
 
@@ -132,6 +145,14 @@ object C139Constants {
     const val SHARE_X_DEVICEINFO = "||3|12.27.0|||||chrome 150.0.0.0|360X444|zh-cn|||"
     const val SHARE_X_HUAWEI_CHANNELSRC = "10245500"
     const val SHARE_X_MM_SOURCE = "0002"
+
+    /**
+     * 口令 XML 接口的 App 渠道头。
+     * 该接口在 hcy-cool-flag=1 时要求 App 侧设备上下文；具体设备信息由 [C139DeviceInfo] 生成。
+     */
+    const val SHARE_CODE_APP_VERSION = "13.2.4"
+    const val SHARE_CODE_APP_CHANNEL = "10000023"
+    const val SHARE_CODE_MM_SOURCE = "021"
 
     /** 分享接口 User-Agent（必须浏览器/WebView UA，不能用 okhttp/4.x，设备头修复文档 §3.1） */
     const val SHARE_MOBILE_UA =

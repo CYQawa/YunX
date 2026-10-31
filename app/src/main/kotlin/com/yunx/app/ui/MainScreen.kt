@@ -106,6 +106,7 @@ import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.backup.AuthBackupManager
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.C139Api
+import com.yunx.app.data.network.C139DeviceInfo
 import com.yunx.app.data.network.GitHubApi
 import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.GitHubTokenStore
@@ -390,7 +391,10 @@ fun MainScreen(
     val ucApi = remember { UCApi() }
     val xunleiApi = remember { XunleiApi() }
     val baiduApi = remember { BaiduApi() }
-    val c139Api = remember { C139Api() }
+    val appContext = context.applicationContext
+    val c139Api = remember(appContext) {
+        C139Api(deviceInfoProvider = { C139DeviceInfo.from(appContext) })
+    }
     val pan123Api = remember { Pan123Api() }
     val pan115Api = remember { Pan115Api() }
     val guangyaApi = remember { GuangYaApi() }
