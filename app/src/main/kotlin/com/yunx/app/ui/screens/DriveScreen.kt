@@ -102,6 +102,7 @@ import com.yunx.app.data.db.XunleiAccountEntity
 import com.yunx.app.data.db.VideoAccountEntity
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.model.QuotaInfo
+import com.yunx.app.data.network.video.VideoParsers
 import com.yunx.app.data.network.video.VideoPlatform
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
@@ -138,16 +139,13 @@ private data class DriveAccount(
 /**
  * 账号页的一行网盘账号：渲染数据 + 该行自己的点击行为。
  *
- * ★ 顺序由用户设置决定，所以点击/更多按钮必须和账号**一起**绑定，不能按位置去猜；
- *   [hideWhenUnlogged] 见 `driveItems` 构建处的说明（GitHub 不参与隐藏）。
+ * ★ 顺序由用户设置决定，所以点击/更多按钮必须和账号**一起**绑定，不能按位置去猜。
  */
 private data class DriveAccountItem(
     val account: DriveAccount,
     val quota: QuotaInfo?,
     val onClick: () -> Unit,
-    val onMoreClick: (() -> Unit)?,
-    /** 「隐藏未登录的网盘」是否作用于这一行 */
-    val hideWhenUnlogged: Boolean = true
+    val onMoreClick: (() -> Unit)?
 )
 
 /**
@@ -382,8 +380,8 @@ fun DriveScreen(
     val ilanzouQuota by driveQuotaViewModel.ilanzouQuota.collectAsState()
 
     // 网盘账号卡片：数据 + 点击行为一一绑定 —— 顺序只影响渲染先后，不改任何点击语义。
-    // ★ hideWhenUnlogged=false 的项（目前只有 GitHub）不参与「隐藏未登录」：它不是网盘，
-    //   而且这张卡片是配置 Token 的唯一入口，藏起来用户就找不到入口了。
+    // ★ GitHub 也参与「隐藏未登录」（未配置 Token 时算未登录）：它只是列表里普通的一行，
+    //   隐藏后仍能在排序弹窗里看到并取消隐藏，不会丢入口。
     val driveItems = listOf(
         DriveAccountItem(
             account = quark,
@@ -509,8 +507,7 @@ fun DriveScreen(
             account = github,
             quota = null,
             onClick = if (githubHasToken) onGitHubBrowseHome else onGitHubTokenClick,
-            onMoreClick = sheetAction(githubHasToken) { showGitHubSheet = true },
-            hideWhenUnlogged = false
+            onMoreClick = sheetAction(githubHasToken) { showGitHubSheet = true }
         )
     )
 
@@ -523,15 +520,26 @@ fun DriveScreen(
         .sortedBy { rank[it.value.account.id] ?: Int.MAX_VALUE }
         .map { it.value }
     val visibleDriveItems = if (hideUnloggedDrives) {
-        orderedDriveItems.filter { it.account.isLoggedIn || !it.hideWhenUnlogged }
+        orderedDriveItems.filter { it.account.isLoggedIn }
     } else {
         orderedDriveItems
     }
     val hiddenUnloggedCount = if (hideUnloggedDrives) {
-        orderedDriveItems.count { !it.account.isLoggedIn && it.hideWhenUnlogged }
+        orderedDriveItems.count { !it.account.isLoggedIn }
     } else {
         0
     }
+    // 视频解析区共用同一个「隐藏未登录」开关：需要登录且还没登录的平台会被藏起来；
+    // 免登录平台不藏（藏了等于把可用功能删掉），所以这里也只统计 needsLogin 的。
+    val hiddenVideoCount = if (hideUnloggedDrives) {
+        VideoParsers.supportedPlatforms.count { it.needsLogin && videoLoginState[it] == null }
+    } else {
+        0
+    }
+    val hiddenHint = listOfNotNull(
+        hiddenUnloggedCount.takeIf { it > 0 }?.let { "$it 个未登录的网盘" },
+        hiddenVideoCount.takeIf { it > 0 }?.let { "$it 个未登录的视频平台" }
+    ).joinToString("、")
 
     // 进入网盘页加载空间详情（仅已登录平台）
     LaunchedEffect(Unit) {
@@ -663,11 +671,11 @@ fun DriveScreen(
                         onMoreClick = item.onMoreClick
                     )
                 }
-                if (hiddenUnloggedCount > 0) {
-                    // 别让账号「凭空消失」：明确告诉用户藏了几个、去哪恢复
+                if (hiddenHint.isNotEmpty()) {
+                    // 别让账号「凭空消失」：明确告诉用户藏了什么、去哪恢复
                     item(key = "drive_hidden_hint") {
                         Text(
-                            text = "已隐藏 $hiddenUnloggedCount 个未登录的网盘，点右上角排序可恢复",
+                            text = "已隐藏 $hiddenHint，点右上角排序可恢复",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 4.dp)
@@ -683,7 +691,8 @@ fun DriveScreen(
                         loginState = videoLoginState,
                         accounts = videoAccounts,
                         onLogin = onVideoLogin,
-                        onManage = { showVideoSheet = it }
+                        onManage = { showVideoSheet = it },
+                        hideUnlogged = hideUnloggedDrives
                     )
                 }
             }
@@ -1164,7 +1173,7 @@ private fun DriveSortDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = "隐藏未登录的网盘", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = "只显示已登录的账号；GitHub 入口始终保留",
+                            text = "只显示已登录的账号，随时可以在这里恢复",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

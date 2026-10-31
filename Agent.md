@@ -2197,11 +2197,12 @@ App UA（`netdisk;…`）+ `yun.baidu.com` 域名，且不带 `channel`」。百
 的 id 名次做 `sortedBy`（**稳定排序**），没排过的项（以后新增的平台）自然落到末尾并保持默认相对顺序，
 所以**加新网盘不需要迁移顺序设置**。上移/下移走 `onMove(from, to)` → `removeAt` + `add` → 即时落盘。
 
-**隐藏未登录**：`SettingsRepository.hideUnloggedDrives`，过滤条件是
-`isLoggedIn || !hideWhenUnlogged`。`DriveAccountItem.hideWhenUnlogged` 默认 true，**只有 GitHub 传 false**——
-它不是网盘，而且这张卡片是配置 Token 的唯一入口，藏掉就找不到入口。隐藏后在列表尾部显示
-「已隐藏 N 个未登录的网盘，点右上角排序可恢复」，别让账号「凭空消失」。弹窗里传的是
-`orderedDriveItems`（含被隐藏项），否则一旦隐藏就再也点不到恢复。
+**隐藏未登录**：`SettingsRepository.hideUnloggedDrives`，网盘区过滤条件就是 `isLoggedIn`
+（**GitHub 也参与**：未配置 Token 时算未登录，藏了仍能在排序弹窗里取消隐藏，不会丢 Token 入口）。
+视频解析区共用同一开关（`VideoAccountSection(hideUnlogged)`）：只藏「需要登录且未登录」的平台，
+免登录平台永远保留（藏了等于删功能，它们也没有「未登录」这个概念）。隐藏后在列表尾部显示
+「已隐藏 N 个未登录的网盘、M 个未登录的视频平台，点右上角排序可恢复」，别让账号「凭空消失」。
+弹窗里传的是 `orderedDriveItems`（含被隐藏项），否则一旦隐藏就再也点不到恢复。
 
 **为什么不拖拽**：`AlertDialog` 里手写拖拽要自己算 pointerInput + 逐行位移，而这里只有 11 行，
 上移/下移箭头的点按目标与可访问性（`contentDescription = "上移"/"下移"`）都更稳，也不用引入拖拽库。

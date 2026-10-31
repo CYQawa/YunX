@@ -70,15 +70,23 @@ internal fun AccountSectionLabel(text: String) {
  *
  * @param loginState 各平台当前账号（platform → 账号），决定显示「未登录 / 昵称 / 备注」
  * @param accounts 全部平台的视频账号，用于统计「共 N 个账号」
+ * @param hideUnlogged 与网盘区共用「隐藏未登录」开关：需要登录且未登录的平台不显示；
+ *   免登录平台始终显示（藏掉就等于把可用功能删了，它们也没有「未登录」这个概念）
  */
 @Composable
 internal fun VideoAccountSection(
     loginState: Map<VideoPlatform, VideoAccountEntity>,
     accounts: List<VideoAccountEntity>,
     onLogin: (VideoPlatform) -> Unit,
-    onManage: (VideoPlatform) -> Unit
+    onManage: (VideoPlatform) -> Unit,
+    hideUnlogged: Boolean = false
 ) {
-    val platforms = remember { VideoParsers.supportedPlatforms }
+    val allPlatforms = remember { VideoParsers.supportedPlatforms }
+    val platforms = if (hideUnlogged) {
+        allPlatforms.filter { !it.needsLogin || loginState[it] != null }
+    } else {
+        allPlatforms
+    }
     // 每个平台已登录的账号数：只有多账号时才需要在状态里补「共 N 个账号」
     val counts = remember(accounts) { accounts.groupingBy { it.platform }.eachCount() }
 
