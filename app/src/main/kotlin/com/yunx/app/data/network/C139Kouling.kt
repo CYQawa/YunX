@@ -74,7 +74,7 @@ object C139KoulingParser {
  * 第一段查询：口令 + 用户提供的提取码。
  *
  * 带密码查询时必须同时把 `isPasswd` 置为 1；否则服务端不会使用 `passwd`，
- * 对设有提取码的口令会返回 9188。
+ * 对设有提取码的口令会返回 9188 错误。
  */
 internal fun buildC139KoulingInfoRequest(
     command: C139Kouling,
