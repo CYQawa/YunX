@@ -354,7 +354,7 @@ class Pan123CloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：123 的直链按 UA/Referer 放行，与下载共用 [downloadHeaders]。
+     * 在线预览（云盘文件）：123 的直链按 UA/Referer 放行，与下载共用 [downloadHeaders]。
      * 直链有有效期，必须现取，不能在列表里预存。
      */
     fun openPreview() {
@@ -367,7 +367,7 @@ class Pan123CloudViewModel(
                     ?: throw IllegalStateException("获取下载链接失败")
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {

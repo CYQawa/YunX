@@ -395,7 +395,7 @@ class QuarkCloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：与 [downloadFile] 取同一条直链、同一份请求头，只是不弹下载确认弹窗。
+     * 在线预览（云盘文件）：与 [downloadFile] 取同一条直链、同一份请求头，只是不弹下载确认弹窗。
      *
      * ★ 必须现取直链：夸克直链带签名且有时效，预览页的图片加载器需要的是「此刻能读」的地址。
      *   取链失败（未登录 / 文件已删 / 直链额度用尽）把原因交给页面 Snackbar，不静默。
@@ -420,7 +420,9 @@ class QuarkCloudViewModel(
                     // 与 downloadFile 走同一个出口：QuarkCdn.fastest 现在是原样返回，将来若真做节点改写，
                     // 预览与下载的直链也必须同步，否则会出现「能下载、预览白屏」这类只在一侧复现的问题
                     url = com.yunx.app.data.network.QuarkCdn.fastest(link.downloadUrl, cookie),
-                    headers = downloadHeaders(cookie)
+                    headers = downloadHeaders(cookie),
+                    // 视频预览：m3u8 直链在播放端要显式当 HLS 处理（见 CloudPreview.open 的说明）
+                    isHls = link.isHls
                 )
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"

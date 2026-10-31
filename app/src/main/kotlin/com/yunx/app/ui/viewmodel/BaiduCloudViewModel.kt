@@ -362,7 +362,7 @@ class BaiduCloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：BaiduApi.locateDownload(file.fidToken, …) 给的是带 sign/timestamp 的
+     * 在线预览（云盘文件）：BaiduApi.locateDownload(file.fidToken, …) 给的是带 sign/timestamp 的
      * 临时 dlink，必须配同一份 Cookie + 客户端 UA 才读得到；取链失败照实回报。
      */
     fun openPreview() {

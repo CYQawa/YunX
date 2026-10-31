@@ -369,7 +369,7 @@ class LanzouCloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：个人盘直链要登录 Cookie + uid/vei（[creds]），
+     * 在线预览（云盘文件）：个人盘直链要登录 Cookie + uid/vei（[creds]），
      * 且 Referer 必须落在直链自己的域名上 —— [downloadHeaders] 按直链域名现算，下载与预览共用。
      */
     fun openPreview() {
@@ -382,7 +382,7 @@ class LanzouCloudViewModel(
                 val link = api.getPersonalDownloadLink(cred.cookie, cred.uid, cred.vei, fileNumeric(file.fid), file.fname)
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders(link.downloadUrl))
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(link.downloadUrl), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {

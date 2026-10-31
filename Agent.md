@@ -1920,12 +1920,22 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 
 **网盘页的入口在文件操作弹窗里**：`FileActionSheet` 只有调用方传了 `onPreview` 才显示「在线预览」项，
 **可见性统一由 `ui/preview/CloudPreview.kt` 的 `canPreview` 判断**（十个云盘页不要各抄一份扩展名判断）。
-云盘页**目前只放开图片**：直链按次/带时效（夸克每次取链都算一次额度、百度 dlink 会过期），图片是「点开
-看一眼」价值最高、失败代价最小的类型；视频/音频/文本要再逐平台验证 Range 与播放，放开前别顺手打开。
+云盘页与分享解析页一样**放开全部可预览类型**（图片 / 视频 / 音频 / 文本）：视频与音频是 ExoPlayer
+**流式播放**（HTTP Range，边下边播，不整段下载），文本也只读前 512KB。以前只放开图片的理由是
+「直链按次/带时效，怕播放再叠一层 Range 风险」，但内置下载器的分片与断点续传本来就依赖 Range，
+这个前提并不成立；真要逐平台验证，用「下载能通、预览 403」这条线索排查 —— 那几乎都是请求头缺失
+（少 Referer/Cookie/UA），而不是 CDN 不支持 Range。
 取链放在各云盘 ViewModel 的 `openPreview()`：**请求头必须复用下载那一份 `downloadHeaders`**，因为
 「下载能通、预览白屏」几乎都是少 Referer/Cookie/UA；成功拿到直链后**先清 `actionFile` 再 `PreviewLauncher`**，
-否则关掉预览时文件操作弹窗会重新弹回来。分享解析页（`ShareDetailScreen`）不受此限，仍按 `PreviewTypes`
-放开全部可预览类型。
+否则关掉预览时文件操作弹窗会重新弹回来。**`DownloadLink.isHls` 要一路带到 `CloudPreview.open(..., isHls=)`**：
+UC 的 video_preview 回退链路会给转码流（m3u8），而这类地址不一定带 `.m3u8` 后缀，播放器没法靠后缀
+识别（见下面表格里的 HLS 说明）。
+
+**预览要快（起播门槛）**：`MediaPreviewScreen.buildPlayer` 用 `previewLoadControl()` 替代 ExoPlayer 默认值 ——
+`minBuffer 15s / maxBuffer 50s / 起播 1.2s / 重缓冲后 3s` + `setPrioritizeTimeOverSizeThresholds(true)`。
+默认的 2.5 秒起播门槛是给「长时间连续播放」调的，对「点开看一眼」太保守：网盘直链首字节还要等取链与
+CDN 握手，再攒 2.5 秒素材就会像「点了没反应」。缓冲**不要**一起压低（15 秒是给限速 CDN 留的余量），
+调参只改 `previewLoadControl()` 这一处 —— 分享解析页、结果页内联播放器、云盘预览共用同一个 `buildPlayer`。
 
 **预览页可带「下载」**：`PreviewRequest.onDownload`（`(当前页下标) -> Unit`）非空时顶栏出现下载按钮，
 下的是**正在看的那一条**（翻页后随之变化）。用「下标回调」而不是把 `VideoMedia` 塞进 `PreviewMedia`：
@@ -1935,7 +1945,7 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 | 类型 | 实现 | 要点 |
 |---|---|---|
 | 图片 | Coil 3（`coil-compose` + `coil-network-okhttp`） | 多图用 `HorizontalPager` 翻页；请求头必须逐请求带上 |
-| 视频/音频 | Media3 ExoPlayer + `PlayerView`（`AndroidView`） | `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)`；`DefaultMediaSourceFactory` 按 URI 自动识别 m3u8；`DisposableEffect` 里 `player.release()` |
+| 视频/音频 | Media3 ExoPlayer + `PlayerView`（`AndroidView`） | `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)` + `previewLoadControl()` 快速起播；**m3u8 要显式建 `HlsMediaSource`**（播放器的 `DefaultMediaSourceFactory` 是用 `DataSource.Factory` 构造的，那条构造路径拿不到 HLS 工厂，后缀推断对无后缀转码流也不可靠）；`DisposableEffect` 里 `player.release()` |
 | 文本（仅网盘） | OkHttp + `Range: bytes=0-524287` | **只读前 512KB**，不整文件下载；UTF-8 严格解码失败回退 GBK 再回退 ISO-8859-1；`.md` 走已有 mikepenz 渲染，其余等宽纯文本 + 可复制 |
 
 **新增的两个依赖**（`gradle/libs.versions.toml`）：`media3 1.4.1`（1.4.x 用 Kotlin 1.9 编译，与项目

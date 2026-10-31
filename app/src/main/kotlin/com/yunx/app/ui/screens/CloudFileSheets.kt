@@ -148,7 +148,7 @@ internal fun FileActionSheet(
     onDownloadFolder: () -> Unit,
     /**
      * 文件：在线预览（各云盘页），null = 不显示该项。
-     * 可见性由 [CloudPreview.canPreview] 统一判断（目前只放开图片），调用方不必自己过滤类型 ——
+     * 可见性由 [CloudPreview.canPreview] 统一判断（图片/视频/音频/文本都放开），调用方不必自己过滤类型 ——
      * 否则十个云盘页要各抄一份扩展名判断，改规则时必漏。
      */
     onPreview: (() -> Unit)? = null,

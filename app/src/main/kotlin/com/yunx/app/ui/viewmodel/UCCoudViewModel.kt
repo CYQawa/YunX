@@ -454,7 +454,7 @@ class UCCoudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：与 [downloadFile] 同一条直链、同一份请求头。
+     * 在线预览（云盘文件）：与 [downloadFile] 同一条直链、同一份请求头。
      *
      * ★ UC 的 OSS 直链按 Referer 档位限速：不带官方 Referer/Origin 不会 403，而是被压到 ~100KB/s，
      *   表现就是图片一直转圈。所以这里必须复用 [downloadHeaders]，别另拼一份。
@@ -474,7 +474,7 @@ class UCCoudViewModel(
                     ?: throw IllegalStateException("获取下载链接失败")
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders(cookie))
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(cookie), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {

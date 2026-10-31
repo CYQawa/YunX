@@ -345,7 +345,7 @@ class ILanzouCloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：优享版取链要 appToken + uuid + userId（[credential] 会补全缺失的 userId），
+     * 在线预览（云盘文件）：优享版取链要 appToken + uuid + userId（[credential] 会补全缺失的 userId），
      * 请求头与下载共用 [downloadHeaders]，否则直链 403。
      */
     fun openPreview() {
@@ -358,7 +358,7 @@ class ILanzouCloudViewModel(
                     ?: throw IllegalStateException("获取下载链接失败")
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {

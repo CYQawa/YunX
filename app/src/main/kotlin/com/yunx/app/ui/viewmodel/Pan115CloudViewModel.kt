@@ -374,7 +374,7 @@ class Pan115CloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：115 直链是 pickcode 换来的 CDN 地址，CDN 同时校验登录 Cookie 与
+     * 在线预览（云盘文件）：115 直链是 pickcode 换来的 CDN 地址，CDN 同时校验登录 Cookie 与
      * 取链响应下发的 900 秒 CDN Cookie（[downloadHeaders] 负责拼接）—— 缺任一直接 403。
      */
     fun openPreview() {
@@ -388,7 +388,7 @@ class Pan115CloudViewModel(
                     ?: throw IllegalStateException("获取下载链接失败")
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders(ck, link))
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(ck, link), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {

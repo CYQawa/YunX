@@ -356,7 +356,7 @@ class C139CloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：139 直链要求 PC UA + 官方 Referer，与下载共用 [downloadHeaders]。
+     * 在线预览（云盘文件）：139 直链要求 PC UA + 官方 Referer，与下载共用 [downloadHeaders]。
      * 少一个头不会返回 403，而是回一段 HTML/JSON 错误页 —— 图片加载器那边只会显示「加载失败」，看不出原因。
      */
     fun openPreview() {
@@ -369,7 +369,7 @@ class C139CloudViewModel(
                     ?: throw IllegalStateException("获取下载链接失败")
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {

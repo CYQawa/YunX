@@ -364,7 +364,7 @@ class XunleiCloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：迅雷直链从 getFileDetail 现取，请求头必须带客户端 UA
+     * 在线预览（云盘文件）：迅雷直链从 getFileDetail 现取，请求头必须带客户端 UA
      * （浏览器 UA 会被 CDN 判成网页端拒掉，与下载一致，见 [downloadHeaders]）。
      */
     fun openPreview() {
@@ -378,7 +378,7 @@ class XunleiCloudViewModel(
                     ?: throw IllegalStateException("获取下载链接失败")
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {

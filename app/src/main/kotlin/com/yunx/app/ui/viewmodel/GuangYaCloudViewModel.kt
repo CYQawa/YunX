@@ -335,7 +335,7 @@ class GuangYaCloudViewModel(
     }
 
     /**
-     * 在线预览（云盘图片）：光鸭直链要配网页端 UA + 官方 Referer（[downloadHeaders]），
+     * 在线预览（云盘文件）：光鸭直链要配网页端 UA + 官方 Referer（[downloadHeaders]），
      * 访问令牌会过期，[token] 每次取链前都会重新确保 —— 别把上一次的直链缓存到预览页。
      */
     fun openPreview() {
@@ -348,7 +348,7 @@ class GuangYaCloudViewModel(
                     ?: throw IllegalStateException("获取下载链接失败")
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
-                CloudPreview.open(file, link.downloadUrl, downloadHeaders())
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "预览失败"
             } finally {
