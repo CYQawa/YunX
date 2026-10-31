@@ -20,7 +20,9 @@ package com.yunx.app.data.repository
 
 import com.yunx.app.data.network.C139Api
 import com.yunx.app.data.network.C139Constants
+import com.yunx.app.data.network.C139Kouling
 import com.yunx.app.data.network.ShareLinkParser
+import com.yunx.app.data.network.SharePlatform
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
@@ -32,6 +34,25 @@ import com.yunx.app.data.network.model.ShareSession
  * 列目录允许游客（cookie 为空）：getOutLinkInfoV6 是匿名端点；取直链仍要求登录（Agent.md §3.19）。
  */
 class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
+
+    /**
+     * 139 个人云盘口令 → 官方分享链接。
+     *
+     * 后续列目录、提取码补齐、取直链全部复用既有分享链路；这里只做“口令换链接”这一段，
+     * 避免把反序列化后的真实 linkID 直接散落到 UI 层。
+     */
+    suspend fun resolveKouling(
+        command: C139Kouling,
+        cookie: String = "",
+        authorization: String? = null
+    ): Result<String> = runCatching {
+        val resolved = api.resolveKouling(command, cookie, authorization)
+        val parsed = ShareLinkParser.parse(resolved.shareUrl)
+        if (parsed?.platform != SharePlatform.C139) {
+            throw IllegalStateException("139 云盘口令解析失败：返回的分享链接无效")
+        }
+        resolved.shareUrl
+    }
 
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
