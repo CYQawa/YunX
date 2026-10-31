@@ -24,6 +24,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -33,6 +34,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
+import java.security.MessageDigest
 
 /**
  * 百度网盘分享解析数据（xpan/share list 响应）。
@@ -374,27 +376,14 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         return servers.toList()
     }
 
-    /** 列出个人网盘目录（检查临时转存目录是否存在），返回子项 path 集合 */
-    suspend fun listDir(dir: String, cookie: String): List<String> = withContext(Dispatchers.IO) {
-        val url = "https://yun.baidu.com/api/list?clienttype=0&app_id=${BaiduConstants.APP_ID}" +
-            "&web=1&order=time&desc=1&dir=" + URLEncoder.encode(dir, "UTF-8") + "&num=100&page=1"
-        val request = Request.Builder()
-            .url(url)
-            .header("Cookie", cookie)
-            .header("User-Agent", BaiduConstants.UA_NETDISK)
-            .get()
-            .build()
-        runCatching {
-            val json = executeJson(request)
-            if (json.optInt("errno") != 0) return@runCatching emptyList()
-            val array = json.optJSONArray("list") ?: return@runCatching emptyList()
-            buildList {
-                for (i in 0 until array.length()) {
-                    array.optJSONObject(i)?.let { add(it.optString("path")) }
-                }
-            }
-        }.getOrDefault(emptyList())
-    }
+    /**
+     * 列出个人网盘目录（检查临时转存目录是否存在），返回子项 path 集合。
+     *
+     * 只是 [listCloudFiles] 的轻量包装：通道选择、分页、失效判定都只有一处实现，
+     * 免得「转存目录检查」和「列表页」跑在不同通道上、一个能读一个读不了。
+     */
+    suspend fun listDir(dir: String, cookie: String): List<String> =
+        catching { listCloudFiles(dir, cookie).map { it.fidToken } }.getOrDefault(emptyList())
 
     /**
      * 转存分享文件到指定目录（同步返回结果）。
@@ -540,59 +529,172 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
 
     /**
      * 列出个人网盘目录（自动翻页，返回该目录下全部文件）。
-     * 单页 num=100（官方 page_size 上限）；本页未满 100 视为末页，封顶 100 页防异常死循环。
+     *
+     * ★ 必须准备两个通道，而且**参数与 UA 不能混用**：
+     *  - App 通道（首选）：`clienttype=1`，`channel` 要保留但值为空（网页会话也认），
+     *    `bdstoken` 用 MD5(BDUSS) 而不是网页接口返回的 token；
+     *  - 网页通道（兜底）：`channel=chunlei&clienttype=0&web=1` + 网页 UA + 站内 Referer。
+     *
+     * 之前这里把「网页参数 + App UA」拼在一起、又没带 channel：百度会按「这不是同一类客户端」
+     * 拒绝（errno=2 参数错误 / -6 未登录），而旧实现把非 0 的 errno 当成空页吞掉，
+     * 于是界面上只剩一个永远加载不出来的空目录。
+     *
      * 返回 ShareFile（fid=fs_id，fidToken=绝对路径 path）
      */
     suspend fun listCloudFiles(dir: String, cookie: String): List<ShareFile> = withContext(Dispatchers.IO) {
-        val all = mutableListOf<ShareFile>()
         // 缩略图落在 thumbnail.baidupcs.com（签名地址，不需要 Cookie），但图床按网盘 UA + Referer 防盗链
         val thumbnailHeaders = mapOf(
             "User-Agent" to BaiduConstants.UA_NETDISK,
             "Referer" to "https://yun.baidu.com/"
         )
-        var page = 1
-        while (true) {
-            val url = "https://yun.baidu.com/api/list?clienttype=0&app_id=${BaiduConstants.APP_ID}" +
-                "&web=1&order=time&desc=1&dir=" + URLEncoder.encode(dir, "UTF-8") + "&num=100&page=$page"
+        val appResult = catching { fetchPersonalList(dir, cookie, thumbnailHeaders, app = true) }
+        appResult.getOrNull()?.let { return@withContext it }
+        val appError = appResult.exceptionOrNull()?.message
+        val webResult = catching { fetchPersonalList(dir, cookie, thumbnailHeaders, app = false) }
+        webResult.getOrNull()?.let { files ->
+            // App 通道失败本身不算错（网页会话/老账号会这样），但要留痕：下次百度再改协议时能看出是兜底在生效
+            DiagnosticLog.warn(DiagnosticLog.NETWORK, "baidu_list_web_fallback", "app=$appError")
+            return@withContext files
+        }
+        // 两个通道都失败：把真实原因抛出去（UI 显示 errno），不要再假装成空目录
+        val webError = webResult.exceptionOrNull()?.message
+        DiagnosticLog.warn(
+            DiagnosticLog.NETWORK,
+            "baidu_list_failed",
+            "app=$appError web=$webError"
+        )
+        throw BaiduApiException(webError ?: appError ?: "百度文件列表加载失败")
+    }
+
+    /**
+     * 按指定通道逐页拉取目录。
+     *
+     * 分页语义两边不同：App 通道用 `start/limit` 偏移，网页通道用 `page/num` 页码——
+     * 所以只能整条通道走完再决定要不要换另一条，不能从中间页切换（会漏文件）。
+     */
+    private fun fetchPersonalList(
+        dir: String,
+        cookie: String,
+        thumbnailHeaders: Map<String, String>,
+        app: Boolean
+    ): List<ShareFile> {
+        val files = mutableListOf<ShareFile>()
+        val seen = HashSet<String>()
+        for (page in 0 until LIST_MAX_PAGES) {
+            val url = listPageUrl(dir, cookie, app, page)
             val request = Request.Builder()
                 .url(url)
                 .header("Cookie", cookie)
-                .header("User-Agent", BaiduConstants.UA_NETDISK)
-                .header("X-Requested-With", "XMLHttpRequest")
-                .header("Referer", "https://yun.baidu.com/disk/main")
+                .header("User-Agent", if (app) BaiduConstants.UA_APP else BaiduConstants.UA_WEB)
+                .apply { if (!app) header("Referer", "https://pan.baidu.com/disk/main") }
                 .get()
                 .build()
-            val pageFiles = runCatching {
-                val json = executeJson(request)
-                if (json.optInt("errno") != 0) return@runCatching emptyList()
-                val array = json.optJSONArray("list") ?: return@runCatching emptyList()
-                buildList {
-                    for (i in 0 until array.length()) {
-                        val item = array.optJSONObject(i) ?: continue
-                        add(
-                            ShareFile(
-                                fid = item.optString("fs_id"),
-                                fname = item.optString("server_filename"),
-                                fsize = item.optLong("size"),
-                                isdir = item.optInt("isdir") == 1,
-                                pdirFid = dir,
-                                fidToken = item.optString("path"),
-                                modifyTime = item.optString("server_mtime"),
-                                thumbnail = thumbnailOf(item, thumbnailHeaders)
-                            )
-                        )
-                    }
-                }
-            }.getOrDefault(emptyList())
-            // 空页（含单页请求失败）视为已到末页，停止翻页
-            if (pageFiles.isEmpty()) break
-            all += pageFiles
-            // 本页未满 100 → 已是最后一页；封顶 100 页防止异常死循环
-            if (pageFiles.size < 100 || page >= 100) break
-            page++
+            val json = executeJson(request)
+            if (json.optInt("errno") != 0) throw BaiduApiException(listErrorMessage(json))
+            val array = json.optJSONArray("list")
+                ?: throw BaiduApiException("百度文件列表响应不完整，请刷新重试")
+            var fresh = 0
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val path = item.optString("path")
+                val fid = item.optString("fs_id").ifBlank { path }
+                if (fid.isBlank() || !seen.add(fid)) continue
+                fresh++
+                files.add(
+                    ShareFile(
+                        fid = item.optString("fs_id"),
+                        fname = item.optString("server_filename"),
+                        fsize = item.optLong("size"),
+                        isdir = item.optInt("isdir") == 1,
+                        pdirFid = dir,
+                        fidToken = path,
+                        modifyTime = item.optString("server_mtime"),
+                        thumbnail = thumbnailOf(item, thumbnailHeaders)
+                    )
+                )
+            }
+            // 本页未满一页 → 已是最后一页；整页都是重复项 → 服务端忽略了偏移，继续翻只会死循环
+            if (array.length() < LIST_PAGE_SIZE || fresh == 0) break
         }
-        all
+        return files
     }
+
+    /** 个人盘列表页 URL：App 通道 / 网页通道两套参数，混用会被判成参数错误（errno=2） */
+    private fun listPageUrl(dir: String, cookie: String, app: Boolean, page: Int): String {
+        val encodedDir = URLEncoder.encode(dir, "UTF-8")
+        return if (app) {
+            val uid = appDeviceId(cookie)
+            "https://pan.baidu.com/api/list?clienttype=1&app_id=${BaiduConstants.APP_ID}" +
+                "&version=${BaiduConstants.APP_VERSION}&channel=" +
+                "&bdstoken=${appBdstoken(cookie)}&devuid=$uid&cuid=$uid" +
+                "&apn_id=0_0&freeisp=0&queryfree=2" +
+                "&start=${page * LIST_PAGE_SIZE}&limit=$LIST_PAGE_SIZE&preset=0" +
+                "&order=time&desc=1&dir=$encodedDir"
+        } else {
+            "https://pan.baidu.com/api/list?channel=chunlei&clienttype=0" +
+                "&app_id=${BaiduConstants.APP_ID}&web=1&page=${page + 1}&num=$LIST_PAGE_SIZE" +
+                "&order=time&desc=1&dir=$encodedDir"
+        }
+    }
+
+    /** 列表失败的错误文案：errno 一定带上，服务端有 err_msg 就一起显示 */
+    private fun listErrorMessage(json: JSONObject): String {
+        val errno = json.optInt("errno")
+        // 字段为 JSON null 时 optString 会返回字符串 "null"，直接拼进提示会变成「：null」
+        val message = listOf("err_msg", "errmsg", "show_msg")
+            .firstNotNullOfOrNull { key ->
+                json.optString(key).takeIf { it.isNotBlank() && it != "null" }
+            }
+            .orEmpty()
+        return buildString {
+            append("百度文件列表加载失败（errno=").append(errno)
+            if (message.isNotBlank()) append("：").append(message)
+            append('）')
+            if (errno == -6) append("，登录已失效，请重新登录百度网盘")
+        }
+    }
+
+    /**
+     * App 通道的 CSRF：百度 App 认的是 MD5(BDUSS) 的 32 位小写十六进制，
+     * 不是 `gettemplatevariable` 返回的那个网页 token（两者在网页会话下并不通用）。
+     */
+    private fun appBdstoken(cookie: String): String =
+        md5Hex(cookieValue(cookie, "BDUSS").orEmpty())
+
+    /**
+     * App 通道的设备号：接口只要求形状像设备号（32 位大写十六进制 + "|0"）。
+     * 这里不采集任何硬件标识，用 BDUSS 派生一份稳定的「账号级设备号」：
+     * 同一账号每次一致即可，换账号/换登录态会自然不同。
+     */
+    private fun appDeviceId(cookie: String): String =
+        md5Hex("yunx|" + cookieValue(cookie, "BDUSS").orEmpty()).uppercase() + "|0"
+
+    /** 从 Cookie 串取单个键（形如 `BDUSS=...; STOKEN=...`），缺失返回 null */
+    private fun cookieValue(cookie: String, name: String): String? =
+        Regex("(?:^|;\\s*)" + Regex.escape(name) + "=([^;]+)")
+            .find(cookie)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+
+    private fun md5Hex(text: String): String =
+        MessageDigest.getInstance("MD5").digest(text.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+    /**
+     * 等价于 `runCatching`，但把协程取消原样抛出去。
+     *
+     * `runCatching` 会连 `CancellationException` 一起吞掉：用户退出列表页/切目录时，
+     * 这里的「通道回退」会继续发第二个请求并最终把取消伪装成业务失败。
+     */
+    private inline fun <T> catching(block: () -> T): Result<T> =
+        try {
+            Result.success(block())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
 
     /**
      * 百度列表项的缩略图：thumbs.url3 > url2 > url1（按清晰度降序）。
@@ -755,9 +857,11 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
 
     private fun executeJson(request: Request): JSONObject {
         val response = client.newCall(request).execute()
+        val status = response.code
         val body = response.use { it.body?.string() ?: throw BaiduApiException("请求失败：响应为空") }
+        // 带上 HTTP 状态码：百度鉴权失败时可能直接回 HTML 登录页，只报「解析失败」会查不出是哪一类
         return runCatching { JSONObject(body) }.getOrElse {
-            throw BaiduApiException("响应解析失败")
+            throw BaiduApiException("响应解析失败（HTTP $status）")
         }
     }
 
@@ -771,4 +875,12 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
     }
 
     private fun urlEncode(value: String): String = URLEncoder.encode(value, "UTF-8")
+
+    private companion object {
+        /** 单页 100 条（接口上限）；两个通道的页码语义不同，但页大小可以共用一个值 */
+        const val LIST_PAGE_SIZE = 100
+
+        /** 翻页硬上限：防止服务端忽略偏移导致死循环 */
+        const val LIST_MAX_PAGES = 100
+    }
 }

@@ -1488,6 +1488,13 @@ android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently in
   先跑正则的话 `"  Bearer xxx  "` 匹配不上，剩下的空格又过不了 token 字符集校验，粘贴兜底直接失效。
 - 切换登录方式必须调 `XunleiAccountViewModel.resetLoginStep()`：旧的 `creditkey/token` 属于上一条流程，
   带过去提交只会报「验证已失效」。
+- ⚠️ **`captcha/init` 的 `meta.user_id` 必须传「本次登录」的 userID**（`v3/login` / `v3/smslogin`
+  响应里的 `userID`，已存在 `XunleiLoginStep.userID`），由 `XunleiAccountRepository.finishLogin` /
+  `loginWithSms` 显式传进 `XunleiApi.initCaptcha(..., userId = step.userID)`。
+  旧实现用的是实例缓存的 `currentUserId`（从 access_token 的 JWT 里解出来的），**首次登录/升级后
+  进程里还没有 token，这个值是空的**，`meta.user_id` 空着只能拿降级 captcha_token，
+  `signin/token` 换 token 时被拒 —— 表现就是「短信验证码明明通过了，却拿不到登录态」。
+  `currentUserId` 现在只作「已登录过、调用方没传」时的兜底。
 - **网页登录的 token 与 App token 不是同一套 OAuth 客户端**，这是最容易踩的一条：
   - App：`Xp6vsxz_7IYVw2BB` + secret，刷新走**表单** + `X-Device-Id`；
   - 网页：`Xqp0kJBXWhwaTpB6`（`XunleiWebCredential.CLIENT_ID`）**无 secret**，刷新走 **JSON** +
@@ -2096,6 +2103,47 @@ reCAPTCHA 的 `_GRECAPTCHA` Cookie 也在、**没有任何 Cookie 被拦** —�
 **回退**：删掉 `data/upload/` 四个文件、`data/network/QuarkUpload.kt`、十家 `XxxApi.upload` 与对应常量、
 十个 ViewModel 的「上传」小节、`CloudFileSheets.kt` 的 `rememberUploadPicker`/`UploadProgressDialog`、
 十页的 `pickUpload` 接线即可（无数据库改动、无权限改动）。
+
+---
+
+### 3.46 百度个人盘列表：App 通道优先 + 网页通道兜底（「列表加载不出来」的根因）
+
+`BaiduApi.listCloudFiles` 现在**固定两条通道**，`listDir`（转存前检查临时目录）也走它，
+不许再各写一套：
+
+| 通道 | 请求形态 | 用途 |
+|---|---|---|
+| App（首选） | `pan.baidu.com/api/list`，`clienttype=1` + `version=13.15.4` + **`channel=`（键在、值为空）** + `bdstoken=MD5(BDUSS)` + `devuid/cuid/apn_id/freeisp/queryfree`，`start/limit` 翻页，`netdisk` UA | 网页登录拿到的 BDUSS 也能过；当前百度主推的形态 |
+| 网页（兜底） | `pan.baidu.com/api/list`，`channel=chunlei&clienttype=0&web=1`，`page/num` 翻页，**网页 UA** + `Referer: pan.baidu.com/disk/main` | App 通道被拒（老账号/网页会话）时用 |
+
+**踩过的那次「个人网盘文件列表加载不出来」**：旧实现是「网页参数（`clienttype=0&web=1`）+
+App UA（`netdisk;…`）+ `yun.baidu.com` 域名，且不带 `channel`」。百度按「不是同一类客户端」
+拒绝（`errno=2` 参数错误 / `-6` 未登录），而旧代码把「非 0 的 errno」当成**空目录**吞掉，
+所以界面上既没有错误提示、也没有文件 —— 看起来就是「列表加载不出来」。
+
+**必须守住的几条**：
+
+1. **参数与 UA 不能跨通道混用**：App 通道用 `BaiduConstants.UA_APP`（版本号与 `APP_VERSION`
+   必须一致，百度会交叉校验），网页通道用 `UA_WEB` + 站内 Referer。改一边就得两边一起改。
+2. **`bdstoken` 有两套**：App 通道是 `MD5(BDUSS)`（`appBdstoken`），网页通道才是
+   `gettemplatevariable` 返回的那个 token。把网页 token 塞进 App 通道会被拒，
+   反之亦然——上传/文件管理目前仍走网页通道，别顺手换。
+3. **失败了要抛异常，不许再 return 空列表**：两个通道都失败时抛
+   `百度文件列表加载失败（errno=…）`，`BaiduCloudViewModel` 会显示在错误态里。
+   吞掉 errno 等于把「登录失效 / 参数错误」伪装成「空文件夹」，是最难查的一类问题。
+4. **兜底成功要留痕**：走网页通道成功时写 `event=baidu_list_web_fallback`，
+   两个都失败写 `event=baidu_list_failed`（诊断模式 → network 模块）。百度下次改协议时，
+   日志里能直接看出是 App 通道失效还是两条都失效。
+5. **翻页语义两边不同**：App 是 `start/limit` 偏移、网页是 `page/num` 页码，
+   所以只能整条通道走完再换另一条，不能从中间页切换（会漏文件）；用
+   `seen` 去重 + 满页判定终止，封顶 100 页防服务端忽略偏移时死循环。
+6. `devuid/cuid` **不采集硬件标识**：用 BDUSS 派生稳定的 32 位大写十六进制 + `|0`
+   （`appDeviceId`），只是让请求形状像客户端；换账号自然变化。
+
+**落点**：`data/network/BaiduApi.kt`（`listCloudFiles` / `fetchPersonalList` / `listPageUrl` /
+`listErrorMessage` / `appBdstoken` / `appDeviceId`）、`data/network/BaiduConstants.kt`（`UA_APP` / `APP_VERSION`）。
+
+**回退**：把 `listCloudFiles` 恢复成单条网页请求即可（`listDir` 是它的包装，不用单独改）。
 
 ## 4. 验证
 

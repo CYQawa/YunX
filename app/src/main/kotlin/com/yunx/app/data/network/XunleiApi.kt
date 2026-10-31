@@ -126,13 +126,21 @@ class XunleiApi(
 
     // ---------- 登录 ----------
 
-    /** 1. 验证码盾初始化，返回 captcha_token（换 token 与 pan 请求需带 X-Captcha-Token）。
+    /**
+     * 1. 验证码盾初始化，返回 captcha_token（换 token 与 pan 请求需带 X-Captcha-Token）。
      * 官方抓包：client_id 用 app 凭据 Xp6vsxz_7IYVw2BB。
-     * 按文档 §9.5：meta 必须带 captcha_sign（10-salt 算法），否则拿到降级 token（POST 类接口可能拒绝）。 */
+     * 按文档 §9.5：meta 必须带 captcha_sign（10-salt 算法），否则拿到降级 token（POST 类接口可能拒绝）。
+     *
+     * @param userId 本次登录的迅雷用户 ID（v3/login、v3/smslogin 响应里的 userID）。
+     *   ★ 必须由调用方显式传：升级/首次登录时 [currentUserId] 还是空的，meta.user_id 空着
+     *   会拿到降级 captcha_token，`signin/token` 换 token 时被拒（表现为「短信验证通过但拿不到登录态」）。
+     *   [currentUserId] 只作为「同一进程里已经登录过、调用方没传」时的兜底。
+     */
     suspend fun initCaptcha(
         deviceId: String,
         username: String,
-        action: String = "POST:/auth/signin/token"
+        action: String = "POST:/auth/signin/token",
+        userId: String = ""
     ): String? = withContext(Dispatchers.IO) {
         val ts = System.currentTimeMillis().toString()
         val sign = buildCaptchaSign(deviceId, ts)
@@ -147,7 +155,7 @@ class XunleiApi(
                 .put("package_name", XunleiConstants.APP_PACKAGE_NAME)
                 .put("timestamp", ts)
                 .put("captcha_sign", sign)
-                .put("user_id", currentUserId)) // 真实 user_id，空会得到降级 token
+                .put("user_id", userId.ifBlank { currentUserId })) // 真实 user_id，空会得到降级 token
             .put("redirect_uri", "xlaccsdk01://xunlei.com/callback?state=harbor")
             .toString()
         val request = Request.Builder()
