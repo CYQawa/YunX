@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.Manifest
@@ -1649,7 +1650,11 @@ fun MainScreen(
                         },
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text("↗ 从 GitHub 获取 Token", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = "↗ 从 GitHub 获取 Token",
+                            style = MaterialTheme.typography.bodySmall,
+                            textDecoration = TextDecoration.Underline
+                        )
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
