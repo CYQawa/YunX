@@ -18,6 +18,9 @@
 
 package com.yunx.app.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -45,7 +48,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -81,6 +86,7 @@ import coil3.request.ImageRequest
 import com.yunx.app.data.network.video.VideoMedia
 import com.yunx.app.data.network.video.VideoMediaKind
 import com.yunx.app.data.network.video.VideoParseResult
+import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.items.logoRes
@@ -117,6 +123,8 @@ private const val IMAGE_PAGE_SIZE = 10
 fun VideoResultSection(
     result: VideoParseResult,
     onDownloadMedia: (VideoMedia) -> Unit,
+    /** 「仅下载音频」：产物是 `.m4a`，对视频行才显示入口 */
+    onDownloadAudio: (VideoMedia) -> Unit,
     onDownloadAll: () -> Unit,
     onDownloadSelected: (List<VideoMedia>) -> Unit,
     onBack: () -> Unit,
@@ -216,6 +224,7 @@ fun VideoResultSection(
                                 count = result.medias.size,
                                 media = media,
                                 onDownload = { onDownloadMedia(media) },
+                                onDownloadAudio = { onDownloadAudio(media) },
                                 // 预览：入口直接交给全局预览页（与当前页面无关的一次性动作，不用层层传回调）
                                 onPreview = { openMediaPreview(result, listOf(media), media, onDownloadMedia) }
                             )
@@ -545,9 +554,10 @@ private fun DownloadAllBar(result: VideoParseResult, onDownloadAll: () -> Unit) 
     }
 }
 
-/** 作品信息块：作者、发布时间、正文（超长折叠，点击展开） */
+/** 作品信息块：作者、发布时间、正文/文案（超长折叠，点击展开，可一键复制原文） */
 @Composable
 private fun VideoMetaBlock(result: VideoParseResult, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     // 元信息行：作者 / 发布时间（时间戳为 0 表示未知，不显示）
     val metaLine = buildList {
         if (result.author.isNotBlank()) add(result.author)
@@ -564,11 +574,15 @@ private fun VideoMetaBlock(result: VideoParseResult, modifier: Modifier = Modifi
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        if (result.text.isNotBlank()) {
-            var expanded by remember(result.text) { mutableStateOf(false) }
-            val canExpand = result.text.length > 60
+        // 文案：抖音/快手的分享文案、小红书笔记正文、B站简介都落在这里。
+        // 个别平台的「文案」就是标题本身（解析器把它同时写进 text），此时仍照常展示，
+        // 因为顶栏标题最多两行、必然会被截断，这里才是完整的原文。
+        val caption = result.text.ifBlank { result.title }
+        if (caption.isNotBlank()) {
+            var expanded by remember(caption) { mutableStateOf(false) }
+            val canExpand = caption.length > 60
             Text(
-                text = result.text,
+                text = caption,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = if (expanded) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Ellipsis,
@@ -576,15 +590,35 @@ private fun VideoMetaBlock(result: VideoParseResult, modifier: Modifier = Modifi
                     .padding(top = if (metaLine.isNotBlank()) 6.dp else 0.dp)
                     .clickable(enabled = canExpand) { expanded = !expanded }
             )
-            if (canExpand) {
-                Text(
-                    text = if (expanded) "收起" else "展开",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .clickable { expanded = !expanded }
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                if (canExpand) {
+                    Text(
+                        text = if (expanded) "收起" else "展开",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(end = 16.dp)
+                            .clickable { expanded = !expanded }
+                    )
+                }
+                // 复制原文而不是折叠后的显示文本：长文案正是最需要复制出去的
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { copyVideoCaption(context, caption) }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "复制文案",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
             }
         }
     }
@@ -621,13 +655,14 @@ private fun InlineVideoPlayer(media: PreviewMedia, modifier: Modifier = Modifier
     }
 }
 
-/** 单条媒体行：序号 + 类型 + 清晰度 + 大小，右侧「预览」图标 + 「下载」 */
+/** 单条媒体行：序号 + 类型 + 清晰度 + 大小，右侧「预览」图标 +（视频）「仅下载音频」 + 「下载」 */
 @Composable
 private fun VideoMediaRow(
     index: Int,
     count: Int,
     media: VideoMedia,
     onDownload: () -> Unit,
+    onDownloadAudio: () -> Unit,
     onPreview: () -> Unit
 ) {
     val subtitle = buildList {
@@ -674,6 +709,17 @@ private fun VideoMediaRow(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                    // 仅下载音频：只有视频才有音轨（图片没有，音频本身就是音频）
+                    if (media.kind == VideoMediaKind.VIDEO) {
+                        IconButton(onClick = onDownloadAudio, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Outlined.MusicNote,
+                                contentDescription = "仅下载音频",
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     TextButton(onClick = onDownload) {
                         Text("下载")
                     }
@@ -698,6 +744,21 @@ private fun formatVideoDate(timestampSeconds: Long): String {
     return runCatching {
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(timestampSeconds * 1000L))
     }.getOrDefault("")
+}
+
+/**
+ * 复制作品文案（复制的是**完整原文**，不是折叠后的显示文本 —— 长文案正是最需要复制出去的）。
+ *
+ * 走系统剪贴板 + 全局 Snackbar，与本应用其它「已复制」入口保持一致；Android 13 起系统自己会弹
+ * 复制预览，这里仍给一句提示（系统提示可能被用户关掉）。
+ */
+private fun copyVideoCaption(context: Context, text: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+    runCatching {
+        clipboard.setPrimaryClip(ClipData.newPlainText("yunx_video_caption", text))
+    }.onSuccess {
+        SnackbarController.show("文案已复制")
+    }
 }
 
 /**

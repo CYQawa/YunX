@@ -381,6 +381,7 @@ fun ResolveScreen(
                 is ResolveUiState.Video -> VideoResultSection(
                     result = s.result,
                     onDownloadMedia = { viewModel.downloadVideoMedia(it) },
+                    onDownloadAudio = { viewModel.downloadVideoAudio(it) },
                     onDownloadAll = { viewModel.downloadAllVideoMedia() },
                     onDownloadSelected = { viewModel.downloadVideoMedias(it) },
                     onBack = { viewModel.backToInput() }

@@ -119,6 +119,8 @@ object KuaishouParser : VideoParser {
             author = jsonString(photo, "userName").replace("\u3164", "").trim(),
             avatar = jsonString(photo, "headUrl"),
             cover = coverUrl,
+            // 快手的「文案」就是 caption（标题也取它），单独落到 text 供结果页展示/复制
+            text = title,
             timestampSeconds = photo.optLong("timestamp", 0L) / 1000,
             url = link.url,
             medias = medias

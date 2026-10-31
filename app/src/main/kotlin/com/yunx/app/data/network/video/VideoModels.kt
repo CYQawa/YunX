@@ -74,7 +74,7 @@ data class VideoParseResult(
     val author: String = "",
     val avatar: String = "",
     val cover: String = "",
-    /** 正文/描述（小红书笔记、微博正文那类） */
+    /** 正文/文案：抖音/快手的分享文案、小红书笔记正文、微博正文、B站简介都落在这里 */
     val text: String = "",
     /** 发布时间戳（秒），0 表示未知 */
     val timestampSeconds: Long = 0L,

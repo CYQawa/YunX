@@ -1719,7 +1719,7 @@ operation = 入队/暂停/删除等用户关键操作。
 | 快手 | 分享页 SSR 的 `window.INIT_STATE` | 单文件 mp4 | 不需要 |
 | 微博 | `m.weibo.cn/statuses/show`（伪装 XHR、**不跟随重定向**）、`h5.video.weibo.com/api/component` | 单文件 mp4（720p 优先）/ 九宫格原图 | 不需要（提高成功率） |
 | AcFun | `?quickViewId=videoInfo_new&ajaxpipe=1` 的 `window.videoInfo` | **m3u8** → 自动走 HLS 路径 | 不需要 |
-| 哔哩哔哩 | `x/web-interface/view` + `x/player/playurl?fnval=1&platform=html5` | **单文件低清**（见下方 TODO） | 可选（登录后画质更高） |
+| 哔哩哔哩 | `x/web-interface/view` + `x/player/playurl`：未登录 `fnval=1&platform=html5` 取单文件，已登录 `fnval=4048` 取 DASH | 单文件低清 /（已登录）**DASH 分轨**（音视频分离，下载后由 `DashMuxer` 本地合轨） | 可选（登录后画质更高） |
 | Pixiv | `ajax/illust/{id}` + `ajax/illust/{id}/pages` | 每页**原图**直链 | **要全量必须登录，但只支持手动填 Cookie**（实测 2026-10：未登录也能解析**一部分公开作品**，R18 / 受限作品与其余部分必须登录；网页登录在 WebView 里过不了它的风控，见 §3.44） |
 
 **刻意不做的**：YouTube / TikTok / Instagram（依赖 yt-dlp、gallery-dl）、知乎（curl_cffi TLS 指纹 + bs4）、
@@ -1852,11 +1852,34 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
   下载页就自然出现一个可折叠分组，而不是几十张散落的图片任务。**单张不加前缀**
   （一个只有一张图的「文件夹」没有意义），所以「下载全部 / 下载所选」走批量入口、单张下载走
   `downloadVideoMedia`。批量入口同时负责传合轨音轨，别再退回只传 `url` 的写法。
+- **文案（简介/正文）必须落到 `VideoParseResult.text`**：抖音的 `desc`、快手的 `caption` 既是标题、
+  也是**完整文案**，以前只写进 `title`（顶栏最多两行、必然截断）→ 结果页没有文案块、用户也没法复制。
+  现在两个解析器都同时写 `text`（抖音 WebView 路线的 `EXTRACT_JS` 单独回 `desc`，不再从
+  `document.title` 反推）；结果页文案块带「复制文案」，复制的是**完整原文**而不是折叠后的显示文本。
+  ★ 新增平台只要「作品有一段文字描述」，就填 `text` —— 别指望 `title` 兼任文案。
+- **「仅下载音频」**（视频行右侧的音频图标，产物固定 `.m4a`）：
+  - **有独立音轨就直接下音轨**：目前只有哔哩哔哩 DASH（`VideoMedia.audioUrl`），由
+    `ResolveViewModel.downloadVideoAudio` 直接把 `audioUrl` 入队 —— 体积通常只有视频的几十分之一，
+    这才是真正意义上的「只下音频」。
+  - **其余平台只有一条整段视频直链**（抖音/快手/小红书/微博/AcFun），平台侧没有音频地址：入队时带
+    `audioOnly = true`，由 `DownloadManager.audioOnlyDownload` **下完整段视频后抽音轨**
+    （`AudioExtractor`：MediaExtractor 选第一条 `audio/` 轨 + MediaMuxer 逐样本重封装，**不重编码**）。
+    ★ 所以这些平台的「仅下载音频」**流量与下视频完全一样**，省不掉 —— 这是没有独立音轨时的物理上限，
+    别在 UI 上暗示「只下很小的一段」。HLS（AcFun）同样是先把分片合成临时文件、再从中抽。
+  - ★ **分支顺序**：`runTask` 里 `task.audioOnly` 必须排在 `mergeAudioUrl` **之前**。否则给一条 DASH
+    任务点「只要音频」会走进合轨，产出的是一个视频。
+  - ★ **必须走内置下载器**：`enqueue(..., audioOnly = true)` 要顺带让 `shouldUseEngine` 的 `needMerge`
+    为真，否则设置里选了 Gopeed 时，引擎会把完整视频存下来、没有任何人抽音轨。
+  - 落库在 `download_task.audioOnly`（**DB v24**，`MIGRATION_23_24`）：抽音轨发生在下载完成时，
+    暂停/重启后还要按同一标记收尾。文件名由 `ResolveViewModel.videoAudioFileName` 生成为
+    `<作品名>_音频.m4a`；`DownloadSaver.mimeOf` 把 `m4a/m4s` 映射成 `audio/mp4`（少了这个分支会落成
+    `application/octet-stream`，相册/音乐播放器按类型筛选时看不到产物）。
+  - 抽音轨阶段前台通知显示「正在提取音频」（`DownloadService.AUDIO_TEXT`），**不要复用合并文案**。
 
 **TODO（改动前先读）**：
 
-1. **B站 DASH 合并**：`fnval=1` 只能拿到单文件（未登录画质很低）。高清是音视频分离的 DASH，Android 侧
-   需要 mux 方案（自研或引入原生库）才能合并，属于独立课题；
+1. **B站画质**：DASH 音视频分离的**本地合轨已实现**（`fnval=4048` + `DashMuxer`，见 §3.42），别再把它
+   当待办；剩下的限制是**未登录拿不到 DASH 高清**、以及番剧/付费内容不返回可合轨的流；
 2. **B站 playurl 若被要求 WBI 签名**：现在用的是公开的 `x/player/playurl`，一旦该接口开始强制签名，
    需要实现 WBI 签名或改用其它公开接口；
 3. **Pixiv 动图**（ugoira，zip + 帧时长表）与**小说**未支持，识别层会给出明确提示而不是产出打不开的文件；

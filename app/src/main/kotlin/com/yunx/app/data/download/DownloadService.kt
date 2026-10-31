@@ -106,9 +106,10 @@ class DownloadService : Service() {
         builder
             .setSmallIcon(R.drawable.icon)
             .setContentTitle(title)
-            // 完整通知显示下载速度；合并阶段单独提示（大文件合并可能几十秒）；简化模式仅提示下载中
+            // 完整通知显示下载速度；合并/抽音轨阶段单独提示（都要跑几秒到几十秒）；简化模式仅提示下载中
             .setContentText(
                 if (speed == MERGE_TEXT) "正在合并分片，完成前请勿关闭应用"
+                else if (speed == AUDIO_TEXT) "正在提取音频，完成前请勿关闭应用"
                 else if (hasSpeed) "下载速度 $speed"
                 else "正在后台下载，完成前请勿关闭应用"
             )
@@ -177,6 +178,12 @@ class DownloadService : Service() {
          * 通知正文因此显示「正在合并分片」，而不是「下载速度 合并中」。
          */
         const val MERGE_TEXT = "合并中"
+
+        /**
+         * 抽音轨阶段速度栏占位文案：DownloadManager 把视频下完、用 AudioExtractor 抽音轨时把它
+         * 当作 speed 传进来，通知正文因此显示「正在提取音频」，而不是「下载速度 提取中」。
+         */
+        const val AUDIO_TEXT = "提取中"
 
         /** 请求提升为「进行中」通知的 extras 键（与 Notification.EXTRA_REQUEST_PROMOTED_ONGOING 同值） */
         private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
