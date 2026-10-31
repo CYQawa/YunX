@@ -149,6 +149,32 @@ class SettingsRepository(context: Context) {
         }
 
     /**
+     * 账号页网盘列表的顺序（平台 id 的列表），空 = 默认顺序。
+     *
+     * ★ 只存「用户排过的相对顺序」：以后新增平台不在这个列表里，由账号页按默认顺序补在末尾
+     *   （见 `DriveScreen` 的排序归一化），所以加新网盘不需要迁移这个设置。
+     */
+    var driveAccountOrder: List<String>
+        get() = prefs.getString("drive_account_order", "")
+            .orEmpty()
+            .split(',')
+            .filter { it.isNotBlank() }
+        set(value) {
+            prefs.edit().putString("drive_account_order", value.joinToString(",")).apply()
+        }
+
+    /**
+     * 账号页隐藏未登录的网盘（默认关）：开启后列表只保留已登录的账号。
+     * 未登录的平台仍能在「排序」弹窗里看到并取消隐藏；GitHub 卡片不受影响
+     * （它不是网盘，且是配置 Token 的唯一入口，见 `DriveScreen`）。
+     */
+    var hideUnloggedDrives: Boolean
+        get() = prefs.getBoolean("hide_unlogged_drives", false)
+        set(value) {
+            prefs.edit().putBoolean("hide_unlogged_drives", value).apply()
+        }
+
+    /**
      * 列表缩略图：在网盘/分享文件列表里给图片显示小图（默认开启）。
      *
      * 关掉后**一个取图请求都不发**（不是加载完再隐藏）：缩略图要走各网盘接口或图床，

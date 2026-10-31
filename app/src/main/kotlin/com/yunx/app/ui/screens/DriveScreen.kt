@@ -29,6 +29,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +41,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,10 +50,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -57,6 +65,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -74,8 +83,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.C139AccountEntity
@@ -91,6 +103,7 @@ import com.yunx.app.data.db.VideoAccountEntity
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.video.VideoPlatform
+import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
 import com.yunx.app.ui.viewmodel.C139CloudViewModel
 import com.yunx.app.ui.viewmodel.DriveQuotaViewModel
@@ -121,6 +134,31 @@ private data class DriveAccount(
     val avatarText: String,
     val isLoggedIn: Boolean = false
 )
+
+/**
+ * 账号页的一行网盘账号：渲染数据 + 该行自己的点击行为。
+ *
+ * ★ 顺序由用户设置决定，所以点击/更多按钮必须和账号**一起**绑定，不能按位置去猜；
+ *   [hideWhenUnlogged] 见 `driveItems` 构建处的说明（GitHub 不参与隐藏）。
+ */
+private data class DriveAccountItem(
+    val account: DriveAccount,
+    val quota: QuotaInfo?,
+    val onClick: () -> Unit,
+    val onMoreClick: (() -> Unit)?,
+    /** 「隐藏未登录的网盘」是否作用于这一行 */
+    val hideWhenUnlogged: Boolean = true
+)
+
+/**
+ * 已登录才有「更多」按钮：返回 null 时 [DriveAccountCard] 不画三点图标。
+ *
+ * ★ 单独抽成函数是为了给 lambda 一个明确的 `() -> Unit` 期望类型 ——
+ *   `onMoreClick = if (x) ({ ... }) else null` 这种写法在 Kotlin 里依赖类型推断，
+ *   条件分支里的 lambda 字面量推断不稳，抽出来后就没有歧义了。
+ */
+private fun sheetAction(enabled: Boolean, open: () -> Unit): (() -> Unit)? =
+    if (enabled) open else null
 
 /**
  * 账号页（原「网盘」页）：
@@ -200,6 +238,12 @@ fun DriveScreen(
     onVideoRename: (String, String) -> Unit = { _, _ -> },
     onVideoRemove: (String) -> Unit = {},
     onVideoRemoveAll: (VideoPlatform) -> Unit = {},
+    /** 顶栏「排序」弹窗是否打开 —— 按钮画在全局顶栏（MainScreen），状态由上层持有 */
+    showSortDialog: Boolean = false,
+    /** 关闭顶栏「排序」弹窗 */
+    onDismissSortDialog: () -> Unit = {},
+    /** 账号列表 ↔ 网盘浏览子页切换：上层据此只在账号列表上显示「排序」按钮 */
+    onSubPageChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showQuarkSheet by remember { mutableStateOf(false) }
@@ -239,6 +283,13 @@ fun DriveScreen(
 
     // 网盘账号列表的滚动状态（与 show*Cloud 同在 DriveScreen 生命周期内；AnimatedContent 切页不会丢）
     val accountListState = rememberLazyListState()
+
+    // 排序 / 隐藏未登录：和滚动态一样提升到本层（进网盘子页再回来也不丢），
+    // 改动即时落盘、不做「确定/取消」——这个弹窗是设置面板，改完即所见。
+    val context = LocalContext.current
+    val settings = remember { SettingsRepository(context) }
+    var driveOrder by remember { mutableStateOf(settings.driveAccountOrder) }
+    var hideUnloggedDrives by remember { mutableStateOf(settings.hideUnloggedDrives) }
 
     // 夸克：登录态由数据库驱动；已登录则副标题显示昵称
     val quark = DriveAccount(
@@ -319,8 +370,167 @@ fun DriveScreen(
         avatarText = "GH",
         isLoggedIn = githubHasToken
     )
-    val others = remember {
-        emptyList<DriveAccount>()
+    // 空间额度统一在列表外层 collect：卡片先后顺序变了也不会重复/漏订阅
+    val quarkQuota by driveQuotaViewModel.quarkQuota.collectAsState()
+    val ucQuota by driveQuotaViewModel.ucQuota.collectAsState()
+    val xunleiQuota by driveQuotaViewModel.xunleiQuota.collectAsState()
+    val baiduQuota by driveQuotaViewModel.baiduQuota.collectAsState()
+    val c139Quota by driveQuotaViewModel.c139Quota.collectAsState()
+    val pan123Quota by driveQuotaViewModel.pan123Quota.collectAsState()
+    val pan115Quota by driveQuotaViewModel.pan115Quota.collectAsState()
+    val guangyaQuota by driveQuotaViewModel.guangyaQuota.collectAsState()
+    val ilanzouQuota by driveQuotaViewModel.ilanzouQuota.collectAsState()
+
+    // 网盘账号卡片：数据 + 点击行为一一绑定 —— 顺序只影响渲染先后，不改任何点击语义。
+    // ★ hideWhenUnlogged=false 的项（目前只有 GitHub）不参与「隐藏未登录」：它不是网盘，
+    //   而且这张卡片是配置 Token 的唯一入口，藏起来用户就找不到入口了。
+    val driveItems = listOf(
+        DriveAccountItem(
+            account = quark,
+            quota = quarkQuota,
+            onClick = {
+                if (quark.isLoggedIn) {
+                    showCloud = true
+                } else {
+                    onQuarkLogin()
+                }
+            },
+            onMoreClick = sheetAction(quark.isLoggedIn) { showQuarkSheet = true }
+        ),
+        DriveAccountItem(
+            account = uc,
+            quota = ucQuota,
+            onClick = {
+                if (uc.isLoggedIn) {
+                    showUCCloud = true
+                } else {
+                    onUCLogin()
+                }
+            },
+            onMoreClick = sheetAction(uc.isLoggedIn) { showUCSheet = true }
+        ),
+        DriveAccountItem(
+            account = xunlei,
+            quota = xunleiQuota,
+            onClick = {
+                if (xunlei.isLoggedIn) {
+                    showXunleiCloud = true
+                } else {
+                    onXunleiLogin()
+                }
+            },
+            onMoreClick = sheetAction(xunlei.isLoggedIn) { showXunleiSheet = true }
+        ),
+        DriveAccountItem(
+            account = baidu,
+            quota = baiduQuota,
+            onClick = {
+                if (baidu.isLoggedIn) {
+                    showBaiduCloud = true
+                } else {
+                    onBaiduLogin()
+                }
+            },
+            onMoreClick = sheetAction(baidu.isLoggedIn) { showBaiduSheet = true }
+        ),
+        DriveAccountItem(
+            account = c139,
+            quota = c139Quota,
+            onClick = {
+                if (c139.isLoggedIn) {
+                    showC139Cloud = true
+                } else {
+                    onC139Login()
+                }
+            },
+            onMoreClick = sheetAction(c139.isLoggedIn) { showC139Sheet = true }
+        ),
+        DriveAccountItem(
+            account = pan123,
+            quota = pan123Quota,
+            onClick = {
+                if (pan123.isLoggedIn) {
+                    showPan123Cloud = true
+                } else {
+                    onPan123Login()
+                }
+            },
+            onMoreClick = sheetAction(pan123.isLoggedIn) { showPan123Sheet = true }
+        ),
+        DriveAccountItem(
+            account = pan115,
+            quota = pan115Quota,
+            onClick = {
+                if (pan115.isLoggedIn) {
+                    showPan115Cloud = true
+                } else {
+                    onPan115Login()
+                }
+            },
+            onMoreClick = sheetAction(pan115.isLoggedIn) { showPan115Sheet = true }
+        ),
+        DriveAccountItem(
+            account = guangya,
+            quota = guangyaQuota,
+            onClick = {
+                if (guangya.isLoggedIn) {
+                    showGuangYaCloud = true
+                } else {
+                    onGuangYaLogin()
+                }
+            },
+            onMoreClick = sheetAction(guangya.isLoggedIn) { showGuangYaSheet = true }
+        ),
+        DriveAccountItem(
+            account = ilanzou,
+            quota = ilanzouQuota,
+            onClick = {
+                if (ilanzou.isLoggedIn) {
+                    showILanzouCloud = true
+                } else {
+                    onILanzouLogin()
+                }
+            },
+            onMoreClick = sheetAction(ilanzou.isLoggedIn) { showILanzouSheet = true }
+        ),
+        DriveAccountItem(
+            account = lanzou,
+            quota = null,
+            onClick = {
+                if (lanzou.isLoggedIn) {
+                    showLanzouCloud = true
+                } else {
+                    onLanzouLogin()
+                }
+            },
+            onMoreClick = sheetAction(lanzou.isLoggedIn) { showLanzouSheet = true }
+        ),
+        DriveAccountItem(
+            account = github,
+            quota = null,
+            onClick = if (githubHasToken) onGitHubBrowseHome else onGitHubTokenClick,
+            onMoreClick = sheetAction(githubHasToken) { showGitHubSheet = true },
+            hideWhenUnlogged = false
+        )
+    )
+
+    // 排序归一化：先按用户保存的名次排；不在保存顺序里的项（新增平台 / 从没排过）
+    // 名次并到末尾，且保持它们在默认列表里的前后关系（稳定排序）。
+    val rank = driveOrder.withIndex().associate { (index, id) -> id to index }
+    // sortedBy 是稳定排序：没保存过名次的项（新增平台）都拿 Int.MAX_VALUE，
+    // 会按默认顺序稳定地排在有名字的项后面，不需要再用第二关键字。
+    val orderedDriveItems = driveItems.withIndex()
+        .sortedBy { rank[it.value.account.id] ?: Int.MAX_VALUE }
+        .map { it.value }
+    val visibleDriveItems = if (hideUnloggedDrives) {
+        orderedDriveItems.filter { it.account.isLoggedIn || !it.hideWhenUnlogged }
+    } else {
+        orderedDriveItems
+    }
+    val hiddenUnloggedCount = if (hideUnloggedDrives) {
+        orderedDriveItems.count { !it.account.isLoggedIn && it.hideWhenUnlogged }
+    } else {
+        0
     }
 
     // 进入网盘页加载空间详情（仅已登录平台）
@@ -330,21 +540,26 @@ fun DriveScreen(
     // 下拉刷新状态：绑定空间配额加载中状态
     val isRefreshing by driveQuotaViewModel.loading.collectAsState()
 
+    // 当前展示第几页：0=账号列表，1..10=各网盘浏览。提成变量是因为要同时喂给
+    // AnimatedContent 和「子页打开时隐藏顶栏排序按钮」的通知（见 onSubPageChange）
+    val drivePage = when {
+        showCloud -> 1
+        showUCCloud -> 2
+        showXunleiCloud -> 3
+        showBaiduCloud -> 4
+        showC139Cloud -> 5
+        showPan123Cloud -> 6
+        showPan115Cloud -> 7
+        showGuangYaCloud -> 8
+        showILanzouCloud -> 9
+        showLanzouCloud -> 10
+        else -> 0
+    }
+    LaunchedEffect(drivePage) { onSubPageChange(drivePage != 0) }
+
     // 账号列表 ↔ 夸克云盘 ↔ UC 云盘 ↔ 迅雷云盘 ↔ 百度云盘 ↔ 139 云盘 ↔ 123 云盘：平滑过渡（淡入 + 轻微缩放，不僵硬）
     AnimatedContent(
-        targetState = when {
-            showCloud -> 1
-            showUCCloud -> 2
-            showXunleiCloud -> 3
-            showBaiduCloud -> 4
-            showC139Cloud -> 5
-            showPan123Cloud -> 6
-            showPan115Cloud -> 7
-            showGuangYaCloud -> 8
-            showILanzouCloud -> 9
-            showLanzouCloud -> 10
-            else -> 0
-        },
+        targetState = drivePage,
         transitionSpec = {
             (fadeIn(effectsDefault()) + scaleIn(spatialDefault(), initialScale = 0.98f))
                 .togetherWith(fadeOut(effectsFast()) + scaleOut(spatialFast(), targetScale = 0.98f))
@@ -438,175 +653,26 @@ fun DriveScreen(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-                item(key = quark.id) {
+                // 顺序 / 隐藏未登录由顶栏「排序」弹窗控制：这里只按设置渲染，
+                // 数据与点击行为在 driveItems 里一一绑定（改顺序不会改语义）。
+                items(visibleDriveItems, key = { it.account.id }) { item ->
                     DriveAccountCard(
-                        account = quark,
-                        quota = driveQuotaViewModel.quarkQuota.collectAsState().value,
-                        onClick = if (quark.isLoggedIn) {
-                            { showCloud = true }
-                        } else {
-                            onQuarkLogin
-                        },
-                        onMoreClick = if (quark.isLoggedIn) {
-                            { showQuarkSheet = true }
-                        } else {
-                            null
-                        }
+                        account = item.account,
+                        quota = item.quota,
+                        onClick = item.onClick,
+                        onMoreClick = item.onMoreClick
                     )
                 }
-                item(key = uc.id) {
-                    DriveAccountCard(
-                        account = uc,
-                        quota = driveQuotaViewModel.ucQuota.collectAsState().value,
-                        onClick = if (uc.isLoggedIn) {
-                            { showUCCloud = true }
-                        } else {
-                            onUCLogin
-                        },
-                        onMoreClick = if (uc.isLoggedIn) {
-                            { showUCSheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = xunlei.id) {
-                    DriveAccountCard(
-                        account = xunlei,
-                        quota = driveQuotaViewModel.xunleiQuota.collectAsState().value,
-                        onClick = if (xunlei.isLoggedIn) {
-                            { showXunleiCloud = true }
-                        } else {
-                            onXunleiLogin
-                        },
-                        onMoreClick = if (xunlei.isLoggedIn) {
-                            { showXunleiSheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = baidu.id) {
-                    DriveAccountCard(
-                        account = baidu,
-                        quota = driveQuotaViewModel.baiduQuota.collectAsState().value,
-                        onClick = if (baidu.isLoggedIn) {
-                            { showBaiduCloud = true }
-                        } else {
-                            onBaiduLogin
-                        },
-                        onMoreClick = if (baidu.isLoggedIn) {
-                            { showBaiduSheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = c139.id) {
-                    DriveAccountCard(
-                        account = c139,
-                        quota = driveQuotaViewModel.c139Quota.collectAsState().value,
-                        onClick = if (c139.isLoggedIn) {
-                            { showC139Cloud = true }
-                        } else {
-                            onC139Login
-                        },
-                        onMoreClick = if (c139.isLoggedIn) {
-                            { showC139Sheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = pan123.id) {
-                    DriveAccountCard(
-                        account = pan123,
-                        quota = driveQuotaViewModel.pan123Quota.collectAsState().value,
-                        onClick = if (pan123.isLoggedIn) {
-                            { showPan123Cloud = true }
-                        } else {
-                            onPan123Login
-                        },
-                        onMoreClick = if (pan123.isLoggedIn) {
-                            { showPan123Sheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = pan115.id) {
-                    DriveAccountCard(
-                        account = pan115,
-                        quota = driveQuotaViewModel.pan115Quota.collectAsState().value,
-                        onClick = if (pan115.isLoggedIn) {
-                            { showPan115Cloud = true }
-                        } else {
-                            onPan115Login
-                        },
-                        onMoreClick = if (pan115.isLoggedIn) {
-                            { showPan115Sheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = guangya.id) {
-                    DriveAccountCard(
-                        account = guangya,
-                        quota = driveQuotaViewModel.guangyaQuota.collectAsState().value,
-                        onClick = if (guangya.isLoggedIn) {
-                            { showGuangYaCloud = true }
-                        } else {
-                            onGuangYaLogin
-                        },
-                        onMoreClick = if (guangya.isLoggedIn) {
-                            { showGuangYaSheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = ilanzou.id) {
-                    DriveAccountCard(
-                        account = ilanzou,
-                        quota = driveQuotaViewModel.ilanzouQuota.collectAsState().value,
-                        onClick = if (ilanzou.isLoggedIn) {
-                            { showILanzouCloud = true }
-                        } else {
-                            onILanzouLogin
-                        },
-                        onMoreClick = if (ilanzou.isLoggedIn) {
-                            { showILanzouSheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = lanzou.id) {
-                    DriveAccountCard(
-                        account = lanzou,
-                        onClick = if (lanzou.isLoggedIn) {
-                            { showLanzouCloud = true }
-                        } else {
-                            onLanzouLogin
-                        },
-                        onMoreClick = if (lanzou.isLoggedIn) {
-                            { showLanzouSheet = true }
-                        } else {
-                            null
-                        }
-                    )
-                }
-                item(key = github.id) {
-                    // GitHub：已配置 Token 点击主体进入「我的主页」；未配置打开 Token 弹窗；更多按钮在登录后显示
-                    DriveAccountCard(
-                        account = github,
-                        onClick = if (githubHasToken) onGitHubBrowseHome else onGitHubTokenClick,
-                        onMoreClick = if (githubHasToken) { { showGitHubSheet = true } } else null
-                    )
-                }
-                items(others, key = { it.id }) { account ->
-                    DriveAccountCard(account = account)
+                if (hiddenUnloggedCount > 0) {
+                    // 别让账号「凭空消失」：明确告诉用户藏了几个、去哪恢复
+                    item(key = "drive_hidden_hint") {
+                        Text(
+                            text = "已隐藏 $hiddenUnloggedCount 个未登录的网盘，点右上角排序可恢复",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
                 }
                 // 视频解析：平台列表与登录态全部由 VideoAccountSection 自己呈现，这里只透传数据与回调
                 item(key = "video_section_label") {
@@ -825,6 +891,34 @@ fun DriveScreen(
             }
         }
     }
+
+    // 顶栏「排序」入口打开的弹窗：调整顺序 + 隐藏未登录。
+    // ★ 传给弹窗的是 orderedDriveItems（含被隐藏的项）：隐藏开关不会把已排序项从弹窗里弄丢，
+    //   否则一旦隐藏就再也点不到「恢复」。
+    if (showSortDialog) {
+        DriveSortDialog(
+            accounts = orderedDriveItems.map { it.account },
+            hideUnlogged = hideUnloggedDrives,
+            onMove = { from, to ->
+                val ids = orderedDriveItems.map { it.account.id }.toMutableList()
+                if (from in ids.indices && to in ids.indices && from != to) {
+                    val moved = ids.removeAt(from)
+                    ids.add(to, moved)
+                    driveOrder = ids
+                    settings.driveAccountOrder = ids
+                }
+            },
+            onToggleHide = { enabled ->
+                hideUnloggedDrives = enabled
+                settings.hideUnloggedDrives = enabled
+            },
+            onReset = {
+                driveOrder = emptyList()
+                settings.driveAccountOrder = emptyList()
+            },
+            onDismiss = onDismissSortDialog
+        )
+    }
 }
 
 @Composable
@@ -1027,4 +1121,130 @@ private fun formatBytes(bytes: Long): String {
     }
     return if (unit == 0) "${bytes} B"
     else String.format("%.1f %s", value, units[unit])
+}
+
+/**
+ * 「排序与显示」弹窗：调整网盘账号的先后顺序，并控制是否隐藏未登录的网盘。
+ *
+ * ★ 用上移/下移箭头而不是拖拽：拖拽要在 AlertDialog 里手写 pointerInput + 逐行位移计算，
+ *   而这里只有 11 行、每行都要求点得准，箭头方案的手指目标和可访问性都更稳，也不用引入拖拽库。
+ * ★ 改动即时生效（调用方立刻写设置），所以弹窗只有「完成」一个按钮，没有确定/取消语义。
+ *
+ * @param accounts 全部网盘账号，顺序就是当前显示顺序
+ * @param hideUnlogged 是否隐藏未登录的网盘
+ * @param onMove 把 from 位置的行移动到 to 位置（相邻即上移/下移一位）
+ * @param onToggleHide 切换「隐藏未登录」
+ * @param onReset 恢复默认顺序（清空保存的顺序）
+ */
+@Composable
+private fun DriveSortDialog(
+    accounts: List<DriveAccount>,
+    hideUnlogged: Boolean,
+    onMove: (from: Int, to: Int) -> Unit,
+    onToggleHide: (Boolean) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    // 列表高度跟着屏幕走：竖屏能多显示几行，横屏/小屏自动缩到约 42% 屏高，
+    // 否则 11 行顶出去会把「完成」按钮挤出可视区。
+    val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.42f).dp
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("排序与显示") },
+        text = {
+            Column {
+                // 整行可点：Switch 本身触摸区不大，整行点能少一脚踩空
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleHide(!hideUnlogged) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "隐藏未登录的网盘", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "只显示已登录的账号；GitHub 入口始终保留",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = hideUnlogged, onCheckedChange = onToggleHide)
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "顺序",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onReset) { Text("恢复默认") }
+                }
+                // 11 行会超出 AlertDialog 的默认高度：给高度上限再滚动，别把「完成」顶出屏幕
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = maxListHeight)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    accounts.forEachIndexed { index, account ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${index + 1}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(22.dp)
+                            )
+                            Text(
+                                text = account.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (!account.isLoggedIn) {
+                                Text(
+                                    text = "未登录",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                            }
+                            // 首行禁用上移、末行禁用下移：边界点不动，避免「点了没反应」的疑惑
+                            IconButton(
+                                onClick = { onMove(index, index - 1) },
+                                enabled = index > 0
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowUp,
+                                    contentDescription = "上移 ${account.name}"
+                                )
+                            }
+                            IconButton(
+                                onClick = { onMove(index, index + 1) },
+                                enabled = index < accounts.lastIndex
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = "下移 ${account.name}"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("完成") }
+        }
+    )
 }

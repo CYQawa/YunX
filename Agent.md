@@ -2178,6 +2178,43 @@ App UA（`netdisk;…`）+ `yun.baidu.com` 域名，且不带 `channel`」。百
 
 **回退**：把 `listCloudFiles` 恢复成单条网页请求即可（`listDir` 是它的包装，不用单独改）。
 
+### 3.47 账号页排序与「隐藏未登录的网盘」
+
+**需求**：账号页右上角加排序入口，弹窗里调整网盘账号列表的先后顺序，并可隐藏未登录的网盘。
+
+**跨层结构（改之前先看这里）**：按钮画在**全局顶栏**（`MainScreen` 的 `actions`，条件是
+`currentTab == MainTab.Drive && !driveSubPageOpen`），但列表、账号数据、顺序状态都在 `DriveScreen` 里，
+所以三处要连着改：
+
+- `MainScreen`：`showDriveSort`（弹窗开关）与 `driveSubPageOpen`（是否停在某个网盘的浏览子页）
+  两个 `rememberSaveable`；进入子页时隐藏排序入口（排序只属于账号列表）。
+- `DriveScreen` 参数：`showSortDialog` / `onDismissSortDialog` / `onSubPageChange`。
+  子页状态由 `drivePage`（0=列表，1..10=各网盘）经 `LaunchedEffect(drivePage)` 回传给上层。
+- 弹窗实现：`DriveSortDialog`（同文件末尾）。
+
+**排序怎么落地**：`driveItems` 把「账号渲染数据 + 该行自己的点击/更多行为」绑成一个
+`DriveAccountItem`，顺序只影响渲染先后、不改点击语义；再按 `SettingsRepository.driveAccountOrder`
+的 id 名次做 `sortedBy`（**稳定排序**），没排过的项（以后新增的平台）自然落到末尾并保持默认相对顺序，
+所以**加新网盘不需要迁移顺序设置**。上移/下移走 `onMove(from, to)` → `removeAt` + `add` → 即时落盘。
+
+**隐藏未登录**：`SettingsRepository.hideUnloggedDrives`，过滤条件是
+`isLoggedIn || !hideWhenUnlogged`。`DriveAccountItem.hideWhenUnlogged` 默认 true，**只有 GitHub 传 false**——
+它不是网盘，而且这张卡片是配置 Token 的唯一入口，藏掉就找不到入口。隐藏后在列表尾部显示
+「已隐藏 N 个未登录的网盘，点右上角排序可恢复」，别让账号「凭空消失」。弹窗里传的是
+`orderedDriveItems`（含被隐藏项），否则一旦隐藏就再也点不到恢复。
+
+**为什么不拖拽**：`AlertDialog` 里手写拖拽要自己算 pointerInput + 逐行位移，而这里只有 11 行，
+上移/下移箭头的点按目标与可访问性（`contentDescription = "上移"/"下移"`）都更稳，也不用引入拖拽库。
+
+**两个容易踩的坑**：
+1. 空间额度必须**在 LazyColumn 外面** `collectAsState`（`quarkQuota`…`ilanzouQuota` 共 9 个）：
+   放进 item 里则顺序一变就重复/漏订阅；`lanzou` 没有额度接口，`quota = null`。
+2. `onMoreClick` 用 `sheetAction(loggedIn) { showXxxSheet = true }`，**不要写**
+   `if (x) ({ ... }) else null` —— 条件分支里的 lambda 字面量要靠期望类型推断，抽成函数才稳。
+
+**回退**：删顶栏按钮 + `DriveScreen` 三个参数 + `SettingsRepository` 两个设置项；
+已存的顺序/开关留在 prefs 里无害（不读即不生效）。
+
 ## 4. 验证
 
 
