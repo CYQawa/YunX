@@ -57,6 +57,15 @@ object Pan115Constants {
     /** 个人盘空间信息 */
     const val INDEX_INFO_URL = "$API_BASE/files/index_info?count_space_nums=1"
 
+    /**
+     * 上传初始化：返回 OSS 直传策略（host/object/policy/accessid/signature/callback）。
+     * 成功响应**没有** `state` 信封，直接就是策略对象。
+     */
+    const val UPLOAD_INIT_URL = "https://uplb.115.com/3.0/sampleinitupload.php"
+
+    /** 网页端单文件上限：超过 5 GB 官方网页就直接拒绝了，客户端也不该白传 */
+    const val UPLOAD_MAX_SIZE: Long = 5L * 1024 * 1024 * 1024
+
     /** 新建文件夹（pid、cname） */
     const val FILE_ADD_URL = "$API_BASE/files/add"
 

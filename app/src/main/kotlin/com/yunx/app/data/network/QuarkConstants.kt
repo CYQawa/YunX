@@ -47,6 +47,14 @@ object QuarkConstants {
     /** 业务 API 基础域名 */
     const val API_BASE = "https://drive-pc.quark.cn"
 
+    /**
+     * 列表缩略图接口所在域名。
+     *
+     * ★ 只有这个域名的取图请求需要（也只应该收到）账号 Cookie：缩略图地址来自列表响应，
+     *   若哪天被指到别的域名，按域名分流能保证登录态不会被发到平台之外。
+     */
+    const val THUMBNAIL_HOST = "drive-pc.quark.cn"
+
     /** 获取分享 Token */
     const val SHARE_TOKEN_URL = "$API_BASE/1/clouddrive/share/sharepage/token?pr=ucpro&fr=pc"
 

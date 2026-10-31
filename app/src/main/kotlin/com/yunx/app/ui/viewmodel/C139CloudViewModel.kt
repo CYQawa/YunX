@@ -18,6 +18,11 @@
 
 package com.yunx.app.ui.viewmodel
 
+import android.content.ContentResolver
+import android.net.Uri
+import com.yunx.app.data.network.HttpClients
+import com.yunx.app.data.upload.UploadProgress
+import com.yunx.app.data.upload.UploadRunner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +38,7 @@ import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -343,6 +349,29 @@ class C139CloudViewModel(
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘文件）：139 直链要求 PC UA + 官方 Referer，与下载共用 [downloadHeaders]。
+     * 少一个头不会返回 403，而是回一段 HTML/JSON 错误页 —— 图片加载器那边只会显示「加载失败」，看不出原因。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val link = api.getDownloadUrl(file.fid, cookie())
+                    ?: throw IllegalStateException("获取下载链接失败")
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }
@@ -671,6 +700,38 @@ class C139CloudViewModel(
         }
         throw IllegalStateException("任务超时")
     }
+
+    // ---------- 上传（139 分片直传） ----------
+
+    /** 上传进度（null 表示没有任务）；上传弹窗直接读这里 */
+    val uploadProgress: UploadProgress? get() = uploadRunner.progress
+
+    private val uploadRunner = UploadRunner(viewModelScope, { HttpClients.apiClient() }) { outcome ->
+        // 传成功过就刷新列表（失败也刷：已经落库的文件要立刻可见）
+        if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
+        cloudMessage = when {
+            outcome.error != null -> outcome.error
+            outcome.cancelled -> "已取消上传"
+            else -> "已上传 ${outcome.uploaded} 个文件"
+        }
+    }
+
+    /**
+     * 上传选中的本地文件到**当前目录**。
+     *
+     * 目标目录在这里就先固定下来（上传期间用户可能切目录、返回上级），
+     * 凭据留到 IO 线程现取，避免拿着已过期的 Cookie 一路失败。
+     */
+    fun uploadFiles(resolver: ContentResolver, uris: List<Uri>) {
+        val dir = (uiState.value as? C139CloudUiState.Loaded)?.dirId ?: "/"
+        uploadRunner.start(resolver, uris) { io, source ->
+            val cookie = cookieProvider() ?: throw IllegalStateException("请先登录移动云盘")
+            api.upload(io, source, dir, cookie)
+        }
+    }
+
+    /** 取消当前上传（正在发的那一段会立刻被打断） */
+    fun cancelUpload() = uploadRunner.cancel()
 
     class Factory(
         private val api: C139Api,

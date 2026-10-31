@@ -19,10 +19,13 @@
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.network.model.ShareToken
+import com.yunx.app.data.upload.UploadIo
+import com.yunx.app.data.upload.UploadSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -262,6 +265,17 @@ class QuarkApi(
     ): List<ShareFile>? = withContext(Dispatchers.IO) {
         val all = mutableListOf<ShareFile>()
         var p = page
+        // 列表项里的 thumbnail 指向 drive-pc.quark.cn 的自家接口，**不带账号 Cookie 不给图**；
+        // 若响应给的是别的域名（CDN 签名地址），就只带 UA/Referer（见 FileThumbnail.of 的 host 分流）
+        val thumbnailAuthHeaders = mapOf(
+            "Cookie" to cookie,
+            "User-Agent" to QuarkConstants.API_USER_AGENT,
+            "Referer" to "https://pan.quark.cn/"
+        )
+        val thumbnailHeaders = mapOf(
+            "User-Agent" to QuarkConstants.API_USER_AGENT,
+            "Referer" to "https://pan.quark.cn/"
+        )
         while (true) {
             val url = buildString {
                 append(QuarkConstants.CLOUD_FILE_SORT_URL)
@@ -296,7 +310,13 @@ class QuarkApi(
                                 isdir = item.optBoolean("dir", false),
                                 pdirFid = item.optString("pdir_fid"),
                                 fidToken = "",
-                                modifyTime = item.optString("updated_at")
+                                modifyTime = item.optString("updated_at"),
+                                thumbnail = FileThumbnail.of(
+                                    url = item.optString("thumbnail"),
+                                    headers = thumbnailHeaders,
+                                    authHost = QuarkConstants.THUMBNAIL_HOST,
+                                    authHeaders = thumbnailAuthHeaders
+                                )
                             )
                         )
                     }
@@ -701,6 +721,49 @@ class QuarkApi(
                 expiredType = data.optInt("expired_type")
             )
         }
+    }
+
+    // ---------- 上传 ----------
+
+    /**
+     * 上传文件到 [parentFid] 目录：预上传 → 秒传判定 → OSS 分片 → 合并 → finish。
+     *
+     * 返回值只在对端明确给了文件 id 时才有意义；这里统一返回 null，调用方上传成功后
+     * 直接刷新目录即可（OSS 回调落库有个几秒的延迟，刷新比猜 id 可靠）。
+     */
+    suspend fun upload(
+        io: UploadIo,
+        file: UploadSource,
+        parentFid: String,
+        cookie: String
+    ): String? = withContext(Dispatchers.IO) {
+        QuarkUpload(
+            apiBase = QuarkConstants.API_BASE,
+            product = "ucpro",
+            origin = "https://pan.quark.cn",
+            userAgent = QuarkConstants.API_USER_AGENT,
+            post = { url, body -> postJsonRaw(url, cookie, body) }
+        ).upload(io, file, parentFid)
+    }
+
+    /**
+     * 上传链路专用：与 [parseData] 一样校验 `status`，但允许响应没有 `data`
+     * （`file/upload/finish` 之类的接口就是这样）。统一返回 `data`，缺省给空对象。
+     */
+    private fun postJsonRaw(url: String, cookie: String, body: JSONObject): JSONObject {
+        val request = postJson(url, cookie, body.toString())
+        val response = client.newCall(request).execute()
+        val text = response.use {
+            mergeCookieFromResponse(request, it)
+            it.body?.string() ?: throw QuarkApiException("请求失败：响应为空")
+        }
+        val json = runCatching { JSONObject(text) }.getOrElse {
+            throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
+        }
+        if (json.optInt("status") != 200) {
+            throw QuarkApiException(json.optString("message").ifBlank { "上传请求失败" })
+        }
+        return json.optJSONObject("data") ?: JSONObject()
     }
 
     // ---------- 请求构造与响应解析 ----------

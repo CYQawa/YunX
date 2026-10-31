@@ -133,18 +133,11 @@ fun BaiduAccountSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (showFullCookie) {
-                        // 展开 Cookie：占满全屏并允许内部滚动
-                        Modifier
-                            .fillMaxHeight()
-                            .verticalScroll(scrollState)
-                            .nestedScroll(sheetNestedScroll)
-                    } else {
-                        // 未展开：自适应内容高度，不滚动
-                        Modifier
-                    }
-                )
+                .then(if (showFullCookie) Modifier.fillMaxHeight() else Modifier)
+                // ★ 纵向滚动无条件挂上：原来只在「展开全部」时才挂，横屏等高度不足时整张弹窗会卡死
+                //   （下方内容在屏幕外又滑不动）；内容不足一屏时 verticalScroll 仍按内容包裹，外观不变
+                .verticalScroll(scrollState)
+                .nestedScroll(sheetNestedScroll)
                 .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
         ) {
             // 用户信息

@@ -20,10 +20,14 @@ package com.yunx.app.data.network
 
 import android.util.Base64
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.data.upload.UploadIo
+import com.yunx.app.data.upload.UploadPhase
+import com.yunx.app.data.upload.UploadSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -416,6 +420,39 @@ class C139Api(
         val mapping: Map<String, String>
     )
 
+    /** 缩略图请求头：139 的图床同样校验 PC UA 与官方 Referer，缺一个就 403 */
+    private fun thumbnailHeaders(): Map<String, String> = mapOf(
+        "User-Agent" to C139Constants.PC_UA,
+        "Referer" to "https://yun.139.com/"
+    )
+
+    /**
+     * 139 列表项的缩略图：优先 `thumbnailUrls[]` 里 style=Large 的那张，其次任意一张，
+     * 最后回退 big/mid/thumbnailURL 三个平铺字段（老接口只在这三个字段里给图）。
+     *
+     * ★ 逐档校验 https：字段为 JSON null 时 `optString` 给出的是字符串 "null"，
+     *   先挑「非空」再校验会让大图字段被 null 占位、反而丢掉后面本可用的地址。
+     */
+    private fun thumbnailOf(item: JSONObject, headers: Map<String, String>): FileThumbnail? {
+        val urls = item.optJSONArray("thumbnailUrls")
+        if (urls != null) {
+            var first: FileThumbnail? = null
+            var large: FileThumbnail? = null
+            for (i in 0 until urls.length()) {
+                val entry = urls.optJSONObject(i) ?: continue
+                val thumbnail = FileThumbnail.of(entry.optString("url"), headers) ?: continue
+                if (first == null) first = thumbnail
+                if (large == null && entry.optString("style").equals("large", ignoreCase = true)) {
+                    large = thumbnail
+                }
+            }
+            (large ?: first)?.let { return it }
+        }
+        return FileThumbnail.of(item.optString("bigthumbnailURL"), headers)
+            ?: FileThumbnail.of(item.optString("midthumbnailURL"), headers)
+            ?: FileThumbnail.of(item.optString("thumbnailURL"), headers)
+    }
+
     /** 单页列目录（含翻页游标）；返回 (文件列表, 下一页游标 or null=末页) */
     private suspend fun fetchCloudPage(
         parentFileId: String,
@@ -437,6 +474,7 @@ class C139Api(
         val resp = cloudPost(C139Constants.FILE_LIST_URL, req.toString(), authorization)
         checkCloud(resp, "获取文件列表失败")
         val data = resp.optJSONObject("data") ?: return@withContext null
+        val thumbHeaders = thumbnailHeaders()
         val files = buildList {
             data.optJSONArray("items")?.let { arr ->
                 for (i in 0 until arr.length()) {
@@ -449,7 +487,8 @@ class C139Api(
                             isdir = item.optString("type") == "folder",
                             pdirFid = parentFileId,
                             fidToken = item.optString("fileId"),
-                            modifyTime = item.optString("updatedAt")
+                            modifyTime = item.optString("updatedAt"),
+                            thumbnail = thumbnailOf(item, thumbHeaders)
                         )
                     )
                 }
@@ -548,6 +587,127 @@ class C139Api(
             resp.optJSONObject("data")?.optString("fileId")?.takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("移动云盘未返回文件夹编号")
         }
+
+    // ---------- 上传 ----------
+
+    /**
+     * 上传一个文件到 [parentFileId] 目录，返回新文件的 fileId。
+     *
+     * 流程：`/hcy/file/create` 建任务（带整文件 SHA256，服务端已存在同内容文件时直接秒传）→
+     * 对服务端签发的每个 uploadUrl 发一次 PUT（100 MiB 分片；单文件超过 30 GB 时用 512 MiB）→
+     * `/hcy/file/complete` 合并。
+     *
+     * ★ 分片 PUT 打到对象存储，**不能带 Authorization / 网关渠道头**：地址本身已签名，
+     *   多带账号凭证反而会被拒；但 Origin/Referer 是必需的。
+     */
+    suspend fun upload(
+        io: UploadIo,
+        file: UploadSource,
+        parentFileId: String,
+        cookie: String
+    ): String = withContext(Dispatchers.IO) {
+        val authorization = C139Constants.extractAuthorization(cookie)
+            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+        io.progress(UploadPhase.PREPARING)
+        val hash = io.digest("SHA-256")
+        val partSize = if (file.size > 30L * 1024 * 1024 * 1024) {
+            512L * 1024 * 1024
+        } else {
+            100L * 1024 * 1024
+        }
+        val count = maxOf(1L, (file.size + partSize - 1) / partSize)
+        val parts = (0 until count).map { index ->
+            JSONObject()
+                .put("partNumber", (index + 1).toInt())
+                .put("partSize", minOf(file.size - index * partSize, partSize))
+                .put("parallelHashCtx", JSONObject().put("partOffset", index * partSize))
+        }
+        val createBody = JSONObject()
+            .put("contentHash", hash)
+            .put("contentHashAlgorithm", "SHA256")
+            .put("contentType", "application/octet-stream")
+            .put("parallelUpload", false)
+            .put("partInfos", JSONArray().apply { parts.take(100).forEach { put(it) } })
+            .put("size", file.size)
+            .put("parentFileId", parentFileId)
+            .put("name", file.name)
+            .put("type", "file")
+            .put("fileRenameMode", "auto_rename")
+        val created = cloudPost(C139Constants.FILE_UPLOAD_CREATE_URL, createBody.toString(), authorization)
+        checkCloud(created, "创建上传任务失败")
+        val created1 = created.optJSONObject("data")
+            ?: throw IllegalStateException("移动云盘未返回上传任务")
+        if (created1.optBoolean("exist")) {
+            throw IllegalStateException("移动云盘已有同名文件，请重新命名后上传")
+        }
+        val fileId = created1.optString("fileId").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("移动云盘未创建上传任务")
+        if (created1.optBoolean("rapidUpload")) {
+            io.progress(UploadPhase.FINISHING, file.size)
+            return@withContext fileId
+        }
+        val uploadId = created1.optString("uploadId").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("移动云盘未返回上传标识")
+        var batch = created1
+        var first = 0L
+        while (first < count) {
+            if (first > 0L) {
+                val body = JSONObject()
+                    .put("fileId", fileId)
+                    .put("uploadId", uploadId)
+                    .put(
+                        "partInfos",
+                        JSONArray().apply {
+                            parts.drop(first.toInt()).take(100).forEach { put(it) }
+                        }
+                    )
+                val resp = cloudPost(C139Constants.FILE_UPLOAD_URL_URL, body.toString(), authorization)
+                checkCloud(resp, "获取上传地址失败")
+                batch = resp.optJSONObject("data")
+                    ?: throw IllegalStateException("移动云盘未返回上传地址")
+            }
+            val addresses = batch.optJSONArray("partInfos")
+                ?: throw IllegalStateException("移动云盘未返回完整上传分段")
+            if (addresses.length() != minOf(100L, count - first).toInt()) {
+                throw IllegalStateException("移动云盘未返回完整上传分段")
+            }
+            for (i in 0 until addresses.length()) {
+                val part = addresses.optJSONObject(i) ?: continue
+                val index = part.optInt("partNumber") - 1
+                if (index.toLong() != first + i) {
+                    throw IllegalStateException("移动云盘上传分段序号无效")
+                }
+                val url = part.optString("uploadUrl")
+                if (url.isBlank()) throw IllegalStateException("移动云盘未返回上传地址")
+                val start = index * partSize
+                val response = io.send(
+                    url = url,
+                    method = "PUT",
+                    start = start,
+                    end = minOf(file.size, start + partSize),
+                    headers = mapOf(
+                        "Content-Type" to "application/octet-stream",
+                        "Origin" to "https://yun.139.com",
+                        "Referer" to "https://yun.139.com/"
+                    ),
+                    retries = 1
+                )
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("文件上传失败（HTTP ${response.code}）")
+                }
+            }
+            first += addresses.length()
+        }
+        io.progress(UploadPhase.FINISHING, file.size)
+        val completeBody = JSONObject()
+            .put("contentHash", hash)
+            .put("contentHashAlgorithm", "SHA256")
+            .put("fileId", fileId)
+            .put("uploadId", uploadId)
+        val completed = cloudPost(C139Constants.FILE_UPLOAD_COMPLETE_URL, completeBody.toString(), authorization)
+        checkCloud(completed, "合并上传分段失败")
+        fileId
+    }
 
     /** 重命名 */
     suspend fun renameFile(fileId: String, newName: String, cookie: String): Boolean = withContext(Dispatchers.IO) {

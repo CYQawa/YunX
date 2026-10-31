@@ -18,6 +18,11 @@
 
 package com.yunx.app.ui.viewmodel
 
+import android.content.ContentResolver
+import android.net.Uri
+import com.yunx.app.data.network.HttpClients
+import com.yunx.app.data.upload.UploadProgress
+import com.yunx.app.data.upload.UploadRunner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +38,7 @@ import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.ui.preview.CloudPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -341,6 +347,29 @@ class Pan123CloudViewModel(
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
                 cloudMessage = e.message ?: "下载失败"
+            } finally {
+                isOperating = false
+            }
+        }
+    }
+
+    /**
+     * 在线预览（云盘文件）：123 的直链按 UA/Referer 放行，与下载共用 [downloadHeaders]。
+     * 直链有有效期，必须现取，不能在列表里预存。
+     */
+    fun openPreview() {
+        val file = actionFile ?: return
+        if (!CloudPreview.canPreview(file)) return
+        viewModelScope.launch {
+            isOperating = true
+            try {
+                val link = api.getDownloadLink(file, token())
+                    ?: throw IllegalStateException("获取下载链接失败")
+                // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
+                actionFile = null
+                CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
+            } catch (e: Exception) {
+                cloudMessage = e.message ?: "预览失败"
             } finally {
                 isOperating = false
             }
@@ -656,6 +685,38 @@ class Pan123CloudViewModel(
         return sdf.format(Date(cal.timeInMillis)) +
             String.format("%s%02d:%02d", sign, abs / 60, abs % 60)
     }
+
+    // ---------- 上传（123 预签名/S3 分片） ----------
+
+    /** 上传进度（null 表示没有任务）；上传弹窗直接读这里 */
+    val uploadProgress: UploadProgress? get() = uploadRunner.progress
+
+    private val uploadRunner = UploadRunner(viewModelScope, { HttpClients.apiClient() }) { outcome ->
+        // 传成功过就刷新列表（失败也刷：已经落库的文件要立刻可见）
+        if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
+        cloudMessage = when {
+            outcome.error != null -> outcome.error
+            outcome.cancelled -> "已取消上传"
+            else -> "已上传 ${outcome.uploaded} 个文件"
+        }
+    }
+
+    /**
+     * 上传选中的本地文件到**当前目录**。
+     *
+     * 目标目录在这里就先固定下来（上传期间用户可能切目录、返回上级），
+     * 凭据留到 IO 线程现取，避免拿着已过期的 Cookie 一路失败。
+     */
+    fun uploadFiles(resolver: ContentResolver, uris: List<Uri>) {
+        val dir = (uiState.value as? Pan123CloudUiState.Loaded)?.dirId ?: "0"
+        uploadRunner.start(resolver, uris) { io, source ->
+            val token = tokenProvider() ?: throw IllegalStateException("请先登录 123 云盘")
+            api.upload(io, source, dir, token)
+        }
+    }
+
+    /** 取消当前上传（正在发的那一段会立刻被打断） */
+    fun cancelUpload() = uploadRunner.cancel()
 
     class Factory(
         private val api: Pan123Api,

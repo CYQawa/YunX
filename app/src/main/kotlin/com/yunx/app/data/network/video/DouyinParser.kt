@@ -157,6 +157,8 @@ object DouyinParser : VideoParser {
             // 参考实现优先 avatar_thumb，退化到 avatar_medium
             avatar = firstUrl(author?.optObjectAny("avatar_thumb", "avatar_medium")).orEmpty(),
             cover = cover,
+            // 抖音的「文案」就是 desc（标题也取它），单独落到 text 供结果页展示/复制
+            text = title,
             timestampSeconds = data.optLongAny("create_time", "createTime"),
             url = link.url,
             medias = medias
@@ -219,7 +221,9 @@ object DouyinParser : VideoParser {
         val video: String,
         val cover: String,
         /** 与 [images] 一一对应的**动图资源**（Live Photo 的短视频）；没有动图时是等长的空串 */
-        val motions: List<String> = emptyList()
+        val motions: List<String> = emptyList(),
+        /** 详情接口里的文案原文（`desc`）；页面没给时为空，上层退回 [title] */
+        val text: String = ""
     )
 
     /**
@@ -269,7 +273,8 @@ object DouyinParser : VideoParser {
             images = images,
             video = video,
             cover = obj.optString("cover").takeIf { it != "null" }.orEmpty(),
-            motions = motions
+            motions = motions,
+            text = obj.optString("desc").takeIf { it != "null" }.orEmpty()
         )
     }
 
@@ -312,6 +317,8 @@ object DouyinParser : VideoParser {
             author = payload.author,
             // 详情里给了封面就用它，没给（图文）退回首图
             cover = payload.cover.ifBlank { payload.images.firstOrNull().orEmpty() },
+            // 文案原文（完整 desc）：页面没给 desc 时退回标题（标题也是从同一份详情取的，只是可能被截过）
+            text = payload.text.ifBlank { payload.title },
             url = link.url,
             medias = medias
         )
@@ -582,6 +589,9 @@ object DouyinParser : VideoParser {
 
     return {
       title: title,
+      // 文案原文：title 可能退到 document.title（只是「<文案> - 抖音」剥尾巴的近似值），
+      // desc 才是详情接口里的原始文案，两者不再混用
+      desc: (d && d.desc) || '',
       author: author,
       video: video,
       images: images,

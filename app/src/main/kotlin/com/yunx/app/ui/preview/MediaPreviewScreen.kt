@@ -80,7 +80,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.ui.PlayerView
@@ -379,8 +381,12 @@ internal fun previewNetworkHeaders(headers: Map<String, String>): NetworkHeaders
  *   的直链（网盘、B站 CDN）会直接 403 / 黑屏。UA 单独交给 `setUserAgent`，并从请求头里摘掉，
  *   避免「请求属性里的 UA」与「setUserAgent 的 UA」两份互相覆盖（谁后写入取决于库内部实现，不能赌）。
  *
- * ★ `DefaultMediaSourceFactory` 会按内容自动选 Progressive / HLS 数据源（`media3-exoplayer-hls` 已在
- *   classpath 上，m3u8 无需手动指定）。
+ * ★ `DefaultMediaSourceFactory` 会按内容自动选 Progressive 数据源；但 **m3u8 不能靠它自动识别** ——
+ *   这里的 factory 是用 `DataSource.Factory` 构造的，那条构造路径拿不到 HLS 工厂（媒体类型靠后缀推断，
+ *   而 UC 的转码流地址不一定带 `.m3u8`）。所以 `isHls`/`.m3u8` 的媒体显式建 `HlsMediaSource`。
+ *
+ * ★ **起播要快**：预览是「点开看一眼」，不该等播放器按默认值攒满 2.5 秒才有画面 ——
+ *   见 `previewLoadControl()`。分享解析页的视频、各云盘的视频预览共用这一处，改它等于两处一起变快。
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -415,7 +421,7 @@ internal fun MediaPlayerPane(
         }
     }
 
-    LaunchedEffect(player, media.url, media.audioUrl) {
+    LaunchedEffect(player, media.url, media.audioUrl, media.isHls) {
         if (media.audioUrl.isNotBlank()) {
             // ★ 音视频分轨（哔哩哔哩 DASH 高清）：两路各自带请求头，流式合并播放
             //   MergingMediaSource 按同一 timeline 播放视频轨 + 音轨，声音随画面同步
@@ -426,6 +432,13 @@ internal fun MediaPlayerPane(
                 httpDataSourceFactory(media.audioHeaders.ifEmpty { media.headers })
             ).createMediaSource(MediaItem.fromUri(media.audioUrl))
             player.setMediaSource(MergingMediaSource(videoSource, audioSource))
+        } else if (media.isHls || media.url.contains(".m3u8", ignoreCase = true)) {
+            // m3u8 显式建源（理由见函数 KDoc）：播放器自带的 factory 是按「DataSource.Factory」构造的，
+            // 那条路径没有 HLS 工厂；而且转码流地址可能不带后缀，后缀推断也不可靠
+            player.setMediaSource(
+                HlsMediaSource.Factory(httpDataSourceFactory(media.headers))
+                    .createMediaSource(MediaItem.fromUri(media.url))
+            )
         } else {
             player.setMediaItem(MediaItem.fromUri(media.url))
         }
@@ -464,8 +477,35 @@ internal fun MediaPlayerPane(
 private fun buildPlayer(context: Context, media: PreviewMedia): ExoPlayer {
     return ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory(media.headers)))
+        // 起播门槛降到 1.2 秒（见 previewLoadControl）
+        .setLoadControl(previewLoadControl())
         .build()
 }
+
+/**
+ * 预览用的缓冲参数：比 ExoPlayer 默认「攒 2.5 秒才起播」更快出画面。
+ *
+ * 默认值（50s/50s/2500ms/5000ms）是给「长时间不间断播放」调的，对「点开看一眼」的预览太保守：
+ * 网盘直链首字节本来就要等取链 + CDN 握手，再攒 2.5 秒素材，用户就会觉得「点半天没反应」。
+ * 这里：
+ * - 起播只要 1.2 秒素材，卡顿后重新起播要 3 秒（比默认 5 秒短，但比首次起播保守，避免抖动时反复卡）；
+ * - 最低缓冲保留 15 秒（不是压到 1~2 秒）：网盘 CDN 常有限速，缓冲太低会变成「播两秒卡一下」；
+ * - `setPrioritizeTimeOverSizeThresholds(true)`：码率高/未知的大文件按**时间**判断够不够播，
+ *   而不是硬等目标字节数，避免 4K 片源起播被字节门槛拖住。
+ *
+ * ★ 想调快/调稳只改这一处：分享解析页、内联播放器、云盘预览共用同一个 `buildPlayer`。
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun previewLoadControl(): DefaultLoadControl =
+    DefaultLoadControl.Builder()
+        .setBufferDurationsMs(
+            /* minBufferMs = */ 15_000,
+            /* maxBufferMs = */ 50_000,
+            /* bufferForPlaybackMs = */ 1_200,
+            /* bufferForPlaybackAfterRebufferMs = */ 3_000
+        )
+        .setPrioritizeTimeOverSizeThresholds(true)
+        .build()
 
 /**
  * 把请求头与 UA 拆成 `DefaultHttpDataSource.Factory`（预览合并播放的两路各建一个）。

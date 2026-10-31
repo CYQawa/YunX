@@ -79,6 +79,18 @@ object Pan123Constants {
      */
     const val FILE_UPLOAD_REQUEST_URL = "$API_BASE/b/api/file/upload_request"
 
+    /**
+     * 上传：预签名分片地址。
+     * - 单分片走 `s3_upload_object/auth`；
+     * - 多分片走 `s3_repare_upload_parts_batch`（批量取，`partNumberStart/End` 控制范围）。
+     */
+    const val FILE_S3_UPLOAD_AUTH_URL = "$API_BASE/b/api/file/s3_upload_object/auth"
+    const val FILE_S3_REPARE_PARTS_URL = "$API_BASE/b/api/file/s3_repare_upload_parts_batch"
+
+    /** 上传：合并（S3 直传凭据路径用 `upload_complete`，预签名分片路径用 `upload_complete/v2`） */
+    const val FILE_UPLOAD_COMPLETE_URL = "$API_BASE/b/api/file/upload_complete"
+    const val FILE_UPLOAD_COMPLETE_V2_URL = "$API_BASE/b/api/file/upload_complete/v2"
+
     /** 创建分享（POST /b/api/share/create） */
     const val SHARE_CREATE_URL = "$API_BASE/b/api/share/create"
 

@@ -33,9 +33,21 @@ object BaiduConstants {
     const val UA_WEB =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-    /** 百度客户端 UA（yun/api/list、filemanager、locatedownload 使用） */
+    /** 百度客户端 UA（filemanager、locatedownload 等老接口使用） */
     const val UA_NETDISK =
         "netdisk;12.24.6;piano;android-android;16;JSbridge4.4.0;jointBridge;1.1.0"
+
+    /**
+     * 个人盘列表「App 通道」的 UA：版本号必须与 [APP_VERSION] 一致。
+     *
+     * 百度会交叉校验 UA 里的版本与 query 的 version——两边对不上就按「不是同一个客户端」拒绝，
+     * 所以这两个值只能成对修改。
+     */
+    const val UA_APP =
+        "netdisk;13.15.4;piano;android-android;16;JSbridge4.4.0;jointBridge;1.1.0;"
+
+    /** 个人盘列表「App 通道」的协议版本（api/list 的 version 参数） */
+    const val APP_VERSION = "13.15.4"
 
     /** 百度网盘统一 app_id */
     const val APP_ID = "250528"

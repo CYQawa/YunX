@@ -37,7 +37,10 @@ data class ShareToken(
 )
 
 /**
- * 分享文件/目录项。
+ * 文件/目录项。
+ *
+ * @param thumbnail 列表行小图（图片文件才有）。由**列表接口在拿到凭证的那一次**一并产出，
+ *   见 [FileThumbnail] 的说明 —— 列表行只负责画，不去问 ViewModel 要账号。
  */
 data class ShareFile(
     val fid: String,
@@ -46,8 +49,59 @@ data class ShareFile(
     val isdir: Boolean,
     val pdirFid: String,
     val fidToken: String,
-    val modifyTime: String = ""
+    val modifyTime: String = "",
+    val thumbnail: FileThumbnail? = null
 )
+
+/**
+ * 列表行缩略图：图片地址 + 取图所需的请求头。
+ *
+ * 各家列表接口给缩略图的方式并不统一：多数只是列表项里的一个 URL 字段
+ * （百度 `thumbs.*`、139 `thumbnailUrls[]`、迅雷 `thumbnail_link`…），123 还要从一个**可能指向原图**
+ * 的 `DownloadUrl` 里挑出缩略图变体；而夸克/UC 的缩略图地址指向自家接口，**不带账号 Cookie 不给图**。
+ *
+ * 所以「地址 + 请求头」跟着条目一起返回：列表接口本来就有 Cookie，顺手拼好即可；
+ * 否则列表行还得回头去问 ViewModel 要账号凭证，UI 与数据层无谓地互相依赖。
+ * 没有缩略图（文件夹、没图的平台、地址非法）时整条为 null，列表行据此退回文件图标。
+ */
+data class FileThumbnail(
+    val url: String,
+    val headers: Map<String, String> = emptyMap()
+) {
+    companion object {
+        /**
+         * 构造缩略图信息；地址为空或不是 https 时返回 null。
+         *
+         * ★ 只认 https 不是洁癖：应用的 `network_security_config` 全局禁止明文，`http://` 图片必然加载失败，
+         *   留着只会让每行都留一个空框（还多一次注定失败的请求）。
+         */
+        fun of(url: String, headers: Map<String, String> = emptyMap()): FileThumbnail? {
+            val trimmed = url.trim()
+            if (!trimmed.startsWith("https://", ignoreCase = true)) return null
+            return FileThumbnail(trimmed, headers)
+        }
+
+        /**
+         * 需要账号鉴权的缩略图：只有 [url] 的 host 恰好是 [authHost] 时才带 [authHeaders]，
+         * 其余域名只用 [headers]。
+         *
+         * ★ 为什么按 host 分流而不是一律带 Cookie：列表响应是外部数据，地址里的域名不由我们控制。
+         *   账号 Cookie 只该发给平台自己的接口；万一响应把缩略图指到别的域名（CDN 签名地址/异常数据），
+         *   一律带 Cookie 等于把登录态主动交出去（同类取舍见夸克/UC 的取图接口）。
+         */
+        fun of(
+            url: String,
+            headers: Map<String, String>,
+            authHost: String,
+            authHeaders: Map<String, String>
+        ): FileThumbnail? {
+            val trimmed = url.trim()
+            val host = runCatching { java.net.URI(trimmed).host }.getOrNull().orEmpty()
+            val picked = if (host.equals(authHost, ignoreCase = true)) authHeaders else headers
+            return of(trimmed, picked)
+        }
+    }
+}
 
 /**
  * 分享信息（云盘功能：创建分享后查询得到的链接与提取码）。

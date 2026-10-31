@@ -28,21 +28,25 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material3.SnackbarHost
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -62,6 +66,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -97,6 +102,8 @@ fun BaiduLoginScreen(
     var showTutorial by remember { mutableStateOf(false) }
     // 进入登录页先弹风控提示，确认后再弹登录教程（避免两个弹窗叠层）
     var showRiskDialog by remember { mutableStateOf(true) }
+    // 风控提示必须勾选「已阅读」才能继续（未勾选时「继续」不可点、点外部也关不掉）
+    var riskAcknowledged by remember { mutableStateOf(false) }
 
     val webView = remember {
         WebView(context).apply {
@@ -225,30 +232,52 @@ fun BaiduLoginScreen(
         }
     }
 
-    // 风控温馨提示弹窗（进入登录页优先展示）
+    // 风控温馨提示弹窗（进入登录页优先展示）：勾选「已阅读」后才能继续
     if (showRiskDialog) {
         AlertDialog(
-            onDismissRequest = { showRiskDialog = false },
+            // 不允许点外部/返回键关掉：这是使用前必须确认的前置提示
+            onDismissRequest = {},
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-            title = { Text("温馨提示") },
+            title = { Text("使用前请阅读") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "百度网盘风控严重，可能导致你的账号被风控",
+                        text = "百度网盘风控严重，可能导致你的账号被风控。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "请勿高频操作（频繁解析/转存/下载），如遇异常建议降低使用频率或稍后再试。",
+                        text = "以下情况通常都是风控导致，不是软件故障：\n" +
+                            "· 获取 bdstoken 失败\n" +
+                            "· 个人网盘文件列表加载不出来",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "请勿高频操作（频繁解析/转存/下载/上传），如遇异常建议降低使用频率或稍后再试。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { riskAcknowledged = !riskAcknowledged }
+                    ) {
+                        Checkbox(
+                            checked = riskAcknowledged,
+                            onCheckedChange = { riskAcknowledged = it }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("我已阅读并了解上述风险", style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showRiskDialog = false
-                    showTutorial = true
-                }) { Text("我知道了") }
+                TextButton(
+                    onClick = {
+                        showRiskDialog = false
+                        showTutorial = true
+                    },
+                    enabled = riskAcknowledged
+                ) { Text("继续") }
             }
         )
     }

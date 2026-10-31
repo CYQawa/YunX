@@ -461,6 +461,9 @@ object DownloadSaver {
             "zip", "rar", "7z" -> "application/zip"
             "mp4", "mkv", "mov", "avi", "webm" -> "video/mp4"
             "mp3", "wav", "flac", "aac" -> "audio/mpeg"
+            // 「仅下载音频」的产物（AAC in MP4）与 B站 DASH 音轨：少了这个分支会落成
+            // application/octet-stream，相册/音乐播放器按类型筛选时就看不到它们
+            "m4a", "m4s" -> "audio/mp4"
             "jpg", "jpeg", "png", "gif", "webp" -> "image/jpeg"
             "txt", "md", "log" -> "text/plain"
             else -> "application/octet-stream"

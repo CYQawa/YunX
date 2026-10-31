@@ -69,6 +69,21 @@ object GuangYaConstants {
     const val MOVE_FILE = "$API_BASE/userres/v1/file/move_file"
     const val DELETE_FILE = "$API_BASE/userres/v1/file/delete_file"
     const val RES_DOWNLOAD = "$API_BASE/userres/v1/get_res_download_url"
+
+    // ---------- 上传（文档 §3.2.22 / §3.2.23） ----------
+
+    /** 上传建任务：返回 OSS 临时凭据；`code == 156` 表示秒传命中 */
+    const val UPLOAD_TOKEN = "$API_BASE/nd.bizuserres.s/v1/get_res_center_token"
+
+    /** 查询上传任务是否已生成文件（拿到 fileId 才算完成） */
+    const val UPLOAD_TASK_INFO = "$API_BASE/nd.bizuserres.s/v1/file/get_info_by_task_id"
+
+    /** 上传任务「还在处理」的业务码：这几码不代表失败，继续轮询 */
+    val UPLOAD_PENDING_CODES = setOf("145", "146", "147", "155", "163")
+
+    /** 上传结果轮询：最多 180 次、每次间隔 1 秒（光鸭异步校验内容的常规耗时） */
+    const val UPLOAD_MAX_POLLS = 180
+    const val UPLOAD_POLL_INTERVAL_MS = 1000L
     const val TASK_STATUS = "$API_BASE/userres/v1/get_task_status"
 
     /** 分享根目录 id（空串） */

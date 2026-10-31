@@ -83,6 +83,13 @@ data class DownloadTaskEntity(
      */
     @ColumnInfo(defaultValue = "''")
     val motionUrl: String = "",
+    /**
+     * **只要音频**：下完整个视频后把音轨抽出来，产物是 `.m4a`（见 `AudioExtractor`）。
+     * 单文件平台没有独立的音频直链，只能先拿到完整视频；任务上的 [fileName] 已经是 `.m4a` 名字。
+     * false = 普通下载，行为与以前完全一致。
+     */
+    @ColumnInfo(defaultValue = "0")
+    val audioOnly: Boolean = false,
     /** 下载完成时的平均速度（字节/秒）；完成态展示用，进行中为 0 */
     @ColumnInfo(defaultValue = "0")
     val avgSpeed: Long = 0,

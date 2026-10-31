@@ -19,6 +19,7 @@
 package com.yunx.app.data.network
 
 import com.yunx.app.data.network.model.DownloadLink
+import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
@@ -32,6 +33,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import com.yunx.app.data.upload.UploadIo
+import com.yunx.app.data.upload.UploadPhase
+import com.yunx.app.data.upload.UploadSigning
+import com.yunx.app.data.upload.UploadSource
 import org.json.JSONObject
 import java.security.MessageDigest
 import kotlin.random.Random
@@ -121,13 +126,21 @@ class XunleiApi(
 
     // ---------- 登录 ----------
 
-    /** 1. 验证码盾初始化，返回 captcha_token（换 token 与 pan 请求需带 X-Captcha-Token）。
+    /**
+     * 1. 验证码盾初始化，返回 captcha_token（换 token 与 pan 请求需带 X-Captcha-Token）。
      * 官方抓包：client_id 用 app 凭据 Xp6vsxz_7IYVw2BB。
-     * 按文档 §9.5：meta 必须带 captcha_sign（10-salt 算法），否则拿到降级 token（POST 类接口可能拒绝）。 */
+     * 按文档 §9.5：meta 必须带 captcha_sign（10-salt 算法），否则拿到降级 token（POST 类接口可能拒绝）。
+     *
+     * @param userId 本次登录的迅雷用户 ID（v3/login、v3/smslogin 响应里的 userID）。
+     *   ★ 必须由调用方显式传：升级/首次登录时 [currentUserId] 还是空的，meta.user_id 空着
+     *   会拿到降级 captcha_token，`signin/token` 换 token 时被拒（表现为「短信验证通过但拿不到登录态」）。
+     *   [currentUserId] 只作为「同一进程里已经登录过、调用方没传」时的兜底。
+     */
     suspend fun initCaptcha(
         deviceId: String,
         username: String,
-        action: String = "POST:/auth/signin/token"
+        action: String = "POST:/auth/signin/token",
+        userId: String = ""
     ): String? = withContext(Dispatchers.IO) {
         val ts = System.currentTimeMillis().toString()
         val sign = buildCaptchaSign(deviceId, ts)
@@ -142,7 +155,7 @@ class XunleiApi(
                 .put("package_name", XunleiConstants.APP_PACKAGE_NAME)
                 .put("timestamp", ts)
                 .put("captcha_sign", sign)
-                .put("user_id", currentUserId)) // 真实 user_id，空会得到降级 token
+                .put("user_id", userId.ifBlank { currentUserId })) // 真实 user_id，空会得到降级 token
             .put("redirect_uri", "xlaccsdk01://xunlei.com/callback?state=harbor")
             .toString()
         val request = Request.Builder()
@@ -469,6 +482,8 @@ class XunleiApi(
             append("?parent_id=").append(parentId)
             append("&page_token=").append(java.net.URLEncoder.encode(pageToken, "UTF-8"))
             append("&limit=100&with_audit=true&filters=").append(filters)
+            // 列表行缩略图：不请求这个尺寸的话响应里没有 thumbnail_link（SIZE_SMALL 够 40dp 列表用）
+            append("&thumbnail_size=SIZE_SMALL")
         }
         panCall(captchaToken, deviceId, "GET:/drive/v1/files", { t ->
             panRequest(url, accessToken, deviceId, t)
@@ -515,6 +530,65 @@ class XunleiApi(
         panCall(captchaToken, deviceId, "POST:/drive/v1/files", { t ->
             panRequest(XunleiConstants.FILES_URL, accessToken, deviceId, t, body)
         }) { data -> data.optString("id").takeIf { it.isNotBlank() } }
+    }
+
+    // ---------- 上传 ----------
+
+    /**
+     * 上传一个文件到 [parentId] 目录，返回 fileId。
+     *
+     * 迅雷用「gcid」做秒传判定：把文件按 256 KiB 起、随文件大小指数放大（上限 2 MiB）分块，
+     * 每块算 SHA1，再把**这些 SHA1 的原始字节**拼起来整体算一次 SHA1，转大写十六进制。
+     * 服务端命中就返回 `UPLOAD_TYPE_INSTANT`（不用传）；否则回 `resumable.params` 的
+     * S3 临时凭据，直接分片 PUT 到对象存储（region 固定 `xunlei`）。
+     */
+    suspend fun upload(
+        io: UploadIo,
+        file: UploadSource,
+        parentId: String,
+        accessToken: String,
+        deviceId: String,
+        captchaToken: String
+    ): String? = withContext(Dispatchers.IO) {
+        require(file.size > 0L) { "迅雷云盘不支持上传空文件" }
+        io.progress(UploadPhase.PREPARING)
+        var blockSize = 0x40000L
+        while (file.size / blockSize > 0x200 && blockSize < 0x200000L) blockSize *= 2
+        val count = maxOf(1L, (file.size + blockSize - 1) / blockSize)
+        val blockDigests = (0 until count).map { index ->
+            val start = index * blockSize
+            io.digestBytes("SHA-1", start, minOf(file.size, start + blockSize))
+        }
+        val gcid = UploadSigning.gcid(blockDigests)
+        val body = JSONObject()
+            .put("kind", "drive#file")
+            .put("parent_id", parentId)
+            .put("name", file.name)
+            .put("size", file.size)
+            .put("hash", gcid)
+            .put("upload_type", "UPLOAD_TYPE_RESUMABLE")
+            .put("space", "")
+            .toString()
+        val task = panCall(captchaToken, deviceId, "POST:/drive/v1/files", { token ->
+            panRequest(XunleiConstants.FILES_URL, accessToken, deviceId, token, body)
+        }) { data -> data }
+        val params = task.optJSONObject("resumable")?.optJSONObject("params")
+        val fileId = task.optJSONObject("file")?.optString("id").orEmpty()
+            .ifBlank { task.optString("id") }
+            .takeIf { it.isNotBlank() }
+        if (params != null && params.length() > 0) {
+            io.s3Multipart(
+                endpoint = params.optString("endpoint"),
+                bucket = params.optString("bucket"),
+                objectKey = params.optString("key"),
+                accessKey = params.optString("access_key_id"),
+                secretKey = params.optString("access_key_secret"),
+                region = "xunlei",
+                securityToken = params.optString("security_token")
+            )
+        }
+        io.progress(UploadPhase.FINISHING, file.size)
+        fileId
     }
 
     /** 文件详情（返回下载直链 links.application/octet-stream.url） */
@@ -825,6 +899,8 @@ class XunleiApi(
     // ---------- 请求构造 ----------
 
     private fun parseFileArray(array: JSONArray): List<ShareFile> = buildList {
+        // 迅雷缩略图落在自家 CDN：只认客户端 UA（浏览器 UA 会被降级成错误图/403）
+        val thumbnailHeaders = mapOf("User-Agent" to XunleiConstants.APP_UA)
         for (i in 0 until array.length()) {
             val item = array.optJSONObject(i) ?: continue
             add(
@@ -835,7 +911,8 @@ class XunleiApi(
                     isdir = item.optString("kind") == "drive#folder",
                     pdirFid = item.optString("parent_id"),
                     fidToken = "",
-                    modifyTime = item.optString("modified_time")
+                    modifyTime = item.optString("modified_time"),
+                    thumbnail = FileThumbnail.of(item.optString("thumbnail_link"), thumbnailHeaders)
                 )
             )
         }

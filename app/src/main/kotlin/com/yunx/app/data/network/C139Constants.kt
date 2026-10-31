@@ -115,6 +115,15 @@ object C139Constants {
     const val FILE_CREATE_URL = "$CLOUD_BASE/hcy/file/create"
 
     /** 重命名 */
+    /** 上传：建任务（拿到 uploadId/partInfos，命中时 rapidUpload=true 直接秒传） */
+    const val FILE_UPLOAD_CREATE_URL = "$CLOUD_BASE/hcy/file/create"
+
+    /** 上传：分批取分片地址（单批最多 100 个分片） */
+    const val FILE_UPLOAD_URL_URL = "$CLOUD_BASE/hcy/file/getUploadUrl"
+
+    /** 上传：合并分片 */
+    const val FILE_UPLOAD_COMPLETE_URL = "$CLOUD_BASE/hcy/file/complete"
+
     const val FILE_UPDATE_URL = "$CLOUD_BASE/hcy/file/update"
 
     /** 移动（异步，返回 taskId） */

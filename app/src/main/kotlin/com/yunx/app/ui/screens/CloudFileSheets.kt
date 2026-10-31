@@ -21,6 +21,9 @@ package com.yunx.app.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.expandVertically
@@ -59,6 +62,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -73,6 +77,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -99,9 +104,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
+import com.yunx.app.data.upload.UploadPhase
+import com.yunx.app.data.upload.UploadProgress
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.OperationSheet
 import com.yunx.app.ui.components.LocalFileOperationBusy
+import com.yunx.app.ui.preview.CloudPreview
 import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
@@ -138,6 +146,12 @@ internal fun FileActionSheet(
     operating: Boolean,
     onDownload: () -> Unit,
     onDownloadFolder: () -> Unit,
+    /**
+     * 文件：在线预览（各云盘页），null = 不显示该项。
+     * 可见性由 [CloudPreview.canPreview] 统一判断（图片/视频/音频/文本都放开），调用方不必自己过滤类型 ——
+     * 否则十个云盘页要各抄一份扩展名判断，改规则时必漏。
+     */
+    onPreview: (() -> Unit)? = null,
     onShare: (withPassword: Boolean, passcode: String, expiredType: Int) -> Unit,
     onRename: (String) -> Unit,
     /** 确认删除后执行（页面的 deleteFile()）：确认步骤在本弹窗内部完成 */
@@ -176,6 +190,9 @@ internal fun FileActionSheet(
                     onShare = { step = ActionStep.SHARE },
                     onMove = { step = ActionStep.MOVE },
                     onRename = { step = ActionStep.RENAME },
+                    // 在线预览：点开即关弹窗（取链成功后 ViewModel 会清空 actionFile，弹窗随之消失）；
+                    // 取链失败时弹窗留在原地，错误经 cloudMessage 走 Snackbar，用户可以直接重试
+                    onPreview = if (onPreview != null && CloudPreview.canPreview(file)) onPreview else null,
                     // 删除是弹窗内的第二级步骤：这样过渡与分享/重命名完全一致，也不会像另开底部弹窗那样
                     // 让本弹窗瞬间消失（页面的确认目标是从 actionFile 推导的，关掉它会把 actionFile 清空）
                     onDelete = { step = ActionStep.DELETE }
@@ -258,8 +275,8 @@ internal fun FileSheetHeader(file: ShareFile) {
  * 只挂在**个人盘**页面：各家文档都写明「新建目录 / 上传」必须在个人盘模式下可用，
  * 分享浏览页（`ShareDetailScreen`）不挂这个入口。
  *
- * @param onUploadFile 上传协议尚未接入时的占位：传 null（默认）时菜单项置灰并标「开发中」，
- *   等上传落地后由各页把真实回调接上即可，不用改这个组件。
+ * @param onUploadFile 上传入口。传 null（默认）时菜单项置灰并标「开发中」——只有
+ *   个人盘页才接这个回调（见各页 `CloudAddMenu(onUploadFile = pickUpload)`）。
  */
 @Composable
 internal fun CloudAddMenu(
@@ -285,7 +302,7 @@ internal fun CloudAddMenu(
                 }
             )
             DropdownMenuItem(
-                // 上传未接入前把「开发中」写在文案里：比灰掉一个没有说明的菜单项更容易看懂
+                // 未接入上传的页面把「开发中」写在文案里：比灰掉一个没有说明的菜单项更容易看懂
                 text = { Text(if (onUploadFile == null) "上传文件（开发中）" else "上传文件") },
                 leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
                 onClick = {
@@ -375,6 +392,8 @@ private fun ActionMenu(
     file: ShareFile,
     onDownload: () -> Unit,
     onDownloadFolder: (() -> Unit)? = null,
+    /** 非空时在「下载」之后显示「在线预览」（已由 [FileActionSheet] 按 [CloudPreview.canPreview] 过滤） */
+    onPreview: (() -> Unit)? = null,
     onShare: () -> Unit,
     onMove: () -> Unit,
     onRename: () -> Unit,
@@ -409,6 +428,16 @@ private fun ActionMenu(
                 desc = "递归下载整个文件夹，保持目录结构",
                 tint = MaterialTheme.colorScheme.primary,
                 onClick = onDownloadFolder
+            )
+        }
+        // 在线预览：紧跟「下载」，让「看一眼」排在「存下来」旁边（图片才出现，见 CloudPreview）
+        if (onPreview != null) {
+            ActionItem(
+                icon = Icons.Outlined.Visibility,
+                title = "在线预览",
+                desc = "不下载，直接在应用内查看",
+                tint = MaterialTheme.colorScheme.primary,
+                onClick = onPreview
             )
         }
         ActionItem(
@@ -1216,4 +1245,78 @@ private fun BatchMenu(
             onClick = onDelete
         )
     }
+}
+
+/**
+ * 「上传文件」的选文件器：封装系统多选文件对话框，选完把 uri 列表交给 [onPicked]。
+ *
+ * 用 `OpenMultipleDocuments` 而不是 `GetContent`：前者给的是可长期读取的 uri，
+ * 一次选多个文件后逐个上传期间都不会出现「授权已失效」；后者是单次临时授权。
+ */
+@Composable
+internal fun rememberUploadPicker(onPicked: (List<Uri>) -> Unit): () -> Unit {
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> if (uris.isNotEmpty()) onPicked(uris) }
+    return remember(launcher) {
+        { launcher.launch(arrayOf("*/*")) }
+    }
+}
+
+/**
+ * 上传进度弹窗：第几个/共几个、文件名、字节进度与阶段，只留一个「取消」。
+ *
+ * 点外部不关闭、没有「确定」——上传是真在后台跑的，随手关掉弹窗会让人误以为停了。
+ */
+@Composable
+internal fun UploadProgressDialog(progress: UploadProgress, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = { },
+        title = {
+            Text(
+                if (progress.count > 1) {
+                    "正在上传（${progress.index}/${progress.count}）"
+                } else {
+                    "正在上传"
+                }
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FileNameText(
+                    text = progress.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                LinearProgressIndicator(
+                    progress = { progress.fraction },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = when (progress.phase) {
+                            UploadPhase.PREPARING -> "正在校验文件…"
+                            UploadPhase.UPLOADING -> "正在上传"
+                            UploadPhase.FINISHING -> "等待网盘确认…"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${formatSize(progress.sent)} / ${formatSize(progress.size)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onCancel, enabled = !progress.cancelling) {
+                Text(if (progress.cancelling) "正在取消…" else "取消")
+            }
+        }
+    )
 }

@@ -67,6 +67,10 @@ app/src/main/kotlin/com/yunx/app/
 │   │   ├── AnnouncementApi.kt   # 公开接口客户端（列表 / 详情；列表接口有副作用，勿轮询）
 │   │   ├── AnnouncementReadStore.kt  # 已读口径的唯一真源（服务端没有已读接口）
 │   │   └── AnnouncementTime.kt  # UTC ISO 8601 → 本地时间（**不用 java.time**，minSdk 24）
+│   ├── upload/                  # ★ 上传引擎（SAF 区间流 + 分块/进度/取消 + OSS/S3 签名，见 §3.45）
+│   │   ├── UploadSource.kt / UploadIo.kt
+│   │   ├── UploadSigning.kt     # 纯函数：hex / Base64 / HMAC / OSS V1 / 迅雷 gcid
+│   │   └── UploadRunner.kt      # 一批文件的串行状态机
 │   ├── gopeed/GopeedEngine.kt          # ★ Gopeed 进程内引擎（导入 AAR / 加载 .so / 进程内 REST，见 §3.27、§3.28）
 │   ├── backup/                  # 认证备份（口令派生密钥 + AES-GCM）
 │   ├── update/UpdateChecker.kt
@@ -716,7 +720,7 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 
 ---
 
-### 3.26 网盘页「+」新建菜单：创建文件夹（7 家）/ 上传文件（占位）
+### 3.26 网盘页「+」新建菜单：创建文件夹（7 家）/ 上传文件（见 §3.45）
 
 **入口只有一个**：七家个人盘页顶栏「放大镜」图标**右侧**的 `CloudAddMenu`（`+` → 下拉菜单，两项：创建文件夹 / 上传文件），
 位置在每页 `if (!viewModel.multiSelectMode)` 的顶栏分支里，所以**多选态自动隐藏**；
@@ -727,8 +731,23 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 七个云盘页（`CloudDriveScreen`/`UCCoudScreen`/`XunleiCloudScreen`/`BaiduCloudScreen`/`C139CloudScreen`/`Pan123CloudScreen`/`Pan115CloudScreen`）
 各插三处：`var showCreateFolder`、顶栏 `CloudAddMenu(...)`、末尾 `if (showCreateFolder) CreateFolderDialog(...)`。
 
-**上传项是占位**：`onUploadFile` 默认 `null`，此时菜单项置灰、文案显示为「上传文件（开发中）」；上传协议落地后把回调传进来即可，不用改组件。
-**别把 `onUploadFile` 传成空 lambda**（那会让菜单项可点但什么都不发生）。
+**上传项已接入**（十家，见 §3.45）：各页传 `CloudAddMenu(onUploadFile = pickUpload)`，
+`pickUpload` 来自 `rememberUploadPicker`。`onUploadFile` 默认 `null` 时菜单项置灰并标「开发中」——
+**别把它传成空 lambda**（那会让菜单项可点但什么都不发生）。
+
+**滚动状态与弹窗高度的坑（2026-10-31 修，改列表页/账号弹窗之前先看）**：
+
+1. `LaunchedEffect(目录) { listState.scrollToItem(scrollPositions[目录] ?: 0) }` **不能无条件执行**。
+   在线预览是 `MainScreen` 里的 early-return：打开预览时整页离开组合，`scrollPositions`（普通 `remember`）
+   已经清空，而 `listState` 是 `rememberSaveable`、恢复出来还是原来的位置 —— 无条件执行就等于把它又拉回顶部。
+   现在用 `rememberSaveable` 的 `appliedDirKey` 标记「这个目录已经应用过一次」，同目录的重组只信任
+   `listState` 自己的保存态（`ShareDetailScreen` 与十个云盘页都是这个写法）。
+2. 账号首页（`DriveScreen`）的 `LazyListState` 必须**提升到 `AnimatedContent` 之外**：进入某个网盘页时，
+   账号列表会被 `AnimatedContent` 移出组合，状态若留在列表内部（隐式 `rememberLazyListState`）就丢了，
+   返回账号首页会回滚到顶部。
+3. 账号弹窗（`*AccountSheet`）的纵向滚动**必须无条件挂**：原来只在「展开全部」时才加 `verticalScroll`，
+   横屏等高度不足时整张弹窗卡死（下方内容在屏幕外又滑不动）。`fillMaxHeight()` 仍只在展开时给 ——
+   无条件给会让弹窗永远占满全屏。
 
 **各平台建目录接口与根目录约定**（根目录取值必须与列目录一致，否则建到别处）：
 
@@ -1338,8 +1357,9 @@ material3 的 `IconButton` 内部自带 `.clip(CircleShape)`（那颗 40dp 的�
 `RemoteImageLoader`（OkHttp + 内存 LRU 128 张 + `Semaphore(4)` + 总像素降采样 + svg 跳过 + GitHub 镜像），
 Markdown 渲染器与普通图片（`RemoteImage`：公告封面 / 头像 / 正文图集）**共用同一份缓存**；
 `GitHubMarkdownImageTransformer` 现在只是「渲染器适配层」（`mirrorPrefix` 转发给加载器）。
-列表 / 公告 / Markdown 的图片**一律走这套**，不要再引别的图片库。**唯一例外是 §3.42 的在线预览**：
-`ui/preview` 用 Coil 3 加载带逐请求请求头的原图与多图翻页，那是用户拍板的选型（见 `MediaPreviewScreen`）。
+列表 / 公告 / Markdown 的图片**一律走这套**，不要再引别的图片库。**唯一例外是 §3.42**：
+`ui/preview` 用 Coil 3 加载带逐请求请求头的原图与多图翻页，文件列表行的缩略图（`ShareFile.thumbnail`）
+同样用 Coil —— 两者都要按条目/按图带 `Referer`/`Cookie`/`UA`，`RemoteImageLoader` 那套没有逐请求头。
 ★ `RemoteImage` 的尺寸只有两种给法，别混：
 1. **固定尺寸**（头像 / 列表缩略图 / **弹窗封面**）：调用方传 `Modifier.size(...)` 或 `height(...)`，
    宽高必须**都有界**（`Image` 在无界高度下会退化成图片固有尺寸，长图糊一屏）；
@@ -1468,6 +1488,13 @@ android.security.keystore.KeyPermanentlyInvalidatedException: Key permanently in
   先跑正则的话 `"  Bearer xxx  "` 匹配不上，剩下的空格又过不了 token 字符集校验，粘贴兜底直接失效。
 - 切换登录方式必须调 `XunleiAccountViewModel.resetLoginStep()`：旧的 `creditkey/token` 属于上一条流程，
   带过去提交只会报「验证已失效」。
+- ⚠️ **`captcha/init` 的 `meta.user_id` 必须传「本次登录」的 userID**（`v3/login` / `v3/smslogin`
+  响应里的 `userID`，已存在 `XunleiLoginStep.userID`），由 `XunleiAccountRepository.finishLogin` /
+  `loginWithSms` 显式传进 `XunleiApi.initCaptcha(..., userId = step.userID)`。
+  旧实现用的是实例缓存的 `currentUserId`（从 access_token 的 JWT 里解出来的），**首次登录/升级后
+  进程里还没有 token，这个值是空的**，`meta.user_id` 空着只能拿降级 captcha_token，
+  `signin/token` 换 token 时被拒 —— 表现就是「短信验证码明明通过了，却拿不到登录态」。
+  `currentUserId` 现在只作「已登录过、调用方没传」时的兜底。
 - **网页登录的 token 与 App token 不是同一套 OAuth 客户端**，这是最容易踩的一条：
   - App：`Xp6vsxz_7IYVw2BB` + secret，刷新走**表单** + `X-Device-Id`；
   - 网页：`Xqp0kJBXWhwaTpB6`（`XunleiWebCredential.CLIENT_ID`）**无 secret**，刷新走 **JSON** +
@@ -1692,7 +1719,7 @@ operation = 入队/暂停/删除等用户关键操作。
 | 快手 | 分享页 SSR 的 `window.INIT_STATE` | 单文件 mp4 | 不需要 |
 | 微博 | `m.weibo.cn/statuses/show`（伪装 XHR、**不跟随重定向**）、`h5.video.weibo.com/api/component` | 单文件 mp4（720p 优先）/ 九宫格原图 | 不需要（提高成功率） |
 | AcFun | `?quickViewId=videoInfo_new&ajaxpipe=1` 的 `window.videoInfo` | **m3u8** → 自动走 HLS 路径 | 不需要 |
-| 哔哩哔哩 | `x/web-interface/view` + `x/player/playurl?fnval=1&platform=html5` | **单文件低清**（见下方 TODO） | 可选（登录后画质更高） |
+| 哔哩哔哩 | `x/web-interface/view` + `x/player/playurl`：未登录 `fnval=1&platform=html5` 取单文件，已登录 `fnval=4048` 取 DASH | 单文件低清 /（已登录）**DASH 分轨**（音视频分离，下载后由 `DashMuxer` 本地合轨） | 可选（登录后画质更高） |
 | Pixiv | `ajax/illust/{id}` + `ajax/illust/{id}/pages` | 每页**原图**直链 | **要全量必须登录，但只支持手动填 Cookie**（实测 2026-10：未登录也能解析**一部分公开作品**，R18 / 受限作品与其余部分必须登录；网页登录在 WebView 里过不了它的风控，见 §3.44） |
 
 **刻意不做的**：YouTube / TikTok / Instagram（依赖 yt-dlp、gallery-dl）、知乎（curl_cffi TLS 指纹 + bs4）、
@@ -1825,11 +1852,34 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
   下载页就自然出现一个可折叠分组，而不是几十张散落的图片任务。**单张不加前缀**
   （一个只有一张图的「文件夹」没有意义），所以「下载全部 / 下载所选」走批量入口、单张下载走
   `downloadVideoMedia`。批量入口同时负责传合轨音轨，别再退回只传 `url` 的写法。
+- **文案（简介/正文）必须落到 `VideoParseResult.text`**：抖音的 `desc`、快手的 `caption` 既是标题、
+  也是**完整文案**，以前只写进 `title`（顶栏最多两行、必然截断）→ 结果页没有文案块、用户也没法复制。
+  现在两个解析器都同时写 `text`（抖音 WebView 路线的 `EXTRACT_JS` 单独回 `desc`，不再从
+  `document.title` 反推）；结果页文案块带「复制文案」，复制的是**完整原文**而不是折叠后的显示文本。
+  ★ 新增平台只要「作品有一段文字描述」，就填 `text` —— 别指望 `title` 兼任文案。
+- **「仅下载音频」**（视频行右侧的音频图标，产物固定 `.m4a`）：
+  - **有独立音轨就直接下音轨**：目前只有哔哩哔哩 DASH（`VideoMedia.audioUrl`），由
+    `ResolveViewModel.downloadVideoAudio` 直接把 `audioUrl` 入队 —— 体积通常只有视频的几十分之一，
+    这才是真正意义上的「只下音频」。
+  - **其余平台只有一条整段视频直链**（抖音/快手/小红书/微博/AcFun），平台侧没有音频地址：入队时带
+    `audioOnly = true`，由 `DownloadManager.audioOnlyDownload` **下完整段视频后抽音轨**
+    （`AudioExtractor`：MediaExtractor 选第一条 `audio/` 轨 + MediaMuxer 逐样本重封装，**不重编码**）。
+    ★ 所以这些平台的「仅下载音频」**流量与下视频完全一样**，省不掉 —— 这是没有独立音轨时的物理上限，
+    别在 UI 上暗示「只下很小的一段」。HLS（AcFun）同样是先把分片合成临时文件、再从中抽。
+  - ★ **分支顺序**：`runTask` 里 `task.audioOnly` 必须排在 `mergeAudioUrl` **之前**。否则给一条 DASH
+    任务点「只要音频」会走进合轨，产出的是一个视频。
+  - ★ **必须走内置下载器**：`enqueue(..., audioOnly = true)` 要顺带让 `shouldUseEngine` 的 `needMerge`
+    为真，否则设置里选了 Gopeed 时，引擎会把完整视频存下来、没有任何人抽音轨。
+  - 落库在 `download_task.audioOnly`（**DB v24**，`MIGRATION_23_24`）：抽音轨发生在下载完成时，
+    暂停/重启后还要按同一标记收尾。文件名由 `ResolveViewModel.videoAudioFileName` 生成为
+    `<作品名>_音频.m4a`；`DownloadSaver.mimeOf` 把 `m4a/m4s` 映射成 `audio/mp4`（少了这个分支会落成
+    `application/octet-stream`，相册/音乐播放器按类型筛选时看不到产物）。
+  - 抽音轨阶段前台通知显示「正在提取音频」（`DownloadService.AUDIO_TEXT`），**不要复用合并文案**。
 
 **TODO（改动前先读）**：
 
-1. **B站 DASH 合并**：`fnval=1` 只能拿到单文件（未登录画质很低）。高清是音视频分离的 DASH，Android 侧
-   需要 mux 方案（自研或引入原生库）才能合并，属于独立课题；
+1. **B站画质**：DASH 音视频分离的**本地合轨已实现**（`fnval=4048` + `DashMuxer`，见 §3.42），别再把它
+   当待办；剩下的限制是**未登录拿不到 DASH 高清**、以及番剧/付费内容不返回可合轨的流；
 2. **B站 playurl 若被要求 WBI 签名**：现在用的是公开的 `x/player/playurl`，一旦该接口开始强制签名，
    需要实现 WBI 签名或改用其它公开接口；
 3. **Pixiv 动图**（ugoira，zip + 帧时长表）与**小说**未支持，识别层会给出明确提示而不是产出打不开的文件；
@@ -1844,8 +1894,48 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 参数表，所以做成「发一条请求 → MainScreen 观察到就挂载预览页」。`PreviewTypes.kindOf(fileName)` 是**唯一**
 的「能不能预览」判据（压缩包/未知类型返回 null，菜单项根本不显示）。
 
+**列表行缩略图**（设置 → 通用 → 列表缩略图，默认开）：图片文件的行首图标换成小图；关掉后
+**一个取图请求都不发**（不是加载完再隐藏）。缩略图信息是 `ShareFile.thumbnail: FileThumbnail?`
+（地址 + 取图请求头），由**列表接口在拿到凭证的那一次**产出 —— 各家字段并不统一：
+百度 `thumbs.url3 > url2 > url1`、139 `thumbnailUrls[]`（优先 style=Large，回退 big/mid/thumbnailURL）、
+迅雷 `thumbnail_link`（个人盘列表请求必须带 `thumbnail_size=SIZE_SMALL`，不带就没有这个字段）、
+光鸭 `thumbnail|thumbnailUrl|thumbnailURL|cover`、123 的列表只给**原图直链** `DownloadUrl`（必须自己拼成
+缩略图，见下），而夸克/UC 的缩略图地址指向自家接口、**不带账号 Cookie 不给图**。
+请求头跟着条目走，是为了让列表行不必回头去问 ViewModel 要凭证；
+**账号 Cookie 按域名分流**（`FileThumbnail.of` 的 authHost 重载：只有 `drive-pc.quark.cn` / `pc-api.uc.cn`
+才带 Cookie，响应把地址指到别的域名时只发 UA/Referer —— 列表响应是外部数据，不能拿登录态去赌）。
+`FileThumbnail.of` 只接受 https（全局禁明文，http 必失败）。115 与蓝奏系的列表接口没有缩略图字段，暂不支持。
+行内用 Coil `AsyncImage` 画小图，失败时不画任何东西、底下垫的文件图标天然成为兜底。
+
+**123 的缩略图是自己拼的**（`pan123ThumbnailUrl`，2026-10-31 用真实列表响应打 CDN 实测）：
+`DownloadUrl` 是原图直链（`download-cdn.cjjd19.com/.../c-m8007?<签名>`，约一周有效期），在它的 query 上
+追加 `w/h` + **单个** `trade_key=123pan-thumbnail`，同一台 CDN 就返回压缩 JPEG（120×120 约 7KB）。
+三条硬约束，改之前先看：① 少 `trade_key` → 403；② `trade_key` **出现两次**（重复参数）→ 直接回原图，
+所以要先剥掉旧的 `w/h/trade_key` 再各写一次；③ 路径里的尺寸后缀（`_70_70`/`_24_24`）对结果没有影响，别去改路径。
+列表项自带的 `Thumbnail` 字段优先用平台的。**注意**：这条是本项目用真实响应 + 实际请求验证出来的，
+不是从别处抄的结论；改它之前先按上面三条复测，别因为「别处没见过」就删掉。
+
 **请求头是刚需**：网盘直链与 B站/微博/Pixiv 直链都校验 `Referer`/`Cookie`/`UA`，少一个就是 403 ——
 所以 `PreviewMedia` 必带 `headers`，播放器与图片加载器都必须把它带上。
+
+**网盘页的入口在文件操作弹窗里**：`FileActionSheet` 只有调用方传了 `onPreview` 才显示「在线预览」项，
+**可见性统一由 `ui/preview/CloudPreview.kt` 的 `canPreview` 判断**（十个云盘页不要各抄一份扩展名判断）。
+云盘页与分享解析页一样**放开全部可预览类型**（图片 / 视频 / 音频 / 文本）：视频与音频是 ExoPlayer
+**流式播放**（HTTP Range，边下边播，不整段下载），文本也只读前 512KB。以前只放开图片的理由是
+「直链按次/带时效，怕播放再叠一层 Range 风险」，但内置下载器的分片与断点续传本来就依赖 Range，
+这个前提并不成立；真要逐平台验证，用「下载能通、预览 403」这条线索排查 —— 那几乎都是请求头缺失
+（少 Referer/Cookie/UA），而不是 CDN 不支持 Range。
+取链放在各云盘 ViewModel 的 `openPreview()`：**请求头必须复用下载那一份 `downloadHeaders`**，因为
+「下载能通、预览白屏」几乎都是少 Referer/Cookie/UA；成功拿到直链后**先清 `actionFile` 再 `PreviewLauncher`**，
+否则关掉预览时文件操作弹窗会重新弹回来。**`DownloadLink.isHls` 要一路带到 `CloudPreview.open(..., isHls=)`**：
+UC 的 video_preview 回退链路会给转码流（m3u8），而这类地址不一定带 `.m3u8` 后缀，播放器没法靠后缀
+识别（见下面表格里的 HLS 说明）。
+
+**预览要快（起播门槛）**：`MediaPreviewScreen.buildPlayer` 用 `previewLoadControl()` 替代 ExoPlayer 默认值 ——
+`minBuffer 15s / maxBuffer 50s / 起播 1.2s / 重缓冲后 3s` + `setPrioritizeTimeOverSizeThresholds(true)`。
+默认的 2.5 秒起播门槛是给「长时间连续播放」调的，对「点开看一眼」太保守：网盘直链首字节还要等取链与
+CDN 握手，再攒 2.5 秒素材就会像「点了没反应」。缓冲**不要**一起压低（15 秒是给限速 CDN 留的余量），
+调参只改 `previewLoadControl()` 这一处 —— 分享解析页、结果页内联播放器、云盘预览共用同一个 `buildPlayer`。
 
 **预览页可带「下载」**：`PreviewRequest.onDownload`（`(当前页下标) -> Unit`）非空时顶栏出现下载按钮，
 下的是**正在看的那一条**（翻页后随之变化）。用「下标回调」而不是把 `VideoMedia` 塞进 `PreviewMedia`：
@@ -1855,7 +1945,7 @@ Android 上无法闭环，要么要把用户链接交给外部服务，宁可不
 | 类型 | 实现 | 要点 |
 |---|---|---|
 | 图片 | Coil 3（`coil-compose` + `coil-network-okhttp`） | 多图用 `HorizontalPager` 翻页；请求头必须逐请求带上 |
-| 视频/音频 | Media3 ExoPlayer + `PlayerView`（`AndroidView`） | `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)`；`DefaultMediaSourceFactory` 按 URI 自动识别 m3u8；`DisposableEffect` 里 `player.release()` |
+| 视频/音频 | Media3 ExoPlayer + `PlayerView`（`AndroidView`） | `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)` + `previewLoadControl()` 快速起播；**m3u8 要显式建 `HlsMediaSource`**（播放器的 `DefaultMediaSourceFactory` 是用 `DataSource.Factory` 构造的，那条构造路径拿不到 HLS 工厂，后缀推断对无后缀转码流也不可靠）；`DisposableEffect` 里 `player.release()` |
 | 文本（仅网盘） | OkHttp + `Range: bytes=0-524287` | **只读前 512KB**，不整文件下载；UTF-8 严格解码失败回退 GBK 再回退 ISO-8859-1；`.md` 走已有 mikepenz 渲染，其余等宽纯文本 + 可复制 |
 
 **新增的两个依赖**（`gradle/libs.versions.toml`）：`media3 1.4.1`（1.4.x 用 Kotlin 1.9 编译，与项目
@@ -1980,6 +2070,151 @@ reCAPTCHA 的 `_GRECAPTCHA` Cookie 也在、**没有任何 Cookie 被拦** —�
 **通用结论**：`X-Requested-With` / reCAPTCHA 这类「WebView 里过不去的登录」，兜底就是**手动粘贴 Cookie**
 （桌面浏览器登录后复制整串）。哪些平台走这条路由 `manualCookieOnly` 声明，`needsLogin` 决定它是否还出现在
 账号页的「需要登录」那一组里。
+
+---
+
+### 3.45 文件上传（十家网盘 · 个人盘当前目录）
+
+**入口**：各个人盘页顶栏 `CloudAddMenu` 的第二项「上传文件」→ 系统多选文件对话框 →
+`ViewModel.uploadFiles(resolver, uris)` 排队上传到**当前目录**。分享浏览页不挂这个入口（各家上传都只对个人盘开放）。
+
+**分三层，别写乱**：
+
+1. **通用引擎** `app/src/main/kotlin/com/yunx/app/data/upload/`
+   - `UploadSource.kt`：SAF uri → 文件名/大小/MIME + `open(start, end)` 区间流
+     （优先 `openFileDescriptor` + `FileChannel.position`，不能 seek 的 Provider 退回「重开流 + skip」）；
+   - `UploadIo.kt`：定长请求体（裸分片 / multipart）、流式哈希、进度、取消、
+     **OSS V1 分片**（`ossMultipart`）与 **S3 V4 分片**（`s3Multipart`）；
+   - `UploadSigning.kt`：纯函数（hex / Base64 / HMAC / OSS V1 签名 / 迅雷 gcid / XML 合并报文），
+     单测在 `app/src/test/kotlin/com/yunx/app/data/upload/UploadSigningTest.kt`；
+   - `UploadRunner.kt`：一批文件串行上传的状态机（节流 120ms 上报进度、取消、收尾回调）。
+2. **每家协议**：`XxxApi.upload(io, file, 目录标识, 凭据…)`
+   （夸克/UC 共用 `data/network/QuarkUpload.kt`，两家只有域名与 `pr` 不同）。
+3. **页面接线**：各 `XxxCloudViewModel` 持有 `uploadRunner`，暴露 `uploadProgress` / `uploadFiles` / `cancelUpload`；
+   各页 `CloudFileSheets.kt` 的 `rememberUploadPicker` + `UploadProgressDialog`。
+
+| 平台 | 预上传 / 秒传 | 传输 | 合并 / 收尾 |
+|---|---|---|---|
+| 夸克 / UC | `file/upload/pre` → `file/update/hash`（`finish=true` 秒传） | 每片先 `file/upload/auth` 换 `auth_key`，再 PUT 到 OSS | 带 `x-oss-callback` 的 XML 合并 → `file/upload/finish` |
+| 百度 | `api/precreate`（整文件/每 4 MiB/前 256 KiB 的 MD5；`return_type=2` 秒传） | `d.pcs.baidu.com/rest/2.0/pcs/superfile2` 逐片 POST（每片回 md5 校验） | `api/create?a=commit` |
+| 139 | `hcy/file/create`（整文件 SHA256；`rapidUpload=true` 秒传） | 服务端签发的 `uploadUrl` 逐片 PUT（100 MiB / 30 GB 以上 512 MiB） | `hcy/file/complete` |
+| 123 | `b/api/file/upload_request`（etag=整文件 MD5；`Reuse` 秒传） | 有 `AccessKeyId` 就走 S3 V4（`region=123pan`、pathStyle）；否则换预签名地址逐片 PUT 16 MiB | `upload_complete` / `upload_complete/v2` |
+| 115 | `uplb.115.com/3.0/sampleinitupload.php`（无秒传） | OSS **单次表单**直传（策略字段 + `file` 字段） | 回调 JSON 里的 `file_id`；单文件上限 5 GB |
+| 迅雷 | `/drive/v1/files`（`hash`=gcid，命中返回 `UPLOAD_TYPE_INSTANT`） | `resumable.params` 的 S3 临时凭据（`region=xunlei`） | 无需合并（服务端异步校验），列表确认 |
+| 光鸭 | `nd.bizuserres.s/v1/get_res_center_token`（`code=156` 秒传） | 返回的 STS 凭据走 OSS V1 | 轮询 `file/get_info_by_task_id` 直到拿到 `fileId` |
+| 蓝奏 | 无 | `html5up.php` 单次 multipart（字段 `task/vie/ve/id/name/folder_id_bb_n` + `upload_file`） | 响应 `zt==1` + `text[0].id` |
+| 蓝奏优享 | `proved/7n/getUpToken`（`upToken=="-1"` 秒传） | 8 MiB 以内七牛表单直传；超过走七牛分片（URL-safe Base64 的 key） | 轮询 `unproved/7n/results` 到 `status=1` |
+
+**必须守住的几条**：
+
+1. **进度状态在 IO 线程直接写 Compose 快照状态**（`mutableStateOf` 写入本身是线程安全的），
+   靠 `UploadRunner` 节流到 120ms 一次；别改成每读 64 KiB 就 `withContext(Main)`，主线程会被打爆。
+2. **控制类请求不能带文件体**：OSS/S3 的初始化 / 合并 / 中止都走 `UploadIo.send`，
+   `request()` 里 `start == null` 表示「没有分片」，此时必须传 `body = ""`，
+   否则 `FileRequestBody` 会把整个文件当请求体再发一遍（最狠的是 DELETE 中止也传全文件）。
+3. **取消要能打断在飞请求**：`UploadIo.cancel()` 置标志位 + `Call.cancel()`；
+   读循环每轮 `alive()` 检查，`send` 捕获到 `IOException` 且已取消时转成 `CancellationException`。
+4. **上传目标目录在开始时固定**（`uploadFiles` 里先取 `Loaded` 状态的目录 id），
+   不要在上传过程中读 `dirStack` —— 用户可能已经切了目录。
+5. **凭据在 IO 线程现取**（`cookieProvider()` / `tokenProvider()` / `creds()`），别在点击时取一次用到底。
+6. **上传完成后统一 `reloadCurrent()`**：不为「拿不到文件 id」去猜/轮询列表，
+   服务端落库有延迟，刷新列表是最稳的确认方式（蓝奏优享除外：它必须轮询结果接口）。
+7. **`OpenMultipleDocuments` 而不是 `GetContent`**：前者的 uri 授权在整批上传期间有效，
+   后者是单次临时授权，多文件串行上传中途会读不到。
+8. **文本请求体不能用 `String.toRequestBody(MediaType)`**：OkHttp 在 MediaType 没带 charset 时
+   会自动补 `; charset=utf-8`，而 OSS V1 / S3 的签名是按**原样 Content-Type** 算的 ——
+   结果就是「分片 PUT 成功（走文件体的 `contentType()`，不补 charset）、合并/初始化 403
+   SignatureDoesNotMatch」。`UploadIo.send` 用私有 `TextBody` 原样透传 MediaType。
+9. **123 优先走「预签名分片」**：只要响应里有 `UploadId`，就用服务端签发地址（`s3_upload_object/auth`
+   / `s3_repare_upload_parts_batch`），客户端不参与签名；只有拿不到 `UploadId` 时才回退 S3 直传
+   （`region=123pan` + pathStyle 是未验证的猜测，实测真机 403 AccessDenied）。
+
+**已知未验证点（真机先盯这几家）**：139 的 `getUploadUrl` 分批（>100 片）与 `rapidUpload` 字段、
+123 在服务端下发 S3 凭据时的 `endpoint` 形态、光鸭的 STS 凭据是否总在 `creds` 子对象、
+蓝奏优享的七牛 `key` 里账号名缺失时的报错文案、115 的 5 GB 上限提示是否与网页端一致。
+
+**回退**：删掉 `data/upload/` 四个文件、`data/network/QuarkUpload.kt`、十家 `XxxApi.upload` 与对应常量、
+十个 ViewModel 的「上传」小节、`CloudFileSheets.kt` 的 `rememberUploadPicker`/`UploadProgressDialog`、
+十页的 `pickUpload` 接线即可（无数据库改动、无权限改动）。
+
+---
+
+### 3.46 百度个人盘列表：App 通道优先 + 网页通道兜底（「列表加载不出来」的根因）
+
+`BaiduApi.listCloudFiles` 现在**固定两条通道**，`listDir`（转存前检查临时目录）也走它，
+不许再各写一套：
+
+| 通道 | 请求形态 | 用途 |
+|---|---|---|
+| App（首选） | `pan.baidu.com/api/list`，`clienttype=1` + `version=13.15.4` + **`channel=`（键在、值为空）** + `bdstoken=MD5(BDUSS)` + `devuid/cuid/apn_id/freeisp/queryfree`，`start/limit` 翻页，`netdisk` UA | 网页登录拿到的 BDUSS 也能过；当前百度主推的形态 |
+| 网页（兜底） | `pan.baidu.com/api/list`，`channel=chunlei&clienttype=0&web=1`，`page/num` 翻页，**网页 UA** + `Referer: pan.baidu.com/disk/main` | App 通道被拒（老账号/网页会话）时用 |
+
+**踩过的那次「个人网盘文件列表加载不出来」**：旧实现是「网页参数（`clienttype=0&web=1`）+
+App UA（`netdisk;…`）+ `yun.baidu.com` 域名，且不带 `channel`」。百度按「不是同一类客户端」
+拒绝（`errno=2` 参数错误 / `-6` 未登录），而旧代码把「非 0 的 errno」当成**空目录**吞掉，
+所以界面上既没有错误提示、也没有文件 —— 看起来就是「列表加载不出来」。
+
+**必须守住的几条**：
+
+1. **参数与 UA 不能跨通道混用**：App 通道用 `BaiduConstants.UA_APP`（版本号与 `APP_VERSION`
+   必须一致，百度会交叉校验），网页通道用 `UA_WEB` + 站内 Referer。改一边就得两边一起改。
+2. **`bdstoken` 有两套**：App 通道是 `MD5(BDUSS)`（`appBdstoken`），网页通道才是
+   `gettemplatevariable` 返回的那个 token。把网页 token 塞进 App 通道会被拒，
+   反之亦然——上传/文件管理目前仍走网页通道，别顺手换。
+3. **失败了要抛异常，不许再 return 空列表**：两个通道都失败时抛
+   `百度文件列表加载失败（errno=…）`，`BaiduCloudViewModel` 会显示在错误态里。
+   吞掉 errno 等于把「登录失效 / 参数错误」伪装成「空文件夹」，是最难查的一类问题。
+4. **兜底成功要留痕**：走网页通道成功时写 `event=baidu_list_web_fallback`，
+   两个都失败写 `event=baidu_list_failed`（诊断模式 → network 模块）。百度下次改协议时，
+   日志里能直接看出是 App 通道失效还是两条都失效。
+5. **翻页语义两边不同**：App 是 `start/limit` 偏移、网页是 `page/num` 页码，
+   所以只能整条通道走完再换另一条，不能从中间页切换（会漏文件）；用
+   `seen` 去重 + 满页判定终止，封顶 100 页防服务端忽略偏移时死循环。
+6. `devuid/cuid` **不采集硬件标识**：用 BDUSS 派生稳定的 32 位大写十六进制 + `|0`
+   （`appDeviceId`），只是让请求形状像客户端；换账号自然变化。
+
+**落点**：`data/network/BaiduApi.kt`（`listCloudFiles` / `fetchPersonalList` / `listPageUrl` /
+`listErrorMessage` / `appBdstoken` / `appDeviceId`）、`data/network/BaiduConstants.kt`（`UA_APP` / `APP_VERSION`）。
+
+**回退**：把 `listCloudFiles` 恢复成单条网页请求即可（`listDir` 是它的包装，不用单独改）。
+
+### 3.47 账号页排序与「隐藏未登录的网盘」
+
+**需求**：账号页右上角加排序入口，弹窗里调整网盘账号列表的先后顺序，并可隐藏未登录的网盘。
+
+**跨层结构（改之前先看这里）**：按钮画在**全局顶栏**（`MainScreen` 的 `actions`，条件是
+`currentTab == MainTab.Drive && !driveSubPageOpen`），但列表、账号数据、顺序状态都在 `DriveScreen` 里，
+所以三处要连着改：
+
+- `MainScreen`：`showDriveSort`（弹窗开关）与 `driveSubPageOpen`（是否停在某个网盘的浏览子页）
+  两个 `rememberSaveable`；进入子页时隐藏排序入口（排序只属于账号列表）。
+- `DriveScreen` 参数：`showSortDialog` / `onDismissSortDialog` / `onSubPageChange`。
+  子页状态由 `drivePage`（0=列表，1..10=各网盘）经 `LaunchedEffect(drivePage)` 回传给上层。
+- 弹窗实现：`DriveSortDialog`（同文件末尾）。
+
+**排序怎么落地**：`driveItems` 把「账号渲染数据 + 该行自己的点击/更多行为」绑成一个
+`DriveAccountItem`，顺序只影响渲染先后、不改点击语义；再按 `SettingsRepository.driveAccountOrder`
+的 id 名次做 `sortedBy`（**稳定排序**），没排过的项（以后新增的平台）自然落到末尾并保持默认相对顺序，
+所以**加新网盘不需要迁移顺序设置**。上移/下移走 `onMove(from, to)` → `removeAt` + `add` → 即时落盘。
+
+**隐藏未登录**：`SettingsRepository.hideUnloggedDrives`，网盘区过滤条件就是 `isLoggedIn`
+（**GitHub 也参与**：未配置 Token 时算未登录，藏了仍能在排序弹窗里取消隐藏，不会丢 Token 入口）。
+视频解析区共用同一开关（`VideoAccountSection(hideUnlogged)`）：只藏「需要登录且未登录」的平台，
+免登录平台永远保留（藏了等于删功能，它们也没有「未登录」这个概念）。隐藏后在列表尾部显示
+「已隐藏 N 个未登录的网盘、M 个未登录的视频平台，点右上角排序可恢复」，别让账号「凭空消失」。
+弹窗里传的是 `orderedDriveItems`（含被隐藏项），否则一旦隐藏就再也点不到恢复。
+
+**为什么不拖拽**：`AlertDialog` 里手写拖拽要自己算 pointerInput + 逐行位移，而这里只有 11 行，
+上移/下移箭头的点按目标与可访问性（`contentDescription = "上移"/"下移"`）都更稳，也不用引入拖拽库。
+
+**两个容易踩的坑**：
+1. 空间额度必须**在 LazyColumn 外面** `collectAsState`（`quarkQuota`…`ilanzouQuota` 共 9 个）：
+   放进 item 里则顺序一变就重复/漏订阅；`lanzou` 没有额度接口，`quota = null`。
+2. `onMoreClick` 用 `sheetAction(loggedIn) { showXxxSheet = true }`，**不要写**
+   `if (x) ({ ... }) else null` —— 条件分支里的 lambda 字面量要靠期望类型推断，抽成函数才稳。
+
+**回退**：删顶栏按钮 + `DriveScreen` 三个参数 + `SettingsRepository` 两个设置项；
+已存的顺序/开关留在 prefs 里无害（不读即不生效）。
 
 ## 4. 验证
 

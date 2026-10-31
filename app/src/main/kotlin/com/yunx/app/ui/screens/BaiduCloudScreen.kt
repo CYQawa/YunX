@@ -147,6 +147,8 @@ fun BaiduCloudScreen(
     var showSearch by rememberSaveable { mutableStateOf(false) }
     // 各目录滚动位置记忆：进入文件夹/返回时按目录路径恢复，避免返回后列表回到顶部
     val scrollPositions = remember { mutableStateMapOf<String, Int>() }
+    // 已应用滚动位置的目录：从在线预览返回时这一项随保存态恢复，同目录不再强制回顶
+    var appliedDirKey by rememberSaveable { mutableStateOf<String?>(null) }
     val loadedState = state as? BaiduCloudUiState.Loaded
     val displayFiles = remember(loadedState?.files, searchQuery) {
         val files = loadedState?.files ?: emptyList()
@@ -161,8 +163,18 @@ fun BaiduCloudScreen(
     var showBatchActions by remember { mutableStateOf(false) }
     var batchInitial by remember { mutableStateOf(BatchStep.MENU) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    // 「+」菜单的「创建文件夹」弹窗（「上传文件」项目前是占位，见 CloudAddMenu）
+    // 「+」菜单的「创建文件夹」弹窗（上传项由下面的 pickUpload 直接拉起选文件器）
     var showCreateFolder by remember { mutableStateOf(false) }
+
+    // 「+」菜单的上传：系统多选文件 → 交给 ViewModel 依次上传到当前目录
+    val pickUpload = rememberUploadPicker { uris ->
+        viewModel.uploadFiles(context.contentResolver, uris)
+    }
+
+    // 上传进度弹窗：点外部不关闭，「取消」会打断正在发的那一段
+    viewModel.uploadProgress?.let { progress ->
+        UploadProgressDialog(progress = progress, onCancel = { viewModel.cancelUpload() })
+    }
 
     // 百度非会员 >300MB 限速提示：记住「不再显示」，单文件/批量下载前拦截
     val settingsRepo = remember { SettingsRepository(context) }
@@ -244,6 +256,9 @@ fun BaiduCloudScreen(
                     // 目录加载完成、列表挂载后恢复该目录上次滚动位置（避免 Loading 阶段误触发）
                     val loadedKey = remember(s.pathNames) { s.pathNames.joinToString("/") }
                     LaunchedEffect(loadedKey) {
+                        // 切换目录才重置滚动；同目录的重组（如从预览页返回）交给 listState 自己的保存态恢复
+                        if (appliedDirKey == loadedKey) return@LaunchedEffect
+                        appliedDirKey = loadedKey
                         listState.scrollToItem(scrollPositions[loadedKey] ?: 0)
                     }
                     PullToRefreshBox(
@@ -317,7 +332,10 @@ fun BaiduCloudScreen(
                                                 )
                                             }
                                             // 「+」新建菜单（创建文件夹 / 上传文件，Agent.md §3.26）
-                                            CloudAddMenu(onCreateFolder = { showCreateFolder = true })
+                                                                                        CloudAddMenu(
+                                                                                            onCreateFolder = { showCreateFolder = true },
+                                                                                            onUploadFile = pickUpload
+                                                                                        )
                                         }
                                     }
                                     if (!viewModel.multiSelectMode) {
@@ -492,6 +510,8 @@ fun BaiduCloudScreen(
                 }
             },
             onDownloadFolder = { viewModel.downloadFolder() },
+            // 在线预览（图片）：取链成功后 ViewModel 清空 actionFile，弹窗随之消失；失败则留在弹窗里报错
+            onPreview = { viewModel.openPreview() },
             // 百度分享必须带 4 位提取码
             passcodeMode = PasscodeMode.REQUIRED,
             onShare = { _, passcode, expiredType -> viewModel.shareFile(expiredType, passcode) },
