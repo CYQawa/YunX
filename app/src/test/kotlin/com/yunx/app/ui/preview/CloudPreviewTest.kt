@@ -27,8 +27,9 @@ import org.junit.Test
  * 云盘页「在线预览」入口可见性单测。
  *
  * 重点不在「图片能显示」，而在「不该出现的入口一个都别出现」：菜单项一旦显示，点下去就要取一次直链，
- * 而各网盘的直链是按次/带配额的（夸克每次取链都算一次额度、百度 dlink 会过期），
- * 文件夹、压缩包、以及当前还没放开的视频/音频/文本都必须判 false。
+ * 而各网盘的直链是按次/带配额的（夸克每次取链都算一次额度、百度 dlink 会过期）。
+ * 现在图片/视频/音频/文本都已放开（与分享解析页同一口径），所以这里只锁「文件夹、压缩包、
+ * 安装包、没有真扩展名」这几类必须判 false。
  */
 class CloudPreviewTest {
 
@@ -55,11 +56,19 @@ class CloudPreviewTest {
     }
 
     @Test
-    fun `当前未放开的类型不给入口`() {
-        assertFalse(CloudPreview.canPreview(file("video.mp4")))
-        assertFalse(CloudPreview.canPreview(file("song.flac")))
-        assertFalse(CloudPreview.canPreview(file("readme.txt")))
+    fun `视频音频文本也已放开预览入口`() {
+        // 与分享解析页同一口径：视频/音频是流式播放（Range），文本只读前 512KB
+        assertTrue(CloudPreview.canPreview(file("video.mp4")))
+        assertTrue(CloudPreview.canPreview(file("stream.m3u8")))
+        assertTrue(CloudPreview.canPreview(file("song.flac")))
+        assertTrue(CloudPreview.canPreview(file("readme.txt")))
+        assertTrue(CloudPreview.canPreview(file("notes.md")))
+    }
+
+    @Test
+    fun `不可预览的类型不给入口`() {
         assertFalse(CloudPreview.canPreview(file("archive.zip")))
+        assertFalse(CloudPreview.canPreview(file("setup.apk")))
         // 没有扩展名 / 扩展名过长（不是真扩展名，PreviewTypes 会判成不可预览）
         assertFalse(CloudPreview.canPreview(file("README")))
         assertFalse(CloudPreview.canPreview(file("x.verylongext")))
