@@ -1649,7 +1649,7 @@ fun MainScreen(
                         },
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        Text("↗从GitHub获取 token", style = MaterialTheme.typography.bodySmall)
+                        Text("↗ 从 GitHub 获取 Token", style = MaterialTheme.typography.bodySmall)
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(

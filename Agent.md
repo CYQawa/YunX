@@ -598,12 +598,6 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 | `AppLinks.QQ_GROUP` | `635207650` | 引导页首页胶囊、设置页「关于」组 |
 | `AppLinks.GITHUB_REPO` | `https://github.com/CYQawa/YunX` | 引导页 / 关于页卡片跳转、设置页「关于」组 |
 | `AppLinks.GITHUB_REPO_DISPLAY` | `github.com/CYQawa/YunX` | 界面文字展示（不带协议头） |
-| `AppLinks.GITHUB_TOKEN_PAGE` | `https://github.com/settings/tokens/new?scopes=public_repo&description=YunX` | 网盘页 GitHub Token 弹窗里的「↗从GitHub获取 token」 |
-
-- **Token 弹窗里的跳转 = 先跳浏览器、失败再复制**（`AppLinks.openGitHubTokenPage(context)`，与 `openQQGroup` 同一口径：
-  不做 `resolveActivity()` 预检，靠 `runCatching` 捕获），返回 false 时复制链接 + 提示「未找到可用浏览器，链接已复制」。
-- **为什么用带 query 的创建页而不是 `https://github.com/settings/tokens`（列表页）**：列表页登录后还要再点一次
-  「Generate new token」；`scopes=public_repo` 与弹窗第 3 步那句「勾选 public_repo」是同一口径，两处要一起改。
 
 - 入口清单：`app/src/main/kotlin/com/yunx/app/ui/screens/OnboardingScreen.kt` 的 `QQGroupPill`（欢迎页 GitHub 卡片下方，点击拉起 QQ 群卡片）；
   `app/src/main/kotlin/com/yunx/app/ui/screens/SettingsScreen.kt` 的「关于」组最后两项 —— 「QQ 交流群」（点击拉起 QQ 群卡片，长按复制群号）、
