@@ -40,6 +40,16 @@ object AppLinks {
     const val GITHUB_REPO_DISPLAY = "github.com/CYQawa/YunX"
 
     /**
+     * GitHub 个人访问令牌（classic）创建页，带 `scopes` 与 `description` 预填。
+     *
+     * ★ 为什么不用列表页 `https://github.com/settings/tokens`：登录后还要再点一次「Generate new token」，
+     *   手机上翻 GitHub 设置的成本比电脑高，直接把权限和备注填好省两步。
+     * ★ `scopes=public_repo` 必须与 Token 弹窗里「勾选 public_repo」那句话保持一致，
+     *   两边不一致会让人按文字去补勾权限。
+     */
+    const val GITHUB_TOKEN_PAGE = "https://github.com/settings/tokens/new?scopes=public_repo&description=YunX"
+
+    /**
      * QQ 群资料页 scheme：QQ 已安装时直接拉起群卡片，用户点一下「加入」即可进群。
      *
      * ★ 为什么不用 https://qm.qq.com/... ：那种加群链接需要在 QQ 群后台申请一个 key，
@@ -57,6 +67,17 @@ object AppLinks {
      */
     fun openQQGroup(context: Context): Boolean {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(qqGroupScheme()))
+        return runCatching { context.startActivity(intent) }.isSuccess
+    }
+
+    /**
+     * 用系统默认浏览器打开 [GITHUB_TOKEN_PAGE]；返回 false 表示这台设备上没有应用能处理 https。
+     *
+     * ★ 与 [openQQGroup] 同一口径：不做 `resolveActivity()` 预检（Android 11+ 包可见性会把
+     *   「装了浏览器」误判成「没装」），失败交给调用方退化成复制链接。
+     */
+    fun openGitHubTokenPage(context: Context): Boolean {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_TOKEN_PAGE))
         return runCatching { context.startActivity(intent) }.isSuccess
     }
 }
