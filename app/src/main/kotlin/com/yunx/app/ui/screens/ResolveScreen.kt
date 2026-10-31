@@ -97,6 +97,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yunx.app.data.db.BookmarkEntity
+import com.yunx.app.data.network.C139KoulingParser
 import com.yunx.app.data.network.GitHubLinkParser
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.SharePlatform
@@ -185,10 +186,12 @@ fun ResolveScreen(
         val text = incomingLink?.trim().orEmpty()
         if (text.isEmpty()) return@LaunchedEffect
         val shareParsed = ShareLinkParser.parse(text)
+        val c139Parsed = C139KoulingParser.parse(text)
+        val parsedPwd = shareParsed?.pwd ?: c139Parsed?.password
         link = text
-        pwd = shareParsed?.pwd.orEmpty()
+        pwd = parsedPwd.orEmpty()
         pwdEdited = true
-        viewModel.startVideoResolve(text, shareParsed?.pwd)
+        viewModel.startVideoResolve(text, parsedPwd)
         onIncomingLinkConsumed()
     }
 
@@ -206,7 +209,7 @@ fun ResolveScreen(
             text != link &&
             text != ignoredClipboard &&
             (ShareLinkParser.parse(text) != null || GitHubLinkParser.parse(text) != null ||
-                VideoLinkParser.looksLikeVideoLink(text))
+                VideoLinkParser.looksLikeVideoLink(text) || C139KoulingParser.parse(text) != null)
         ) {
             clipboardSuggestion = text
         }
@@ -260,7 +263,9 @@ fun ResolveScreen(
     // 链接变化时自动匹配提取码（用户未手动输入时）
     LaunchedEffect(link) {
         if (!pwdEdited && pwd.isEmpty()) {
-            ShareLinkParser.parse(link)?.pwd?.let { pwd = it }
+            (ShareLinkParser.parse(link)?.pwd ?: C139KoulingParser.parse(link)?.password)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { pwd = it }
         }
     }
 
@@ -446,30 +451,34 @@ fun ResolveScreen(
         ) {
             animatedSuggestion?.let { suggestion ->
                 val shareParsed = ShareLinkParser.parse(suggestion)
+                val c139Parsed = C139KoulingParser.parse(suggestion)
                 val githubParsed = GitHubLinkParser.parse(suggestion)
                 val videoParsed = VideoLinkParser.parse(suggestion)
                 val platformName = when {
                     videoParsed != null -> videoParsed.platform.displayName
                     githubParsed != null -> "GitHub"
                     shareParsed != null -> shareParsed.platform.displayName
+                    c139Parsed != null -> SharePlatform.C139.displayName
                     else -> "网盘"
                 }
                 val platformLogo = when {
                     videoParsed != null -> videoParsed.platform.logoRes()
                     githubParsed != null -> SharePlatform.GITHUB.logoRes()
                     shareParsed != null -> shareParsed.platform.logoRes()
+                    c139Parsed != null -> SharePlatform.C139.logoRes()
                     else -> null
                 }
+                val parsedPwd = shareParsed?.pwd ?: c139Parsed?.password
                 ClipboardSuggestCard(
                     platformName = platformName,
                     platformLogo = platformLogo,
                     onPaste = {
                         link = suggestion
-                        pwd = shareParsed?.pwd.orEmpty()
+                        pwd = parsedPwd.orEmpty()
                         pwdEdited = true
                         clipboardSuggestion = null
                         // 统一入口：先试视频、再试 GitHub、最后网盘
-                        viewModel.startVideoResolve(suggestion, shareParsed?.pwd)
+                        viewModel.startVideoResolve(suggestion, parsedPwd)
                     },
                     onDismiss = {
                         ignoredClipboard = suggestion
@@ -541,7 +550,7 @@ private fun ResolveInputContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "粘贴分享链接，一键解析分享内容",
+            text = "粘贴分享链接或口令，一键解析分享内容",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -550,7 +559,7 @@ private fun ResolveInputContent(
             value = link,
             onValueChange = onLinkChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("例如：https://pan.quark.cn/s/xxxx 或 迅雷口令") },
+            placeholder = { Text("例如：https://pan.quark.cn/s/xxxx、迅雷口令或 139 云盘口令") },
             leadingIcon = { Icon(Icons.Outlined.Link, contentDescription = null) },
             trailingIcon = {
                 if (link.isNotEmpty()) {

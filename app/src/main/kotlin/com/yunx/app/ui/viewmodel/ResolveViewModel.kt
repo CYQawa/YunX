@@ -33,6 +33,7 @@ import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSource
 import com.yunx.app.data.network.BaiduConstants
 import com.yunx.app.data.network.C139Constants
+import com.yunx.app.data.network.C139KoulingParser
 import com.yunx.app.data.network.GuangYaConstants
 import com.yunx.app.data.network.ILanzouConstants
 import com.yunx.app.data.network.LanzouConstants
@@ -1170,32 +1171,50 @@ class ResolveViewModel(
         }
         viewModelScope.launch {
             uiState = ResolveUiState.Loading
-            // 中文口令兜底（既不是分享链接、也不是 GitHub 链接）：**先迅雷，迅雷没给出可用链接再问星海**。
-            // ① 迅雷口令（如「张三丰资源」）：口令是「分享链接 + 提取码」的打包形式，打 shoulei 跳转接口换链接；
-            // ② 星海（夸克/UC 中文口令）：换回 pwd_id，再合成分享链接，后续提取码/登录/列表/取链全走既有链路。
-            // 两个服务都用同一段原文，成功即止；都失败时把原因带出去（而不是只丢一句「无法识别」）。
+            // 口令兜底（既不是分享链接、也不是 GitHub 链接）：
+            // ① 139 云盘口令：先换成官方分享链接，后续完全复用普通 139 分享链路；
+            // ② 迅雷口令（如「张三丰资源」）：口令是「分享链接 + 提取码」的打包形式，打 shoulei 跳转接口换链接；
+            // ③ 星海（夸克/UC 中文口令）：换回 pwd_id，再合成分享链接，后续提取码/登录/列表/取链全走既有链路。
+            // 各服务都用同一段原文，成功即止；都失败时把原因带出去（而不是只丢一句「无法识别」）。
             var effectiveLink = link
+            var effectivePwd = pwd
             var commandError: String? = null
             if (ShareLinkParser.parse(link) == null) {
-                if (XunleiKouling.looksLikeKouling(link)) {
-                    xunleiResolveRepository.resolveKouling(XunleiKouling.normalize(link))
+                val c139Command = C139KoulingParser.parse(link)
+                if (c139Command != null) {
+                    if (effectivePwd.isNullOrBlank()) {
+                        effectivePwd = c139Command.password.ifBlank { null }
+                    }
+                    val c139Account = c139AccountRepository.getAccount()
+                    c139ResolveRepository.resolveKouling(
+                        command = c139Command,
+                        cookie = c139Account?.cookie.orEmpty(),
+                        authorization = c139Account?.authorization
+                    )
                         .onSuccess { effectiveLink = it }
                         .onFailure { commandError = it.message }
-                }
-                if (ShareLinkParser.parse(effectiveLink) == null && StarSeaApi.looksLikeCommand(link)) {
-                    StarSeaApi.resolveToShareLink(link)
-                        .onSuccess { effectiveLink = it }
-                        .onFailure { commandError = it.message }
+                } else {
+                    if (XunleiKouling.looksLikeKouling(link)) {
+                        xunleiResolveRepository.resolveKouling(XunleiKouling.normalize(link))
+                            .onSuccess { effectiveLink = it }
+                            .onFailure { commandError = it.message }
+                    }
+                    if (ShareLinkParser.parse(effectiveLink) == null && StarSeaApi.looksLikeCommand(link)) {
+                        StarSeaApi.resolveToShareLink(link)
+                            .onSuccess { effectiveLink = it }
+                            .onFailure { commandError = it.message }
+                    }
                 }
             }
             val parsed = ShareLinkParser.parse(effectiveLink)
             if (parsed == null) {
-                // 两个口令服务都给不出结果时，用更靠后那次（星海）的原因——它对夸克/UC 口令最准
+                // 口令服务给不出结果时，把最近一次服务的具体原因带出去，而不是只报“无法识别”。
                 uiState = ResolveUiState.Error(commandError ?: "无法识别分享链接")
                 return@launch
             }
             // 口令已换成真实分享链接：收藏 / 复制 / 重新解析都用它，而不是原始口令
             currentLink = effectiveLink
+            currentPwd = effectivePwd
             currentPlatform = parsed.platform
             isGuest = false
             // 游客模式：列目录不要求登录（7 个网盘的分享列表接口都允许匿名，详见 Agent.md §3.19）。
@@ -1203,7 +1222,7 @@ class ResolveViewModel(
             val credential = currentCredential().orEmpty()
             isGuest = credential.isBlank()
             val repo = currentRepo()
-            repo.createSession(effectiveLink, pwd, credential)
+            repo.createSession(effectiveLink, effectivePwd, credential)
                 .onSuccess { s ->
                     session = s
                     currentDirFid = currentDefaultDirFid()

@@ -49,12 +49,16 @@ import java.util.zip.GZIPInputStream
  * 登录态：cookie（含账号信息，authorization 可选）。
  * 分享解析（§15，7.13+）：share-kd-njs.yun.139.com
  *   - 列目录 getOutLinkInfoV6（pCaID:"root"/父coID，passwd 提取码）
- *   - 下载 dlFromOutLinkV3（coIDLst.item:[coID] → data.redrUrl OBS 直链，900s）
- * 分享接口请求/响应均经 AES-CBC 加密（§14）：base64(IV(16B) ‖ AES_CBC(KEY=PVGDwmcvfs1uV3d1, IV, 明文))；
- * mcloud-sign 按「明文 body」计算（§4），加密只是传输包装；mcloud-skey 可省略。
+ *   - 下载 dlFromOutLinkV3（coIDLst.item:`coID` → data.redrUrl OBS 直链，900s）
+ *   - 个人云盘口令通过 XML 端点换成官方分享链接，再复用上面的加密 JSON 链路
+ * 普通分享 JSON 接口使用 16 字节密钥 PVGDwmcvfs1uV3d1；口令 XML 接口使用 App release 的
+ * 24 字节密钥 2olBaQGYnEKoStYomsd1n7ax。两者都是 base64(IV(16B) ‖ AES_CBC(key, IV, 明文))，
+ * 不能串用。mcloud-sign 按「明文 body」计算（§4），加密只是传输包装；mcloud-skey 可省略。
  */
 class C139Api(
-    private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
+    private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() },
+    /** 设备信息由系统 API 生成；未注入 Context 的测试路径使用无隐私占位值。 */
+    private val deviceInfoProvider: () -> C139DeviceInfo = { C139DeviceInfo.fallback() }
 ) {
     /** 每次请求动态获取全局客户端（忽略 SSL 开关切换即时生效） */
     private val client get() = clientProvider()
@@ -63,6 +67,10 @@ class C139Api(
 
     private val shareAesKey: SecretKeySpec =
         SecretKeySpec(C139Constants.SHARE_AES_KEY.toByteArray(Charsets.UTF_8), "AES")
+
+    /** 口令 XML 接口使用 App release 的 24 字节密钥（AES-192），不能复用上面的 16 字节 key。 */
+    private val shareCodeAesKey: SecretKeySpec =
+        SecretKeySpec(C139Constants.SHARE_CODE_AES_KEY.toByteArray(Charsets.UTF_8), "AES")
 
     // ---------- mcloud-sign 签名（§4） ----------
 
@@ -117,21 +125,21 @@ class C139Api(
     // ---------- §14 分享接口 AES-CBC 加解密（固定密钥 + IV 前置） ----------
 
     /** 明文 JSON → 加密 base64（IV(16B) 前置） */
-    private fun encryptBody(plaintext: String): String {
+    private fun encryptBody(plaintext: String, key: SecretKeySpec = shareAesKey): String {
         val iv = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.ENCRYPT_MODE, shareAesKey, IvParameterSpec(iv))
+        cipher.init(Cipher.ENCRYPT_MODE, key, IvParameterSpec(iv))
         val ct = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
         return Base64.encodeToString(iv + ct, Base64.NO_WRAP)
     }
 
     /** 加密 base64 → 明文 JSON；解密后若为 gzip（首 2 字节 0x1f 0x8b）先解压（alist YunCrypto 同款） */
-    private fun decryptBody(b64: String): String {
+    private fun decryptBody(b64: String, key: SecretKeySpec = shareAesKey): String {
         val raw = Base64.decode(b64, Base64.NO_WRAP)
         val iv = raw.copyOfRange(0, 16)
         val ct = raw.copyOfRange(16, raw.size)
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, shareAesKey, IvParameterSpec(iv))
+        cipher.init(Cipher.DECRYPT_MODE, key, IvParameterSpec(iv))
         var d = cipher.doFinal(ct)  // PKCS5Padding 自动去填充
         // alist YunCrypto 同款：解密后若为 gzip 则解压（首 2 字节 0x1f 0x8b）
         if (d.size > 2 && d[0] == 0x1f.toByte() && d[1] == 0x8b.toByte()) {
@@ -141,6 +149,99 @@ class C139Api(
     }
 
     // ---------- 分享解析（§15，7.13+ 加密） ----------
+
+    /**
+     * 个人云盘口令 → 真实分享链接。
+     *
+     * 第一段必须把用户提供的提取码一起发给服务端；缺密码时受保护分享会直接报 9188。
+     * 两段请求都使用 App release 的 AES-192-CBC 加密，并尽量携带已登录 139 账号的
+     * Authorization/account 上下文。拿到服务端回吐的提取码后，再查询官方分享地址。
+     */
+    suspend fun resolveKouling(
+        command: C139Kouling,
+        cookie: String = "",
+        authorization: String? = null
+    ): C139ResolvedKouling = withContext(Dispatchers.IO) {
+        val effectiveAuthorization =
+            authorization?.takeIf { it.isNotBlank() } ?: C139Constants.extractAuthorization(cookie)
+        val account = C139Constants.extractAccountFull(cookie)
+            ?: effectiveAuthorization?.let(::accountFromAuthorization).orEmpty()
+        val infoXml = postShareCodeXml(
+            C139Constants.SHARE_CODE_INFO_URL,
+            buildC139KoulingInfoRequest(command, account, command.password),
+            effectiveAuthorization
+        )
+        val info = parseC139KoulingInfo(infoXml)
+        val password = command.password.ifBlank { info.password }
+        val generalXml = postShareCodeXml(
+            C139Constants.SHARE_CODE_GENERAL_URL,
+            buildC139KoulingGeneralRequest(command, account, password),
+            effectiveAuthorization
+        )
+        val general = parseC139KoulingGeneral(generalXml)
+        general.copy(
+            title = general.title.ifBlank { info.title },
+            password = password
+        )
+    }
+
+    /**
+     * 口令 XML 接口专用 POST：请求和响应均按 AES-192-CBC 处理。
+     *
+     * 为什么不复用 [sharePostAnonymous] / [sharePostEncrypted]：
+     * - 普通分享 JSON 接口使用 16 字节 [C139Constants.SHARE_AES_KEY]；口令 XML 接口必须使用
+     *   App release 的 24 字节 [C139Constants.SHARE_CODE_AES_KEY]，混用会得到 `01000019` 解密错误。
+     * - `hcy-cool-flag: 1` 让网关按密文处理请求，`type-factory: 0` 与 App 渠道头参与选择密钥和路由；
+     *   缺少这些头时，同一密文请求可能直接返回 HTTP 500。
+     * - 请求体是加密后的 XML，不是 JSON；Content-Type 必须保持 `text/xml`，否则服务端无法识别协议。
+     * - 正常情况下响应也是同密钥加密的 Base64；少数网关配置会直接透传明文 XML，因此解密失败后
+     *   仅在响应确实以 `<` 开头时回退明文，不能把任意错误响应当作 XML 继续解析。
+     * - [authorization] 只在已登录时附加。公开分享可以匿名查询，但与分享者账号绑定的口令仍需要
+     *   正确的 `Authorization` / `account` 上下文；该上下文由调用方从 139 账号仓库传入。
+     *
+     * @param url 固定的 139 口令 HTTPS 端点
+     * @param body 明文 XML；第一段查询的 `passwd` / `isPasswd` 必须由调用方提前填好
+     * @param authorization 可选的 `Basic ...` 登录态，空白时不附加该请求头
+     * @return 解密后的 UTF-8 XML；空响应、HTTP 失败或无法解密时抛异常
+     */
+    private fun postShareCodeXml(url: String, body: String, authorization: String?): String {
+        val mediaType = "text/xml; charset=UTF-8".toMediaType()
+        val deviceInfo = deviceInfoProvider()
+        val builder = Request.Builder()
+            .url(url)
+            .header("hcy-cool-flag", "1")
+            .header("type-factory", "0")
+            .header("Accept-Charset", "UTF-8")
+            .header("Accept-Language", "zh-CN")
+            .header("x-DeviceInfo", deviceInfo.appDeviceInfo())
+            .header("x-yun-client-info", deviceInfo.appDeviceInfo())
+            .header("x-yun-app-channel", C139Constants.SHARE_CODE_APP_CHANNEL)
+            .header("x-huawei-channelSrc", C139Constants.SHARE_CODE_APP_CHANNEL)
+            .header("x-MM-Source", C139Constants.SHARE_CODE_MM_SOURCE)
+            .header("x-SvcType", "1")
+            .header("x-NetType", "1")
+            .header("x-yun-user-agent", deviceInfo.appUserAgent())
+            .header("User-Agent", C139Constants.SHARE_MOBILE_UA)
+            .header("Origin", "https://yun.139.com")
+            .header("Referer", "https://yun.139.com/")
+        if (!authorization.isNullOrBlank()) builder.header("Authorization", authorization)
+        val request = builder
+            .post(encryptBody(body, shareCodeAesKey).toRequestBody(mediaType))
+            .build()
+        val response = client.newCall(request).execute()
+        val responseText = response.use {
+            it.body?.string() ?: throw IllegalStateException("139 云盘口令解析失败：响应为空")
+        }
+        if (!response.isSuccessful) {
+            throw IllegalStateException("139 云盘口令解析失败（HTTP ${response.code}）")
+        }
+        return runCatching { decryptBody(responseText, shareCodeAesKey) }
+            .getOrElse {
+                // 兼容网关未触发加密而直接透传 XML 的情况。
+                if (responseText.trimStart().startsWith("<")) responseText
+                else throw IllegalStateException("139 云盘口令解析失败：响应解密失败", it)
+            }
+    }
 
     /**
      * 分享标题：getOutLinkGeneral（匿名，§2.3）→ data.getOutLinkGeneralResp.outLinkGeneral[].lkName；
