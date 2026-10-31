@@ -28,6 +28,7 @@ import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -584,7 +585,20 @@ class Pan123Api(
 
         val accessKey = data.optString("AccessKeyId")
         val secretKey = data.optString("SecretAccessKey")
-        if (accessKey.isNotBlank() && secretKey.isNotBlank()) {
+        val uploadId = data.optString("UploadId")
+        // 服务端只要给了 uploadId，就优先走「预签名分片」：分片地址由服务端签好，客户端不参与签名，
+        // 不会因为 region / 寻址方式（path-style）猜错而 403。S3 直传是拿不到 uploadId 时的兜底。
+        val direct = uploadId.isBlank() && accessKey.isNotBlank() && secretKey.isNotBlank()
+        DiagnosticLog.event(
+            DiagnosticLog.NETWORK,
+            "upload_123_plan",
+            summary = "direct=$direct | uploadId=${uploadId.take(24)} | endpoint=${data.optString("EndPoint")}" +
+                " | bucket=${data.optString("Bucket")} | key=${data.optString("Key").take(48)}" +
+                " | accessKey=${if (accessKey.isBlank()) "none" else "present"}" +
+                " | sessionToken=${if (data.optString("SessionToken").isBlank()) "none" else "present"}" +
+                " | size=${file.size}"
+        )
+        if (direct) {
             io.s3Multipart(
                 endpoint = data.optString("EndPoint"),
                 bucket = data.optString("Bucket"),
@@ -605,6 +619,7 @@ class Pan123Api(
             checkOk(completed, "合并上传分段失败")
             return@withContext fileId
         }
+        if (uploadId.isBlank()) throw IllegalStateException("123 未返回上传凭据")
 
         val common = JSONObject()
             // 字段必须存在（服务端按 key 判断），缺失时给显式 null 而不是删掉这一项

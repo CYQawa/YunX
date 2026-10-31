@@ -19,6 +19,7 @@
 package com.yunx.app.data.upload
 
 import android.content.ContentResolver
+import com.yunx.app.util.DiagnosticLog
 import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.MediaType
@@ -157,7 +158,11 @@ class UploadIo(
         val boundary = if (fields.isEmpty() || body != null) null else "----YunXUpload${System.nanoTime()}"
         val mediaType = contentType?.toMediaType()
         val requestBody: RequestBody = when {
-            body != null -> body.toRequestBody(mediaType ?: "application/xml".toMediaType())
+            // ★ 不能用 body.toRequestBody(mediaType)：OkHttp 的 String.toRequestBody 在类型没带
+            //   charset 时会自动补 "; charset=utf-8"，而 OSS/S3 的签名是按**原样的 Content-Type**
+            //   算的，补上 charset 签名就对不上（实测：分片 PUT 没事，合并/初始化直接 403
+            //   SignatureDoesNotMatch）。这里用自己的 TextBody 把 Content-Type 原样发出。
+            body != null -> TextBody(body.toByteArray(Charsets.UTF_8), mediaType ?: "application/xml".toMediaType())
             else -> FileRequestBody(
                 start = start,
                 end = end,
@@ -178,6 +183,22 @@ class UploadIo(
             try {
                 call.execute().use { response ->
                     val text = response.body?.string().orEmpty()
+                    if (response.code !in 200..299) {
+                        // 上传失败必须留下「方法 + 主机/路径 + Content-Type + 有没有带授权」：
+                        // 对象存储的签名错只回 403，看不到这些就只能猜（日志里的 URL 默认会被脱敏成只剩主机）
+                        DiagnosticLog.error(
+                            DiagnosticLog.NETWORK,
+                            "upload_http_failed",
+                            code = response.code,
+                            summary = buildString {
+                                append(method).append(' ').append(hostAndPath(url))
+                                append(" | ct=").append(requestBody.contentType())
+                                append(" | len=").append(runCatching { requestBody.contentLength() }.getOrDefault(-1L))
+                                append(" | auth=").append(if (headers.containsKey("Authorization")) "yes" else "no")
+                                if (text.isNotBlank()) append(" | resp=").append(text.take(500))
+                            }
+                        )
+                    }
                     return UploadResponse(response.code, response.headers, text)
                 }
             } catch (e: IOException) {
@@ -188,6 +209,21 @@ class UploadIo(
             } finally {
                 inFlight.remove(call)
             }
+        }
+    }
+
+    /** 纯文本请求体：Content-Type 与签名用的字符串逐字一致（不追加 charset） */
+    private class TextBody(
+        private val bytes: ByteArray,
+        private val type: MediaType?
+    ) : RequestBody() {
+
+        override fun contentType(): MediaType? = type
+
+        override fun contentLength(): Long = bytes.size.toLong()
+
+        override fun writeTo(sink: BufferedSink) {
+            sink.write(bytes)
         }
     }
 
@@ -329,6 +365,13 @@ class UploadIo(
             )
         }
 
+        DiagnosticLog.event(
+            DiagnosticLog.NETWORK,
+            "upload_oss_plan",
+            summary = "endpoint=${UploadIo.hostAndPath(baseUrl)} | bucket=$bucket | key=${objectKey.take(64)}" +
+                " | token=${if (securityToken.isBlank()) "none" else "present(${securityToken.length})"}" +
+                " | size=${file.size}"
+        )
         if (file.size == 0L) {
             val response = request("PUT", start = 0L, end = 0L)
             require(response.isSuccessful && !xmlError(response.body)) {
@@ -471,6 +514,14 @@ class UploadIo(
             )
         }
 
+        DiagnosticLog.event(
+            DiagnosticLog.NETWORK,
+            "upload_s3_plan",
+            summary = "endpoint=${UploadIo.hostAndPath(origin)} | bucket=$bucket | key=${objectKey.take(64)}" +
+                " | region=$region | pathStyle=$pathStyle" +
+                " | token=${if (securityToken.isBlank()) "none" else "present(${securityToken.length})"}" +
+                " | size=${file.size}"
+        )
         val partSize = maxOf(MIN_PART_SIZE, (file.size + 8999) / 9000)
         if (file.size <= partSize) {
             val response = request("PUT", start = 0L, end = file.size)
@@ -527,6 +578,12 @@ class UploadIo(
 
         /** OSS/S3 分片下限（两者都要求 5 MiB 以上，这里按 8 MiB 留余量），同时按 9000 段上限自适应 */
         private const val MIN_PART_SIZE = 8L * 1024 * 1024
+
+        /** 取 `scheme://host/path`（**不含查询串**：预签名 URL 的签名不能进日志） */
+        fun hostAndPath(url: String): String = runCatching {
+            val uri = java.net.URI(url)
+            "${uri.scheme}://${uri.host}${uri.rawPath.orEmpty()}"
+        }.getOrDefault("<invalid-url>")
 
         fun hex(bytes: ByteArray): String = UploadSigning.hex(bytes)
 

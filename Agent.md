@@ -2081,6 +2081,13 @@ reCAPTCHA 的 `_GRECAPTCHA` Cookie 也在、**没有任何 Cookie 被拦** —�
    服务端落库有延迟，刷新列表是最稳的确认方式（蓝奏优享除外：它必须轮询结果接口）。
 7. **`OpenMultipleDocuments` 而不是 `GetContent`**：前者的 uri 授权在整批上传期间有效，
    后者是单次临时授权，多文件串行上传中途会读不到。
+8. **文本请求体不能用 `String.toRequestBody(MediaType)`**：OkHttp 在 MediaType 没带 charset 时
+   会自动补 `; charset=utf-8`，而 OSS V1 / S3 的签名是按**原样 Content-Type** 算的 ——
+   结果就是「分片 PUT 成功（走文件体的 `contentType()`，不补 charset）、合并/初始化 403
+   SignatureDoesNotMatch」。`UploadIo.send` 用私有 `TextBody` 原样透传 MediaType。
+9. **123 优先走「预签名分片」**：只要响应里有 `UploadId`，就用服务端签发地址（`s3_upload_object/auth`
+   / `s3_repare_upload_parts_batch`），客户端不参与签名；只有拿不到 `UploadId` 时才回退 S3 直传
+   （`region=123pan` + pathStyle 是未验证的猜测，实测真机 403 AccessDenied）。
 
 **已知未验证点（真机先盯这几家）**：139 的 `getUploadUrl` 分批（>100 片）与 `rapidUpload` 字段、
 123 在服务端下发 S3 凭据时的 `endpoint` 形态、光鸭的 STS 凭据是否总在 `creds` 子对象、
