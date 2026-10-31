@@ -149,8 +149,18 @@ fun CloudDriveScreen(
     var batchInitial by remember { mutableStateOf(com.yunx.app.ui.screens.BatchStep.MENU) }
     // 批量删除二次确认
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    // 「+」菜单的「创建文件夹」弹窗（「上传文件」项目前是占位，见 CloudAddMenu）
+    // 「+」菜单的「创建文件夹」弹窗（上传项由下面的 pickUpload 直接拉起选文件器）
     var showCreateFolder by remember { mutableStateOf(false) }
+
+    // 「+」菜单的上传：系统多选文件 → 交给 ViewModel 依次上传到当前目录
+    val pickUpload = rememberUploadPicker { uris ->
+        viewModel.uploadFiles(context.contentResolver, uris)
+    }
+
+    // 上传进度弹窗：点外部不关闭，「取消」会打断正在发的那一段
+    viewModel.uploadProgress?.let { progress ->
+        UploadProgressDialog(progress = progress, onCancel = { viewModel.cancelUpload() })
+    }
 
     // 操作结果 Toast（放在本层：弹窗关闭后仍能正常弹出）
     LaunchedEffect(viewModel.cloudMessage) {
@@ -299,7 +309,10 @@ fun CloudDriveScreen(
                                 )
                             }
                             // 「+」新建菜单（创建文件夹 / 上传文件，Agent.md §3.26）
-                            CloudAddMenu(onCreateFolder = { showCreateFolder = true })
+                                                        CloudAddMenu(
+                                                            onCreateFolder = { showCreateFolder = true },
+                                                            onUploadFile = pickUpload
+                                                        )
                         }
                     }
                     // 可点击面包屑（多选模式下隐藏）

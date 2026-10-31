@@ -24,6 +24,9 @@ import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.data.upload.UploadIo
+import com.yunx.app.data.upload.UploadPhase
+import com.yunx.app.data.upload.UploadSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -515,6 +518,77 @@ class GuangYaApi(
             throw IllegalStateException("光鸭未创建文件夹，请检查是否存在同名文件")
         }
         id
+    }
+
+    // ---------- 上传 ----------
+
+    /**
+     * 上传一个文件到 [parentId] 目录，返回新文件的 fileId。
+     *
+     * 流程：`get_res_center_token` 用整文件 MD5 建任务（`code == 156` 即秒传）→
+     * 用返回的 OSS 临时凭据直传（`fullEndPoint`/`bucketName`/`objectPath` + STS token）→
+     * 轮询 `get_info_by_task_id` 直到拿到 fileId（光鸭是异步校验，不轮询列表里看不到文件）。
+     */
+    suspend fun upload(
+        io: UploadIo,
+        file: UploadSource,
+        parentId: String,
+        accessToken: String
+    ): String = withContext(Dispatchers.IO) {
+        io.progress(UploadPhase.PREPARING)
+        val md5 = io.digest("MD5")
+        val body = JSONObject()
+            .put("capacity", 2)
+            .put("name", file.name)
+            .put("parentId", parentId)
+            .put(
+                "res",
+                JSONObject().put("fileSize", file.size).put("md5", md5)
+            )
+        val json = executeJson(
+            businessRequest(GuangYaConstants.UPLOAD_TOKEN, body.toString(), null, accessToken).build()
+        )
+        val code = json.optString("code")
+        // 156 = 秒传命中：业务上算成功，但 checkBusiness 只认 code 0
+        if (code != "156") checkBusiness(json, "创建上传任务失败")
+        val data = dataOf(json) ?: throw IllegalStateException("光鸭未创建上传任务")
+        val taskId = data.optString("taskId").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("光鸭未创建上传任务")
+        if (code != "156") {
+            // 凭据可能平铺在 data，也可能裹在 creds 里
+            fun field(key: String): String = data.optString(key).ifBlank {
+                data.optJSONObject("creds")?.optString(key).orEmpty()
+            }
+            io.ossMultipart(
+                endpoint = data.optString("fullEndPoint").ifBlank { data.optString("endPoint") },
+                bucket = data.optString("bucketName"),
+                objectKey = data.optString("objectPath"),
+                accessKey = field("accessKeyID").ifBlank { field("accessKeyId") },
+                secretKey = field("secretAccessKey"),
+                securityToken = field("sessionToken")
+            )
+        }
+        io.progress(UploadPhase.FINISHING, file.size)
+        repeat(GuangYaConstants.UPLOAD_MAX_POLLS) {
+            val status = executeJson(
+                businessRequest(
+                    GuangYaConstants.UPLOAD_TASK_INFO,
+                    JSONObject().put("taskId", taskId).toString(),
+                    null,
+                    accessToken
+                ).build()
+            )
+            val fileId = dataOf(status)?.optString("fileId").orEmpty()
+            if (fileId.isNotBlank()) return@withContext fileId
+            val statusCode = status.optString("code")
+            if (statusCode.isNotBlank() && statusCode != "0" &&
+                statusCode !in GuangYaConstants.UPLOAD_PENDING_CODES
+            ) {
+                checkBusiness(status, "查询上传结果失败")
+            }
+            delay(GuangYaConstants.UPLOAD_POLL_INTERVAL_MS)
+        }
+        throw IllegalStateException("光鸭正在校验上传内容，请稍后刷新列表")
     }
 
     /** 重命名（文档 §5.3）。 */

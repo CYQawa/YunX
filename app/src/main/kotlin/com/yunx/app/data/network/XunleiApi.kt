@@ -33,6 +33,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import com.yunx.app.data.upload.UploadIo
+import com.yunx.app.data.upload.UploadPhase
+import com.yunx.app.data.upload.UploadSigning
+import com.yunx.app.data.upload.UploadSource
 import org.json.JSONObject
 import java.security.MessageDigest
 import kotlin.random.Random
@@ -518,6 +522,65 @@ class XunleiApi(
         panCall(captchaToken, deviceId, "POST:/drive/v1/files", { t ->
             panRequest(XunleiConstants.FILES_URL, accessToken, deviceId, t, body)
         }) { data -> data.optString("id").takeIf { it.isNotBlank() } }
+    }
+
+    // ---------- 上传 ----------
+
+    /**
+     * 上传一个文件到 [parentId] 目录，返回 fileId。
+     *
+     * 迅雷用「gcid」做秒传判定：把文件按 256 KiB 起、随文件大小指数放大（上限 2 MiB）分块，
+     * 每块算 SHA1，再把**这些 SHA1 的原始字节**拼起来整体算一次 SHA1，转大写十六进制。
+     * 服务端命中就返回 `UPLOAD_TYPE_INSTANT`（不用传）；否则回 `resumable.params` 的
+     * S3 临时凭据，直接分片 PUT 到对象存储（region 固定 `xunlei`）。
+     */
+    suspend fun upload(
+        io: UploadIo,
+        file: UploadSource,
+        parentId: String,
+        accessToken: String,
+        deviceId: String,
+        captchaToken: String
+    ): String? = withContext(Dispatchers.IO) {
+        require(file.size > 0L) { "迅雷云盘不支持上传空文件" }
+        io.progress(UploadPhase.PREPARING)
+        var blockSize = 0x40000L
+        while (file.size / blockSize > 0x200 && blockSize < 0x200000L) blockSize *= 2
+        val count = maxOf(1L, (file.size + blockSize - 1) / blockSize)
+        val blockDigests = (0 until count).map { index ->
+            val start = index * blockSize
+            io.digestBytes("SHA-1", start, minOf(file.size, start + blockSize))
+        }
+        val gcid = UploadSigning.gcid(blockDigests)
+        val body = JSONObject()
+            .put("kind", "drive#file")
+            .put("parent_id", parentId)
+            .put("name", file.name)
+            .put("size", file.size)
+            .put("hash", gcid)
+            .put("upload_type", "UPLOAD_TYPE_RESUMABLE")
+            .put("space", "")
+            .toString()
+        val task = panCall(captchaToken, deviceId, "POST:/drive/v1/files", { token ->
+            panRequest(XunleiConstants.FILES_URL, accessToken, deviceId, token, body)
+        }) { data -> data }
+        val params = task.optJSONObject("resumable")?.optJSONObject("params")
+        val fileId = task.optJSONObject("file")?.optString("id").orEmpty()
+            .ifBlank { task.optString("id") }
+            .takeIf { it.isNotBlank() }
+        if (params != null && params.length() > 0) {
+            io.s3Multipart(
+                endpoint = params.optString("endpoint"),
+                bucket = params.optString("bucket"),
+                objectKey = params.optString("key"),
+                accessKey = params.optString("access_key_id"),
+                secretKey = params.optString("access_key_secret"),
+                region = "xunlei",
+                securityToken = params.optString("security_token")
+            )
+        }
+        io.progress(UploadPhase.FINISHING, file.size)
+        fileId
     }
 
     /** 文件详情（返回下载直链 links.application/octet-stream.url） */

@@ -21,12 +21,16 @@ package com.yunx.app.data.network
 import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
+import com.yunx.app.data.upload.UploadIo
+import com.yunx.app.data.upload.UploadPhase
+import com.yunx.app.data.upload.UploadSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 
@@ -218,6 +222,156 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             val json = executeJson(request)
             json.optInt("errno") == 0
         }.getOrDefault(false)
+    }
+
+    // ---------- 上传（预上传 → 秒传/分片 → 合并） ----------
+
+    /**
+     * 上传一个文件到 [parentPath] 目录（百度按**绝对路径**而不是 fid），返回 fs_id。
+     *
+     * 流程：整文件/每 4 MiB 分片/前 256 KiB 的 MD5 一次读全 → `api/precreate`（带上一版块哈希，
+     * 命中秒传时 `return_type=2` 直接结束）→ `d.pcs.baidu.com` 取上传节点 →
+     * 逐个分片 POST `superfile2`（每片回 md5，要与本地算的一致）→ `api/create?a=commit` 合并。
+     *
+     * ★ 分片顺序由服务端 `block_list` 决定，不能按本地顺序猜；
+     * ★ 上传节点只认 `*.pcs.baidu.com`，响应里给别的域一律不用。
+     */
+    suspend fun upload(
+        io: UploadIo,
+        file: UploadSource,
+        parentPath: String,
+        cookie: String
+    ): String? = withContext(Dispatchers.IO) {
+        if (file.size <= 0L) throw IllegalStateException("百度网盘不支持上传空文件")
+        val bdstoken = getBdstoken(cookie)
+            ?: throw IllegalStateException("获取百度会话令牌失败，请重新登录")
+        io.progress(UploadPhase.PREPARING)
+        val path = parentPath.trimEnd('/') + "/" + file.name
+        val chunkSize = 4L * 1024 * 1024
+        val count = maxOf(1L, (file.size + chunkSize - 1) / chunkSize)
+        val blocks = (0 until count).map { index ->
+            io.digest(
+                "MD5",
+                index * chunkSize,
+                minOf(file.size, (index + 1) * chunkSize)
+            )
+        }
+        val blockJson = JSONArray(blocks).toString()
+        val params = "channel=chunlei&web=1&app_id=${BaiduConstants.APP_ID}&clienttype=0&bdstoken=$bdstoken"
+        val preBody = buildString {
+            append("path=").append(urlEncode(path))
+            append("&isdir=0&size=").append(file.size)
+            append("&autoinit=1&rtype=0")
+            append("&block_list=").append(urlEncode(blockJson))
+            append("&content-md5=").append(io.digest("MD5"))
+            append("&slice-md5=").append(io.digest("MD5", 0, minOf(file.size, 256L * 1024)))
+        }
+        val pre = executeJson(
+            Request.Builder()
+                .url("https://pan.baidu.com/api/precreate?$params")
+                .header("Cookie", cookie)
+                .header("User-Agent", BaiduConstants.UA_NETDISK)
+                .header("Referer", "https://pan.baidu.com/disk/main")
+                .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                .post(preBody.toRequestBody(formMediaType))
+                .build()
+        )
+        checkErrno(pre, "创建上传任务失败")
+        if (pre.optInt("return_type") == 2) {
+            // 秒传：服务端已有同内容文件
+            io.progress(UploadPhase.FINISHING, file.size)
+            return@withContext pre.optJSONObject("info")?.optString("fs_id")?.takeIf { it.isNotBlank() }
+        }
+        val uploadId = pre.optString("uploadid")
+        if (uploadId.isBlank()) throw IllegalStateException("百度未创建上传任务")
+        val needed = pre.optJSONArray("block_list")
+            ?: throw IllegalStateException("百度未返回待上传分段")
+        val servers = if (needed.length() == 0) emptyList() else uploadServers(cookie, bdstoken, pre.optString("uploadsign"))
+        if (needed.length() > 0 && servers.isEmpty()) throw IllegalStateException("百度未返回可用上传节点，请稍后重试")
+        val uploaded = mutableSetOf<Int>()
+        for (position in 0 until needed.length()) {
+            val index = needed.optInt(position, -1)
+            if (index < 0 || index >= count) throw IllegalStateException("百度返回的上传分段序号无效")
+            if (!uploaded.add(index)) throw IllegalStateException("百度返回的上传分段序号无效")
+            val response = io.send(
+                url = "${servers.first()}/rest/2.0/pcs/superfile2?$params" +
+                    "&method=upload&type=tmpfile&path=${urlEncode(path)}" +
+                    "&uploadid=$uploadId&partseq=$index",
+                method = "POST",
+                start = index * chunkSize,
+                end = minOf(file.size, (index + 1) * chunkSize),
+                headers = mapOf(
+                    "Cookie" to cookie,
+                    "User-Agent" to BaiduConstants.UA_NETDISK
+                ),
+                retries = 1
+            )
+            if (!response.isSuccessful) throw IllegalStateException("文件上传失败（HTTP ${response.code}）")
+            val part = runCatching { response.json() }.getOrNull()
+                ?: throw IllegalStateException("百度上传分段响应异常，请重试")
+            val remoteMd5 = part.optString("md5")
+            if (!remoteMd5.equals(blocks[index], ignoreCase = true)) {
+                throw IllegalStateException("百度上传分段校验失败，请重试")
+            }
+        }
+        io.progress(UploadPhase.FINISHING, file.size)
+        val commitBody = buildString {
+            append("path=").append(urlEncode(path))
+            append("&isdir=0&size=").append(file.size)
+            append("&uploadid=").append(urlEncode(uploadId))
+            append("&block_list=").append(urlEncode(blockJson))
+            append("&rtype=0")
+            append("&local_mtime=").append(System.currentTimeMillis() / 1000)
+        }
+        val committed = executeJson(
+            Request.Builder()
+                .url("https://pan.baidu.com/api/create?a=commit&$params")
+                .header("Cookie", cookie)
+                .header("User-Agent", BaiduConstants.UA_NETDISK)
+                .header("Referer", "https://yun.baidu.com/disk/main")
+                .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                .post(commitBody.toRequestBody(formMediaType))
+                .build()
+        )
+        checkErrno(committed, "合并上传分段失败")
+        committed.optString("fs_id").takeIf { it.isNotBlank() }
+    }
+
+    /** 取上传节点：只接受 https + `*.pcs.baidu.com`，去重后取前 3 个 */
+    private fun uploadServers(cookie: String, bdstoken: String, sign: String): List<String> {
+        val query = buildString {
+            append("https://d.pcs.baidu.com/rest/2.0/pcs/file")
+            append("?channel=chunlei&web=1&app_id=${BaiduConstants.APP_ID}")
+            append("&clienttype=0&bdstoken=$bdstoken")
+            append("&method=locateupload&upload_version=2.0")
+            if (sign.isNotBlank()) append("&uploadsign=").append(urlEncode(sign))
+        }
+        val json = runCatching {
+            executeJson(
+                Request.Builder()
+                    .url(query)
+                    .header("Cookie", cookie)
+                    .header("User-Agent", BaiduConstants.UA_NETDISK)
+                    .get()
+                    .build()
+            )
+        }.getOrNull() ?: return emptyList()
+        val servers = linkedSetOf<String>()
+        val arrays = listOf(json.optJSONArray("servers"), json.optJSONArray("bak_servers"))
+        for (array in arrays) {
+            if (array == null) continue
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val uri = runCatching { java.net.URI(item.optString("server")) }.getOrNull() ?: continue
+                val host = uri.host.orEmpty()
+                if (uri.scheme != "https" || !host.endsWith(".pcs.baidu.com")) continue
+                servers.add("https://$host")
+                if (servers.size >= 3) return servers.toList()
+            }
+        }
+        val host = json.optString("host")
+        if (servers.isEmpty() && host.endsWith(".pcs.baidu.com")) servers.add("https://$host")
+        return servers.toList()
     }
 
     /** 列出个人网盘目录（检查临时转存目录是否存在），返回子项 path 集合 */

@@ -67,6 +67,10 @@ app/src/main/kotlin/com/yunx/app/
 │   │   ├── AnnouncementApi.kt   # 公开接口客户端（列表 / 详情；列表接口有副作用，勿轮询）
 │   │   ├── AnnouncementReadStore.kt  # 已读口径的唯一真源（服务端没有已读接口）
 │   │   └── AnnouncementTime.kt  # UTC ISO 8601 → 本地时间（**不用 java.time**，minSdk 24）
+│   ├── upload/                  # ★ 上传引擎（SAF 区间流 + 分块/进度/取消 + OSS/S3 签名，见 §3.45）
+│   │   ├── UploadSource.kt / UploadIo.kt
+│   │   ├── UploadSigning.kt     # 纯函数：hex / Base64 / HMAC / OSS V1 / 迅雷 gcid
+│   │   └── UploadRunner.kt      # 一批文件的串行状态机
 │   ├── gopeed/GopeedEngine.kt          # ★ Gopeed 进程内引擎（导入 AAR / 加载 .so / 进程内 REST，见 §3.27、§3.28）
 │   ├── backup/                  # 认证备份（口令派生密钥 + AES-GCM）
 │   ├── update/UpdateChecker.kt
@@ -716,7 +720,7 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 
 ---
 
-### 3.26 网盘页「+」新建菜单：创建文件夹（7 家）/ 上传文件（占位）
+### 3.26 网盘页「+」新建菜单：创建文件夹（7 家）/ 上传文件（见 §3.45）
 
 **入口只有一个**：七家个人盘页顶栏「放大镜」图标**右侧**的 `CloudAddMenu`（`+` → 下拉菜单，两项：创建文件夹 / 上传文件），
 位置在每页 `if (!viewModel.multiSelectMode)` 的顶栏分支里，所以**多选态自动隐藏**；
@@ -727,8 +731,9 @@ QQ 群号与仓库地址**只允许**写在 `app/src/main/kotlin/com/yunx/app/ut
 七个云盘页（`CloudDriveScreen`/`UCCoudScreen`/`XunleiCloudScreen`/`BaiduCloudScreen`/`C139CloudScreen`/`Pan123CloudScreen`/`Pan115CloudScreen`）
 各插三处：`var showCreateFolder`、顶栏 `CloudAddMenu(...)`、末尾 `if (showCreateFolder) CreateFolderDialog(...)`。
 
-**上传项是占位**：`onUploadFile` 默认 `null`，此时菜单项置灰、文案显示为「上传文件（开发中）」；上传协议落地后把回调传进来即可，不用改组件。
-**别把 `onUploadFile` 传成空 lambda**（那会让菜单项可点但什么都不发生）。
+**上传项已接入**（十家，见 §3.45）：各页传 `CloudAddMenu(onUploadFile = pickUpload)`，
+`pickUpload` 来自 `rememberUploadPicker`。`onUploadFile` 默认 `null` 时菜单项置灰并标「开发中」——
+**别把它传成空 lambda**（那会让菜单项可点但什么都不发生）。
 
 **滚动状态与弹窗高度的坑（2026-10-31 修，改列表页/账号弹窗之前先看）**：
 
@@ -2025,6 +2030,65 @@ reCAPTCHA 的 `_GRECAPTCHA` Cookie 也在、**没有任何 Cookie 被拦** —�
 **通用结论**：`X-Requested-With` / reCAPTCHA 这类「WebView 里过不去的登录」，兜底就是**手动粘贴 Cookie**
 （桌面浏览器登录后复制整串）。哪些平台走这条路由 `manualCookieOnly` 声明，`needsLogin` 决定它是否还出现在
 账号页的「需要登录」那一组里。
+
+---
+
+### 3.45 文件上传（十家网盘 · 个人盘当前目录）
+
+**入口**：各个人盘页顶栏 `CloudAddMenu` 的第二项「上传文件」→ 系统多选文件对话框 →
+`ViewModel.uploadFiles(resolver, uris)` 排队上传到**当前目录**。分享浏览页不挂这个入口（各家上传都只对个人盘开放）。
+
+**分三层，别写乱**：
+
+1. **通用引擎** `app/src/main/kotlin/com/yunx/app/data/upload/`
+   - `UploadSource.kt`：SAF uri → 文件名/大小/MIME + `open(start, end)` 区间流
+     （优先 `openFileDescriptor` + `FileChannel.position`，不能 seek 的 Provider 退回「重开流 + skip」）；
+   - `UploadIo.kt`：定长请求体（裸分片 / multipart）、流式哈希、进度、取消、
+     **OSS V1 分片**（`ossMultipart`）与 **S3 V4 分片**（`s3Multipart`）；
+   - `UploadSigning.kt`：纯函数（hex / Base64 / HMAC / OSS V1 签名 / 迅雷 gcid / XML 合并报文），
+     单测在 `app/src/test/kotlin/com/yunx/app/data/upload/UploadSigningTest.kt`；
+   - `UploadRunner.kt`：一批文件串行上传的状态机（节流 120ms 上报进度、取消、收尾回调）。
+2. **每家协议**：`XxxApi.upload(io, file, 目录标识, 凭据…)`
+   （夸克/UC 共用 `data/network/QuarkUpload.kt`，两家只有域名与 `pr` 不同）。
+3. **页面接线**：各 `XxxCloudViewModel` 持有 `uploadRunner`，暴露 `uploadProgress` / `uploadFiles` / `cancelUpload`；
+   各页 `CloudFileSheets.kt` 的 `rememberUploadPicker` + `UploadProgressDialog`。
+
+| 平台 | 预上传 / 秒传 | 传输 | 合并 / 收尾 |
+|---|---|---|---|
+| 夸克 / UC | `file/upload/pre` → `file/update/hash`（`finish=true` 秒传） | 每片先 `file/upload/auth` 换 `auth_key`，再 PUT 到 OSS | 带 `x-oss-callback` 的 XML 合并 → `file/upload/finish` |
+| 百度 | `api/precreate`（整文件/每 4 MiB/前 256 KiB 的 MD5；`return_type=2` 秒传） | `d.pcs.baidu.com/rest/2.0/pcs/superfile2` 逐片 POST（每片回 md5 校验） | `api/create?a=commit` |
+| 139 | `hcy/file/create`（整文件 SHA256；`rapidUpload=true` 秒传） | 服务端签发的 `uploadUrl` 逐片 PUT（100 MiB / 30 GB 以上 512 MiB） | `hcy/file/complete` |
+| 123 | `b/api/file/upload_request`（etag=整文件 MD5；`Reuse` 秒传） | 有 `AccessKeyId` 就走 S3 V4（`region=123pan`、pathStyle）；否则换预签名地址逐片 PUT 16 MiB | `upload_complete` / `upload_complete/v2` |
+| 115 | `uplb.115.com/3.0/sampleinitupload.php`（无秒传） | OSS **单次表单**直传（策略字段 + `file` 字段） | 回调 JSON 里的 `file_id`；单文件上限 5 GB |
+| 迅雷 | `/drive/v1/files`（`hash`=gcid，命中返回 `UPLOAD_TYPE_INSTANT`） | `resumable.params` 的 S3 临时凭据（`region=xunlei`） | 无需合并（服务端异步校验），列表确认 |
+| 光鸭 | `nd.bizuserres.s/v1/get_res_center_token`（`code=156` 秒传） | 返回的 STS 凭据走 OSS V1 | 轮询 `file/get_info_by_task_id` 直到拿到 `fileId` |
+| 蓝奏 | 无 | `html5up.php` 单次 multipart（字段 `task/vie/ve/id/name/folder_id_bb_n` + `upload_file`） | 响应 `zt==1` + `text[0].id` |
+| 蓝奏优享 | `proved/7n/getUpToken`（`upToken=="-1"` 秒传） | 8 MiB 以内七牛表单直传；超过走七牛分片（URL-safe Base64 的 key） | 轮询 `unproved/7n/results` 到 `status=1` |
+
+**必须守住的几条**：
+
+1. **进度状态在 IO 线程直接写 Compose 快照状态**（`mutableStateOf` 写入本身是线程安全的），
+   靠 `UploadRunner` 节流到 120ms 一次；别改成每读 64 KiB 就 `withContext(Main)`，主线程会被打爆。
+2. **控制类请求不能带文件体**：OSS/S3 的初始化 / 合并 / 中止都走 `UploadIo.send`，
+   `request()` 里 `start == null` 表示「没有分片」，此时必须传 `body = ""`，
+   否则 `FileRequestBody` 会把整个文件当请求体再发一遍（最狠的是 DELETE 中止也传全文件）。
+3. **取消要能打断在飞请求**：`UploadIo.cancel()` 置标志位 + `Call.cancel()`；
+   读循环每轮 `alive()` 检查，`send` 捕获到 `IOException` 且已取消时转成 `CancellationException`。
+4. **上传目标目录在开始时固定**（`uploadFiles` 里先取 `Loaded` 状态的目录 id），
+   不要在上传过程中读 `dirStack` —— 用户可能已经切了目录。
+5. **凭据在 IO 线程现取**（`cookieProvider()` / `tokenProvider()` / `creds()`），别在点击时取一次用到底。
+6. **上传完成后统一 `reloadCurrent()`**：不为「拿不到文件 id」去猜/轮询列表，
+   服务端落库有延迟，刷新列表是最稳的确认方式（蓝奏优享除外：它必须轮询结果接口）。
+7. **`OpenMultipleDocuments` 而不是 `GetContent`**：前者的 uri 授权在整批上传期间有效，
+   后者是单次临时授权，多文件串行上传中途会读不到。
+
+**已知未验证点（真机先盯这几家）**：139 的 `getUploadUrl` 分批（>100 片）与 `rapidUpload` 字段、
+123 在服务端下发 S3 凭据时的 `endpoint` 形态、光鸭的 STS 凭据是否总在 `creds` 子对象、
+蓝奏优享的七牛 `key` 里账号名缺失时的报错文案、115 的 5 GB 上限提示是否与网页端一致。
+
+**回退**：删掉 `data/upload/` 四个文件、`data/network/QuarkUpload.kt`、十家 `XxxApi.upload` 与对应常量、
+十个 ViewModel 的「上传」小节、`CloudFileSheets.kt` 的 `rememberUploadPicker`/`UploadProgressDialog`、
+十页的 `pickUpload` 接线即可（无数据库改动、无权限改动）。
 
 ## 4. 验证
 

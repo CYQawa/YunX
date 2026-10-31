@@ -21,12 +21,17 @@ package com.yunx.app.data.network
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
+import com.yunx.app.data.upload.UploadIo
+import com.yunx.app.data.upload.UploadPhase
+import com.yunx.app.data.upload.UploadSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import javax.crypto.Cipher
@@ -219,6 +224,175 @@ class ILanzouApi(
             .toString()
         exec(Request.Builder().url(url).headers(commonHeaders(true)).post(body.toRequestBody(jsonMediaType)).build())
     }
+
+    // ---------- 上传（文档 §3.10） ----------
+
+    /**
+     * 上传一个文件到 [folderId] 目录，返回 `f:<id>`。
+     *
+     * 流程：`getUpToken` 用整文件 MD5 换七牛上传凭证（`upToken == "-1"` 即秒传）→
+     * 8 MiB 以内走表单直传、超过走七牛分片（初始化 / 逐片 PUT / 合并）→
+     * 轮询 `7n/results` 等它落库（七牛回调是异步的，拿到 status=1 才算真的传完）。
+     *
+     * ★ 七牛的 key 里要带账号名（`disk/yyyy/MM/dd/<account>/<时间戳>.rar`），
+     *   账号信息拿不到就直接报错，别硬编一个假 key —— 服务端会拒。
+     */
+    suspend fun upload(
+        io: UploadIo,
+        file: UploadSource,
+        folderId: String,
+        appToken: String,
+        uuid: String
+    ): String = withContext(Dispatchers.IO) {
+        io.progress(UploadPhase.PREPARING)
+        val md5 = io.digest("MD5")
+        val preUrl = buildUrl(
+            ILanzouConstants.UPLOAD_TOKEN, uuid, appToken, extra = true, params = emptyList()
+        )
+        val preBody = JSONObject()
+            .put("fileId", "")
+            .put("fileName", file.name)
+            // 该接口的 fileSize 单位是 KiB，向上取整且最小 1
+            .put("fileSize", maxOf(1L, (file.size + 1023) / 1024))
+            .put("folderId", folderId.ifBlank { ILanzouConstants.ROOT_FOLDER_ID })
+            .put("md5", md5)
+            .put("type", 1)
+        val pre = exec(
+            Request.Builder()
+                .url(preUrl)
+                .headers(commonHeaders(true))
+                .post(preBody.toString().toRequestBody(jsonMediaType))
+                .build()
+        )
+        val upToken = pre.optString("upToken")
+        if (upToken.isBlank()) throw IllegalStateException("蓝奏优享未返回上传授权")
+        if (upToken == "-1") {
+            val id = pre.optJSONObject("map")?.optString("fileId").orEmpty()
+            if (id.isBlank()) throw IllegalStateException("蓝奏优享未确认秒传文件")
+            io.progress(UploadPhase.FINISHING, file.size)
+            return@withContext ILanzouConstants.FILE_PREFIX + id
+        }
+        val account = runCatching { fetchAccountInfo(appToken, uuid)?.account.orEmpty() }
+            .getOrDefault("")
+        if (account.isBlank()) {
+            throw IllegalStateException("蓝奏优享未返回上传账号信息，请重新登录后再试")
+        }
+        val calendar = java.util.Calendar.getInstance()
+        val key = buildString {
+            append("disk/").append(calendar.get(java.util.Calendar.YEAR))
+            append('/').append("%02d".format(calendar.get(java.util.Calendar.MONTH) + 1))
+            append('/').append("%02d".format(calendar.get(java.util.Calendar.DAY_OF_MONTH)))
+            append('/').append(account).append('/').append(System.currentTimeMillis()).append(".rar")
+        }
+        val headers = mapOf(
+            "User-Agent" to ILanzouConstants.WEB_UA,
+            "Origin" to ILanzouConstants.WEB_SITE,
+            "Referer" to ILanzouConstants.DOWNLOAD_REFERER
+        )
+        val partSize = 8L * 1024 * 1024
+        val token: String
+        if (file.size <= partSize) {
+            val form = io.send(
+                url = ILanzouConstants.QINIU_UPLOAD,
+                method = "POST",
+                headers = headers,
+                fields = listOf(
+                    "token" to upToken,
+                    "key" to key,
+                    "fname" to file.name
+                ),
+                retries = 0
+            )
+            if (!form.isSuccessful) throw IllegalStateException("文件上传失败（HTTP ${form.code}）")
+            token = runCatching { form.json().optString("token") }.getOrDefault("")
+        } else {
+            val auth = headers + ("Authorization" to "UpToken $upToken")
+            val objectKey = base64Url(key)
+            val base = "${ILanzouConstants.QINIU_UPLOAD}/buckets/${ILanzouConstants.QINIU_BUCKET}" +
+                "/objects/$objectKey/uploads"
+            val init = io.send(
+                url = base,
+                method = "POST",
+                headers = auth,
+                body = "",
+                contentType = "application/octet-stream",
+                retries = 0
+            )
+            if (!init.isSuccessful) throw IllegalStateException("蓝奏优享无法创建分段上传")
+            val uploadId = runCatching { init.json().optString("uploadId") }.getOrDefault("")
+            if (uploadId.isBlank()) throw IllegalStateException("蓝奏优享未返回分段上传标识")
+            val parts = JSONArray()
+            var offset = 0L
+            while (offset < file.size) {
+                val stop = minOf(file.size, offset + partSize)
+                val number = parts.length() + 1
+                val part = io.send(
+                    url = "$base/$uploadId/$number",
+                    method = "PUT",
+                    headers = auth,
+                    start = offset,
+                    end = stop,
+                    retries = 1
+                )
+                if (!part.isSuccessful) throw IllegalStateException("文件上传失败（HTTP ${part.code}）")
+                val etag = runCatching { part.json().optString("etag") }.getOrDefault("")
+                if (etag.isBlank()) throw IllegalStateException("蓝奏优享未确认上传分段")
+                parts.put(JSONObject().put("partNumber", number).put("etag", etag))
+                offset = stop
+            }
+            io.progress(UploadPhase.FINISHING, file.size)
+            val commit = io.send(
+                url = "$base/$uploadId",
+                method = "POST",
+                headers = auth,
+                body = JSONObject()
+                    .put("fname", file.name)
+                    .put("parts", parts)
+                    .toString(),
+                contentType = "application/json",
+                retries = 0
+            )
+            if (!commit.isSuccessful) throw IllegalStateException("蓝奏优享无法合并上传分段")
+            token = runCatching { commit.json().optString("token") }.getOrDefault("")
+        }
+        if (token.isBlank()) throw IllegalStateException("蓝奏优享未返回上传结果")
+        io.progress(UploadPhase.FINISHING, file.size)
+        val timeFormat = java.text.SimpleDateFormat(
+            "yyyy-MM-dd'T'HH:mm:ss.SSS", java.util.Locale.US
+        )
+        repeat(30) {
+            // 该接口不带 appToken，tokenTime 每次轮询重新取当前时间（服务端按它做去重窗口）
+            val url = buildUrl(
+                ILanzouConstants.UPLOAD_RESULT,
+                uuid,
+                null,
+                extra = true,
+                params = listOf(
+                    "tokenList" to token,
+                    "tokenTime" to timeFormat.format(java.util.Date())
+                )
+            )
+            val result = exec(
+                Request.Builder()
+                    .url(url)
+                    .headers(commonHeaders(false))
+                    .post("".toRequestBody())
+                    .build()
+            )
+            val first = result.optJSONArray("list")?.optJSONObject(0)
+            if (first != null && first.optInt("status") == 1) {
+                val id = first.optString("fileId")
+                if (id.isBlank()) throw IllegalStateException("蓝奏优享未确认上传文件标识")
+                return@withContext ILanzouConstants.FILE_PREFIX + id
+            }
+            delay(1000)
+        }
+        throw IllegalStateException("蓝奏优享仍在处理上传，请稍后刷新列表")
+    }
+
+    /** 七牛对象键要 URL-safe Base64（保留填充） */
+    private fun base64Url(value: String): String =
+        com.yunx.app.data.upload.UploadSigning.base64(value.toByteArray(Charsets.UTF_8), urlSafe = true)
 
     // ---------- 下载（文档 §4.1） ----------
 
