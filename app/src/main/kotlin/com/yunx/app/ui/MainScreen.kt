@@ -31,6 +31,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -84,9 +85,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -199,6 +203,7 @@ import com.yunx.app.ui.viewmodel.UCAccountViewModel
 import com.yunx.app.ui.viewmodel.XunleiAccountViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
 import com.yunx.app.ui.viewmodel.VideoAccountViewModel
+import com.yunx.app.util.AppLinks
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
@@ -1634,6 +1639,23 @@ fun MainScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // 那四步是让人在电脑上手翻路径，手机上翻不动 —— 直接给一个跳到预填好权限的表单的入口
+                    TextButton(
+                        onClick = {
+                            // 与设置页「GitHub 仓库」同一口径：没有可用浏览器就复制链接，不静默失败
+                            if (!AppLinks.openGitHubTokenPage(context)) {
+                                copyToClipboard(context, AppLinks.GITHUB_TOKEN_PAGE)
+                                SnackbarController.show("未找到可用浏览器，链接已复制")
+                            }
+                        },
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = "↗ 从 GitHub 获取 Token",
+                            style = MaterialTheme.typography.bodySmall,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = "安全提示：仅给最小权限，勿勾选删除/管理类权限；Token 不明文保存、不上传，清除只需清空后保存。",
@@ -1723,6 +1745,12 @@ fun MainScreen(
     }
 }
 
+
+/** 复制文本到剪贴板（写剪贴板不受「自动识别剪贴板」开关约束，见 Agent.md §3.22） */
+private fun copyToClipboard(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("yunx_link", text))
+}
 
 /**
  * 叠加页容器（关于云析 / 支持开发 / 主题与外观 / 收藏）：整屏 + 不透明底色 + 可选的 sharedBounds 形变。
