@@ -35,6 +35,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 百度网盘分享解析数据（xpan/share list 响应）。
@@ -54,13 +55,55 @@ data class BaiduTransferResult(
     val path: String
 )
 
+/** locatedownload 返回的一条 CDN/HTTP 候选。 */
+data class BaiduCdnUrl(
+    val url: String,
+    val rank: Int,
+    val encrypt: Int
+)
+
+/** locatedownload 的完整响应。 */
+data class BaiduLocatedownloadInfo(
+    /** 客户端发起 locatedownload 时使用的 Unix 秒（TPDATA 字段 16）。 */
+    val localTime: Long,
+    /** locatedownload 服务端返回的 Unix 秒（TPDATA 字段 17）。 */
+    val timestamp: Long,
+    val urls: List<BaiduCdnUrl>,
+    val encryptKey: BaiduEncryptKey?,
+    val encryptKeyList: List<BaiduEncryptKey>,
+    val sl: Long,
+    val fsl: Long,
+    val maxContinuousFailure: Int,
+    val bakRankSliceNum: Int
+) {
+    /**
+     * 明文 CDN 候选：HTTP Range 可以直接写盘，不需要在下载器里再做一层 AES 解密。
+     * 只接受 https：应用禁止全局明文，http CDN 即使返回也会被系统直接拦下。
+     */
+    fun bestPlainCdnUrl(): String? {
+        return urls.asSequence()
+            .filter { it.encrypt == 0 && it.url.startsWith("https://", ignoreCase = true) }
+            .sortedBy { it.rank }
+            .firstOrNull()
+            ?.url
+    }
+}
+
+/** `/cms/fgid` 返回：P2P Seed 必需的文件全局 ID 与真实大小。 */
+data class BaiduFgidInfo(
+    val fgid: String,
+    val size: Long
+)
+
 /**
  * 百度网盘 API 封装（OkHttp + Cookie 认证）：
  * 登录态 BDUSS 经 Cookie 携带；分享解析链路 share/verify → xpan/share → share/transfer → filemetas。
  * 全部基于抓包字段，错误码用 errno（0 表示成功）判定。
  */
 class BaiduApi(
-    private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
+    private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() },
+    /** 百度下载方式：CDN / P2P（设置页实时生效） */
+    private val downloadModeProvider: () -> String = { BaiduConstants.DOWNLOAD_MODE_CDN }
 ) {
     /** 每次请求动态获取全局客户端（忽略 SSL 开关切换即时生效） */
     private val client get() = clientProvider()
@@ -71,12 +114,25 @@ class BaiduApi(
     @Volatile
     private var cachedBdstoken: String? = null
 
+    private data class BaiduIdentity(
+        val uid: String,
+        val uinfo: String,
+        val sk: ByteArray
+    )
+
+    /** Cookie -> UID/uinfo/sk；uinfo 只在内存里缓存，不落库、不打印。 */
+    private val identityCache = ConcurrentHashMap<String, BaiduIdentity>()
+
     // ---------- 账号 ----------
 
-    /** 获取昵称（gettemplatevariable 的 username 字段）；失败返回 null */
+    /**
+     * 获取昵称（gettemplatevariable 的 username 字段）。
+     * 会话无效 / 请求失败返回 null；接口成功但服务端未给昵称时返回空串
+     * （调用方不能把「校验失败」与「没有昵称」混为一谈）。
+     */
     suspend fun fetchNickname(cookie: String): String? = withContext(Dispatchers.IO) {
         val result = templateVariable(cookie, """["username"]""") ?: return@withContext null
-        result.optString("username").takeIf { it.isNotBlank() }
+        result.optString("username").trim().takeUnless { it == "null" }.orEmpty()
     }
 
     /** 获取 bdstoken（gettemplatevariable，带缓存） */
@@ -108,6 +164,97 @@ class BaiduApi(
                 }
             }.getOrNull()
         }
+
+    /** 获取当前账号 UID（gettemplatevariable 的 uk）。 */
+    suspend fun fetchUid(cookie: String): String? = withContext(Dispatchers.IO) {
+        val result = templateVariable(cookie, """["uk"]""") ?: return@withContext null
+        result.optString("uk").trim().takeIf { it.isNotBlank() && it != "null" }
+    }
+
+    /**
+     * 获取登录上报接口的 uinfo。
+     *
+     * 这是 BrowserEngine 的 sign_key，也是内核 encode_sk 的原文；
+     * 不能把它当成 psign_sk，也不能把它直接当文本拼进 rand。
+     */
+    suspend fun fetchUinfo(cookie: String): String? = withContext(Dispatchers.IO) {
+        val body = buildString {
+            append("action=pc_uniyunguanjia_login&timestamp=")
+            append(System.currentTimeMillis() / 1000)
+        }
+        val request = Request.Builder()
+            .url("https://pan.baidu.com/api/report/user")
+            .header("Cookie", cookie)
+            .header("User-Agent", BaiduConstants.UA_WEB)
+            .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .post(body.toRequestBody(formMediaType))
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val json = JSONObject(response.body?.string() ?: "{}")
+                if (json.optInt("errno") != 0) return@use null
+                json.optString("uinfo").takeIf { it.isNotBlank() }
+            }
+        }.getOrNull()
+    }
+
+    /**
+     * 查询文件 fgid（P2P Seed/TPDATA 的必需字段）。
+     *
+     * 实测接口只需 fsid、uk、path 三项，未签名的 GET 即可返回：
+     * `{"error_code":0,"fgid":"...","fsize":...}`。
+     */
+    suspend fun fetchFgid(uid: String, fsId: String, path: String, cookie: String): BaiduFgidInfo? =
+        withContext(Dispatchers.IO) {
+            if (uid.isBlank() || fsId.isBlank() || path.isBlank()) return@withContext null
+            val url = "https://pan.baidu.com/cms/fgid?method=query" +
+                "&fsid=${urlEncode(fsId)}&uk=${urlEncode(uid)}&path=${urlEncode(path)}"
+            val request = Request.Builder()
+                .url(url)
+                .header("Cookie", cookie)
+                .header("User-Agent", BaiduConstants.UA_WEB)
+                .get()
+                .build()
+            runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    val json = JSONObject(response.body?.string() ?: "{}")
+                    if (json.optInt("error_code", -1) != 0) return@use null
+                    val fgid = json.optString("fgid").takeIf { it.isNotBlank() }
+                        ?: return@use null
+                    BaiduFgidInfo(
+                        fgid = fgid,
+                        size = json.optLong("fsize", -1L)
+                    )
+                }
+            }.getOrNull()
+        }
+
+    private suspend fun identity(cookie: String): BaiduIdentity? {
+        identityCache[cookie]?.let { return it }
+        val uid = fetchUid(cookie) ?: return null
+        val uinfo = fetchUinfo(cookie) ?: return null
+        val sk = BaiduDownloadCrypto.decodeUinfo(uinfo, uid) ?: return null
+        return BaiduIdentity(uid, uinfo, sk).also { identityCache[cookie] = it }
+    }
+
+    /**
+     * 账号稳定设备标识。不采集硬件标识，只从 BDUSS 派生：
+     * devuid 为 32 位大写十六进制，deviceid 为十进制数值。
+     */
+    private fun deviceIdentity(cookie: String): Pair<String, String> {
+        val bduss = cookieValue(cookie, "BDUSS").orEmpty()
+        val digest = BaiduDownloadCrypto.sha256("yunx|download|$bduss".toByteArray())
+        val devuid = BaiduDownloadCrypto.hex(digest).take(32).uppercase()
+        var numeric = 0L
+        for (i in 0 until 8) {
+            numeric = (numeric shl 8) or (digest[i].toLong() and 0xFF)
+        }
+        numeric = (numeric and Long.MAX_VALUE).coerceAtLeast(1L)
+        return devuid to numeric.toString()
+    }
 
     // ---------- 分享解析 ----------
 
@@ -430,56 +577,190 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
     // ---------- 下载直链 ----------
 
     /**
-     * 获取高速下载直链（官方 locatedownload 接口，对齐 MoePal 抓包）：
-     * POST d.pcs.baidu.com/rest/2.0/pcs/file?method=locatedownload&path=<转存后完整路径>。
-     * 响应 urls[] 按 rank 返回多个候选 CDN 直链（自带 sign/expires，无需计算）：
-     *  - rank1 常为 d2-ant.baidu.com（encrypt=1 加密通道，内容需 AES-CTR 解密，且部分网络 TLS 握手失败）
-     *  - rank2+ 为 appallNN.baidupcs.com（encrypt=0 明文通道，可直接 Range 下载）
-     * 仅需 BDUSS 登录态 + 手机 UA；psign 为写死常量，rand/devuid 复用抓包常量即可。
-     * @return 选中的 appall 明文直链；全部候选不可用时抛异常
+     * 获取下载地址。
+     *
+     * CDN 模式返回明文 HTTP 直链；P2P 模式返回 `baidu-p2p://` 快照。
+     * `rand`/`time`/`devuid`/`deviceid`/`psign` 全部按当前登录态动态生成，
+     * 不再使用任何固定抓包常量（固定值正是触发风控的根因）。
+     *
+     * @param fsId 转存后的 fs_id；P2P 必填，CDN 模式可空
+     * @param fileSize 列表已知的文件大小；P2P 缺失时再问 `/cms/fgid?method=query`
+     * @param forceCdn 在线预览必须走 CDN，ExoPlayer 不认识 P2P 描述符
      */
-    suspend fun locateDownload(path: String, cookie: String): String = withContext(Dispatchers.IO) {
+    suspend fun locateDownload(
+        path: String,
+        fsId: String,
+        cookie: String,
+        fileSize: Long = -1L,
+        forceCdn: Boolean = false
+    ): String = withContext(Dispatchers.IO) {
+        val info = fetchLocatedownloadInfo(path, cookie)
+        val cdn = info.bestPlainCdnUrl()
+        val wantP2p = !forceCdn && downloadModeProvider() == BaiduConstants.DOWNLOAD_MODE_P2P
+        if (!wantP2p || fsId.isBlank()) {
+            return@withContext cdn
+                ?: throw BaiduApiException("未返回可用明文 CDN 下载链接")
+        }
+        val account = identity(cookie)
+        if (account == null) {
+            DiagnosticLog.warn(
+                DiagnosticLog.NETWORK, "baidu_p2p_fallback",
+                "无法取得 uid/uinfo，已回退 CDN"
+            )
+            return@withContext cdn
+                ?: throw BaiduApiException("获取百度下载身份失败，请重新登录")
+        }
+        val fgid = fetchFgid(account.uid, fsId, path, cookie)
+        if (fgid == null) {
+            DiagnosticLog.warn(
+                DiagnosticLog.NETWORK, "baidu_p2p_fallback",
+                "fgid 查询失败，已回退 CDN"
+            )
+            return@withContext cdn
+                ?: throw BaiduApiException("百度 P2P 资源初始化失败，且没有可回退的 CDN 链接")
+        }
+        val size = fileSize.takeIf { it > 0L } ?: fgid.size
+        if (size <= 0L) {
+            DiagnosticLog.warn(
+                DiagnosticLog.NETWORK, "baidu_p2p_fallback",
+                "文件大小未知，已回退 CDN"
+            )
+            return@withContext cdn
+                ?: throw BaiduApiException("百度 P2P 缺少文件大小")
+        }
+        val (devuid, deviceId) = deviceIdentity(cookie)
+        val keys = info.encryptKeyList.ifEmpty {
+            listOfNotNull(info.encryptKey)
+        }
+        BaiduP2pSpec(
+            fgid = fgid.fgid,
+            fsId = fsId,
+            uid = account.uid,
+            path = path,
+            fileSize = size,
+            encryptKeys = keys,
+            sl = info.sl,
+            fsl = info.fsl,
+            localTime = info.localTime,
+            serverTime = info.timestamp,
+            devuid = devuid,
+            deviceId = deviceId,
+            cdnUrls = info.urls
+                .asSequence()
+                .filter { it.encrypt == 0 && it.url.startsWith("https://", ignoreCase = true) }
+                .sortedBy { it.rank }
+                .map { it.url }
+                .distinct()
+                .take(3)
+                .toList()
+        ).toUrl()
+    }
+
+    /**
+     * 动态签名 locatedownload，并解析 CDN 候选与 P2P 需要的加密 key。
+     *
+     * 签名顺序严格遵循内核：
+     * 1. 所有值先做 URL 编码；
+     * 2. 按 query key 字典序排序，只拼 value，两级 MD5 生成 psign；
+     * 3. 重建 query，并把 psign 放最后。
+     */
+    private suspend fun fetchLocatedownloadInfo(
+        path: String,
+        cookie: String
+    ): BaiduLocatedownloadInfo {
+        val bduss = cookieValue(cookie, "BDUSS")
+            ?: throw BaiduApiException("百度登录态缺少 BDUSS，请重新登录")
+        val account = identity(cookie)
+            ?: throw BaiduApiException("获取百度下载身份失败，请重新登录")
         val time = System.currentTimeMillis() / 1000
-        // 抓包常量：psign 写死；rand/devuid/cuid/deviceid 有 BDUSS 登录态时可直接复用
-        val url = "https://d.pcs.baidu.com/rest/2.0/pcs/file" +
-            "?method=locatedownload" +
-            "&app_id=${BaiduConstants.APP_ID}" +
-            "&clienttype=17&ver=4.0" +
-            "&ant=1&check_blue=1&es=1&esl=1&apn_id=1_-1" +
-            "&freeisp=0&queryfree=0&use=1&dtype=1&eck=1&ehps=1" +
-            "&err_ver=1.0&network_type=WIFI&channel=0" +
-            "&path=${urlEncode(path)}" +
-            "&time=$time" +
-            "&rand=5ed606e9da222cde0474cdf70eda884b" +
-            "&devuid=0F1E9FC2E084472DA5A61C4CF4C759AF" +
-            "&cuid=0F1E9FC2E084472DA5A61C4CF4C759AF" +
-            "&deviceid=348642637967375013" +
-            "&psign=860a071f77c860e8cea06e4e54c518f3" +
-            "&version=2.2.111.34&version_app=12.24.6&vip=0"
+        val (devuid, deviceId) = deviceIdentity(cookie)
+        val rand = BaiduDownloadCrypto.makeRand(
+            bduss = bduss,
+            uid = account.uid,
+            sk = account.sk,
+            time = time,
+            devuid = devuid
+        )
+        val params = linkedMapOf(
+            "ant" to "1",
+            "app_id" to BaiduConstants.APP_ID,
+            "channel" to "00000000000000000000000040000001",
+            "check_blue" to "1",
+            "clienttype" to "9",
+            "deviceid" to deviceId,
+            "devuid" to devuid,
+            "dpkg" to "1",
+            "dsize" to "4194304",
+            "dtype" to "1",
+            "eck" to "1",
+            "ehps" to "1",
+            "err_ver" to "1.0",
+            "es" to "1",
+            "esl" to "1",
+            "method" to "locatedownload",
+            "open_pflag" to "0",
+            "path" to urlEncode(path),
+            "rand" to rand,
+            "sd" to "0",
+            "time" to time.toString(),
+            "ver" to "4.0",
+            "version" to BaiduConstants.P2P_SDK_VERSION,
+            "version_app" to "8.9.7.101",
+            "vip" to "0"
+        ).toSortedMap()
+        val psign = BaiduDownloadCrypto.makePsign(params)
+        val query = params.entries.joinToString("&") { "${it.key}=${it.value}" } +
+            "&psign=$psign"
         val request = Request.Builder()
-            .url(url)
+            .url("https://d.pcs.baidu.com/rest/2.0/pcs/file?$query")
             .header("Cookie", cookie)
-            .header("User-Agent", BaiduConstants.UA_NETDISK)
+            .header("User-Agent", BaiduConstants.UA_P2SP)
+            .header("Accept", "*/*")
             .header("Content-Type", "application/x-www-form-urlencoded")
             .post("0".toRequestBody(formMediaType))
             .build()
         val json = executeJson(request)
         checkErrno(json, "获取高速下载链接失败")
-        // 直链候选选择：优先 encrypt=0（明文，无需解密）的 https 直链（appall01/02）；
-        // rank1 的 d2-ant 为 encrypt=1 加密通道（需 AES-CTR 解密且部分网络 TLS 握手失败），直接排除；
-        // 全部为加密通道时退回第一个 https 候选（仍有尝试价值），最后兜底第一个候选。
-        val urls = json.optJSONArray("urls")
-        val candidates = (0 until (urls?.length() ?: 0))
-            .mapNotNull { urls?.optJSONObject(it) }
-            .filter { it.optString("url").isNotBlank() }
-        val directUrl = candidates
-            .filter { it.optInt("encrypt", 1) == 0 }
-            .sortedBy { !it.optString("url").startsWith("https") }
-            .firstOrNull()?.optString("url")
-            ?: candidates.firstOrNull { it.optString("url").startsWith("https") }?.optString("url")
-            ?: candidates.firstOrNull()?.optString("url")
-            ?: throw BaiduApiException("未返回下载链接")
-        directUrl
+
+        val urls = buildList {
+            val array = json.optJSONArray("urls")
+            for (i in 0 until (array?.length() ?: 0)) {
+                val item = array?.optJSONObject(i) ?: continue
+                val url = item.optString("url").takeIf { it.isNotBlank() } ?: continue
+                add(
+                    BaiduCdnUrl(
+                        url = url,
+                        rank = item.optInt("rank", Int.MAX_VALUE),
+                        encrypt = item.optInt("encrypt", 1)
+                    )
+                )
+            }
+        }
+        val rankParam = json.optJSONObject("rank_param")
+        val primaryKey = json.optJSONObject("encrypt_key")?.let(BaiduEncryptKey::fromJson)
+        val keyList = buildList {
+            val array = json.optJSONArray("encrypt_key_list")
+            for (i in 0 until (array?.length() ?: 0)) {
+                array?.optJSONObject(i)?.let { add(BaiduEncryptKey.fromJson(it)) }
+            }
+            if (primaryKey != null && none {
+                    it.version == primaryKey.version && it.key == primaryKey.key
+                }
+            ) {
+                add(primaryKey)
+            }
+        }
+        return BaiduLocatedownloadInfo(
+            localTime = time,
+            timestamp = json.optLong("timestamp", time),
+            urls = urls,
+            encryptKey = primaryKey,
+            encryptKeyList = keyList,
+            sl = json.optLong("sl", 120L),
+            fsl = json.optLong("fsl", -1L),
+            maxContinuousFailure = rankParam?.optInt("max_continuous_failure", 5) ?: 5,
+            bakRankSliceNum = rankParam?.optInt("bak_rank_slice_num", 30) ?: 30
+        )
     }
 
     /**
@@ -650,7 +931,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             append("百度文件列表加载失败（errno=").append(errno)
             if (message.isNotBlank()) append("：").append(message)
             append('）')
-            if (errno == -6) append("，登录已失效，请重新登录百度网盘")
+            if (errno == -6) append("，").append(BaiduConstants.INCOMPLETE_LOGIN_HINT)
         }
     }
 
@@ -870,7 +1151,8 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         if (errno != 0) {
             // 常见：errno=-12 提取码错误 / 403 分享已失效 / 31066 文件不存在
             val msg = json.optString("err_msg").ifBlank { json.optString("show_msg") }.ifBlank { fallback }
-            throw BaiduApiException("$msg（errno=$errno）")
+            val loginHint = if (errno == -6) "，${BaiduConstants.INCOMPLETE_LOGIN_HINT}" else ""
+            throw BaiduApiException("$msg（errno=$errno）$loginHint")
         }
     }
 

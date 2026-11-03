@@ -273,6 +273,9 @@ fun SettingsScreen(
     var retryCount by remember { mutableStateOf(settingsRepo.downloadRetryCount) }
     // 夸克取链方式：免转存（默认，不写入网盘）↔ 转存（先存临时目录再取链）
     var quarkNoSave by remember { mutableStateOf(settingsRepo.quarkNoSaveDownload) }
+    // 百度下载方式：CDN 直链 / P2P（只下载，不上传）
+    var baiduDownloadMode by remember { mutableStateOf(settingsRepo.baiduDownloadMode) }
+    var showBaiduModeDialog by remember { mutableStateOf(false) }
     var showConcurrencyDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRetryDialog by remember { mutableStateOf(false) }
@@ -420,6 +423,20 @@ fun SettingsScreen(
             title = "下载线程数",
             description = "按网盘分别设置分片并发数（默认 32，最高 512）",
             onClick = { showThreadsDialog = true }
+        )
+
+        Spacer(modifier = Modifier.height(ListGroupGap))
+
+        SettingsItem(
+            icon = Icons.Outlined.Cloud,
+            shape = listGroupShape(ListGroupPos.MIDDLE),
+            title = "百度下载方式",
+            description = if (baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P) {
+                "P2P 优先（只下载、不上传；强制使用自带下载器，未覆盖区间自动走 CDN）"
+            } else {
+                "CDN / HTTP 直链（默认，兼容性最好）"
+            },
+            onClick = { showBaiduModeDialog = true }
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))
@@ -1226,6 +1243,42 @@ fun SettingsScreen(
         )
     }
 
+    if (showBaiduModeDialog) {
+        AlertDialog(
+            onDismissRequest = { showBaiduModeDialog = false },
+            title = { Text("百度下载方式") },
+            text = {
+                Column {
+                    BaiduModeRow(
+                        title = "CDN / HTTP 直链",
+                        description = "使用 locatedownload 返回的明文节点，兼容性最好。",
+                        selected = baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN,
+                        onSelect = {
+                            baiduDownloadMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN
+                            settingsRepo.baiduDownloadMode = baiduDownloadMode
+                            showBaiduModeDialog = false
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    BaiduModeRow(
+                        title = "P2P（只下载、不上传）",
+                        description = "经 Seed 节点的 range_list 按区间调度 TPDATA；不监听端口、不做种、" +
+                            "不接受上传。该模式固定使用自带下载器，节点未覆盖的区间自动走 CDN。",
+                        selected = baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P,
+                        onSelect = {
+                            baiduDownloadMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P
+                            settingsRepo.baiduDownloadMode = baiduDownloadMode
+                            showBaiduModeDialog = false
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBaiduModeDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
     // 导出认证信息弹窗（AES 加密密码 + 导出范围）
     if (showExportAuthDialog) {
         ExportAuthDialog(
@@ -1913,6 +1966,33 @@ private fun RadioThreadRow(
             text = "$value 线程",
             style = MaterialTheme.typography.bodyLarge
         )
+    }
+}
+
+@Composable
+private fun BaiduModeRow(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onSelect: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

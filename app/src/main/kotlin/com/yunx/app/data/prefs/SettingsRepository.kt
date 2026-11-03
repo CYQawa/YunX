@@ -127,6 +127,22 @@ class SettingsRepository(context: Context) {
             prefs.edit().putString("download_engine", value).apply()
         }
 
+    /**
+     * 百度取流方式：
+     * - [BAIDU_DOWNLOAD_MODE_CDN]：locatedownload 明文 CDN（默认，兼容性最好）；
+     * - [BAIDU_DOWNLOAD_MODE_P2P]：Seed range_list + TPDATA（只下载，不做种/不上传）；
+     *   未覆盖区间自动补 CDN，并强制使用内置下载器。
+     *
+     * 非法值回退 CDN，避免手改 prefs 后下载入口拿到空模式。
+     */
+    var baiduDownloadMode: String
+        get() = prefs.getString("baidu_download_mode", BAIDU_DOWNLOAD_MODE_CDN)?.takeIf {
+            it == BAIDU_DOWNLOAD_MODE_CDN || it == BAIDU_DOWNLOAD_MODE_P2P
+        } ?: BAIDU_DOWNLOAD_MODE_CDN
+        set(value) {
+            prefs.edit().putString("baidu_download_mode", value).apply()
+        }
+
     /** 夸克取链方式：true=免转存（直接换下载直链，不写入网盘，默认）；false=先转存到临时目录再取链 */
     var quarkNoSaveDownload: Boolean
         get() = prefs.getBoolean("quark_no_save_download", true)
@@ -353,6 +369,12 @@ class SettingsRepository(context: Context) {
 
         /** 下载引擎标识：内置 Gopeed 引擎（gomobile 核心，需用户导入 AAR） */
         const val ENGINE_GOPEED = "gopeed"
+
+        /** 百度 CDN 直链模式（settings 值与 [com.yunx.app.data.network.BaiduConstants] 对齐）。 */
+        const val BAIDU_DOWNLOAD_MODE_CDN = "cdn"
+
+        /** 百度 P2P 模式：只下载、不上传；固定内置下载器，节点未覆盖区间补 CDN。 */
+        const val BAIDU_DOWNLOAD_MODE_P2P = "p2p"
         /**
          * 线程数上限 = 512（与设置页档位一致）。
          * 真正同时在飞的请求数另由 `DownloadManager.MAX_INFLIGHT_CHUNKS`（按最大堆预算推导、同样封顶 512）

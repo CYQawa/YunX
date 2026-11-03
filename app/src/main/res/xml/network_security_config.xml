@@ -51,4 +51,14 @@
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">yunx.cyqawa.os.kg</domain>
     </domain-config>
+
+    <!--
+        百度 P2P 控制面（Seed / query_pop）在抓包中固定是 HTTP，且主机名固定为
+        nj.t.bcsp2p.baidu.com。这里只放行该域；POP 数据节点是随机 IPv4、无法枚举，
+        因此数据面由 BaiduP2pDownloader 通过原始 Socket 发送抓包确认的 HTTP/1.1，
+        不把 base-config 改成全局 cleartext（见 Agent.md §3.49）。
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">nj.t.bcsp2p.baidu.com</domain>
+    </domain-config>
 </network-security-config>

@@ -2165,7 +2165,7 @@ class ResolveViewModel(
             SharePlatform.XUNLEI -> mapOf("User-Agent" to XunleiConstants.APP_UA) // 迅雷直链必须用官方 app UA，浏览器 UA 会触发 CDN 降级（200整文件）
             SharePlatform.BAIDU -> mapOf(
                 "Cookie" to credential,
-                "User-Agent" to BaiduConstants.UA_NETDISK
+                "User-Agent" to BaiduConstants.UA_P2SP
             )
             SharePlatform.C139 -> mapOf("User-Agent" to C139Constants.PC_UA)
             // 115：CDN 同时校验登录 Cookie 与取链响应下发的 900 秒 CDN Cookie，

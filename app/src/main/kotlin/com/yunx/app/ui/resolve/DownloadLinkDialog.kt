@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yunx.app.data.network.BaiduP2pSpec
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
@@ -68,6 +69,7 @@ fun DownloadLinkDialog(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isP2p = BaiduP2pSpec.isP2p(link.downloadUrl)
     // Dialog 内提示宿主（AlertDialog 为独立窗口）
     val snackbarHostState = rememberGlobalSnackbarHostState()
 
@@ -91,45 +93,58 @@ fun DownloadLinkDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "下载直链已生成（有效期约 15-30 分钟）",
+                    text = if (isP2p) {
+                        "百度 P2P 任务已生成（只下载、不上传做种）"
+                    } else {
+                        "下载直链已生成（有效期约 15-30 分钟）"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
+                if (isP2p) {
                     Text(
-                        text = link.downloadUrl,
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClickLabel = "复制下载链接",
-                                onLongClick = {
-                                    copyToClipboard(context, link.downloadUrl)
-                                    SnackbarController.show("下载链接已复制")
-                                }
-                            ),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
+                        text = "该任务使用 Seed / POP / TPDATA 取分片，不是可直接复制的 HTTP 直链。" +
+                            "本机只发起下载请求，不监听端口、不接受上传。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                TextButton(onClick = {
-                    copyToClipboard(context, link.downloadUrl)
-                    SnackbarController.show("下载链接已复制")
-                }) {
-                    Icon(Icons.Outlined.ContentCopy, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("复制下载链接")
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
+                    ) {
+                        Text(
+                            text = link.downloadUrl,
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClickLabel = "复制下载链接",
+                                    onLongClick = {
+                                        copyToClipboard(context, link.downloadUrl)
+                                        SnackbarController.show("下载链接已复制")
+                                    }
+                                ),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    TextButton(onClick = {
+                        copyToClipboard(context, link.downloadUrl)
+                        SnackbarController.show("下载链接已复制")
+                    }) {
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("复制下载链接")
+                    }
                 }
                 Text(
                     text = "开始下载后，可在「下载」页查看保存进度",
