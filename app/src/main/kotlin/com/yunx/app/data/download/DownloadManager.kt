@@ -174,9 +174,6 @@ private const val MAX_STREAM_RETRIES = 3
 /** 暂停/删除时等待任务协程退出的上限（毫秒）：阻塞式 IO 不响应取消，不能无限等，否则按钮「点不动」 */
 private const val JOB_EXIT_WAIT_MS = 10_000L
 
-/** 百度 P2P 单文件并发上限：POP/TPDATA 没有公开的安全阈值，压在 8 路避免节点级熔断。 */
-private const val BAIDU_P2P_WORKERS_CAP = 8
-
 /**
  * 下载引擎分流策略（纯函数，便于单测）：
  * - 需要本地后处理、GitHub 镜像回退、P2P 快照只能走内置下载器；
@@ -2492,9 +2489,11 @@ class DownloadManager(
         if (total <= 0L) throw IllegalStateException("百度 P2P 文件大小非法：$total")
         val range = BaiduConstants.P2P_RANGE_SIZE.toLong()
         val totalRanges = ((total + range - 1) / range).toInt()
+        // 并发数可由设置页覆盖；仍受平台线程数与总片数约束。
+        val configuredWorkers = settings.baiduP2pWorkers.coerceAtLeast(1)
         val workers = min(
             threadProvider(task.platform).coerceAtLeast(1),
-            BAIDU_P2P_WORKERS_CAP
+            configuredWorkers
         ).coerceAtMost(totalRanges).coerceAtLeast(1)
         val rawChunk = (total + workers - 1) / workers
         val chunkSize = ((rawChunk + range - 1) / range) * range
@@ -2543,7 +2542,11 @@ class DownloadManager(
             summary = "workers=$actualWorkers chunkSize=$chunkSize chunks=$chunkCount 已有=$initial"
         )
 
-        val downloaderP2p = BaiduP2pDownloader()
+        val downloaderP2p = BaiduP2pDownloader(
+            slowNodeWindowMillis = settings.baiduP2pSlowSeconds * 1000L,
+            slowNodeMinBytesPerSecond = settings.baiduP2pSlowKbps * 1024L,
+            slowNodeMinRemainBytes = settings.baiduP2pMinRemainKb * 1024L
+        )
         val cookie = headers.entries
             .firstOrNull { it.key.equals("Cookie", ignoreCase = true) }
             ?.value

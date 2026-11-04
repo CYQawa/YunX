@@ -47,10 +47,14 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
 import kotlin.math.min
 
 private const val TAG = "YunX-BD-P2P"
+
+/** 慢节点冷却时间：被低速看门狗踢掉后，这段时间内不再优先选它。 */
+private const val SLOW_NODE_COOLDOWN_MS = 60_000L
 
 /**
  * 百度 Seed + POP + TPDATA 下载器。
@@ -62,9 +66,18 @@ private const val TAG = "YunX-BD-P2P"
  * - 只访问 locatedownload 已授权的 fgid，不实现分享转存/网盘权限之外的任何绕过。
  */
 class BaiduP2pDownloader(
-    private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
+    private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() },
+    /** 低速判定窗口（毫秒）：窗口内平均速度低于阈值就断开当前节点换下一个 */
+    private val slowNodeWindowMillis: Long = 6_000L,
+    /** 低速阈值（字节/秒）：默认 128 KiB/s，低于它视为节点过慢 */
+    private val slowNodeMinBytesPerSecond: Long = 128L * 1024L,
+    /** 最小切换分片（字节）：小于该值的尾片不折腾，避免为几十 KB 反复换节点 */
+    private val slowNodeMinRemainBytes: Long = 256L * 1024L
 ) {
     private val client get() = clientProvider()
+
+    /** ip:port -> 冷却截止时间（毫秒）。多分片并发时共享，避免同一慢节点被反复选中。 */
+    private val nodeCooldownUntil = ConcurrentHashMap<String, Long>()
 
     /**
      * 建立一次 P2P 会话：Seed query_peer -> query_pop -> 可用 POP 节点。
@@ -247,10 +260,15 @@ class BaiduP2pDownloader(
     ): ByteArray {
         // Seed 的 range_list 就是各节点的负责区间。节点只接受区间内请求，
         // 区间外会返回 404 invalid fgid；这不是 fgid 本身错误。
-        val candidates = session.peers
+        val covering = session.peers
             .filter { it.covers(offset, length) }
             .distinctBy { "${it.ip}:${it.publicPort}" }
-            .take(5)
+        val now = System.currentTimeMillis()
+        val fresh = covering.filter {
+            (nodeCooldownUntil["${it.ip}:${it.publicPort}"] ?: 0L) <= now
+        }
+        // 全部都在冷却时仍然要试（总比直接回退 CDN 好），否则优先未冷却节点。
+        val candidates = (fresh.ifEmpty { covering }).take(5)
         if (candidates.isEmpty()) {
             Log.d(
                 TAG,
@@ -260,10 +278,23 @@ class BaiduP2pDownloader(
         }
         var lastError: Throwable? = null
         for (peer in candidates) {
+            val key = "${peer.ip}:${peer.publicPort}"
             try {
-                return requestPeer(spec, peer, offset, length)
+                val data = requestPeer(spec, peer, offset, length)
+                nodeCooldownUntil.remove(key)
+                return data
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: SlowNodeException) {
+                // 标记冷却后继续试下一个候选节点；全部失败再走 CDN。
+                nodeCooldownUntil[key] =
+                    System.currentTimeMillis() + SLOW_NODE_COOLDOWN_MS
+                lastError = e
+                Log.w(
+                    TAG,
+                    "POP 节点低速冷却 node=$key offset=$offset " +
+                        "err=${e.message ?: e.javaClass.simpleName}"
+                )
             } catch (e: Throwable) {
                 if (!coroutineContext.isActive) {
                     throw CancellationException("P2P 下载被取消")
@@ -331,7 +362,8 @@ class BaiduP2pDownloader(
             peer.ip,
             peer.publicPort,
             header.toByteArray(Charsets.US_ASCII),
-            body
+            body,
+            length
         )
         val headers = response.headers
         val range = HttpRangePolicy.parse(headers["content-range"])
@@ -481,7 +513,8 @@ class BaiduP2pDownloader(
         host: String,
         port: Int,
         header: ByteArray,
-        body: ByteArray
+        body: ByteArray,
+        contentLength: Long
     ): RawResponse {
         val addresses = InetAddress.getAllByName(host)
         var lastError: Throwable? = null
@@ -492,14 +525,21 @@ class BaiduP2pDownloader(
             }
             try {
                 socket.connect(InetSocketAddress(address, port), 10_000)
-                socket.soTimeout = 20_000
+                // 单次 read 的停顿上限与低速窗口对齐：完全不出数据的节点也不必等 20 秒。
+                socket.soTimeout = maxOf(6_000L, slowNodeWindowMillis).toInt()
                 socket.tcpNoDelay = true
                 val output = BufferedOutputStream(socket.getOutputStream())
                 output.write(header)
                 output.write(body)
                 output.flush()
-                return readResponse(BufferedInputStream(socket.getInputStream()))
+                return readResponse(
+                    BufferedInputStream(socket.getInputStream()),
+                    guardBody = contentLength >= slowNodeMinRemainBytes
+                )
             } catch (e: CancellationException) {
+                throw e
+            } catch (e: SlowNodeException) {
+                // 同一 host 的其它地址也是同一节点，不重复等一个窗口。
                 throw e
             } catch (e: Throwable) {
                 if (!coroutineContext.isActive) {
@@ -514,7 +554,7 @@ class BaiduP2pDownloader(
         throw IOException("连接 POP 节点失败：$host:$port", lastError)
     }
 
-    private fun readResponse(input: InputStream): RawResponse {
+    private fun readResponse(input: InputStream, guardBody: Boolean): RawResponse {
         val headerBytes = readHeader(input)
         val headerText = String(headerBytes, Charsets.ISO_8859_1)
         val lines = headerText.split("\r\n")
@@ -538,7 +578,71 @@ class BaiduP2pDownloader(
                 "POP HTTP $status" + detail.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
             )
         }
-        return RawResponse(headers, readBody(input, headers))
+        // 只对响应体做低速看门狗，响应头阶段不计入，避免把建连/TLS/首包延迟误判为节点慢。
+        // 小尾片不启用，避免为几十 KB 反复换节点。
+        val guarded = if (guardBody) {
+            SlowNodeGuardInputStream(
+                delegate = input,
+                minBytesPerSecond = slowNodeMinBytesPerSecond,
+                windowMillis = slowNodeWindowMillis
+            )
+        } else {
+            input
+        }
+        return RawResponse(headers, readBody(guarded, headers))
+    }
+
+    /** 低速节点专用异常：让 [rawPost] 立即换节点，而不是在同一 host 的多个地址上重复等待。 */
+    private class SlowNodeException(message: String) : IOException(message)
+
+    /**
+     * 响应体低速看门狗。
+     *
+     * POP 节点有时能建连但持续以几 KB/s 吐数据；如果只靠 20s socket 超时，会把整段拖死。
+     * 这里按“窗口内平均速度”判定：窗口结束前不杀（避开 TCP 爬坡），窗口后低于阈值立即抛错，
+     * 由 [requestRange] 换下一个节点，全部失败再走 CDN 补齐。
+     */
+    private class SlowNodeGuardInputStream(
+        private val delegate: InputStream,
+        private val minBytesPerSecond: Long,
+        private val windowMillis: Long
+    ) : InputStream() {
+        private val startedAt = System.nanoTime()
+        private var total = 0L
+
+        override fun read(): Int {
+            val value = delegate.read()
+            if (value >= 0) {
+                total++
+                checkSpeed()
+            }
+            return value
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            val count = delegate.read(b, off, len)
+            if (count > 0) {
+                total += count
+                checkSpeed()
+            }
+            return count
+        }
+
+        private fun checkSpeed() {
+            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L
+            if (elapsedMs < windowMillis) return
+            val bps = if (elapsedMs <= 0L) Long.MAX_VALUE else total * 1000L / elapsedMs
+            if (bps < minBytesPerSecond) {
+                throw SlowNodeException(
+                    "P2P 节点持续低速（${bps / 1024} KiB/s < " +
+                        "${minBytesPerSecond / 1024} KiB/s，已读 $total 字节 / ${elapsedMs}ms），切换节点"
+                )
+            }
+        }
+
+        override fun available(): Int = delegate.available()
+
+        override fun close() = delegate.close()
     }
 
     private fun readBody(

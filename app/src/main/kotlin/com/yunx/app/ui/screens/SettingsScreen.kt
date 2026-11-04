@@ -275,7 +275,11 @@ fun SettingsScreen(
     var quarkNoSave by remember { mutableStateOf(settingsRepo.quarkNoSaveDownload) }
     // 百度下载方式：CDN 直链 / P2P（只下载，不上传）
     var baiduDownloadMode by remember { mutableStateOf(settingsRepo.baiduDownloadMode) }
-    var showBaiduModeDialog by remember { mutableStateOf(false) }
+    var baiduP2pWorkers by remember { mutableStateOf(settingsRepo.baiduP2pWorkers) }
+    var baiduP2pSlowSeconds by remember { mutableStateOf(settingsRepo.baiduP2pSlowSeconds) }
+    var baiduP2pSlowKbps by remember { mutableStateOf(settingsRepo.baiduP2pSlowKbps) }
+    var baiduP2pMinRemainKb by remember { mutableStateOf(settingsRepo.baiduP2pMinRemainKb) }
+    var showBaiduP2pDialog by remember { mutableStateOf(false) }
     var showConcurrencyDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRetryDialog by remember { mutableStateOf(false) }
@@ -430,13 +434,14 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Outlined.Cloud,
             shape = listGroupShape(ListGroupPos.MIDDLE),
-            title = "百度下载方式",
+            title = "百度网盘",
             description = if (baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P) {
-                "P2P 优先（只下载、不上传；强制使用自带下载器，未覆盖区间自动走 CDN）"
+                "P2P（只下载、不上传）· ${baiduP2pWorkers} 线程 · " +
+                    "持续 ${baiduP2pSlowSeconds}s 低于 ${baiduP2pSlowKbps} KiB/s 切换节点"
             } else {
-                "CDN / HTTP 直链（默认，兼容性最好）"
+                "CDN / HTTP 直链（默认，兼容性最好）· 可切换 P2P 并调整线程/低速阈值"
             },
-            onClick = { showBaiduModeDialog = true }
+            onClick = { showBaiduP2pDialog = true }
         )
 
         Spacer(modifier = Modifier.height(ListGroupGap))
@@ -1243,38 +1248,26 @@ fun SettingsScreen(
         )
     }
 
-    if (showBaiduModeDialog) {
-        AlertDialog(
-            onDismissRequest = { showBaiduModeDialog = false },
-            title = { Text("百度下载方式") },
-            text = {
-                Column {
-                    BaiduModeRow(
-                        title = "CDN / HTTP 直链",
-                        description = "使用 locatedownload 返回的明文节点，兼容性最好。",
-                        selected = baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN,
-                        onSelect = {
-                            baiduDownloadMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN
-                            settingsRepo.baiduDownloadMode = baiduDownloadMode
-                            showBaiduModeDialog = false
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    BaiduModeRow(
-                        title = "P2P（只下载、不上传）",
-                        description = "经 Seed 节点的 range_list 按区间调度 TPDATA；不监听端口、不做种、" +
-                            "不接受上传。该模式固定使用自带下载器，节点未覆盖的区间自动走 CDN。",
-                        selected = baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P,
-                        onSelect = {
-                            baiduDownloadMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P
-                            settingsRepo.baiduDownloadMode = baiduDownloadMode
-                            showBaiduModeDialog = false
-                        }
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showBaiduModeDialog = false }) { Text("取消") }
+    if (showBaiduP2pDialog) {
+        BaiduP2pSettingsDialog(
+            mode = baiduDownloadMode,
+            workers = baiduP2pWorkers,
+            slowSeconds = baiduP2pSlowSeconds,
+            slowKbps = baiduP2pSlowKbps,
+            minRemainKb = baiduP2pMinRemainKb,
+            onDismiss = { showBaiduP2pDialog = false },
+            onConfirm = { newMode, newWorkers, newSeconds, newKbps, newMinRemain ->
+                baiduDownloadMode = newMode
+                baiduP2pWorkers = newWorkers
+                baiduP2pSlowSeconds = newSeconds
+                baiduP2pSlowKbps = newKbps
+                baiduP2pMinRemainKb = newMinRemain
+                settingsRepo.baiduDownloadMode = newMode
+                settingsRepo.baiduP2pWorkers = newWorkers
+                settingsRepo.baiduP2pSlowSeconds = newSeconds
+                settingsRepo.baiduP2pSlowKbps = newKbps
+                settingsRepo.baiduP2pMinRemainKb = newMinRemain
+                showBaiduP2pDialog = false
             }
         )
     }
@@ -1967,6 +1960,114 @@ private fun RadioThreadRow(
             style = MaterialTheme.typography.bodyLarge
         )
     }
+}
+
+/**
+ * 百度网盘设置合集：下载方式 + P2P 线程/低速切换参数。
+ *
+ * 数值全部允许手动输入（不再用固定档位），保存时按后端可接受范围修正：
+ * 线程 1..32、窗口 1..120 秒、速度 1..1048576 KiB/s、最小分片 0..4194304 KiB。
+ */
+@Composable
+private fun BaiduP2pSettingsDialog(
+    mode: String,
+    workers: Int,
+    slowSeconds: Int,
+    slowKbps: Int,
+    minRemainKb: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int, Int, Int, Int) -> Unit
+) {
+    var editMode by remember { mutableStateOf(mode) }
+    var workersText by remember { mutableStateOf(workers.toString()) }
+    var secondsText by remember { mutableStateOf(slowSeconds.toString()) }
+    var kbpsText by remember { mutableStateOf(slowKbps.toString()) }
+    var minRemainText by remember { mutableStateOf(minRemainKb.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("百度网盘") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("下载方式", style = MaterialTheme.typography.titleSmall)
+                BaiduModeRow(
+                    title = "CDN / HTTP 直链",
+                    description = "使用 locatedownload 返回的明文节点，兼容性最好。",
+                    selected = editMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN,
+                    onSelect = { editMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN }
+                )
+                BaiduModeRow(
+                    title = "P2P（只下载、不上传）",
+                    description = "按 Seed range_list 调度 TPDATA；不监听端口、不做种、不接受上传。",
+                    selected = editMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P,
+                    onSelect = { editMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P }
+                )
+                if (editMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P) {
+                    Text(
+                        "P2P 参数（可直接输入任意数值，保存时自动修正到有效范围）",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    OutlinedTextField(
+                        value = workersText,
+                        onValueChange = { input -> workersText = input.filter { it in '0'..'9' } },
+                        label = { Text("下载线程数（1-32）") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = secondsText,
+                        onValueChange = { input -> secondsText = input.filter { it in '0'..'9' } },
+                        label = { Text("低速判定窗口（秒，1-120）") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = kbpsText,
+                        onValueChange = { input -> kbpsText = input.filter { it in '0'..'9' } },
+                        label = { Text("低速阈值（KiB/s，1-1048576）") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = minRemainText,
+                        onValueChange = { input -> minRemainText = input.filter { it in '0'..'9' } },
+                        label = { Text("最小切换分片（KiB，0-4194304）") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "窗口内平均速度低于阈值，且当前分片不小于最小切换分片时，断开当前节点换下一个；" +
+                            "全部候选失败后自动走 CDN。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm(
+                    editMode,
+                    workersText.toIntOrNull()?.coerceIn(1, 32) ?: workers,
+                    secondsText.toIntOrNull()?.coerceIn(1, 120) ?: slowSeconds,
+                    kbpsText.toIntOrNull()?.coerceIn(1, 1_048_576) ?: slowKbps,
+                    minRemainText.toIntOrNull()?.coerceIn(0, 4_194_304) ?: minRemainKb
+                )
+            }) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
 
 @Composable

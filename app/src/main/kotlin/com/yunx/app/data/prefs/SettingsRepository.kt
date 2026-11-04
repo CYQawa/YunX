@@ -143,6 +143,39 @@ class SettingsRepository(context: Context) {
             prefs.edit().putString("baidu_download_mode", value).apply()
         }
 
+    /**
+     * 百度 P2P 低速节点切换窗口（秒）。
+     *
+     * 节点在该窗口内的平均速度低于 [baiduP2pSlowKbps] 就断开并换下一个节点；
+     * 全部候选都失败时回退 CDN。默认 6 秒，限制 1..120 秒。
+     */
+    var baiduP2pSlowSeconds: Int
+        get() = prefs.getInt("baidu_p2p_slow_seconds", 6).coerceIn(1, 120)
+        set(value) {
+            prefs.edit().putInt("baidu_p2p_slow_seconds", value.coerceIn(1, 120)).apply()
+        }
+
+    /** 百度 P2P 低速阈值（KiB/s）：窗口内平均速度低于该值就换节点。默认 128，允许 1..1048576。 */
+    var baiduP2pSlowKbps: Int
+        get() = prefs.getInt("baidu_p2p_slow_kbps", 128).coerceIn(1, 1_048_576)
+        set(value) {
+            prefs.edit().putInt("baidu_p2p_slow_kbps", value.coerceIn(1, 1_048_576)).apply()
+        }
+
+    /** 百度 P2P 最小切换分片（KiB）：小于该值的尾片不触发低速切换。默认 256，允许 0..4194304。 */
+    var baiduP2pMinRemainKb: Int
+        get() = prefs.getInt("baidu_p2p_min_remain_kb", 256).coerceIn(0, 4_194_304)
+        set(value) {
+            prefs.edit().putInt("baidu_p2p_min_remain_kb", value.coerceIn(0, 4_194_304)).apply()
+        }
+
+    /** 百度 P2P 并发分片数：默认 8，允许 1..32。 */
+    var baiduP2pWorkers: Int
+        get() = prefs.getInt("baidu_p2p_workers", 8).coerceIn(1, 32)
+        set(value) {
+            prefs.edit().putInt("baidu_p2p_workers", value.coerceIn(1, 32)).apply()
+        }
+
     /** 夸克取链方式：true=免转存（直接换下载直链，不写入网盘，默认）；false=先转存到临时目录再取链 */
     var quarkNoSaveDownload: Boolean
         get() = prefs.getBoolean("quark_no_save_download", true)
