@@ -348,10 +348,33 @@ class BaiduP2pDownloader(
         }
         // Keyversion 缺失表示该 POP 直接回明文；有值就必须命中 locatedownload 下发的 key。
         // 解密必须紧贴响应头处理，不能把 keyversion 存进共享字段（并发分片会串号）。
-        val version = headers["keyversion"]?.toLongOrNull() ?: return response.body
-        val key = spec.encryptKeys.firstOrNull { it.version == version }
-            ?: throw IOException("POP Keyversion=$version 在 locatedownload 密钥列表中不存在")
-        return decryptWithKey(key, response.body, offset)
+        val version = headers["keyversion"]?.toLongOrNull()
+        val plain = if (version == null) {
+            response.body
+        } else {
+            val key = spec.encryptKeys.firstOrNull { it.version == version }
+                ?: throw IOException("POP Keyversion=$version 在 locatedownload 密钥列表中不存在")
+            decryptWithKey(key, response.body, offset)
+        }
+        // POP 每个 1 MiB 分片都带 Content-Crc。官方内核按分片校验，校验失败应换节点重取，
+        // 否则坏块会直接写盘，最终表现为文件损坏。
+        val expectedCrc = headers["content-crc"]?.trim()?.toLongOrNull()
+        if (expectedCrc != null) {
+            val plainCrc = crc32(plain)
+            if (plainCrc != expectedCrc) {
+                // 兼容一种实现差异：若服务端按密文计算 CRC，则密文匹配也放行；
+                // 两者都不匹配才判定坏块，避免因 CRC 口径不同误杀正常节点。
+                val encryptedCrc = if (version == null) plainCrc else crc32(response.body)
+                if (encryptedCrc != expectedCrc) {
+                    throw IOException(
+                        "POP 分片 CRC 校验失败（offset=$offset expected=$expectedCrc " +
+                            "plain=$plainCrc enc=$encryptedCrc）"
+                    )
+                }
+                Log.w(TAG, "POP Content-Crc 命中密文 offset=$offset，按兼容模式接受")
+            }
+        }
+        return plain
     }
 
     /**
@@ -395,6 +418,19 @@ class BaiduP2pDownloader(
                     if (body.size.toLong() != length) {
                         throw IOException("CDN 补齐字节数不符：期望 $length，实际 ${body.size}")
                     }
+                    // CDN 206 会带 Content-MD5（原始文件分片的 MD5，Base64）。
+                    // 这是第二道分片校验，防止 POP 节点失败后 CDN 补齐的坏块混入。
+                    val expectedMd5 = response.header("Content-MD5")
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                    if (expectedMd5 != null) {
+                        val expected = BaiduDownloadCrypto.decodeBase64(expectedMd5)
+                        if (expected != null &&
+                            !expected.contentEquals(BaiduDownloadCrypto.md5(body))
+                        ) {
+                            throw IOException("CDN 分片 MD5 校验失败（offset=$offset）")
+                        }
+                    }
                     return body
                 }
             } catch (e: CancellationException) {
@@ -432,6 +468,13 @@ class BaiduP2pDownloader(
             absoluteStart = offset,
             sliceSize = key.sliceSize.coerceAtLeast(16)
         )
+    }
+
+    /** 标准 IEEE CRC32，与 POP `Content-Crc` 一致。 */
+    private fun crc32(bytes: ByteArray): Long {
+        val crc = java.util.zip.CRC32()
+        crc.update(bytes)
+        return crc.value
     }
 
     private suspend fun rawPost(

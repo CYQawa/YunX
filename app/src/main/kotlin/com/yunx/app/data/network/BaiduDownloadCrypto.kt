@@ -254,17 +254,20 @@ object BaiduDownloadCrypto {
     /**
      * P2P 数据面 AES-256-CTR：每个 8192 字节 slice 独立派生 key/iv。
      *
-     * kernel 的 `onecloud_aes_ctr_decrypt` 用 SHA-256(hexKey + decimal(sliceOffset))
-     * 作为密钥、SHA-256(hexIv + decimal(sliceOffset)) 的前 16 字节作为计数器。
+     * kernel 的 `onecloud_aes_ctr_decrypt` 用 SHA-256(hexKey + decimal(sliceIndex))
+     * 作为密钥、SHA-256(hexIv + decimal(sliceIndex)) 的前 16 字节作为计数器。
+     *
+     * ★ sliceIndex 是**分片序号**（absoluteOffset / sliceSize），不是字节偏移。
+     *   官方 `p2p_kernel::preprocess` 的格式串是 `%s%d`，用错会把第 2 片起全部解坏。
      */
     fun decryptP2pSlice(
         encrypted: ByteArray,
         keyHex: String,
         ivHex: String,
-        sliceOffset: Long
+        sliceIndex: Long
     ): ByteArray {
-        val key = sha256((keyHex + sliceOffset.toString()).toByteArray(Charsets.US_ASCII))
-        val iv = sha256((ivHex + sliceOffset.toString()).toByteArray(Charsets.US_ASCII))
+        val key = sha256((keyHex + sliceIndex.toString()).toByteArray(Charsets.US_ASCII))
+        val iv = sha256((ivHex + sliceIndex.toString()).toByteArray(Charsets.US_ASCII))
             .copyOf(16)
         val cipher = Cipher.getInstance("AES/CTR/NoPadding")
         cipher.init(
@@ -301,7 +304,7 @@ object BaiduDownloadCrypto {
             val inSlice = (absolute - sliceStart).toInt()
             val take = min(sliceSize - inSlice, encrypted.size - source)
             val block = encrypted.copyOfRange(source, source + take)
-            val plain = decryptP2pSlice(block, keyHex, ivHex, sliceStart)
+            val plain = decryptP2pSlice(block, keyHex, ivHex, sliceStart / sliceSize)
             System.arraycopy(plain, 0, out, source, take)
             source += take
             absolute += take
