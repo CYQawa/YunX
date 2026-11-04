@@ -336,27 +336,27 @@ class BaiduCloudViewModel(
     private var pendingDownload: PendingDownload? = null
 
     /** 下载文件：取直链 → 弹出下载确认弹窗（对齐解析页行为，确认后入队） */
-    fun downloadFile() {
-        val file = actionFile ?: return
+    fun downloadFile(file: ShareFile? = actionFile) {
+        val target = file ?: return
         viewModelScope.launch {
             isOperating = true
             try {
                 val url = api.locateDownload(
-                    path = file.fidToken,
-                    fsId = file.fid,
+                    path = target.fidToken,
+                    fsId = target.fid,
                     cookie = cookie(),
-                    fileSize = file.fsize
+                    fileSize = target.fsize
                 )
                 val link = DownloadLink(
-                    fid = file.fidToken,
-                    filename = file.fname,
+                    fid = target.fidToken,
+                    filename = target.fname,
                     downloadUrl = url,
-                    size = file.fsize
+                    size = target.fsize
                 )
                 pendingDownload = PendingDownload(
                     url = url,
-                    fileName = file.fname,
-                    size = file.fsize,
+                    fileName = target.fname,
+                    size = target.fsize,
                     headers = mapOf(
                         "Cookie" to cookie(),
                         "User-Agent" to BaiduConstants.UA_P2SP
