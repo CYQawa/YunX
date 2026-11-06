@@ -382,29 +382,20 @@ object DouyinParser : VideoParser {
 """
 
     /**
-     * 就绪判断：**两条路任一条成立即可**。
+     * 就绪判断复用取数结果：SSR / XHR 详情含有效图片，或已拿到视频直链时才完成。
      *
      * ★ 不能按链接里的类型分支（2026-10-22 修）：`/video/<id>`、`?modal_id=<id>` 这类链接抖音会自行
      *   302 到真正的作品页（图文 / 动图会落到 `/note/<id>`），于是「按链接判类型」必然判错 ——
-     *   视频那条判据（等 XHR 钩子）在图文页上**永远不会成立**，只能干等到 40s 超时后整条解析失败。
-     * ★ DOM 那条判据只认**真正的作品图**：`biz_tag=aweme_images` 或 `tplv-dy-aweme-images`。
-     *   封面是 `biz_tag=pcweb_cover`、「相关推荐」带 `WEBPC_RELATED`，两者都不算 —— 否则视频页会
-     *   刚渲染出封面就「就绪」，拿回一堆封面当作品图（视频直链只在钩子数据里，早退就丢了）。
+     *   因此 SSR 图集没有 XHR 也能就绪，视频则等待详情里的直链。
+     * ★ 首张 DOM 作品图无法证明图集完整，非空钩子字符串也不代表详情可用。
+     *   仅有 DOM 时继续等到现有超时，交由 HTTP 回退处理，避免把一张可见图片当作完整图集。
      */
-    private fun readyCheckJs(): String = """
+    internal fun readyCheckJs(): String = """
 (function () {
-  var raw = window.__yunxAwemeDetail;
-  if (typeof raw === 'string' && raw.length > 0) return 'true';
-  var imgs = document.querySelectorAll('img');
-  for (var i = 0; i < imgs.length; i++) {
-    if (isWorkImage(imgs[i].src || '')) return 'true';
-  }
-  return 'false';
-  function isWorkImage(s) {
-    if (!s || s.indexOf('douyinpic.com') < 0) return false;
-    if (s.indexOf('WEBPC_RELATED') >= 0) return false;
-    return s.indexOf('biz_tag=aweme_images') >= 0 || s.indexOf('tplv-dy-aweme-images') >= 0;
-  }
+  var result = $EXTRACT_JS;
+  if (!result || result.error || result.src === 'dom') return 'false';
+  var gallery = (result.src === 'ssr' || result.src === 'hook') && result.images.length > 0;
+  return (gallery || result.video) ? 'true' : 'false';
 })()
 """
 
@@ -416,12 +407,12 @@ object DouyinParser : VideoParser {
      *   1. **SSR**（`<script id="RENDER_DATA">` 里 URL 编码的 `app.videoDetail`）—— 图文/动图的
      *      完整清单与每张的动图资源（`images[].video.playAddr[].src`）都在这里，**动图只有这条路能拿到**；
      *   2. **XHR 钩子**（`window.__yunxAwemeDetail`）—— 视频页的详情，视频直链在这里；
-     *   3. **DOM** 里的作品图 —— 最后兜底，**拿不到动图资源**（所以动图会退化成静态图）。
+     *   3. **DOM** 里的作品图 —— 仅反映当前挂载的图片，**不能据此判定图集就绪**，也拿不到动图资源。
      *
      * ★ 不把整份详情（100KB+）回传：`evaluateJavascript` 传大字符串又慢又容易出问题，只回传必要字段；
      *   同时回传用了哪个源（`src`）与动图条数，排查「为什么没动图」时一眼可见。
      */
-    private const val EXTRACT_JS = """
+    internal const val EXTRACT_JS = """
 (function () {
   try {
     function firstUrl(node) {
