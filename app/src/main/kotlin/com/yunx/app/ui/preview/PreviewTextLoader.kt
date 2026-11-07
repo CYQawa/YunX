@@ -18,8 +18,10 @@
 
 package com.yunx.app.ui.preview
 
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.network.video.VideoHttp
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -85,7 +87,8 @@ object PreviewTextLoader {
                 if (response.code != 200 && response.code != 206) {
                     throw IOException("HTTP ${response.code}")
                 }
-                val body = response.body ?: throw IOException("响应没有内容")
+                val body = response.body
+                    ?: throw IOException(AppStrings.get(R.string.rs_preview_response_empty))
 
                 // 服务端可能无视 Range 返回 200：按字节数硬读上限，绝不把整文件拉进内存
                 val buffer = ByteArray(MAX_BYTES)

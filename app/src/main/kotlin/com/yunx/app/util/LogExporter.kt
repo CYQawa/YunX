@@ -27,6 +27,7 @@ import android.os.Environment
 import android.os.Process
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import com.yunx.app.R
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -103,13 +104,30 @@ object LogExporter {
         OutputStreamWriter(output, StandardCharsets.UTF_8).use { writer ->
             // ---------- 头部：应用与设备信息 ----------
             val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
-            writer.write("云析（YunX）日志导出\n")
-            writer.write("导出时间：${now()}\n")
-            writer.write("应用版本：${pkg.versionName}（${pkg.versionCode}）\n")
-            writer.write("设备：${Build.MANUFACTURER} ${Build.MODEL}\n")
-            writer.write("系统：Android ${Build.VERSION.RELEASE}（SDK ${Build.VERSION.SDK_INT}）\n")
-            writer.write("诊断模式：${if (DiagnosticLog.isEnabled()) "已开启" else "关闭"}\n")
-            writer.write("本应用 uid=${Process.myUid()}，本次 pid=${Process.myPid()}\n")
+            writer.write(AppStrings.get(R.string.em_log_export_title))
+            writer.write(AppStrings.get(R.string.em_log_export_time, now()))
+            writer.write(
+                AppStrings.get(R.string.em_log_app_version, pkg.versionName ?: "-", pkg.versionCode)
+            )
+            writer.write(AppStrings.get(R.string.em_log_device, Build.MANUFACTURER, Build.MODEL))
+            writer.write(
+                AppStrings.get(
+                    R.string.em_log_system,
+                    Build.VERSION.RELEASE,
+                    Build.VERSION.SDK_INT
+                )
+            )
+            writer.write(
+                AppStrings.get(
+                    R.string.em_log_diagnostic_mode,
+                    if (DiagnosticLog.isEnabled()) {
+                        AppStrings.get(R.string.em_log_enabled)
+                    } else {
+                        AppStrings.get(R.string.em_log_disabled)
+                    }
+                )
+            )
+            writer.write(AppStrings.get(R.string.em_log_uid_pid, Process.myUid(), Process.myPid()))
             writer.write("\n")
 
             exportRuntimeLog(writer)
@@ -125,10 +143,10 @@ object LogExporter {
      * 反而会把 Usage 文本写进导出文件）。
      */
     private fun exportRuntimeLog(writer: OutputStreamWriter) {
-        writer.write("========== 运行日志（logcat -d -v time）==========\n")
+        writer.write(AppStrings.get(R.string.em_log_runtime_section))
         val lines = query(listOf("logcat", "-d", "-v", "time"))
         if (lines == null) {
-            writer.write("（读取日志失败：本机 logcat 不可用）\n")
+            writer.write(AppStrings.get(R.string.em_log_logcat_unavailable))
             return
         }
         writeLogLines(writer, lines)
@@ -179,7 +197,7 @@ object LogExporter {
     /** 写入日志行：脱敏 + 丢掉混进来的 NUL（否则整个导出文件会被当成二进制，打开是乱码） */
     private fun writeLogLines(writer: OutputStreamWriter, lines: List<String>) {
         if (lines.isEmpty()) {
-            writer.write("（无输出）\n")
+            writer.write(AppStrings.get(R.string.em_log_no_output))
             return
         }
         lines.forEach {
@@ -204,7 +222,7 @@ object LogExporter {
         }
         // chooser 外层也带上读权限 flag：部分接收者（文件管理器/系统 UI）通过
         // 自己的 Intent 读取 uri 时需要授权，否则报 Permission Denial
-        val chooser = Intent.createChooser(intent, "分享日志").apply {
+        val chooser = Intent.createChooser(intent, AppStrings.get(R.string.em_log_share_title)).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(chooser)

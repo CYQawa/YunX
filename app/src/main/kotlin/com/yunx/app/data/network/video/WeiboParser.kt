@@ -18,7 +18,9 @@
 
 package com.yunx.app.data.network.video
 
+import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
+import com.yunx.app.util.AppStrings
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -42,7 +44,10 @@ object WeiboParser : VideoParser {
         // tv 链接的 id 是 mid：先 mid → id，再按 status 处理
         "tv" -> parseWeiboStatus(link, mid2id(link.id), cookie)
         "fid" -> parseVideoFid(link, cookie)
-        else -> throw VideoParseException(VideoParseErrorKind.UNSUPPORTED, "不支持的微博链接形态：${link.kind}")
+        else -> throw VideoParseException(
+            VideoParseErrorKind.UNSUPPORTED,
+            AppStrings.get(R.string.em_weibo_unsupported_kind, link.kind)
+        )
     }
 
     /**
@@ -75,15 +80,17 @@ object WeiboParser : VideoParser {
             throw when (response.status) {
                 403, 418, 429 -> VideoParseException(
                     VideoParseErrorKind.BLOCKED,
-                    "微博被风控拦截（HTTP ${response.status}），可更换 UA/Referer 或稍后重试"
+                    AppStrings.get(R.string.em_weibo_blocked, response.status)
                 )
 
                 404, 410 -> VideoParseException(
-                    VideoParseErrorKind.NOT_FOUND, "微博内容不存在或已删除（HTTP ${response.status}）"
+                    VideoParseErrorKind.NOT_FOUND,
+                    AppStrings.get(R.string.em_weibo_not_found_code, response.status)
                 )
 
                 else -> VideoParseException(
-                    VideoParseErrorKind.UNKNOWN, "微博数据获取失败（HTTP ${response.status}）"
+                    VideoParseErrorKind.UNKNOWN,
+                    AppStrings.get(R.string.em_weibo_fetch_failed, response.status)
                 )
             }
         }
@@ -94,15 +101,22 @@ object WeiboParser : VideoParser {
         if (!contentType.contains("application/json")) {
             throw VideoParseException(
                 VideoParseErrorKind.BLOCKED,
-                "微博接口返回的不是 JSON（content-type: $contentType），多半被风控拦截"
+                AppStrings.get(R.string.em_weibo_not_json, contentType)
             )
         }
 
         val json = runCatching { JSONObject(response.body) }.getOrElse {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "微博返回数据解析失败", it)
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_weibo_parse_failed),
+                it
+            )
         }
         val data = json.optJSONObject("data")
-            ?: throw VideoParseException(VideoParseErrorKind.NOT_FOUND, "微博内容不存在或已删除")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_weibo_not_found)
+            )
         return buildWeiboData(link, data, cookie, allowRetweet = true)
     }
 
@@ -118,13 +132,25 @@ object WeiboParser : VideoParser {
         }
         // 参考实现把整段 JSON 塞在名为 data 的表单字段里：`data={"Component_Play_Playinfo":{"oid":"..."}}`
         val form = mapOf("data" to """{"Component_Play_Playinfo":{"oid":"${link.id}"}}""")
-        val text = VideoHttp.postForm(reqUrl, form, headers, "微博视频")
+        val text = VideoHttp.postForm(
+            reqUrl,
+            form,
+            headers,
+            AppStrings.get(R.string.em_what_weibo_video)
+        )
 
         val json = runCatching { JSONObject(text) }.getOrElse {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "微博视频接口返回数据解析失败", it)
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_weibo_video_parse_failed),
+                it
+            )
         }
         val data = json.optJSONObject("data")?.optJSONObject("Component_Play_Playinfo")
-            ?: throw VideoParseException(VideoParseErrorKind.NOT_FOUND, "微博视频数据为空（作品可能已删除）")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_weibo_video_empty)
+            )
 
         val mediaHeaders = mediaHeaders(cookie)
         val title = data.str("title")
@@ -209,7 +235,11 @@ object WeiboParser : VideoParser {
                     kind = VideoMediaKind.IMAGE,
                     fileName = "${base}_$imageIndex.jpg",
                     headers = mediaHeaders,
-                    quality = if (motionUrl.isNotBlank()) "动图" else "原图",
+                    quality = if (motionUrl.isNotBlank()) {
+                        AppStrings.get(R.string.em_quality_motion)
+                    } else {
+                        AppStrings.get(R.string.em_quality_original)
+                    },
                     motionUrl = motionUrl
                 )
             }

@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    Groupe E5 : messages affichés à l\'utilisateur par les analyseurs / l\'envoi / la mise à jour / le moteur Gopeed / la sauvegarde chiffrée / l\'export des journaux.
+-->
+<resources>
+    <!-- Erreurs réseau communes -->
+    <string name="em_http_blocked">%1$s a été bloqué par le contrôle des risques (HTTP %2$d)</string>
+    <string name="em_http_not_found">%1$s introuvable (HTTP %2$d)</string>
+    <string name="em_http_failed">Échec de la requête %1$s (HTTP %2$d)</string>
+    <string name="em_http_not_json">%1$s n\'a pas renvoyé de JSON valide</string>
+    <string name="em_http_request_failed">Échec de la requête : %1$s</string>
+    <string name="em_what_parse">Analyse</string>
+
+    <!-- Messages d\'erreur d\'analyse -->
+    <string name="em_parse_blocked">Le contrôle des risques de la plateforme a bloqué cette requête. Veuillez réessayer plus tard.</string>
+    <string name="em_parse_not_found">Le contenu n\'existe pas, a été supprimé ou n\'est pas visible</string>
+    <string name="em_parse_network">Échec de la requête réseau. Vérifiez votre connexion et réessayez.</string>
+    <string name="em_parse_unsupported">Ce lien n\'est pas encore pris en charge</string>
+    <string name="em_parse_failed">Échec de l\'analyse. Veuillez réessayer plus tard.</string>
+
+    <!-- Noms des objets de requête -->
+    <string name="em_what_acfun_video">Vidéo AcFun</string>
+    <string name="em_what_bili_cookie">Vérification de connexion Bilibili</string>
+    <string name="em_what_bili_video">Informations vidéo Bilibili</string>
+    <string name="em_what_bili_playurl">Lien direct Bilibili</string>
+    <string name="em_what_bili_dash">Lien direct DASH Bilibili</string>
+    <string name="em_what_douyin_page">Page de partage Douyin</string>
+    <string name="em_what_kuaishou_page">Page de publication Kuaishou</string>
+    <string name="em_what_xhs_note">Note Xiaohongshu</string>
+    <string name="em_what_weibo_video">Vidéo Weibo</string>
+    <string name="em_what_pixiv_artwork">Informations de l\'œuvre Pixiv</string>
+    <string name="em_what_pixiv_pages">Liste des images originales Pixiv</string>
+
+    <!-- Libellés de qualité -->
+    <string name="em_quality_original">Original</string>
+    <string name="em_quality_motion">Image animée</string>
+    <string name="em_quality_dash">%1$s (pistes séparées, fusionnées après le téléchargement)</string>
+    <string name="em_quality_number">Qualité %1$d</string>
+
+    <!-- AcFun -->
+    <string name="em_acfun_no_video_info">Échec de l\'analyse des informations vidéo AcFun (aucun videoInfo sur la page ; la vidéo a peut-être été supprimée)</string>
+    <string name="em_acfun_parse_failed">Échec de l\'analyse des informations vidéo AcFun</string>
+    <string name="em_acfun_no_stream">AcFun n\'a pas renvoyé d\'URL de flux vidéo</string>
+
+    <!-- Kuaishou -->
+    <string name="em_kuaishou_no_init_state">Aucun window.INIT_STATE sur la page Kuaishou (la publication a peut-être été supprimée ou la page a changé)</string>
+    <string name="em_kuaishou_invalid_json">window.INIT_STATE n\'est pas un JSON valide</string>
+    <string name="em_kuaishou_no_photo">Aucune donnée de publication dans window.INIT_STATE</string>
+
+    <!-- Bilibili -->
+    <string name="em_bili_api_error">L\'API d\'informations vidéo Bilibili a renvoyé code=%1$d msg=%2$s</string>
+    <string name="em_bili_missing_data">Les informations vidéo Bilibili n\'ont pas de champ data</string>
+    <string name="em_bili_missing_ids">Les informations vidéo Bilibili n\'ont pas de bvid/cid</string>
+    <string name="em_bili_no_stream">Bilibili n\'a renvoyé ni lien direct monofichier ni flux séparés fusionnables (code=%1$d msg=%2$s) : cette vidéo est peut-être un animé/contenu payant</string>
+    <string name="em_bili_durl_empty">Le durl Bilibili est vide</string>
+    <string name="em_bili_url_empty">Le lien direct Bilibili est vide (une connexion peut être requise ou le contrôle des risques l\'a bloqué)</string>
+
+    <!-- Douyin -->
+    <string name="em_douyin_no_router_data">Aucun window._ROUTER_DATA sur la page de partage Douyin (la publication a peut-être été supprimée ou la page a changé)</string>
+    <string name="em_douyin_parse_failed">Échec de l\'analyse Douyin</string>
+    <string name="em_douyin_router_invalid_json">window._ROUTER_DATA n\'est pas un JSON valide</string>
+    <string name="em_douyin_no_loader_data">Aucun loaderData dans window._ROUTER_DATA</string>
+    <string name="em_douyin_no_page">window._ROUTER_DATA ne contient ni video_(id)/page ni note_(id)/page</string>
+    <string name="em_douyin_no_data">Douyin n\'a pas renvoyé les données de cette publication (elle a peut-être été supprimée ou n\'est pas visible, ou le contrôle des risques l\'a bloquée) [%1$s]</string>
+    <string name="em_douyin_ttwid_request_failed">Échec de la requête d\'enregistrement ttwid</string>
+    <string name="em_douyin_ttwid_failed">Échec de l\'enregistrement ttwid (HTTP %1$d)</string>
+    <string name="em_douyin_ttwid_no_cookie">L\'enregistrement ttwid n\'a pas renvoyé de cookie utilisable</string>
+    <string name="em_flag_present">présent</string>
+    <string name="em_flag_missing">absent</string>
+    <string name="em_detail_length">longueur %1$d</string>
+    <string name="em_detail_request_id">, requestId=</string>
+
+    <!-- Xiaohongshu -->
+    <string name="em_xhs_parse_failed">Échec de l\'analyse Xiaohongshu</string>
+    <string name="em_xhs_no_note">Aucune donnée de note sur la page Xiaohongshu</string>
+    <string name="em_xhs_login_required">Xiaohongshu exige une connexion pour consulter le contenu des notes. Connectez-vous d\'abord à Xiaohongshu sur la page « Comptes ».</string>
+    <string name="em_xhs_no_note_data">Aucune donnée de note sur la page Xiaohongshu (le contrôle des risques l\'a peut-être bloquée ou la page a changé)</string>
+    <string name="em_xhs_state_parse_failed">Échec de l\'analyse des données de la page Xiaohongshu</string>
+    <string name="em_xhs_video_no_stream">La note vidéo Xiaohongshu n\'a pas de lien vidéo direct (la note a un champ video, mais media.stream n\'a aucune adresse utilisable)</string>
+    <string name="em_xhs_link_invalid">Le lien de partage Xiaohongshu est invalide ou le contenu a été supprimé</string>
+    <string name="em_xhs_note_deleted">Aucune donnée de note sur la page Xiaohongshu (le contenu a peut-être été supprimé)</string>
+    <string name="em_xhs_watermark_fallback">%1$d image(s) n\'ont pas d\'original sans filigrane ; les URL de la plateforme ont été utilisées (filigrane possible)</string>
+
+    <!-- Weibo -->
+    <string name="em_weibo_unsupported_kind">Forme de lien Weibo non prise en charge : %1$s</string>
+    <string name="em_weibo_blocked">Weibo a été bloqué par le contrôle des risques (HTTP %1$d). Modifiez l\'UA/Referer ou réessayez plus tard.</string>
+    <string name="em_weibo_not_found_code">Le contenu Weibo n\'existe pas ou a été supprimé (HTTP %1$d)</string>
+    <string name="em_weibo_fetch_failed">Échec de la récupération des données Weibo (HTTP %1$d)</string>
+    <string name="em_weibo_not_json">L\'API Weibo n\'a pas renvoyé de JSON (content-type : %1$s) ; il a probablement été bloqué par le contrôle des risques</string>
+    <string name="em_weibo_parse_failed">Échec de l\'analyse des données renvoyées par Weibo</string>
+    <string name="em_weibo_not_found">Le contenu Weibo n\'existe pas ou a été supprimé</string>
+    <string name="em_weibo_video_parse_failed">Échec de l\'analyse des données renvoyées par l\'API vidéo Weibo</string>
+    <string name="em_weibo_video_empty">Les données vidéo Weibo sont vides (la publication a peut-être été supprimée)</string>
+
+    <!-- Pixiv -->
+    <string name="em_pixiv_login_expired">La connexion Pixiv a expiré. Recollez le cookie sur la page « Comptes ».</string>
+    <string name="em_pixiv_login_required">Cette œuvre nécessite une connexion pour être analysée (souvent R18 ou restreinte). Collez le cookie du navigateur sur la page « Comptes ».</string>
+    <string name="em_pixiv_error_message">Les informations de l\'œuvre Pixiv ont renvoyé une erreur : %1$s</string>
+    <string name="em_pixiv_missing_body">Les informations de l\'œuvre Pixiv n\'ont pas de body</string>
+    <string name="em_pixiv_ugoira_unsupported">L\'ugoira Pixiv nécessite une composition GIF, non prise en charge par la version actuelle</string>
+    <string name="em_pixiv_no_images">Pixiv n\'a renvoyé aucune image originale téléchargeable</string>
+
+    <!-- Envoi -->
+    <string name="em_upload_invalid_range">Plage de lecture d\'envoi invalide</string>
+    <string name="em_upload_open_failed">Impossible d\'ouvrir le fichier sélectionné</string>
+    <string name="em_upload_read_incomplete">La lecture du fichier local est incomplète. Sélectionnez-le à nouveau.</string>
+    <string name="em_upload_unnamed_file">Fichier sans nom</string>
+    <string name="em_upload_size_unreadable">Impossible de lire la taille du fichier sélectionné. Choisissez un autre fichier et réessayez.</string>
+    <string name="em_upload_file_failed">Échec de l\'envoi de « %1$s » : %2$s</string>
+    <string name="em_upload_network_error">Erreur réseau. Veuillez réessayer.</string>
+    <string name="em_upload_interrupted">Envoi interrompu. Veuillez réessayer.</string>
+    <string name="em_upload_cancelled">Envoi annulé</string>
+    <string name="em_upload_bad_credentials">Le cloud n\'a pas renvoyé d\'identifiants d\'envoi complets</string>
+    <string name="em_upload_service_error">Le service d\'envoi du cloud a renvoyé une erreur (HTTP %1$d)</string>
+    <string name="em_upload_create_multipart_failed">Le cloud n\'a pas pu créer d\'envoi multipart (HTTP %1$d)</string>
+    <string name="em_upload_no_multipart_task">Le cloud n\'a pas créé de tâche d\'envoi multipart</string>
+    <string name="em_upload_part_failed">Échec de l\'envoi du fichier (HTTP %1$d)</string>
+    <string name="em_upload_part_unconfirmed">Le cloud n\'a pas confirmé la partie envoyée</string>
+    <string name="em_upload_merge_failed">Le cloud n\'a pas terminé la fusion des parties</string>
+
+    <!-- Moteur Gopeed -->
+    <string name="em_engine_path_absolute">Saisissez un chemin absolu (commençant par /)</string>
+    <string name="em_engine_dir_create_failed">Impossible de créer ce répertoire : %1$s (vérifiez que le chemin est correct et que le répertoire parent existe)</string>
+    <string name="em_engine_need_all_files">(accordez d\'abord l\'accès « Tous les fichiers »)</string>
+    <string name="em_engine_dir_not_writable">Ce répertoire n\'est pas accessible en écriture : %1$s%2$s</string>
+    <string name="em_engine_stop_before_install">Arrêtez d\'abord le moteur, puis importez les nouveaux fichiers du moteur</string>
+    <string name="em_engine_dir_unavailable">Répertoire du moteur indisponible</string>
+    <string name="em_engine_cannot_create_dir">Impossible de créer le répertoire : %1$s</string>
+    <string name="em_engine_cannot_read_file">Impossible de lire le fichier sélectionné</string>
+    <string name="em_engine_aar_missing_so">Cet AAR ne contient pas jni/%1$s/%2$s (ABI préférée de l\'appareil : %3$s)</string>
+    <string name="em_engine_empty_so">Le fichier du moteur extrait est vide</string>
+    <string name="em_engine_overwrite_failed">Impossible d\'écraser l\'ancien fichier du moteur : %1$s</string>
+    <string name="em_engine_write_failed">Impossible d\'écrire le fichier du moteur : %1$s</string>
+    <string name="em_engine_restart_required">Le moteur a déjà été chargé dans ce processus ; le nouveau fichier ne prendra effet qu\'après le redémarrage de l\'application</string>
+    <string name="em_engine_stop_first">Arrêtez d\'abord le moteur</string>
+    <string name="em_engine_delete_failed">Échec de la suppression : %1$s</string>
+    <string name="em_engine_not_installed">Le moteur Gopeed n\'a pas encore été importé (%1$s manquant)</string>
+    <string name="em_engine_not_started">Moteur non démarré</string>
+    <string name="em_engine_invoke_timeout">Délai d\'appel du moteur dépassé (60 secondes) : %1$s %2$s</string>
+    <string name="em_engine_invoke_failed">Échec de l\'appel du moteur : %1$s %2$s</string>
+    <string name="em_engine_response_unparsable">Impossible d\'analyser la réponse du moteur : %1$s</string>
+    <string name="em_engine_error_code">Le moteur a renvoyé le code d\'erreur %1$d</string>
+    <string name="em_engine_no_config">Le moteur n\'a pas renvoyé de configuration</string>
+    <string name="em_engine_no_task_status">Le moteur n\'a pas renvoyé l\'état de la tâche</string>
+    <string name="em_engine_no_task_detail">Le moteur n\'a pas renvoyé le détail de la tâche</string>
+    <string name="em_engine_load_failed">Échec du chargement de la bibliothèque native du moteur (les deux méthodes ont échoué)\n① System.load(%1$s) : %2$s\n② System.loadLibrary(\"gojni\") : %3$s</string>
+
+    <!-- Téléchargement du noyau Gopeed -->
+    <string name="em_kernel_notify_downloading">Téléchargement du noyau Gopeed</string>
+    <string name="em_kernel_fetch_version_failed">Échec de la récupération de la version du noyau : %1$s</string>
+    <string name="em_kernel_fetch_version_failed_short">Échec de la récupération de la version du noyau</string>
+    <string name="em_kernel_asset_missing">Cette version (%1$s) ne contient pas %2$s (ABI de l\'appareil : %3$s) ; fichiers disponibles : %4$s</string>
+    <string name="em_kernel_none">Aucun</string>
+    <string name="em_kernel_no_pan_link">Les notes de version ne contiennent pas de lien cloud. Utilisez GitHub à la place.</string>
+    <string name="em_kernel_source_github">GitHub direct</string>
+    <string name="em_kernel_source_mirror">Miroir GitHub</string>
+    <string name="em_kernel_notify_importing">Importation du noyau Gopeed</string>
+    <string name="em_kernel_unknown_link">Lien cloud non reconnu : %1$s</string>
+    <string name="em_kernel_only_quark">Seul le téléchargement automatique depuis Quark cloud est pris en charge pour l\'instant (ce lien est %1$s). Utilisez GitHub à la place.</string>
+    <string name="em_kernel_open_share_failed">Échec de l\'ouverture du partage : %1$s</string>
+    <string name="em_kernel_unknown_error">Erreur inconnue</string>
+    <string name="em_kernel_guest_link_failed">Échec de la récupération du lien invité : %1$s</string>
+    <string name="em_kernel_link_failed">Échec de la récupération du lien : %1$s</string>
+    <string name="em_kernel_quark_guest">Quark cloud (invité)</string>
+    <string name="em_kernel_quark_logged_in">Quark cloud (connecté)</string>
+    <string name="em_kernel_list_failed">Échec de la liste du répertoire partagé : %1$s</string>
+    <string name="em_kernel_asset_not_in_root">%1$s n\'est pas dans le partage (racine : %2$s)</string>
+    <string name="em_kernel_asset_not_in_sub">%1$s n\'est pas dans le partage (sous %2$s/ : %3$s)</string>
+    <string name="em_kernel_list_empty">vide</string>
+    <string name="em_kernel_download_failed">Échec du téléchargement</string>
+    <string name="em_kernel_download_failed_single">Échec du téléchargement (flux unique)</string>
+    <string name="em_kernel_downloaded_empty">Le fichier téléchargé est vide</string>
+    <string name="em_kernel_chunk_failed">Échec du téléchargement du fragment (%1$s)</string>
+    <string name="em_kernel_notify_merging">Fusion des fragments du noyau Gopeed</string>
+    <string name="em_kernel_size_mismatch">Échec de la vérification de la taille : %1$d octets attendus, %2$d octets réels (importation du paquet corrompu refusée)</string>
+    <string name="em_kernel_sha_mismatch">Échec de la vérification du paquet du noyau (sha256 non concordant), paquet ignoré : %1$s</string>
+
+    <!-- Vérification des mises à jour -->
+    <string name="em_update_unknown_error">Erreur inconnue</string>
+    <string name="em_update_bad_format">Format de réponse inattendu</string>
+    <string name="em_update_no_release">Le dépôt n\'a pas encore de Release</string>
+    <string name="em_update_rate_limited">Limite de l\'API GitHub atteinte (HTTP %1$d). Veuillez réessayer plus tard.</string>
+    <string name="em_update_empty_response">La réponse est vide</string>
+    <string name="em_update_missing_tag">Les données de la Release n\'ont pas de numéro de version</string>
+
+    <!-- Sauvegarde et chiffrement -->
+    <string name="em_backup_password_too_short">La phrase secrète de sauvegarde doit contenir au moins 8 caractères</string>
+    <string name="em_backup_not_encrypted">Ce n\'est pas un fichier de sauvegarde chiffré valide</string>
+    <string name="em_backup_corrupted">Le fichier de sauvegarde chiffré est corrompu</string>
+    <string name="em_backup_not_valid">Ce n\'est pas un fichier de sauvegarde d\'authentification YunX valide</string>
+    <string name="em_credential_legacy_key_missing">L\'ancienne clé de chiffrement n\'existe plus ; les identifiants historiques ne peuvent pas être déchiffrés</string>
+
+    <!-- Export des journaux -->
+    <string name="em_log_export_title">Export des journaux YunX\n</string>
+    <string name="em_log_export_time">Date d\'export : %1$s\n</string>
+    <string name="em_log_app_version">Version de l\'application : %1$s (%2$d)\n</string>
+    <string name="em_log_device">Appareil : %1$s %2$s\n</string>
+    <string name="em_log_system">Système : Android %1$s (SDK %2$d)\n</string>
+    <string name="em_log_diagnostic_mode">Mode diagnostic : %1$s\n</string>
+    <string name="em_log_enabled">Activé</string>
+    <string name="em_log_disabled">Désactivé</string>
+    <string name="em_log_uid_pid">uid de l\'application=%1$d, pid actuel=%2$d\n</string>
+    <string name="em_log_runtime_section">========== Journal d\'exécution (logcat -d -v time) ==========\n</string>
+    <string name="em_log_logcat_unavailable">(Échec de la lecture des journaux : logcat indisponible sur cet appareil)\n</string>
+    <string name="em_log_no_output">(aucune sortie)\n</string>
+    <string name="em_log_share_title">Partager les journaux</string>
+</resources>

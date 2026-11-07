@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.BaiduAccountDao
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.BaiduConstants
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -78,7 +80,7 @@ class BaiduAccountRepository(
             BaiduAccountEntity(
                 id = slot.id,
                 cookie = cleaned,
-                nickname = nickname.ifBlank { "百度用户" },
+                nickname = nickname.ifBlank { AppStrings.get(R.string.er_baidu_default_nickname) },
                 isPrimary = slot.isPrimary,
                 remark = slot.remark
             )

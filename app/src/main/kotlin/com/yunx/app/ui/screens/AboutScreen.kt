@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,10 +109,10 @@ fun AboutScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("关于云析", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.vm_about_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.vm_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -134,10 +135,8 @@ fun AboutScreen(
             // ---------- 简介 ----------
             InfoCard(
                 icon = Icons.Outlined.Cloud,
-                title = "应用简介",
-                description = "云析（YunX）是一款网盘 / 视频分享链接解析与高速下载工具。" +
-                    "粘贴链接即可：网盘分享能浏览内容并高速下载，视频链接能解析出直链与原图，" +
-                    "图片 / 视频 / 音频都支持在线预览播放。"
+                title = stringResource(R.string.vm_about_intro_title),
+                description = stringResource(R.string.vm_about_intro_desc)
             )
             
 
@@ -155,7 +154,7 @@ fun AboutScreen(
 
             // ---------- 开源协议 ----------
             Text(
-                text = "本项目基于 GNU AGPL-3.0 协议开源",
+                text = stringResource(R.string.vm_about_license),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -170,7 +169,7 @@ fun AboutScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "云析 v$versionName · Made with ❤ and deepseek",
+                text = stringResource(R.string.vm_about_version_footer, versionName),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier
@@ -207,7 +206,7 @@ private fun AppHeader(versionName: String, versionCode: Int) {
         ) {
             Image(
                 painter = painterResource(R.drawable.icon),
-                contentDescription = "云析图标",
+                contentDescription = stringResource(R.string.vm_about_icon),
                 modifier = Modifier
                     .size(88.dp)
                     .clip(RoundedCornerShape(24.dp)),
@@ -216,19 +215,19 @@ private fun AppHeader(versionName: String, versionCode: Int) {
         }
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "云析",
+            text = stringResource(R.string.vm_about_app_name),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "YunX · v$versionName ($versionCode)",
+            text = stringResource(R.string.vm_about_version_name, versionName, versionCode),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "网盘 / 视频链接解析与高速下载",
+            text = stringResource(R.string.vm_about_tagline),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -278,15 +277,15 @@ private fun PlatformCard() {
             CardIcon(Icons.Outlined.Storage)
             Spacer(modifier = Modifier.width(14.dp))
             Text(
-                text = "支持平台",
+                text = stringResource(R.string.vm_about_supported_platforms),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
-        PlatformChipGroup(label = "网盘", chips = drives)
+        PlatformChipGroup(label = stringResource(R.string.vm_about_drives), chips = drives)
         Spacer(modifier = Modifier.height(12.dp))
-        PlatformChipGroup(label = "视频解析", chips = videos)
+        PlatformChipGroup(label = stringResource(R.string.vm_about_video_parsing), chips = videos)
     }
 }
 
@@ -336,20 +335,20 @@ private fun PlatformChipGroup(label: String, chips: List<PlatformChip>) {
 @Composable
 private fun FeatureCard() {
     val features = listOf(
-        "网盘分享解析" to "夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 / 光鸭 / 蓝奏云 / 蓝奏云优享版 直链识别",
-        "视频链接解析" to "抖音 / 小红书 / 快手 / 微博 / AcFun 免登录；哔哩哔哩登录后画质更高，Pixiv 未登录只能解析部分公开作品、粘贴浏览器 Cookie 后可解析全部作品",
-        "在线预览与播放" to "图片 / 视频 / 音频在线看（自动带请求头），网盘里的文本文件也能打开",
-        "音视频合轨" to "哔哩哔哩高清是音视频分轨的，应用内部合轨，不需要额外装 ffmpeg",
-        "高速分片下载" to "多线程并发 + 断点续传，充分利用带宽",
-        "取链即删" to "转存后立即清理，不留残留",
-        "凭证本地化" to "Cookie 加密落库，仅存本机"
+        stringResource(R.string.vm_about_feature_netdisk_title) to stringResource(R.string.vm_about_feature_netdisk_desc),
+        stringResource(R.string.vm_about_feature_video_title) to stringResource(R.string.vm_about_feature_video_desc),
+        stringResource(R.string.vm_about_feature_preview_title) to stringResource(R.string.vm_about_feature_preview_desc),
+        stringResource(R.string.vm_about_feature_mux_title) to stringResource(R.string.vm_about_feature_mux_desc),
+        stringResource(R.string.vm_about_feature_download_title) to stringResource(R.string.vm_about_feature_download_desc),
+        stringResource(R.string.vm_about_feature_cleanup_title) to stringResource(R.string.vm_about_feature_cleanup_desc),
+        stringResource(R.string.vm_about_feature_credentials_title) to stringResource(R.string.vm_about_feature_credentials_desc)
     )
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardIcon(Icons.Outlined.CheckCircle)
             Spacer(modifier = Modifier.width(14.dp))
             Text(
-                text = "功能特性",
+                text = stringResource(R.string.vm_about_features),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
@@ -394,7 +393,7 @@ private fun TechCard() {
             CardIcon(Icons.Outlined.Code)
             Spacer(modifier = Modifier.width(14.dp))
             Text(
-                text = "技术栈",
+                text = stringResource(R.string.vm_about_tech_stack),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
@@ -430,15 +429,13 @@ private fun DisclaimerCard() {
             Spacer(modifier = Modifier.width(14.dp))
             Column {
                 Text(
-                    text = "免责声明",
+                    text = stringResource(R.string.vm_about_disclaimer_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "本应用仅供个人学习与技术交流使用，请勿用于任何商业用途。" +
-                        "下载内容版权归原作者所有，请于下载后 24 小时内删除。" +
-                        "使用本应用产生的任何后果由使用者自行承担。",
+                    text = stringResource(R.string.vm_about_disclaimer_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 22.sp
@@ -482,12 +479,12 @@ private fun PreviewOnboardingCard(onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "重新预览欢迎界面",
+                    text = stringResource(R.string.vm_about_preview_onboarding_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = "重新展示首次启动引导页",
+                    text = stringResource(R.string.vm_about_preview_onboarding_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -571,7 +568,7 @@ private fun GitHubCard(context: android.content.Context) {
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "开源仓库",
+                    text = stringResource(R.string.vm_about_open_source_repo),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )

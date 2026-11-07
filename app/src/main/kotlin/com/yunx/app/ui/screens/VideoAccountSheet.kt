@@ -18,6 +18,9 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -133,9 +136,9 @@ internal fun VideoAccountSheet(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (accounts.size > 1) {
-                                "已登录 · 共 ${accounts.size} 个账号"
+                                stringResource(R.string.sh_logged_in_accounts, accounts.size)
                             } else {
-                                "已登录"
+                                stringResource(R.string.sh_logged_in)
                             },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -147,7 +150,7 @@ internal fun VideoAccountSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "账号（${accounts.size}）",
+                text = stringResource(R.string.sh_accounts_count, accounts.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -186,7 +189,7 @@ internal fun VideoAccountSheet(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "添加账号",
+                            text = stringResource(R.string.sh_add_account),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -201,7 +204,7 @@ internal fun VideoAccountSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "退出全部账号",
+                            text = stringResource(R.string.sh_logout_all_accounts),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -226,9 +229,9 @@ internal fun VideoAccountSheet(
     if (showRemoveAll) {
         AlertDialog(
             onDismissRequest = { showRemoveAll = false },
-            title = { Text("退出全部账号") },
+            title = { Text(stringResource(R.string.sh_logout_all_accounts)) },
             text = {
-                Text("确定要退出「${platform.displayName}」的全部 ${accounts.size} 个账号吗？只清除本机保存的登录凭证。")
+                Text(stringResource(R.string.sh_logout_all_confirm, platform.displayName, accounts.size))
             },
             confirmButton = {
                 TextButton(
@@ -237,10 +240,10 @@ internal fun VideoAccountSheet(
                         onRemoveAll()
                     }
                 ) {
-                    Text("全部退出", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.sh_logout_all), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { showRemoveAll = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { showRemoveAll = false }) { Text(stringResource(R.string.sh_cancel)) } }
         )
     }
 }
@@ -285,7 +288,7 @@ private fun VideoAccountRow(
             Text(text = displayName, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = if (account.isPrimary) "主账号" else "点一下设为主账号",
+                text = if (account.isPrimary) stringResource(R.string.sh_primary_account) else stringResource(R.string.sh_tap_to_set_primary),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (account.isPrimary) {
                     MaterialTheme.colorScheme.primary
@@ -298,20 +301,20 @@ private fun VideoAccountRow(
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(
                     imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "账号操作",
+                    contentDescription = stringResource(R.string.sh_account_actions),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
-                    text = { Text("重命名备注") },
+                    text = { Text(stringResource(R.string.sh_rename_remark)) },
                     onClick = {
                         menuExpanded = false
                         showRename = true
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("退出该账号") },
+                    text = { Text(stringResource(R.string.sh_logout_account)) },
                     onClick = {
                         menuExpanded = false
                         showRemove = true
@@ -325,20 +328,20 @@ private fun VideoAccountRow(
         var input by remember(account.id) { mutableStateOf(account.remark) }
         AlertDialog(
             onDismissRequest = { showRename = false },
-            title = { Text("重命名备注") },
+            title = { Text(stringResource(R.string.sh_rename_remark)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it },
                         singleLine = true,
-                        label = { Text("备注") },
-                        placeholder = { Text(account.nickname.ifBlank { "留空则显示昵称" }) },
+                        label = { Text(stringResource(R.string.sh_remark)) },
+                        placeholder = { Text(account.nickname.ifBlank { stringResource(R.string.sh_remark_placeholder) }) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "同一平台登录多个账号时，备注能帮你区分（清空备注则显示昵称）。",
+                        text = stringResource(R.string.sh_video_remark_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -350,18 +353,18 @@ private fun VideoAccountRow(
                         showRename = false
                         onRename(account.id, input)
                     }
-                ) { Text("保存") }
+                ) { Text(stringResource(R.string.sh_save)) }
             },
-            dismissButton = { TextButton(onClick = { showRename = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { showRename = false }) { Text(stringResource(R.string.sh_cancel)) } }
         )
     }
 
     if (showRemove) {
         AlertDialog(
             onDismissRequest = { showRemove = false },
-            title = { Text("退出该账号") },
+            title = { Text(stringResource(R.string.sh_logout_account)) },
             text = {
-                Text("确定要退出「$displayName」吗？只清除这一个账号在本机的登录凭证，其他账号不受影响。")
+                Text(stringResource(R.string.sh_logout_confirm, displayName))
             },
             confirmButton = {
                 TextButton(
@@ -370,10 +373,10 @@ private fun VideoAccountRow(
                         onRemove(account.id)
                     }
                 ) {
-                    Text("退出", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.sh_logout), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { showRemove = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { showRemove = false }) { Text(stringResource(R.string.sh_cancel)) } }
         )
     }
 }

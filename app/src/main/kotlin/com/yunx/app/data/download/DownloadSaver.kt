@@ -29,6 +29,8 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.RequiresApi
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
@@ -127,7 +129,7 @@ object DownloadSaver {
     fun save(context: Context, fileName: String, source: File, targetDirUri: String? = null): String? {
         val dest = openDestination(context, fileName, targetDirUri) ?: return null
         return try {
-            val out = dest.open() ?: throw IllegalStateException("无法打开下载目标")
+            val out = dest.open() ?: throw IllegalStateException(AppStrings.get(R.string.ed_open_target_failed))
             out.use { o -> source.inputStream().use { it.copyTo(o, COPY_BUFFER_SIZE) } }
             dest.commit()
             dest.path
@@ -219,8 +221,8 @@ object DownloadSaver {
         return runCatching {
             val treeId = DocumentsContract.getTreeDocumentId(Uri.parse(uriString))
             treeId.substringAfterLast(':').replace("%2F", "/").replace("%2f", "/")
-                .ifBlank { "自定义目录" }
-        }.getOrDefault("自定义目录")
+                .ifBlank { AppStrings.get(R.string.ed_custom_dir) }
+        }.getOrDefault(AppStrings.get(R.string.ed_custom_dir))
     }
 
     /**
@@ -275,7 +277,7 @@ object DownloadSaver {
         val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).canonicalFile
         val destDir = (if (subDir.isBlank()) dir else File(dir, subDir)).canonicalFile
         if (destDir != dir && !DownloadPathPolicy.isContained(dir, destDir)) {
-            throw SecurityException("下载目录越界")
+            throw SecurityException(AppStrings.get(R.string.ed_path_out_of_bounds))
         }
         if (!destDir.exists()) destDir.mkdirs()
         for (candidate in nameCandidates(fileName)) {

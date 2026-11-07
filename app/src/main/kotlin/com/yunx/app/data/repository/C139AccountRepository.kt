@@ -18,11 +18,13 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.C139AccountDao
 import com.yunx.app.data.db.C139AccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.C139Constants
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -48,7 +50,7 @@ class C139AccountRepository(
      */
     suspend fun saveC139Account(cookie: String, newAccount: Boolean = false): Boolean {
         if (!C139Constants.isValidCookie(cookie)) return false
-        val nickname = C139Constants.extractAccount(cookie) ?: "139用户"
+        val nickname = C139Constants.extractAccount(cookie) ?: AppStrings.get(R.string.er_c139_default_nickname)
         val authorization = C139Constants.extractAuthorization(cookie).orEmpty()
         val slot = resolveAccountSlot(DownloadPlatform.C139, dao.getAccount(), newAccount)
         dao.upsert(

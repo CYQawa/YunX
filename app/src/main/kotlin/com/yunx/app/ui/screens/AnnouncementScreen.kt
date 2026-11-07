@@ -67,11 +67,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yunx.app.R
 import com.yunx.app.data.announcement.AnnouncementApi
 import com.yunx.app.data.announcement.relativeTime
 import com.yunx.app.ui.components.RemoteImage
@@ -350,7 +352,11 @@ private fun AnnouncementImageViewerPage(
     ) {
         RemoteImage(
             url = url,
-            contentDescription = if (isCover) "封面图片" else "公告图片",
+            contentDescription = if (isCover) {
+                stringResource(R.string.vm_announcement_cover_image)
+            } else {
+                stringResource(R.string.vm_announcement_image)
+            },
             contentScale = ContentScale.Fit,
             // 深色底上不能要浅色占位：透明占位让 Fit 留下的空白直接是黑底
             placeholderColor = Color.Transparent,
@@ -376,13 +382,13 @@ private fun AnnouncementImageViewerPage(
         ) {
             Icon(
                 imageVector = Icons.Outlined.Close,
-                contentDescription = "关闭",
+                contentDescription = stringResource(R.string.vm_announcement_close),
                 tint = Color.White
             )
         }
         // 底部一行小字：是不是封面 + 第几张（只有一张时不显示序号）
         val caption = buildString {
-            if (isCover) append("封面")
+            if (isCover) append(stringResource(R.string.vm_announcement_cover))
             if (isCover && total > 1) append(" · ")
             if (total > 1) append("${index + 1} / $total")
         }
@@ -470,7 +476,11 @@ fun AnnouncementPopupDialog(
         onDismissRequest = onDismiss,
         icon = {
             AnnouncementChip(
-                text = if (announcement.isPinned) "置顶公告" else "最新公告",
+                text = if (announcement.isPinned) {
+                    stringResource(R.string.vm_announcement_pinned)
+                } else {
+                    stringResource(R.string.vm_announcement_latest)
+                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -521,10 +531,10 @@ fun AnnouncementPopupDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDetail) { Text("查看详情") }
+            TextButton(onClick = onDetail) { Text(stringResource(R.string.vm_announcement_view_detail)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("知道了") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.vm_got_it)) }
         }
     )
 }

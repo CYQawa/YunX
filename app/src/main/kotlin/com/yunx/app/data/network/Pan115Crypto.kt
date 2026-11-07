@@ -19,6 +19,8 @@
 package com.yunx.app.data.network
 
 import android.util.Base64
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import java.math.BigInteger
 import java.security.SecureRandom
 
@@ -90,7 +92,7 @@ internal object Pan115Crypto {
 
     /** 明文 payload → 请求体 `data` 参数值（base64） */
     fun encode(payload: String, key: ByteArray): String {
-        require(key.size == 16) { "115 下载协议要求 16 字节 key" }
+        require(key.size == 16) { AppStrings.get(R.string.e1_115_download_protocol_key_16) }
         val body = payload.toByteArray(Charsets.UTF_8).copyOf() // 由 symmetricEncode 就地改写
         symmetricEncode(body, key)
         val plain = ByteArray(16 + body.size)
@@ -101,9 +103,9 @@ internal object Pan115Crypto {
 
     /** 响应 `data` 字段（base64）→ 明文 JSON */
     fun decode(data: String, key: ByteArray): String {
-        require(key.size == 16) { "115 下载协议要求 16 字节 key" }
+        require(key.size == 16) { AppStrings.get(R.string.e1_115_download_protocol_key_16) }
         val decrypted = rsaDecrypt(Base64.decode(data, Base64.DEFAULT))
-        check(decrypted.size > 16) { "115 下载响应长度异常" }
+        check(decrypted.size > 16) { AppStrings.get(R.string.e1_115_download_response_length) }
         val salt = decrypted.copyOfRange(0, 16)
         val body = decrypted.copyOfRange(16, decrypted.size)
         symmetricDecode(body, key, salt)
@@ -180,7 +182,7 @@ internal object Pan115Crypto {
                     break
                 }
             }
-            check(start in 1 until plain.size) { "115 下载响应缺少 RSA 分隔符" }
+            check(start in 1 until plain.size) { AppStrings.get(R.string.e1_115_download_missing_rsa_sep) }
             out.write(plain, start, plain.size - start)
             offset += size
         }

@@ -18,8 +18,10 @@
 
 package com.yunx.app.data.db
 
+import androidx.annotation.StringRes
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.yunx.app.R
 
 /**
  * 网盘链接收藏（Room 持久化，支持多种分类）。
@@ -51,5 +53,24 @@ data class BookmarkEntity(
         val PRESET_CATEGORIES = listOf(
             DEFAULT_CATEGORY, "视频", "文档", "软件", "音乐", "图片", "压缩包", "其他"
         )
+
+        /**
+         * 预置分类的展示文案资源。
+         *
+         * 存库与筛选口径仍是 [PRESET_CATEGORIES] 里的规范值（不随语言变化），
+         * 仅在界面展示时映射成当前语言；自定义分类返回 null，调用方直接展示原文。
+         */
+        @StringRes
+        fun presetLabelRes(category: String): Int? = when (category) {
+            "未分类" -> R.string.rs_category_uncategorized
+            "视频" -> R.string.rs_category_video
+            "文档" -> R.string.rs_category_document
+            "软件" -> R.string.rs_category_software
+            "音乐" -> R.string.rs_category_music
+            "图片" -> R.string.rs_category_image
+            "压缩包" -> R.string.rs_category_archive
+            "其他" -> R.string.rs_category_other
+            else -> null
+        }
     }
 }

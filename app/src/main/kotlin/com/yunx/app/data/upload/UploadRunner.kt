@@ -23,6 +23,8 @@ import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -115,7 +117,7 @@ class UploadRunner(
                 }
                 if (sources.isEmpty()) {
                     failed = 1
-                    error = "无法读取所选文件的大小，请换一个文件后再试"
+                    error = AppStrings.get(R.string.em_upload_size_unreadable)
                     return@launch
                 }
                 loop@ for ((index, source) in sources.withIndex()) {
@@ -138,7 +140,11 @@ class UploadRunner(
                             cancelled = true
                         } else {
                             failed = 1
-                            error = "「${source.name}」上传失败：${e.message ?: "网络异常，请重试"}"
+                            error = AppStrings.get(
+                                R.string.em_upload_file_failed,
+                                source.name,
+                                e.message ?: AppStrings.get(R.string.em_upload_network_error)
+                            )
                         }
                         break@loop
                     } finally {
@@ -149,7 +155,7 @@ class UploadRunner(
                 cancelled = true
             } catch (e: Exception) {
                 cancelled = true
-                error = e.message ?: "上传已中断，请重试"
+                error = e.message ?: AppStrings.get(R.string.em_upload_interrupted)
             } finally {
                 active = null
                 progress = null

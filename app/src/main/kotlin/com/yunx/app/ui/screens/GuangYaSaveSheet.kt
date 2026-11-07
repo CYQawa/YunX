@@ -49,8 +49,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
@@ -92,7 +94,7 @@ internal fun GuangYaSaveContent(
     val snackbarHostState = rememberGlobalSnackbarHostState()
 
     SaveStepScaffold(
-        title = "转存到光鸭云盘",
+        title = stringResource(R.string.csa_save_to_guangya),
         subtitle = resolveViewModel.saveTarget?.fname ?: "",
         onBack = onBack
     ) {
@@ -104,7 +106,7 @@ internal fun GuangYaSaveContent(
             Spacer(modifier = Modifier.height(16.dp))
 
             CrumbBar(
-                rootTitle = "根目录",
+                rootTitle = stringResource(R.string.csa_root_dir),
                 pathNames = (cloudState as? GuangYaCloudUiState.Loaded)?.pathNames ?: emptyList(),
                 onNavigate = { cloudViewModel.navigateToLevel(it) }
             )
@@ -139,7 +141,7 @@ internal fun GuangYaSaveContent(
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            TextButton(onClick = { cloudViewModel.loadRoot() }) { Text("重试") }
+                            TextButton(onClick = { cloudViewModel.loadRoot() }) { Text(stringResource(R.string.csa_retry)) }
                         }
                     }
 
@@ -151,7 +153,7 @@ internal fun GuangYaSaveContent(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "当前目录没有子文件夹，可直接转存到此目录",
+                                    text = stringResource(R.string.csa_no_subfolders_save_here),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -177,7 +179,7 @@ internal fun GuangYaSaveContent(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            val currentDirName = (cloudState as? GuangYaCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+            val currentDirName = (cloudState as? GuangYaCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: stringResource(R.string.csa_root_dir)
             Button(
                 onClick = {
                     val dirId = (cloudState as? GuangYaCloudUiState.Loaded)?.dirId ?: ""
@@ -195,7 +197,7 @@ internal fun GuangYaSaveContent(
                 } else {
                     Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("转存到此目录（$currentDirName）")
+                    Text(stringResource(R.string.csa_save_here, currentDirName))
                 }
             }
 

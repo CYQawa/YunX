@@ -18,6 +18,10 @@
 
 package com.yunx.app.data.network.video
 
+import androidx.annotation.StringRes
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 /**
  * 视频解析支持的平台。
  *
@@ -38,14 +42,14 @@ package com.yunx.app.data.network.video
  *   （见 [manualCookieOnly]）；未登录仍能解析一部分公开作品。
  */
 enum class VideoPlatform(
-    /** 展示名 */
-    val displayName: String,
+    /** 展示名资源 */
+    @StringRes val displayNameRes: Int,
     /** 登录页地址；为空 = 无需登录 */
     val loginUrl: String = "",
     /** 读取 WebView 登录态用的 Cookie 域（如 `bilibili.com`） */
     val cookieDomain: String = "",
-    /** 账号页展示的「登录后能得到什么」 */
-    val loginBenefit: String = "",
+    /** 账号页展示的「登录后能得到什么」资源；0 = 不展示 */
+    @StringRes private val loginBenefitRes: Int = 0,
     /**
      * 该平台**只需要账号、但没有网页登录页**：账号页照常显示「登录」入口，但打开的是
      * **手动填写 Cookie** 页，不加载任何网页。
@@ -78,9 +82,9 @@ enum class VideoPlatform(
      */
     val loginViewportWidth: Int? = null
 ) {
-    DOUYIN("抖音"),
+    DOUYIN(R.string.vm_video_platform_douyin),
     XHS(
-        displayName = "小红书",
+        displayNameRes = R.string.vm_video_platform_xhs,
         // ★ 实测（2026-10）：小红书网页端的笔记页对**未登录会话**一律拦截 —— explore 路径 302 到
         //   /login，discovery 路径 302 到 /website-login/captcha（风控验证码），两种情况页面里都没有
         //   window.__INITIAL_STATE__。所以它必须算「需要登录」：拿到 web_session 后才能解析。
@@ -90,27 +94,35 @@ enum class VideoPlatform(
         //   H5 首页只有「打开 App」没有登录入口）。这里必须用桌面 UA，见 VideoLoginScreen。
         loginUrl = "https://www.xiaohongshu.com/login",
         cookieDomain = "xiaohongshu.com",
-        loginBenefit = "小红书网页端要求登录后才能查看笔记，未登录解析会失败",
+        loginBenefitRes = R.string.vm_video_benefit_xhs,
         // 窄屏下它的登录表单会被裁掉确认按钮（见 loginViewportWidth 注释），强制按桌面宽度渲染
         loginViewportWidth = 1280
     ),
-    KUAISHOU("快手"),
-    WEIBO("微博"),
-    ACFUN("AcFun"),
+    KUAISHOU(R.string.vm_video_platform_kuaishou),
+    WEIBO(R.string.vm_video_platform_weibo),
+    ACFUN(R.string.vm_video_platform_acfun),
     BILIBILI(
-        displayName = "哔哩哔哩",
+        displayNameRes = R.string.vm_video_platform_bilibili,
         loginUrl = "https://passport.bilibili.com/login",
         cookieDomain = "bilibili.com",
-        loginBenefit = "登录后可解析更高清晰度；未登录只能拿到很低清的单文件"
+        loginBenefitRes = R.string.vm_video_benefit_bilibili
     ),
     PIXIV(
-        displayName = "Pixiv",
+        displayNameRes = R.string.vm_video_platform_pixiv,
         cookieDomain = "pixiv.net",
-        loginBenefit = "未登录只能拿到一部分公开作品；粘贴浏览器里的 Cookie 后可解析全部作品（含 R18 与受限作品）",
+        loginBenefitRes = R.string.vm_video_benefit_pixiv,
         // ★ 不给网页登录页（见 manualCookieOnly 的说明）：它的风控不允许在 App 内置网页里登录，
         //   登录入口改成「手动填写 Cookie」页。解析仍然照常：匿名能拿到一部分公开作品。
         manualCookieOnly = true
     );
+
+    /** 展示名 */
+    val displayName: String
+        get() = AppStrings.get(displayNameRes)
+
+    /** 账号页展示的「登录后能得到什么」 */
+    val loginBenefit: String
+        get() = if (loginBenefitRes == 0) "" else AppStrings.get(loginBenefitRes)
 
     /** 是否需要登录态：有网页登录页，或没有网页登录页但支持手动填 Cookie */
     val needsLogin: Boolean get() = loginUrl.isNotBlank() || manualCookieOnly

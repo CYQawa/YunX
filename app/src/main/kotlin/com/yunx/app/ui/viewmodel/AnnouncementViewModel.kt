@@ -22,9 +22,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.announcement.AnnouncementApi
 import com.yunx.app.data.announcement.AnnouncementReadStore
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -153,7 +155,9 @@ class AnnouncementViewModel(private val readStore: AnnouncementReadStore) : View
         viewModelScope.launch {
             when (val result = AnnouncementApi.fetchDetail(id)) {
                 is AnnouncementApi.Result.Failure ->
-                    SnackbarController.show("公告刷新失败：${result.message}")
+                    SnackbarController.show(
+                        AppStrings.get(R.string.vm_announcement_refresh_failed, result.message)
+                    )
                 is AnnouncementApi.Result.Success -> {
                     val item = result.data
                     detailCache[id] = item
@@ -172,7 +176,9 @@ class AnnouncementViewModel(private val readStore: AnnouncementReadStore) : View
             when (val result = AnnouncementApi.fetchPage(page = 1, pageSize = AnnouncementApi.PAGE_SIZE)) {
                 is AnnouncementApi.Result.Failure -> {
                     _list.update { it.copy(loading = false, refreshing = false, error = result.message) }
-                    SnackbarController.show("公告加载失败：${result.message}")
+                    SnackbarController.show(
+                        AppStrings.get(R.string.vm_announcement_load_failed_detail, result.message)
+                    )
                 }
                 is AnnouncementApi.Result.Success -> {
                     val page = result.data
@@ -201,7 +207,9 @@ class AnnouncementViewModel(private val readStore: AnnouncementReadStore) : View
             when (val result = AnnouncementApi.fetchPage(page = next, pageSize = AnnouncementApi.PAGE_SIZE)) {
                 is AnnouncementApi.Result.Failure -> {
                     _list.update { it.copy(loadingMore = false, error = result.message) }
-                    SnackbarController.show("加载更多失败：${result.message}")
+                    SnackbarController.show(
+                        AppStrings.get(R.string.vm_announcement_load_more_failed, result.message)
+                    )
                 }
                 is AnnouncementApi.Result.Success -> {
                     val page = result.data
@@ -278,7 +286,13 @@ class AnnouncementViewModel(private val readStore: AnnouncementReadStore) : View
     /** 「全部标为已读」：针对已加载到的公告（启动时一次取满 100 条，实际等于全部） */
     fun markAllRead() {
         val count = readStore.markAllRead(_list.value.items.map { it.id })
-        SnackbarController.show(if (count > 0) "已将 $count 条公告标为已读" else "没有未读公告")
+        SnackbarController.show(
+            if (count > 0) {
+                AppStrings.get(R.string.vm_announcement_marked_read_count, count)
+            } else {
+                AppStrings.get(R.string.vm_announcement_no_unread)
+            }
+        )
     }
 
     /**

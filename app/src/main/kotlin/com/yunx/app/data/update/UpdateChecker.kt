@@ -20,7 +20,9 @@ package com.yunx.app.data.update
 
 import android.content.Context
 import android.util.Log
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -208,7 +210,10 @@ object UpdateChecker {
                 Log.e(TAG, "获取最新 Release 异常（$repo）：${e.javaClass.simpleName}: ${e.message}", e)
             }
             .getOrElse { e ->
-                CheckResult.Failure("${e.javaClass.simpleName}: ${e.message ?: "未知错误"}")
+                CheckResult.Failure(
+                    "${e.javaClass.simpleName}: " +
+                        (e.message ?: AppStrings.get(R.string.em_update_unknown_error))
+                )
             }
     }
 
@@ -221,7 +226,7 @@ object UpdateChecker {
                     JSONObject(body.text)
                 } catch (e: Exception) {
                     Log.e(TAG, "获取最新 Release 失败：响应不是合法 JSON（前 200 字=${body.text.take(200)}）", e)
-                    return CheckResult.Failure("响应格式异常")
+                    return CheckResult.Failure(AppStrings.get(R.string.em_update_bad_format))
                 }
                 parseRelease(json)
             }
@@ -237,14 +242,14 @@ object UpdateChecker {
                     JSONArray(body.text)
                 } catch (e: Exception) {
                     Log.e(TAG, "获取最新 Release 失败：响应不是合法 JSON 数组（前 200 字=${body.text.take(200)}）", e)
-                    return CheckResult.Failure("响应格式异常")
+                    return CheckResult.Failure(AppStrings.get(R.string.em_update_bad_format))
                 }
                 val json = (0 until array.length())
                     .mapNotNull { array.optJSONObject(it) }
                     .firstOrNull { !it.optBoolean("draft") && it.optString("tag_name").isNotBlank() }
                 if (json == null) {
                     Log.e(TAG, "获取最新 Release 失败：列表里没有可用版本（全为 Draft 或缺 tag_name）")
-                    return CheckResult.Failure("仓库暂无 Release")
+                    return CheckResult.Failure(AppStrings.get(R.string.em_update_no_release))
                 }
                 parseRelease(json)
             }
@@ -263,8 +268,9 @@ object UpdateChecker {
         return client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) {
                 val reason = when (resp.code) {
-                    404 -> "仓库暂无 Release"
-                    403, 429 -> "GitHub 接口限流（HTTP ${resp.code}），请稍后再试"
+                    404 -> AppStrings.get(R.string.em_update_no_release)
+                    403, 429 ->
+                        AppStrings.get(R.string.em_update_rate_limited, resp.code)
                     else -> "HTTP ${resp.code} ${resp.message}"
                 }
                 Log.e(TAG, "获取最新 Release 失败：$reason（$url）")
@@ -273,7 +279,7 @@ object UpdateChecker {
                 val text = resp.body?.string()
                 if (text.isNullOrBlank()) {
                     Log.e(TAG, "获取最新 Release 失败：响应体为空")
-                    BodyResult.Error("响应为空")
+                    BodyResult.Error(AppStrings.get(R.string.em_update_empty_response))
                 } else {
                     BodyResult.Ok(text)
                 }
@@ -286,7 +292,7 @@ object UpdateChecker {
         val tag = json.optString("tag_name")
         if (tag.isBlank()) {
             Log.e(TAG, "获取最新 Release 失败：Release 数据缺少版本号")
-            return CheckResult.Failure("Release 数据缺少版本号")
+            return CheckResult.Failure(AppStrings.get(R.string.em_update_missing_tag))
         }
         val assets = buildList {
             json.optJSONArray("assets")?.let { arr ->

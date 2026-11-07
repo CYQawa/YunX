@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
@@ -26,6 +27,7 @@ import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -106,7 +108,7 @@ class Pan115Api(
     suspend fun fetchNickname(cookie: String): String? = withContext(Dispatchers.IO) {
         runCatching {
             val json = getJson(Pan115Constants.USER_INFO_URL, cookie, Pan115Constants.REFERER)
-            checkState(json, "获取用户信息失败")
+            checkState(json, AppStrings.get(R.string.e1_get_user_info_failed))
             json.optString("data").takeIf { it.isNotBlank() }
         }.getOrNull()
     }
@@ -115,7 +117,7 @@ class Pan115Api(
     suspend fun getQuota(cookie: String): QuotaInfo? = withContext(Dispatchers.IO) {
         runCatching {
             val json = getJson(Pan115Constants.INDEX_INFO_URL, cookie, Pan115Constants.REFERER)
-            checkState(json, "获取空间信息失败")
+            checkState(json, AppStrings.get(R.string.e1_get_space_info_failed))
             val space = json.optJSONObject("data")?.optJSONObject("space_info") ?: return@runCatching null
             val total = space.optJSONObject("all_total")?.optLong("size") ?: 0L
             val used = space.optJSONObject("all_use")?.optLong("size") ?: 0L
@@ -144,7 +146,7 @@ class Pan115Api(
             append("&format=json")
         }
         val json = getJson(url, cookie, Pan115Constants.REFERER)
-        checkState(json, "获取文件列表失败")
+        checkState(json, AppStrings.get(R.string.e1_get_file_list_failed))
         Pan115FilePage(
             files = parsePersonalFiles(json),
             total = json.optInt("count", 0)
@@ -162,7 +164,7 @@ class Pan115Api(
     suspend fun getDownloadLink(file: ShareFile, cookie: String): DownloadLink? =
         withContext(Dispatchers.IO) {
             val pickCode = file.fidToken
-            if (pickCode.isBlank()) throw IllegalStateException("缺少 pickcode，无法获取下载链接")
+            if (pickCode.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_115_missing_pickcode))
             refreshClientVersion()
             runCatching { getAppDownloadLink(pickCode, cookie) }
                 .getOrNull()
@@ -196,7 +198,7 @@ class Pan115Api(
                     Pan115Constants.CLIENT_UA
                 ).get().build()
             )
-            checkState(json, "获取下载链接失败")
+            checkState(json, AppStrings.get(R.string.e1_get_download_link_failed))
             val data = json.optJSONObject("data") ?: return@withContext null
             val fileUrl = data.optString("file_url").takeIf { it.isNotBlank() }
                 ?: return@withContext null
@@ -233,7 +235,7 @@ class Pan115Api(
                 form("data" to Pan115Crypto.encode(payload, key)),
                 Pan115Constants.CLIENT_UA
             )
-            checkState(json, "获取下载链接失败")
+            checkState(json, AppStrings.get(R.string.e1_get_download_link_failed))
             val encrypted = json.optString("data")
             if (encrypted.isBlank()) return@withContext null
             val decoded = JSONObject(Pan115Crypto.decode(encrypted, key))
@@ -264,7 +266,7 @@ class Pan115Api(
                 Pan115Constants.REFERER,
                 form("pid" to pid.ifBlank { Pan115Constants.ROOT_CID }, "cname" to name)
             )
-            checkState(json, "新建文件夹失败")
+            checkState(json, AppStrings.get(R.string.e1_create_folder_failed))
             // 有的接口把结果放 data 内层，两层都读
             json.optString("cid").ifBlank { json.optJSONObject("data")?.optString("cid").orEmpty() }
                 .takeIf { it.isNotBlank() }
@@ -289,7 +291,7 @@ class Pan115Api(
         cookie: String
     ): String? = withContext(Dispatchers.IO) {
         if (file.size > Pan115Constants.UPLOAD_MAX_SIZE) {
-            throw IllegalStateException("115 网页端单文件最大 5 GB，更大的文件请用官方客户端上传")
+            throw IllegalStateException(AppStrings.get(R.string.e1_115_upload_too_large))
         }
         io.progress(UploadPhase.PREPARING)
         val init = postForm(
@@ -304,7 +306,7 @@ class Pan115Api(
             )
         )
         // 成功是裸策略对象；带 state 的是标准错误信封（登录过期/空间不足等）
-        if (init.has("state")) checkState(init, "获取上传地址失败")
+        if (init.has("state")) checkState(init, AppStrings.get(R.string.e1_get_upload_url_failed))
         val host = init.optString("host")
         val objectKey = init.optString("object")
         val policy = init.optString("policy")
@@ -314,12 +316,12 @@ class Pan115Api(
         val uri = runCatching { java.net.URI(host) }.getOrNull()
         val hostName = uri?.host.orEmpty()
         if (!hostName.endsWith(".aliyuncs.com")) {
-            throw IllegalStateException("115 返回的上传服务器无效")
+            throw IllegalStateException(AppStrings.get(R.string.e1_115_invalid_upload_server))
         }
         if (objectKey.isBlank() || policy.isBlank() || accessId.isBlank() ||
             signature.isBlank() || callback.isBlank()
         ) {
-            throw IllegalStateException("115 上传凭据不完整")
+            throw IllegalStateException(AppStrings.get(R.string.e1_115_incomplete_upload_credential))
         }
         val response = io.send(
             url = "https://$hostName${uri?.rawPath.orEmpty()}",
@@ -337,12 +339,12 @@ class Pan115Api(
             retries = 0
         )
         if (!response.isSuccessful) {
-            throw IllegalStateException("文件上传失败（HTTP ${response.code}）")
+            throw IllegalStateException(AppStrings.get(R.string.e1_upload_failed_http, response.code))
         }
         io.progress(UploadPhase.FINISHING, file.size)
         val json = runCatching { response.json() }.getOrNull() ?: return@withContext null
         if (json.has("state") && !json.optBoolean("state")) {
-            throw IllegalStateException(json.optString("error").ifBlank { "115 上传失败" })
+            throw IllegalStateException(json.optString("error").ifBlank { AppStrings.get(R.string.e1_115_upload_failed) })
         }
         json.optJSONObject("data")?.optString("file_id")?.takeIf { it.isNotBlank() }
             ?: json.optString("file_id").takeIf { it.isNotBlank() }
@@ -360,14 +362,14 @@ class Pan115Api(
                 "files_new_name[$id]" to newName
             )
         )
-        checkState(json, "重命名失败")
+        checkState(json, AppStrings.get(R.string.e1_rename_failed))
         Unit
     }
 
     /** 移动：`POST /files/move`（异步，响应含 move_proid 时轮询进度，文档 §3.2） */
     suspend fun move(fids: List<String>, toPid: String, cookie: String) = withContext(Dispatchers.IO) {
         val ids = fids.filter { it.isNotBlank() }
-        if (ids.isEmpty()) throw IllegalStateException("请选择要移动的文件")
+        if (ids.isEmpty()) throw IllegalStateException(AppStrings.get(R.string.e1_115_select_files_to_move))
         val pairs = buildList {
             add("pid" to toPid.ifBlank { Pan115Constants.ROOT_CID })
             ids.forEachIndexed { index, id -> add("fid[$index]" to id) }
@@ -378,7 +380,7 @@ class Pan115Api(
             Pan115Constants.REFERER,
             form(*pairs.toTypedArray())
         )
-        checkState(json, "移动失败")
+        checkState(json, AppStrings.get(R.string.e1_move_failed))
         // 115 的字段层级不稳定（`share/send` 就把信息放在 data 内层，见 createShare 注释），两层都读
         val moveId = json.optString("move_proid")
             .ifBlank { json.optJSONObject("data")?.optString("move_proid").orEmpty() }
@@ -403,7 +405,7 @@ class Pan115Api(
     /** 删除（进回收站）：`POST /rb/delete`；errno=800007 时按文档再确认一次 */
     suspend fun delete(fids: List<String>, pid: String, cookie: String) = withContext(Dispatchers.IO) {
         val ids = fids.filter { it.isNotBlank() }
-        if (ids.isEmpty()) throw IllegalStateException("请选择要删除的文件")
+        if (ids.isEmpty()) throw IllegalStateException(AppStrings.get(R.string.e1_115_select_files_to_delete))
         val pairs = buildList {
             add("pid" to pid.ifBlank { Pan115Constants.ROOT_CID })
             ids.forEachIndexed { index, id -> add("fid[$index]" to id) }
@@ -414,7 +416,7 @@ class Pan115Api(
         if (errnoOf(json) == Pan115Constants.ERRNO_NEED_CONFIRM) {
             json = postForm(Pan115Constants.FILE_DELETE_URL, cookie, Pan115Constants.REFERER, body)
         }
-        checkState(json, "删除失败")
+        checkState(json, AppStrings.get(R.string.e1_delete_failed))
         Unit
     }
 
@@ -442,7 +444,7 @@ class Pan115Api(
             append("&format=json")
         }
         val json = getJson(url, cookie, Pan115Constants.shareReferer(shareCode, receiveCode))
-        checkState(json, "获取分享列表失败")
+        checkState(json, AppStrings.get(R.string.e1_get_share_list_failed))
         val data = json.optJSONObject("data") ?: return@withContext Pan115SharePage(
             files = emptyList(),
             total = 0,
@@ -472,7 +474,7 @@ class Pan115Api(
         file: ShareFile,
         cookie: String
     ): DownloadLink? = withContext(Dispatchers.IO) {
-        if (userId.isBlank()) throw IllegalStateException("缺少分享者标识，请重新解析分享链接")
+        if (userId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_115_missing_sharer_id))
         refreshClientVersion()
         val url = buildString {
             append(Pan115Constants.SHARE_DOWNLOAD_URL)
@@ -492,7 +494,7 @@ class Pan115Api(
                 Pan115Constants.CLIENT_UA
             ).get().build()
         )
-        checkState(json, "获取下载链接失败")
+        checkState(json, AppStrings.get(R.string.e1_get_download_link_failed))
         val data = json.optJSONObject("data") ?: return@withContext null
         // 网页 JS 取的是 file_url_302 || url.url，这里三种形态都兜住
         val fileUrl = data.optString("file_url_302")
@@ -529,7 +531,7 @@ class Pan115Api(
                 "cid" to toCid.ifBlank { Pan115Constants.ROOT_CID }
             )
         )
-        checkState(json, "转存失败")
+        checkState(json, AppStrings.get(R.string.e1_copy_save_failed))
         Unit
     }
 
@@ -546,9 +548,9 @@ class Pan115Api(
     suspend fun createShare(fileIds: List<String>, duration: String, cookie: String): ShareInfo =
         withContext(Dispatchers.IO) {
             val userId = Pan115Constants.extractUserId(cookie)
-                ?: throw IllegalStateException("登录态缺少用户标识，请重新登录115网盘")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e1_115_missing_user_id))
             val ids = fileIds.filter { it.isNotBlank() }
-            if (ids.isEmpty()) throw IllegalStateException("请选择要分享的文件")
+            if (ids.isEmpty()) throw IllegalStateException(AppStrings.get(R.string.e1_115_select_files_to_share))
             allowProtocol(cookie)
             val idText = ids.joinToString(",")
             // 预检（ignore_warn=0）拿统计与提示，失败不阻塞真正创建
@@ -566,13 +568,13 @@ class Pan115Api(
                 Pan115Constants.REFERER,
                 form("user_id" to userId, "file_ids" to idText, "ignore_warn" to "1")
             )
-            checkState(json, "创建分享失败")
+            checkState(json, AppStrings.get(R.string.e1_create_share_failed))
             // 实测（`/storage/emulated/0/抓包/bug/115/2/`）：`share/send` 的分享信息在 data 内层，
             // 顶层只有 state/error/errno。两层都读，服务端挪字段也不会再炸。
             val data = json.optJSONObject("data") ?: JSONObject()
             fun field(name: String): String = data.optString(name).ifBlank { json.optString(name) }
             val shareCode = field("share_code")
-            if (shareCode.isBlank()) throw IllegalStateException("创建分享失败：响应缺少分享编号")
+            if (shareCode.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_115_create_share_no_code))
             // 有效期只能建完再改（创建接口没有该字段）。改失败**不能丢掉已建好的分享**：
             // 回填服务端给的默认档位，并把失败原因放进 ShareInfo.warning 让界面提示（见 Agent.md §3.25 硬规则 4）。
             val update = runCatching {
@@ -597,8 +599,8 @@ class Pan115Api(
                     json2.optString("error").ifBlank { json2.optString("msg") }
                 }?.takeIf { it.isNotBlank() }
                     ?: update.exceptionOrNull()?.message
-                    ?: "未知原因"
-                "分享已创建，但有效期设置未生效（当时按服务端默认档位）：$reason"
+                    ?: AppStrings.get(R.string.e1_115_unknown_reason)
+                AppStrings.get(R.string.e1_115_share_expiry_warning, reason)
             }
             ShareInfo(
                 shareUrl = field("share_url")
@@ -736,9 +738,9 @@ class Pan115Api(
         client.newCall(request).execute().use { response ->
             val downloadCookie = downloadCookie(response.headers("Set-Cookie"))
             val body = response.body?.string()
-                ?: throw IllegalStateException("请求失败：响应为空（${response.code}）")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e1_response_empty_http, response.code))
             if (!response.isSuccessful && body.isBlank()) {
-                throw IllegalStateException("请求失败（HTTP ${response.code}）")
+                throw IllegalStateException(AppStrings.get(R.string.e1_request_failed_http, response.code))
             }
             return JSONObject(body) to downloadCookie
         }
@@ -775,21 +777,23 @@ class Pan115Api(
         val errno = errnoOf(json)
         val raw = json.optString("error").ifBlank { json.optString("msg") }
         val message = when (errno) {
-            Pan115Constants.ERRNO_LOGIN_TIMEOUT -> "登录已过期，请重新登录115网盘"
-            Pan115Constants.ERRNO_NEED_CODE -> "该分享需要访问码，请填写访问码后重试"
-            Pan115Constants.ERRNO_WRONG_CODE -> "访问码错误，请检查后重试"
-            Pan115Constants.ERRNO_SHARE_GONE -> "分享链接不存在或已被删除"
-            Pan115Constants.ERRNO_EMPTY_FOLDER -> "不允许分享空文件夹"
-            Pan115Constants.ERRNO_BUSY -> "上一次操作还没完成，请稍后重试"
+            Pan115Constants.ERRNO_LOGIN_TIMEOUT -> AppStrings.get(R.string.e1_115_login_expired)
+            Pan115Constants.ERRNO_NEED_CODE -> AppStrings.get(R.string.e1_115_need_access_code)
+            Pan115Constants.ERRNO_WRONG_CODE -> AppStrings.get(R.string.e1_115_wrong_access_code)
+            Pan115Constants.ERRNO_SHARE_GONE -> AppStrings.get(R.string.e1_115_share_gone)
+            Pan115Constants.ERRNO_EMPTY_FOLDER -> AppStrings.get(R.string.e1_115_empty_folder_share)
+            Pan115Constants.ERRNO_BUSY -> AppStrings.get(R.string.e1_115_busy)
             // 115 按 UA 判定「网页端/客户端」：浏览器 UA 拿不到大文件直链（抓包见 bug/115/），
             // 正常情况已改用客户端 UA，这里只兜底给出可执行提示
             Pan115Constants.ERRNO_WEB_SIZE_LIMIT ->
-                "115 拒绝向网页端下发该文件的直链（文件过大），请改用115电脑端/手机客户端下载"
+                AppStrings.get(R.string.e1_115_web_size_limit)
             Pan115Constants.ERRNO_CLIENT_TOO_OLD ->
-                "115 判定当前标识版本过低、拒绝下发直链，请改用115电脑端/手机客户端下载"
+                AppStrings.get(R.string.e1_115_client_too_old)
             else -> raw.ifBlank { fallback }
         }
-        val suffix = if (errno != 0 && !message.contains(errno.toString())) "（errno=$errno）" else ""
+        val suffix = if (errno != 0 && !message.contains(errno.toString())) {
+            AppStrings.get(R.string.e1_errno_suffix, errno)
+        } else ""
         throw IllegalStateException(message + suffix)
     }
 

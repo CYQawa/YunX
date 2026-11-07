@@ -50,8 +50,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
@@ -101,7 +103,7 @@ internal fun XunleiSaveContent(
     val snackbarHostState = rememberGlobalSnackbarHostState()
 
     SaveStepScaffold(
-        title = "转存到迅雷网盘",
+        title = stringResource(R.string.csb_save_to_xunlei_title),
         subtitle = resolveViewModel.saveTarget?.fname ?: "",
         onBack = onBack
     ) {
@@ -114,7 +116,7 @@ internal fun XunleiSaveContent(
 
             // 当前目标目录面包屑（可点击回退）
             CrumbBar(
-                rootTitle = "根目录",
+                rootTitle = stringResource(R.string.csb_move_root_dir),
                 pathNames = (cloudState as? XunleiCloudUiState.Loaded)?.pathNames ?: emptyList(),
                 onNavigate = { cloudViewModel.navigateToLevel(it) }
             )
@@ -158,7 +160,7 @@ internal fun XunleiSaveContent(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         TextButton(onClick = { cloudViewModel.loadRoot() }) {
-                            Text("重试")
+                            Text(stringResource(R.string.csb_cloud_retry))
                         }
                     }
                 }
@@ -173,7 +175,7 @@ internal fun XunleiSaveContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "当前目录没有子文件夹，可直接转存到此目录",
+                                text = stringResource(R.string.csb_save_no_subfolder),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -204,7 +206,7 @@ internal fun XunleiSaveContent(
 
             // 转存按钮
             val currentDirName =
-                (cloudState as? XunleiCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+                (cloudState as? XunleiCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: stringResource(R.string.csb_move_root_dir)
             Button(
                 onClick = {
                     val dirFid = (cloudState as? XunleiCloudUiState.Loaded)?.dirFid ?: ""
@@ -228,7 +230,7 @@ internal fun XunleiSaveContent(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("转存到此目录（$currentDirName）")
+                    Text(stringResource(R.string.csb_save_here_with_dir, currentDirName))
                 }
             }
 

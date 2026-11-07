@@ -18,7 +18,9 @@
 
 package com.yunx.app.data.network.video
 
+import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
+import com.yunx.app.util.AppStrings
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -111,7 +113,7 @@ object PixivParser : VideoParser {
         val info = VideoHttp.getJson(
             "https://www.pixiv.net/ajax/illust/${link.id}",
             apiHeaders(cookie),
-            "Pixiv 作品信息"
+            AppStrings.get(R.string.em_what_pixiv_artwork)
         )
         if (info.optBoolean("error")) {
             val message = info.optString("message")
@@ -125,29 +127,32 @@ object PixivParser : VideoParser {
                 else -> VideoParseErrorKind.BLOCKED
             }
             val hint = when {
-                needsLogin -> "Pixiv 登录态已失效，请到「账号」页重新粘贴 Cookie"
+                needsLogin -> AppStrings.get(R.string.em_pixiv_login_expired)
                 kind == VideoParseErrorKind.UNSUPPORTED ->
-                    "该作品需要登录后才能解析（多为 R18 或受限作品），请在「账号」页粘贴浏览器里的 Cookie"
-                else -> "Pixiv 作品信息返回错误：$message"
+                    AppStrings.get(R.string.em_pixiv_login_required)
+                else -> AppStrings.get(R.string.em_pixiv_error_message, message)
             }
             throw VideoParseException(kind, hint)
         }
 
         val body = info.optJSONObject("body")
-            ?: throw VideoParseException(VideoParseErrorKind.UNKNOWN, "Pixiv 作品信息缺少 body")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_pixiv_missing_body)
+            )
 
         // illustType: 0 插画 / 1 漫画 / 2 动图（ugoira）
         if (body.optInt("illustType") == 2) {
             throw VideoParseException(
                 VideoParseErrorKind.UNSUPPORTED,
-                "Pixiv 动图（ugoira）需要合成 GIF，当前版本暂不支持"
+                AppStrings.get(R.string.em_pixiv_ugoira_unsupported)
             )
         }
 
         val pages = VideoHttp.getJson(
             "https://www.pixiv.net/ajax/illust/${link.id}/pages",
             apiHeaders(cookie),
-            "Pixiv 原图列表"
+            AppStrings.get(R.string.em_what_pixiv_pages)
         ).optJSONArray("body")
 
         val title = body.optString("title")
@@ -164,7 +169,7 @@ object PixivParser : VideoParser {
                             kind = VideoMediaKind.IMAGE,
                             fileName = "${fileBase}_${i + 1}.${extensionOf(original)}",
                             headers = mediaHeaders(cookie),
-                            quality = "原图"
+                            quality = AppStrings.get(R.string.em_quality_original)
                         )
                     )
                 }
@@ -179,7 +184,7 @@ object PixivParser : VideoParser {
                             kind = VideoMediaKind.IMAGE,
                             fileName = "$fileBase.${extensionOf(original)}",
                             headers = mediaHeaders(cookie),
-                            quality = "原图"
+                            quality = AppStrings.get(R.string.em_quality_original)
                         )
                     )
                 }
@@ -187,7 +192,10 @@ object PixivParser : VideoParser {
         }
 
         if (medias.isEmpty()) {
-            throw VideoParseException(VideoParseErrorKind.NOT_FOUND, "Pixiv 未返回任何可下载的原图")
+            throw VideoParseException(
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_pixiv_no_images)
+            )
         }
 
         return VideoParseResult(

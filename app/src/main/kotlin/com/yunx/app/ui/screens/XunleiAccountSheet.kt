@@ -18,6 +18,9 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -76,12 +79,12 @@ fun XunleiAccountSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("迅雷网盘 · 已登录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.sh_xunlei_logged_in), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-            Text("登录信息", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.sh_login_info), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -89,9 +92,9 @@ fun XunleiAccountSheet(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    InfoRow(label = "登录时间", value = loginTime)
+                    InfoRow(label = stringResource(R.string.sh_login_time), value = loginTime)
                     Spacer(modifier = Modifier.height(12.dp))
-                    InfoRow(label = "设备号", value = account.deviceId.ifBlank { "-" })
+                    InfoRow(label = stringResource(R.string.sh_device_id), value = account.deviceId.ifBlank { "-" })
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))

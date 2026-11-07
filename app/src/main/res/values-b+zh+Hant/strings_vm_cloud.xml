@@ -1,0 +1,64 @@
+<!--
+    繁體中文（由簡體轉換）。對照 values/strings_vm_cloud.xml。
+    由 i18n 批次 G7 生成（前綴 vc_）。
+-->
+<resources>
+    <!-- 通用操作提示 -->
+    <string name="vc_load_failed">載入失敗</string>
+    <string name="vc_refresh_failed">重新整理失敗</string>
+    <string name="vc_collecting_files">正在收集檔案…</string>
+    <string name="vc_folder_empty">資料夾為空</string>
+    <string name="vc_selected_folder_empty">所選資料夾為空</string>
+    <string name="vc_adding_download_progress">正在加入下載 %1$d/%2$d</string>
+    <string name="vc_download_interrupted">已中斷下載</string>
+    <string name="vc_batch_download_interrupted">已中斷批次下載</string>
+    <string name="vc_download_added">已加入 %1$d 個下載任務</string>
+    <string name="vc_download_added_with_failures">已加入 %1$d 個下載任務（%2$d 個失敗）</string>
+    <string name="vc_download_added_named">已加入下載：%1$s</string>
+    <string name="vc_download_folder_failed">下載資料夾失敗</string>
+    <string name="vc_batch_download_failed">批次下載失敗</string>
+    <string name="vc_download_failed">下載失敗</string>
+    <string name="vc_get_download_link_failed">取得下載連結失敗</string>
+    <string name="vc_preview_failed">預覽失敗</string>
+    <string name="vc_renamed">已重新命名</string>
+    <string name="vc_rename_failed">重新命名失敗</string>
+    <string name="vc_folder_created">已建立資料夾「%1$s」</string>
+    <string name="vc_create_folder_failed">新增資料夾失敗</string>
+    <string name="vc_moved">已移動到目標目錄</string>
+    <string name="vc_move_failed">移動失敗</string>
+    <string name="vc_moved_items">已移動 %1$d 項</string>
+    <string name="vc_deleted_named">已刪除「%1$s」</string>
+    <string name="vc_delete_failed">刪除失敗</string>
+    <string name="vc_deleted_items">已刪除 %1$d 項</string>
+    <string name="vc_share_failed">分享失敗</string>
+    <string name="vc_create_share_failed">建立分享失敗</string>
+    <string name="vc_get_share_link_failed">取得分享連結失敗</string>
+    <string name="vc_share_n_files">分享 %1$d 個檔案</string>
+    <string name="vc_upload_cancelled">已取消上傳</string>
+    <string name="vc_upload_done">已上傳 %1$d 個檔案</string>
+
+    <!-- 未登入提示 -->
+    <string name="vc_login_required_uc">請先登入 UC 網盤</string>
+    <string name="vc_login_required_quark">請先登入夸克網盤</string>
+    <string name="vc_login_required_xunlei">請先登入迅雷網盤</string>
+    <string name="vc_login_required_xunlei_cloud">請先登入迅雷雲盤</string>
+    <string name="vc_login_required_139">請先登入139網盤</string>
+    <string name="vc_login_required_cmcc">請先登入移動雲盤</string>
+    <string name="vc_login_required_baidu">請先登入百度網盤</string>
+    <string name="vc_login_required_pan123">請先登入123雲盤</string>
+    <string name="vc_login_required_pan123_spaced">請先登入 123 雲盤</string>
+    <string name="vc_login_required_guangya">請先登入光鴨雲盤</string>
+    <string name="vc_login_required_lanzou">請先登入藍奏雲</string>
+    <string name="vc_login_required_ilanzou">請先登入藍奏雲優享版</string>
+    <string name="vc_login_required_pan115">請先登入115網盤</string>
+
+    <!-- 平台專屬提示 -->
+    <string name="vc_xunlei_device_id_missing">裝置識別碼缺失，請重新登入迅雷雲盤</string>
+    <string name="vc_task_failed">任務失敗（%1$s）</string>
+    <string name="vc_task_timeout">任務逾時</string>
+    <string name="vc_lanzou_session_expired">藍奏登入狀態已失效，請重新登入</string>
+    <string name="vc_lanzou_move_folder_unsupported">藍奏雲暫不支援移動資料夾</string>
+    <string name="vc_lanzou_share_single_only">藍奏一次只能分享一個檔案或資料夾，已分享第一項</string>
+    <string name="vc_ilanzou_share_unsupported">藍奏雲優享版暫不支援建立分享</string>
+    <string name="vc_ilanzou_session_expired">藍奏優享登入已過期，請重新登入</string>
+</resources>

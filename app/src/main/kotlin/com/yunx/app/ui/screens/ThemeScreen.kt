@@ -110,6 +110,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -129,18 +130,18 @@ import com.yunx.app.ui.theme.readableSeedForeground
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
 
-/** 预置主题色（Material 风格种子色） */
+/** 预置主题色（Material 风格种子色）：名称走字符串资源，随应用内语言切换 */
 private val presetColors = listOf(
-    "蓝色" to 0xFF415F91L,
-    "靛蓝" to 0xFF3F51B5L,
-    "紫色" to 0xFF6750A4L,
-    "玫红" to 0xFFC2185BL,
-    "红色" to 0xFFB3261EL,
-    "橙色" to 0xFFF4631CL,
-    "金黄" to 0xFFF9A825L,
-    "绿色" to 0xFF38761DL,
-    "青色" to 0xFF00897BL,
-    "天蓝" to 0xFF0288D1L,
+    R.string.color_blue to 0xFF415F91L,
+    R.string.color_indigo to 0xFF3F51B5L,
+    R.string.color_purple to 0xFF6750A4L,
+    R.string.color_rose to 0xFFC2185BL,
+    R.string.color_red to 0xFFB3261EL,
+    R.string.color_orange to 0xFFF4631CL,
+    R.string.color_gold to 0xFFF9A825L,
+    R.string.color_green to 0xFF38761DL,
+    R.string.color_cyan to 0xFF00897BL,
+    R.string.color_sky to 0xFF0288D1L,
 )
 
 /**
@@ -207,10 +208,10 @@ fun ThemeScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("主题与外观", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.theme_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -227,7 +228,7 @@ fun ThemeScreen(
                 .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
             // ---------- 外观模式 ----------
-            SectionLabel("外观模式")
+            ThemeSectionLabel(stringResource(R.string.section_appearance_mode))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -236,7 +237,7 @@ fun ThemeScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "选择应用的明暗外观",
+                        text = stringResource(R.string.appearance_mode_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -245,11 +246,15 @@ fun ThemeScreen(
                         modifier = Modifier.fillMaxWidth().selectableGroup(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val modes = listOf("跟随系统", "浅色", "深色")
-                        modes.forEachIndexed { index, label ->
+                        val modes = listOf(
+                            R.string.appearance_follow_system,
+                            R.string.appearance_light,
+                            R.string.appearance_dark
+                        )
+                        modes.forEachIndexed { index, labelRes ->
                             SmoothFilterChip(
                                 selected = ThemeController.darkMode == index,
-                                label = label,
+                                label = stringResource(labelRes),
                                 onClick = { ThemeController.setDarkMode(context, index) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -261,7 +266,7 @@ fun ThemeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ---------- 文件名显示 ----------
-            SectionLabel("文件名显示")
+            ThemeSectionLabel(stringResource(R.string.section_file_name))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -270,7 +275,7 @@ fun ThemeScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "文件名过长时的展示方式",
+                        text = stringResource(R.string.file_name_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -280,11 +285,14 @@ fun ThemeScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 默认「跑马灯滚动」= 改动前的观感；「多行显示」把长文件名折成最多 3 行
-                        val nameModes = listOf("跑马灯滚动", "多行显示")
-                        nameModes.forEachIndexed { index, label ->
+                        val nameModes = listOf(
+                            R.string.file_name_marquee,
+                            R.string.file_name_multiline
+                        )
+                        nameModes.forEachIndexed { index, labelRes ->
                             SmoothFilterChip(
                                 selected = ThemeController.fileNameMultiLine == (index == 1),
-                                label = label,
+                                label = stringResource(labelRes),
                                 onClick = { ThemeController.setFileNameMultiLine(context, index == 1) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -319,7 +327,7 @@ fun ThemeScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "主题色",
+                                text = stringResource(R.string.theme_color_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             AnimatedVisibility(
@@ -328,11 +336,13 @@ fun ThemeScreen(
                                 exit = fadeOut(effectsFast()) + shrinkVertically(spatialFast(), shrinkTowards = Alignment.Top)
                             ) {
                                 Text(
-                                    text = when {
-                                        effectiveColorMode == 0 -> "动态色彩（跟随壁纸）"
-                                        effectiveColorMode == 2 -> "自定义颜色"
-                                        else -> "默认蓝色"
-                                    },
+                                    text = stringResource(
+                                        when {
+                                            effectiveColorMode == 0 -> R.string.theme_color_summary_dynamic
+                                            effectiveColorMode == 2 -> R.string.theme_color_summary_custom
+                                            else -> R.string.theme_color_summary_default
+                                        }
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 2.dp)
@@ -378,9 +388,9 @@ fun ThemeScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("动态色彩", style = MaterialTheme.typography.bodyMedium)
+                                        Text(stringResource(R.string.theme_color_dynamic_switch), style = MaterialTheme.typography.bodyMedium)
                                         Text(
-                                            "从系统壁纸自动取色",
+                                            stringResource(R.string.theme_color_dynamic_hint),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -399,7 +409,7 @@ fun ThemeScreen(
                             AnimatedVisibility(visible = effectiveColorMode != 0) {
                                 Column {
                                     Text(
-                                        text = "主题颜色",
+                                        text = stringResource(R.string.theme_color_palette_label),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -408,13 +418,13 @@ fun ThemeScreen(
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                                         contentPadding = PaddingValues(top = 10.dp, bottom = 8.dp)
                                     ) {
-                                        itemsIndexed(presetColors) { _, (name, color) ->
+                                        itemsIndexed(presetColors) { _, (nameRes, color) ->
                                             // 默认蓝色模式只高亮蓝色；自定义模式高亮匹配种子色的那个
                                             val isSelected = (effectiveColorMode == 1 && color == 0xFF415F91L) ||
                                                 (effectiveColorMode == 2 && ThemeController.seedColor == color)
                                             ColorSelectionItem(
                                                 color = color,
-                                                name = name,
+                                                name = stringResource(nameRes),
                                                 isSelected = isSelected,
                                                 onClick = { ThemeController.setSeedColor(context, color) }
                                             )
@@ -443,7 +453,7 @@ fun ThemeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ---------- 桌面图标（可折叠卡片） ----------
-            SectionLabel("桌面图标")
+            ThemeSectionLabel(stringResource(R.string.section_desktop_icon))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -467,7 +477,7 @@ fun ThemeScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "桌面图标",
+                                text = stringResource(R.string.section_desktop_icon),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             // 与主题色卡片一致的副标题动画：展开时隐藏、收起时显示
@@ -477,7 +487,9 @@ fun ThemeScreen(
                                 exit = fadeOut(effectsFast()) + shrinkVertically(spatialFast(), shrinkTowards = Alignment.Top)
                             ) {
                                 Text(
-                                    text = if (appIconVariant == 1) "新图标" else "经典图标",
+                                    text = stringResource(
+                                        if (appIconVariant == 1) R.string.icon_new else R.string.icon_classic
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 2.dp)
@@ -509,7 +521,7 @@ fun ThemeScreen(
                             ) {
                                 AppIconOption(
                                     iconRes = R.drawable.icon,
-                                    name = "经典图标",
+                                    name = stringResource(R.string.icon_classic),
                                     isSelected = appIconVariant == 0,
                                     onClick = {
                                         appIconVariant = 0
@@ -518,7 +530,7 @@ fun ThemeScreen(
                                 )
                                 AppIconOption(
                                     iconRes = R.drawable.icon2,
-                                    name = "新图标",
+                                    name = stringResource(R.string.icon_new),
                                     isSelected = appIconVariant == 1,
                                     onClick = {
                                         appIconVariant = 1
@@ -528,7 +540,7 @@ fun ThemeScreen(
                             }
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = "Android 12+ 立即生效；部分设备需回到桌面或重启启动器后查看。",
+                                text = stringResource(R.string.icon_apply_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -623,10 +635,11 @@ private fun CustomColorButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val customLabel = stringResource(R.string.color_custom)
     Column(
         modifier = modifier
             .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
-            .semantics(mergeDescendants = true) { contentDescription = "自定义" },
+            .semantics(mergeDescendants = true) { contentDescription = customLabel },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -653,7 +666,7 @@ private fun CustomColorButton(
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "自定义",
+            text = customLabel,
             style = MaterialTheme.typography.labelSmall,
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -676,6 +689,11 @@ internal fun ColorPickerDialog(
     var hexInput by remember(currentColor) {
         mutableStateOf(colorToHex(currentColor).removePrefix("#"))
     }
+    // 滑杆的无障碍描述与标题共用同一份翻译
+    val hexLabel = stringResource(R.string.color_hex_desc)
+    val hueLabel = stringResource(R.string.color_hue)
+    val saturationLabel = stringResource(R.string.color_saturation)
+    val valueLabel = stringResource(R.string.color_value)
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -731,7 +749,7 @@ internal fun ColorPickerDialog(
                                 keyboardType = KeyboardType.Ascii
                             ),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.weight(1f).semantics { contentDescription = "十六进制颜色" }
+                            modifier = Modifier.weight(1f).semantics { contentDescription = hexLabel }
                         )
                     }
                     Box(
@@ -786,25 +804,25 @@ internal fun ColorPickerDialog(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // 标准 Slider 提供值域、调节动作、焦点和方向键支持。
-                Text("色相", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.color_hue), style = MaterialTheme.typography.labelLarge)
                 Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f,
-                    modifier = Modifier.semantics { contentDescription = "色相" })
-                Text("饱和度", style = MaterialTheme.typography.labelLarge)
+                    modifier = Modifier.semantics { contentDescription = hueLabel })
+                Text(stringResource(R.string.color_saturation), style = MaterialTheme.typography.labelLarge)
                 Slider(value = saturation, onValueChange = { saturation = it },
-                    modifier = Modifier.semantics { contentDescription = "饱和度" })
-                Text("明度", style = MaterialTheme.typography.labelLarge)
+                    modifier = Modifier.semantics { contentDescription = saturationLabel })
+                Text(stringResource(R.string.color_value), style = MaterialTheme.typography.labelLarge)
                 Slider(value = value, onValueChange = { value = it },
-                    modifier = Modifier.semantics { contentDescription = "明度" })
+                    modifier = Modifier.semantics { contentDescription = valueLabel })
 
                 // 底部按钮
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("取消") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = { onColorSelected(currentColor.toArgb().toLong() and 0xFFFFFFFFL) }) {
-                        Text("应用")
+                        Text(stringResource(R.string.action_apply))
                     }
                 }
             }
@@ -974,7 +992,7 @@ private fun AppIconOption(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+private fun ThemeSectionLabel(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,

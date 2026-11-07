@@ -1,0 +1,226 @@
+<!--
+    預設語言 = 簡體中文。逐語言對照見 values-b+zh+Hant / values-en / values-ja / values-fr。
+    由 i18n 批次 E2 產生（前綴 e2_），涵蓋 UC / 夸克 / 藍奏 / 光鴨 / 139 / 迅雷 / 星海 / GitHub 網路層例外與錯誤文案。
+-->
+<resources>
+    <!-- 星海中文口令解析 -->
+    <string name="e2_starsea_missing_data">口令解析失敗：回應缺少 data</string>
+    <string name="e2_starsea_missing_pwd_id">口令解析失敗：未取到分享 ID</string>
+    <string name="e2_starsea_empty">口令為空或格式不對</string>
+    <string name="e2_starsea_auth_failed">口令解析服務鑑權失敗（Key 無效或已輪換）</string>
+    <string name="e2_starsea_too_long">口令過長</string>
+    <string name="e2_starsea_rate_limited">口令解析服務限流，請稍後再試</string>
+    <string name="e2_starsea_unavailable">口令解析服務位址不可用</string>
+    <string name="e2_starsea_http_failed">口令解析失敗（HTTP %1$d）</string>
+
+    <!-- 123 雲盤登入 -->
+    <string name="e2_pan123_too_frequent">123 登入請求過於頻繁，請稍後再試</string>
+    <string name="e2_pan123_login_failed">123 登入失敗，請檢查帳號和密碼後重試</string>
+    <string name="e2_pan123_verify_required">123 要求額外安全驗證，請改用網頁登入完成驗證</string>
+    <string name="e2_pan123_api_changed">123 登入介面發生變化，請稍後再試</string>
+    <string name="e2_pan123_service_unavailable">123 登入服務暫時無法使用，請稍後再試</string>
+    <string name="e2_pan123_account_locked">123 帳號暫時無法登入，請先在官方用戶端檢查帳號狀態</string>
+    <!-- 分享有效期 -->
+    <string name="e2_share_expire_unknown">未知的分享有效期代碼：%1$d</string>
+
+    <!-- 139 雲盤口令 -->
+    <string name="e2_c139_kouling_missing_info">139 雲盤口令解析失敗：回應缺少分享資訊</string>
+    <string name="e2_c139_kouling_missing_link">139 雲盤口令解析失敗：回應缺少分享連結</string>
+    <string name="e2_c139_kouling_no_url">139 雲盤口令解析失敗：未傳回分享連結</string>
+    <string name="e2_c139_kouling_bad_response">139 雲盤口令解析失敗：伺服器回應格式異常</string>
+    <string name="e2_c139_kouling_failed_code">139 雲盤口令解析失敗（%1$s）</string>
+    <string name="e2_c139_kouling_failed_desc">139 雲盤口令解析失敗：%1$s（%2$s）</string>
+    <!-- 迅雷 -->
+    <string name="e2_xunlei_sms_sent">簡訊已發送</string>
+    <string name="e2_xunlei_login_success">登入成功</string>
+    <string name="e2_xunlei_empty_file_unsupported">迅雷雲盤不支援上傳空檔案</string>
+    <string name="e2_xunlei_share_enter_passcode">請輸入提取碼</string>
+    <string name="e2_xunlei_share_passcode_wrong">提取碼錯誤</string>
+    <string name="e2_xunlei_share_passcode_required">該分享需要提取碼</string>
+    <string name="e2_xunlei_request_failed">請求失敗</string>
+    <string name="e2_xunlei_response_empty">請求失敗：回應為空</string>
+    <string name="e2_xunlei_response_parse_failed_http">回應解析失敗（HTTP %1$d）</string>
+    <string name="e2_xunlei_captcha_mismatch">驗證碼與目前登入方式不匹配，請重新登入迅雷網頁版</string>
+    <string name="e2_xunlei_captcha_refresh_failed">驗證碼重新整理後仍失敗</string>
+    <string name="e2_xunlei_kouling_http_failed">口令解析失敗（HTTP %1$d）</string>
+    <string name="e2_xunlei_kouling_bad_response">口令解析失敗：回應格式異常</string>
+    <string name="e2_xunlei_kouling_no_share">口令「%1$s」沒有對應的網盤分享</string>
+    <!-- 139 雲盤 -->
+    <string name="e2_c139_kouling_response_empty">139 雲盤口令解析失敗：回應為空</string>
+    <string name="e2_c139_kouling_decrypt_failed">139 雲盤口令解析失敗：回應解密失敗</string>
+    <string name="e2_c139_missing_authorization">登入態缺少 authorization，請重新登入</string>
+    <string name="e2_c139_account_parse_failed">無法從登入態解析帳號，請重新登入</string>
+    <string name="e2_c139_no_folder_id">移動雲盤未傳回資料夾編號</string>
+    <string name="e2_c139_no_upload_task">移動雲盤未傳回上傳任務</string>
+    <string name="e2_c139_same_name_exists">移動雲盤已有同名檔案，請重新命名後上傳</string>
+    <string name="e2_c139_upload_task_not_created">移動雲盤未建立上傳任務</string>
+    <string name="e2_c139_no_upload_id">移動雲盤未傳回上傳識別</string>
+    <string name="e2_c139_no_upload_url">移動雲盤未傳回上傳位址</string>
+    <string name="e2_c139_incomplete_parts">移動雲盤未傳回完整上傳分段</string>
+    <string name="e2_c139_invalid_part_index">移動雲盤上傳分段序號無效</string>
+    <string name="e2_c139_transfer_create_failed">建立轉存任務失敗（%1$s）</string>
+    <string name="e2_c139_transfer_query_failed">查詢轉存結果失敗（%1$s）</string>
+
+    <!-- 通用網盤操作錯誤 -->
+    <string name="e2_get_file_list_failed">取得檔案清單失敗</string>
+    <string name="e2_get_file_list_failed_code">取得檔案清單失敗（%1$s）</string>
+    <string name="e2_get_folder_list_failed">取得資料夾清單失敗</string>
+    <string name="e2_get_download_link_failed">取得下載連結失敗</string>
+    <string name="e2_get_download_link_failed_code">取得下載連結失敗（%1$s）</string>
+    <string name="e2_get_upload_url_failed">取得上傳位址失敗</string>
+    <string name="e2_get_quota_failed">取得空間詳情失敗</string>
+    <string name="e2_create_folder_failed">新建資料夾失敗</string>
+    <string name="e2_create_upload_task_failed">建立上傳任務失敗</string>
+    <string name="e2_create_share_failed">建立分享失敗</string>
+    <string name="e2_create_share_no_link">建立分享失敗：未傳回連結</string>
+    <string name="e2_upload_failed_http">檔案上傳失敗（HTTP %1$d）</string>
+    <string name="e2_merge_upload_failed">合併上傳分段失敗</string>
+    <string name="e2_rename_failed">重新命名失敗</string>
+    <string name="e2_move_failed">移動失敗</string>
+    <string name="e2_delete_failed">刪除失敗</string>
+    <string name="e2_query_task_failed">查詢任務失敗</string>
+    <string name="e2_request_empty_response">請求失敗：回應為空</string>
+    <string name="e2_error_with_code">%1$s（code=%2$s）</string>
+    <!-- 光鴨 -->
+    <string name="e2_guangya_share_restricted">該光鴨分享需登入並轉存後下載，請先登入光鴨雲盤</string>
+    <string name="e2_guangya_captcha_failed_login">光鴨安全驗證未通過，請重試或切換網頁登入</string>
+    <string name="e2_guangya_web_captcha_required">光鴨需要網頁人機驗證，請稍後重試或改用帳號密碼登入</string>
+    <string name="e2_guangya_captcha_failed_password">光鴨安全驗證未通過，請重試或改用帳號密碼登入</string>
+    <string name="e2_send_sms_failed">傳送驗證碼失敗</string>
+    <string name="e2_sms_too_frequent">驗證碼請求過於頻繁，請稍後再試</string>
+    <string name="e2_sms_code_invalid">簡訊驗證碼錯誤或已過期，請重新取得</string>
+    <string name="e2_guangya_get_quota_failed">取得容量資訊失敗</string>
+    <string name="e2_guangya_get_share_info_failed">取得分享資訊失敗</string>
+    <string name="e2_guangya_get_share_token_failed">取得分享存取權杖失敗</string>
+    <string name="e2_guangya_invalid_share_link">光鴨分享連結無效</string>
+    <string name="e2_guangya_get_share_files_failed">取得分享檔案清單失敗</string>
+    <string name="e2_guangya_get_download_url_failed">取得下載位址失敗</string>
+    <string name="e2_guangya_no_valid_download_url">光鴨未傳回有效下載位址，請確認下載權限</string>
+    <string name="e2_guangya_restore_failed">轉存失敗</string>
+    <string name="e2_guangya_list_pagination_duplicate">光鴨檔案清單分頁重複，請重試</string>
+    <string name="e2_guangya_folder_not_created">光鴨未建立資料夾，請檢查是否存在同名檔案</string>
+    <string name="e2_guangya_upload_task_not_created">光鴨未建立上傳任務</string>
+    <string name="e2_guangya_query_upload_failed">查詢上傳結果失敗</string>
+    <string name="e2_guangya_upload_verifying">光鴨正在校驗上傳內容，請稍後重新整理清單</string>
+    <string name="e2_guangya_task_status_failed">任務狀態查詢失敗</string>
+    <string name="e2_guangya_operation_failed">光鴨操作失敗</string>
+    <string name="e2_guangya_operation_pending">光鴨操作仍在處理中，請稍後重新整理清單確認結果</string>
+    <string name="e2_guangya_login_failed">光鴨登入失敗，請檢查帳號密碼，或切換網頁登入</string>
+    <string name="e2_guangya_login_too_frequent">光鴨登入嘗試過於頻繁，請稍後再試</string>
+    <string name="e2_guangya_wrong_credentials">光鴨帳號或密碼不正確，請檢查後重試</string>
+    <string name="e2_guangya_password_not_set">該光鴨帳號尚未設定密碼，請切換網頁登入</string>
+    <string name="e2_guangya_sms_required">光鴨需要簡訊驗證，請切換網頁登入繼續</string>
+    <string name="e2_guangya_share_passcode_invalid">光鴨分享提取碼錯誤或缺失</string>
+    <string name="e2_guangya_share_unavailable">光鴨分享已取消、過期或無法存取</string>
+    <string name="e2_guangya_download_restricted">光鴨分享下載受限，請在官網確認該分享的下載權限</string>
+    <string name="e2_guangya_no_space">光鴨網盤空間不足</string>
+    <string name="e2_request_failed_http">請求失敗（HTTP %1$d）</string>
+    <!-- 通用回應與上傳錯誤（UC / 夸克） -->
+    <string name="e2_download_empty_response">取得下載連結失敗：回應為空</string>
+    <string name="e2_response_parse_failed">回應解析失敗</string>
+    <string name="e2_response_parse_failed_http">回應解析失敗（HTTP %1$d）</string>
+    <string name="e2_response_missing_data">回應缺少 data</string>
+    <string name="e2_download_link_missing">未回傳下載連結</string>
+    <string name="e2_upload_request_failed">上傳請求失敗</string>
+    <string name="e2_request_failed">請求失敗</string>
+
+    <!-- 夸克遊客限制 -->
+    <string name="e2_quark_guest_size_limit">該檔案超出遊客可取得的大小上限（夸克實測約 50MB），請先登入夸克網盤再下載</string>
+    <string name="e2_quark_guest_login_required">該分享需要登入夸克網盤後才能下載</string>
+    <string name="e2_quark_login_expired">夸克登入狀態已失效，請到「網盤」頁重新登入後再試</string>
+    <string name="e2_quark_guest_server_limit">伺服器端依遊客限制拒絕了該檔案（夸克約 50MB 上限）</string>
+
+    <!-- UC 遊客限制 -->
+    <string name="e2_uc_guest_login_required">該分享需要登入 UC 網盤後才能下載</string>
+    <string name="e2_uc_guest_size_limit">該檔案超出遊客可取得的大小上限，請先登入 UC 網盤再下載</string>
+    <string name="e2_uc_share_invalid">分享已失效或提取碼有誤，請重新解析</string>
+    <string name="e2_uc_token_expired">檔案權杖已過期，請重新解析分享</string>
+
+    <!-- 網盤上傳通用錯誤 -->
+    <string name="e2_upload_empty_file">網盤不支援上傳空檔案</string>
+    <string name="e2_upload_task_missing">網盤未回傳上傳任務</string>
+    <string name="e2_upload_host_missing">網盤未回傳上傳伺服器</string>
+    <string name="e2_upload_credential_missing">網盤未回傳完整上傳憑證</string>
+    <string name="e2_upload_auth_missing">網盤未簽發上傳授權</string>
+    <string name="e2_upload_part_unconfirmed">網盤未確認上傳分段</string>
+    <string name="e2_upload_callback_missing">網盤未回傳上傳回呼</string>
+    <string name="e2_upload_merge_failed_generic">網盤未完成上傳分段合併</string>
+
+    <!-- 藍奏雲 -->
+    <string name="e2_lanzou_login_invalid">藍奏登入狀態無效，請重新登入</string>
+    <string name="e2_lanzou_credentials_required">請輸入藍奏雲帳號和密碼</string>
+    <string name="e2_lanzou_login_failed">藍奏雲登入失敗，請稍後重試</string>
+    <string name="e2_lanzou_login_failed_credentials">藍奏雲登入失敗，請檢查帳號密碼</string>
+    <string name="e2_lanzou_login_no_credential">藍奏雲登入未取得有效憑證，請重試</string>
+    <string name="e2_lanzou_file_paging_duplicate">藍奏檔案分頁重複，請重新整理後重試</string>
+    <string name="e2_lanzou_folder_info_missing">藍奏未回傳新資料夾資訊</string>
+    <string name="e2_lanzou_login_expired">藍奏登入已過期，請重新網頁登入</string>
+    <string name="e2_lanzou_verify_page_before_upload">藍奏回傳了驗證頁面，請先在官網完成驗證後再上傳</string>
+    <string name="e2_lanzou_upload_response_invalid">藍奏上傳回應異常，請重試</string>
+    <string name="e2_lanzou_too_frequent_short">藍奏請求頻繁，請稍後重試</string>
+    <string name="e2_lanzou_upload_failed_zt">藍奏上傳失敗（zt=%1$s）</string>
+    <string name="e2_lanzou_upload_failed_detail">：%1$s</string>
+    <string name="e2_lanzou_upload_failed_hint">，請在官網檢查檔案類型與大小</string>
+    <string name="e2_lanzou_upload_file_info_missing">藍奏未回傳上傳檔案資訊</string>
+    <string name="e2_lanzou_share_link_missing">藍奏未回傳分享連結</string>
+    <string name="e2_lanzou_share_paging_error">藍奏分享分頁異常，請重試</string>
+    <string name="e2_lanzou_too_frequent">藍奏請求過於頻繁，請稍後再試</string>
+    <string name="e2_lanzou_passcode_wrong">藍奏提取碼錯誤，請檢查後重新解析</string>
+    <string name="e2_lanzou_parse_failed">藍奏解析失敗，請確認分享連結和提取碼後重試</string>
+    <string name="e2_lanzou_paging_duplicate">藍奏分頁重複，請重新開啟目錄</string>
+    <string name="e2_lanzou_download_page_invalid">藍奏下載頁面位址異常，請檢查分享連結</string>
+    <string name="e2_lanzou_passcode_required">此藍奏分享需要提取碼，請填寫後重新解析</string>
+    <string name="e2_lanzou_download_params_missing">藍奏分享頁缺少下載參數，請重新解析</string>
+    <string name="e2_lanzou_download_url_unavailable">藍奏下載位址暫時不可用，請稍後重試</string>
+    <string name="e2_lanzou_download_url_loop">藍奏下載位址循環跳轉，請重新解析</string>
+    <string name="e2_lanzou_verify_required">藍奏需要進一步驗證，請在分享頁完成驗證後重試</string>
+    <string name="e2_lanzou_verify_page_no_task">藍奏回傳的是驗證頁面，未建立下載任務，請在分享頁完成驗證後重試</string>
+    <string name="e2_lanzou_download_url_expired">藍奏下載位址已失效，請稍後重新解析</string>
+    <string name="e2_lanzou_download_too_frequent">藍奏下載請求過於頻繁，請稍後再試</string>
+    <string name="e2_lanzou_verify_service_unavailable">藍奏下載驗證服務暫時不可用，請稍後重試</string>
+    <string name="e2_lanzou_verify_expired">藍奏下載驗證已過期，請重新解析</string>
+    <string name="e2_lanzou_redirect_too_many">藍奏頁面跳轉次數過多，請重新解析</string>
+    <string name="e2_lanzou_share_link_invalid">藍奏分享連結無效</string>
+    <string name="e2_lanzou_share_page_too_large">藍奏分享頁面過大或異常</string>
+    <string name="e2_lanzou_share_cancelled">藍奏檔案已取消分享或不存在</string>
+    <string name="e2_lanzou_operation_failed">藍奏檔案操作失敗，請在官網檢查權限和檔案類型</string>
+    <string name="e2_lanzou_operation_failed_zt">藍奏檔案操作失敗（%1$s），請在官網檢查權限和檔案類型</string>
+    <string name="e2_lanzou_verify_page_retry">藍奏回傳了驗證頁面，請稍後重試或在分享頁完成驗證</string>
+    <string name="e2_lanzou_parse_service_error">藍奏解析服務回應異常，請稍後重試</string>
+    <string name="e2_lanzou_parse_service_too_large">藍奏解析服務回傳內容過大，請稍後重試</string>
+    <string name="e2_lanzou_parse_service_error_http">藍奏解析服務回應異常（HTTP %1$d），請稍後重試</string>
+
+    <!-- 藍奏雲優享版 -->
+    <string name="e2_ilanzou_login_expired">藍奏優享登入已過期，請重新登入</string>
+    <string name="e2_ilanzou_no_device_id">藍奏優享未回傳有效的裝置識別碼</string>
+    <string name="e2_ilanzou_credentials_required">請輸入藍奏優享帳號和密碼</string>
+    <string name="e2_ilanzou_username_too_long">藍奏優享使用者名稱過長</string>
+    <string name="e2_ilanzou_password_too_long">藍奏優享密碼過長</string>
+    <string name="e2_ilanzou_no_login_token">藍奏優享未回傳登入憑證，請改用網頁登入</string>
+    <string name="e2_ilanzou_default_nickname">藍奏優享使用者</string>
+    <string name="e2_ilanzou_paging_duplicate">藍奏優享分頁重複或不完整，請重新開啟目錄</string>
+    <string name="e2_ilanzou_folder_info_missing">藍奏優享未回傳新資料夾資訊，請重新整理確認</string>
+    <string name="e2_ilanzou_upload_auth_missing">藍奏優享未回傳上傳授權</string>
+    <string name="e2_ilanzou_instant_upload_unconfirmed">藍奏優享未確認秒傳檔案</string>
+    <string name="e2_ilanzou_upload_account_missing">藍奏優享未回傳上傳帳號資訊，請重新登入後再試</string>
+    <string name="e2_ilanzou_upload_failed_http">檔案上傳失敗（HTTP %1$d）</string>
+    <string name="e2_ilanzou_multipart_create_failed">藍奏優享無法建立分段上傳</string>
+    <string name="e2_ilanzou_multipart_id_missing">藍奏優享未回傳分段上傳識別碼</string>
+    <string name="e2_ilanzou_part_unconfirmed">藍奏優享未確認上傳分段</string>
+    <string name="e2_ilanzou_multipart_merge_failed">藍奏優享無法合併上傳分段</string>
+    <string name="e2_ilanzou_upload_result_missing">藍奏優享未回傳上傳結果</string>
+    <string name="e2_ilanzou_upload_file_id_unconfirmed">藍奏優享未確認上傳檔案識別碼</string>
+    <string name="e2_ilanzou_upload_still_processing">藍奏優享仍在處理上傳，請稍後重新整理清單</string>
+    <string name="e2_ilanzou_no_download_url">藍奏優享未回傳下載網址</string>
+    <string name="e2_ilanzou_no_download_url_permission">藍奏優享未回傳下載網址，請檢查檔案權限</string>
+    <string name="e2_ilanzou_share_request_failed">藍奏優享分享請求失敗（%1$d）</string>
+    <string name="e2_ilanzou_access_challenge_failed">藍奏優享的存取驗證未通過，請稍後重試或使用網頁登入</string>
+    <string name="e2_ilanzou_access_challenge_failed_short">藍奏優享的存取驗證未通過，請稍後重試</string>
+    <string name="e2_ilanzou_request_failed">藍奏優享請求失敗（%1$d）</string>
+    <string name="e2_ilanzou_login_failed">藍奏優享登入失敗，請檢查帳號密碼</string>
+    <string name="e2_ilanzou_request_failed_hint">藍奏優享請求失敗（%1$d），請檢查登入資訊或稍後重試</string>
+
+    <!-- 藍奏分享預設標題 -->
+    <string name="e2_lanzou_default_share_title">藍奏分享</string>
+    <string name="e2_lanzou_cloud_default_share_title">藍奏雲分享</string>
+</resources>

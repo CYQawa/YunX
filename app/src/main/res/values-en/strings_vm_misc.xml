@@ -1,0 +1,235 @@
+<!--
+    YunX - English (en)
+    Generated for i18n batch G8 (prefix vm_).
+-->
+<resources>
+    <!-- Common -->
+    <string name="vm_back">Back</string>
+    <string name="vm_retry">Retry</string>
+    <string name="vm_refresh">Refresh</string>
+    <string name="vm_load_more">Load more</string>
+    <string name="vm_save">Save</string>
+    <string name="vm_cancel">Cancel</string>
+    <string name="vm_clear">Clear</string>
+    <string name="vm_got_it">Got it</string>
+    <string name="vm_password_hide">Hide</string>
+    <string name="vm_password_show">Show</string>
+    <string name="vm_login_success">Login successful</string>
+    <string name="vm_login_failed_retry">Login failed. Please try again later.</string>
+    <string name="vm_login_failed_network">Login failed. Please check your network and try again.</string>
+
+    <!-- Crash -->
+    <string name="vm_crash_unknown_error">Unknown error</string>
+    <string name="vm_crash_copy_info">Copy crash info</string>
+    <string name="vm_crash_info_copied">Crash info copied</string>
+    <string name="vm_crash_restart_app">Restart app</string>
+    <string name="vm_crash_exit_app">Exit app</string>
+    <string name="vm_crash_title">App crashed</string>
+    <string name="vm_crash_desc">Sorry, the app ran into an unexpected error. You can copy the crash info to report it to the developer, or restart the app to continue.</string>
+
+    <!-- Link handling: targets -->
+    <string name="vm_link_target_quark">Quark Drive</string>
+    <string name="vm_link_target_uc">UC Drive</string>
+    <string name="vm_link_target_xunlei">Xunlei Drive</string>
+    <string name="vm_link_target_baidu">Baidu Drive</string>
+    <string name="vm_link_target_c139">139 (HeCaiYun)</string>
+    <string name="vm_link_target_pan123">123 Drive</string>
+    <string name="vm_link_target_pan115">115 Drive</string>
+    <string name="vm_link_target_guangya">Guangya Drive</string>
+    <string name="vm_link_target_lanzou">Lanzou Cloud / Premium</string>
+    <string name="vm_link_target_magnet">Magnet link</string>
+    <string name="vm_link_target_yunx">yunx:// custom scheme</string>
+    <string name="vm_link_target_share">Share menu</string>
+    <string name="vm_link_target_process_text">Selected text parsing</string>
+    <string name="vm_link_target_share_sample">Other apps: Share → YunX</string>
+    <string name="vm_link_target_process_text_sample">Long-press selected text → Parse with YunX</string>
+
+    <!-- Link handling -->
+    <string name="vm_link_open_title">Link handling</string>
+    <string name="vm_link_open_intro">Tap a drive share link in a browser or another app and the system will ask which app to use — pick \"YunX\" and check \"Always\", then links will open here for parsing.</string>
+    <string name="vm_link_open_verified_zero">The \"Verified links\" entry in system settings will always stay at 0: verification requires hosting this app\'s verification file (assetlinks.json) on every drive domain\'s server, and none of those domains belong to this project, so a third-party app cannot do it (enabling automatic verification may even make YunX disappear from the chooser entirely).</string>
+    <string name="vm_link_open_manual_associate">The official workaround for third-party apps that cannot verify domains is to associate domains manually: in the system\'s \"Default opening → Open supported links\", check the drive domains for YunX. It works the same as verification (no more chooser), but is recorded under \"Links to open in this app\".</string>
+    <string name="vm_link_open_disable_hint">Turning an item off = stop handling that kind of link (the system will hand it back to the browser or the drive\'s official app); changes take effect immediately, no restart needed.</string>
+    <string name="vm_link_open_open_settings">Associate domains in system settings</string>
+    <string name="vm_link_open_settings_desc">Open \"Default opening → Open supported links\" and check the drive domains you want YunX to handle</string>
+    <string name="vm_link_open_enabled_count">Enabled %1$d / %2$d</string>
+    <string name="vm_link_open_enabled_toast">Now handling \"%1$s\" links</string>
+    <string name="vm_link_open_disabled_toast">No longer handling \"%1$s\" links</string>
+    <string name="vm_link_open_settings_failed">Cannot open system settings. Please go to \"App info → Default opening\" and associate domains manually.</string>
+
+    <!-- Announcements -->
+    <string name="vm_announcements_title">Announcements</string>
+    <string name="vm_announcement_detail_title">Announcement details</string>
+    <string name="vm_announcement_refresh">Refresh announcements</string>
+    <string name="vm_announcement_pinned">Pinned announcement</string>
+    <string name="vm_announcement_pinned_short">Pinned</string>
+    <string name="vm_announcement_latest">Latest announcement</string>
+    <string name="vm_announcement_publisher_fallback">Announcement</string>
+    <string name="vm_announcement_avatar_fallback">A</string>
+    <string name="vm_announcement_no_content">(This announcement has no content)</string>
+    <string name="vm_announcement_images">Images</string>
+    <string name="vm_announcement_image_count">%1$d images</string>
+    <string name="vm_announcement_last_updated">Last updated %1$s</string>
+    <string name="vm_announcement_last_updated_author">Last updated %1$s · by %2$s</string>
+    <string name="vm_announcement_cover_image">Cover image</string>
+    <string name="vm_announcement_image">Announcement image</string>
+    <string name="vm_announcement_cover">Cover</string>
+    <string name="vm_announcement_close">Close</string>
+    <string name="vm_announcement_view_detail">View details</string>
+    <string name="vm_announcement_mark_all_read">Mark all as read</string>
+    <string name="vm_announcement_empty_title">No announcements yet</string>
+    <string name="vm_announcement_empty_desc">New announcements will appear here</string>
+    <string name="vm_announcement_load_failed">Failed to load announcements</string>
+    <string name="vm_announcement_refresh_failed">Failed to refresh announcements: %1$s</string>
+    <string name="vm_announcement_load_failed_detail">Failed to load announcements: %1$s</string>
+    <string name="vm_announcement_load_more_failed">Failed to load more: %1$s</string>
+    <string name="vm_announcement_marked_read_count">%1$d announcements marked as read</string>
+    <string name="vm_announcement_no_unread">No unread announcements</string>
+
+    <!-- Update -->
+    <string name="vm_update_new_version">New version available</string>
+    <string name="vm_update_prerelease">Pre-release</string>
+    <string name="vm_update_current_version">Current %1$s</string>
+    <string name="vm_update_changelog">What\'s new</string>
+    <string name="vm_update_no_changelog">No changelog available</string>
+    <string name="vm_update_netdisk">Drive update</string>
+    <string name="vm_update_download_from_github">Download from GitHub</string>
+    <string name="vm_update_github_download">GitHub download</string>
+    <string name="vm_update_mirror_download">Download via mirror</string>
+    <string name="vm_update_ignore">Ignore this time</string>
+    <string name="vm_update_later">Later</string>
+    <string name="vm_update_github_direct">Direct GitHub download</string>
+    <string name="vm_update_mirror_accelerated">Accelerated mirror download</string>
+    <string name="vm_update_open_github_page">Open GitHub page</string>
+
+    <!-- About -->
+    <string name="vm_about_title">About YunX</string>
+    <string name="vm_about_intro_title">About the app</string>
+    <string name="vm_about_intro_desc">YunX is a tool for parsing drive / video share links and downloading them at high speed. Paste a link: drive shares can be browsed and downloaded fast; video links are resolved into direct links and original images; images / videos / audio can all be previewed and played online.</string>
+    <string name="vm_about_license">This project is open source under GNU AGPL-3.0</string>
+    <string name="vm_about_version_footer">YunX v%1$s · Made with ❤ and deepseek</string>
+    <string name="vm_about_icon">YunX icon</string>
+    <string name="vm_about_app_name">YunX</string>
+    <string name="vm_about_version_name">YunX · v%1$s (%2$d)</string>
+    <string name="vm_about_tagline">Drive / video link parsing and high-speed downloads</string>
+    <string name="vm_about_supported_platforms">Supported platforms</string>
+    <string name="vm_about_drives">Drives</string>
+    <string name="vm_about_video_parsing">Video parsing</string>
+    <string name="vm_about_feature_netdisk_title">Drive share parsing</string>
+    <string name="vm_about_feature_netdisk_desc">Direct link detection for Quark / UC / Xunlei / Baidu / 139 / 123 / 115 / Guangya / Lanzou / Lanzou Premium</string>
+    <string name="vm_about_feature_video_title">Video link parsing</string>
+    <string name="vm_about_feature_video_desc">Douyin / Xiaohongshu / Kuaishou / Weibo / AcFun work without login; Bilibili offers higher quality after login; Pixiv only resolves some public works without login, paste your browser cookie to resolve all works</string>
+    <string name="vm_about_feature_preview_title">Online preview &amp; playback</string>
+    <string name="vm_about_feature_preview_desc">View images / videos / audio online (request headers added automatically); text files in drives can also be opened</string>
+    <string name="vm_about_feature_mux_title">Audio/video muxing</string>
+    <string name="vm_about_feature_mux_desc">Bilibili HD comes as separate audio and video tracks; the app muxes them internally, no extra ffmpeg needed</string>
+    <string name="vm_about_feature_download_title">High-speed chunked downloads</string>
+    <string name="vm_about_feature_download_desc">Multi-threaded concurrency + resumable downloads make full use of your bandwidth</string>
+    <string name="vm_about_feature_cleanup_title">Delete after resolving</string>
+    <string name="vm_about_feature_cleanup_desc">Cleaned up immediately after saving, no leftovers</string>
+    <string name="vm_about_feature_credentials_title">Local credentials</string>
+    <string name="vm_about_feature_credentials_desc">Cookies are encrypted and stored only on this device</string>
+    <string name="vm_about_features">Features</string>
+    <string name="vm_about_tech_stack">Tech stack</string>
+    <string name="vm_about_disclaimer_title">Disclaimer</string>
+    <string name="vm_about_disclaimer_body">This app is for personal learning and technical exchange only; do not use it for any commercial purpose. Downloaded content is copyrighted by its original authors; delete it within 24 hours of downloading. Users bear full responsibility for any consequences of using this app.</string>
+    <string name="vm_about_preview_onboarding_title">Preview welcome screen</string>
+    <string name="vm_about_preview_onboarding_desc">Show the first-launch guide again</string>
+    <string name="vm_about_open_source_repo">Source repository</string>
+
+    <!-- Support development -->
+    <string name="vm_support_title">Support development</string>
+    <string name="vm_support_tagline">Your support keeps development and updates going</string>
+    <string name="vm_support_free_notice">YunX is completely free and open source; every feature works without donations. If it has helped you and you would like to, scan the code to show your appreciation — your support keeps development and updates going~</string>
+    <string name="vm_support_thanks">Thanks to every supporter ❤</string>
+    <string name="vm_support_no_storage_permission">Storage permission not granted; cannot save to gallery</string>
+    <string name="vm_support_saved_to_gallery">Saved to gallery (Pictures/YunX)</string>
+    <string name="vm_support_save_failed">Save failed</string>
+    <string name="vm_support_saved">Saved to gallery</string>
+    <string name="vm_support_save_qr_of">Save QR code for %1$s</string>
+    <string name="vm_support_saved_hint">✓ QR code saved to Gallery/Pictures/YunX</string>
+    <string name="vm_support_role_author">Author CYQawa</string>
+    <string name="vm_support_role_collaborator">Collaborator tidain</string>
+    <string name="vm_support_qr_hint">Save the QR code to your gallery, then open WeChat\'s \"Scan\" to donate</string>
+    <string name="vm_support_next_card">(Next)</string>
+    <string name="vm_support_swipe_hint">Swipe left or right</string>
+    <string name="vm_support_wechat_donate">Donate via WeChat QR</string>
+    <string name="vm_support_qr_content_desc">WeChat donation QR code of %1$s%2$s</string>
+
+    <!-- Main screen -->
+    <string name="vm_main_checking_update">Checking for updates…</string>
+    <string name="vm_main_update_check_failed">Update check failed: %1$s</string>
+    <string name="vm_main_up_to_date">Already up to date</string>
+    <string name="vm_main_release_unavailable">No release data yet. Please connect to the internet and check for updates first.</string>
+    <string name="vm_main_github_token_invalid_cleared">GitHub Token is invalid or expired. It has been cleared automatically and the anonymous limit restored. Please configure it again.</string>
+    <string name="vm_main_verify_done_logging_in">Verification complete, signing in automatically…</string>
+    <string name="vm_main_verify_incomplete">Verification incomplete. Please try again.</string>
+    <string name="vm_main_announcements_unread">Announcements (%1$d unread)</string>
+    <string name="vm_main_announcements">Announcements</string>
+    <string name="vm_main_bookmark_links">Bookmarked drive links</string>
+    <string name="vm_main_sort_drives">Sort drives</string>
+    <string name="vm_main_github_account_failed">Unable to get GitHub account info. Please check your network or reconfigure the Token.</string>
+    <string name="vm_main_added_download_install_hint">Added to downloads. Tap \"Open\" when it finishes to install.</string>
+    <string name="vm_main_apk_not_found">No APK download link found</string>
+    <string name="vm_main_added_download_mirror_install_hint">Added to downloads via mirror. Tap \"Open\" when it finishes to install.</string>
+    <string name="vm_main_preparing_update_package">Preparing update package…</string>
+
+    <!-- GitHub Token -->
+    <string name="vm_github_token_usage">The Token only raises the API limit (60/hour anonymous, 5000/hour authenticated). It is encrypted and stored using Android Keystore AES-GCM.</string>
+    <string name="vm_github_token_howto_title">How to get a Token:</string>
+    <string name="vm_github_token_howto_body">1. Open GitHub in a desktop browser, click your avatar in the top right → Settings\n2. On the left, Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. Check public_repo to browse public repositories; to see your own private repositories on the home page, also check repo\n4. A validity of 90 days or No expiration is recommended; after generating, copy and paste it into the field above</string>
+    <string name="vm_github_no_browser_link_copied">No available browser found. Link copied.</string>
+    <string name="vm_github_get_token">↗ Get a Token from GitHub</string>
+    <string name="vm_github_token_security_tip">Security tip: grant only the minimum permissions and do not check delete/manage permissions. The Token is never stored in plain text or uploaded; to remove it, just clear the field and save.</string>
+    <string name="vm_github_token_cleared">GitHub Token cleared</string>
+    <string name="vm_github_token_saved">GitHub Token saved (@%1$s)</string>
+    <string name="vm_github_token_save_failed">Save failed: the local encryption key is temporarily unavailable. Please try again later.</string>
+    <string name="vm_github_token_invalid">Token is invalid or expired. Please regenerate it and save again.</string>
+    <string name="vm_github_token_check_failed">Unable to verify the Token (network error). Please connect to the internet and try again.</string>
+    <string name="vm_github_clear_token_title">Clear GitHub Token?</string>
+    <string name="vm_github_clear_token_message">After clearing, the GitHub API falls back to the anonymous limit (60 requests/hour/IP).</string>
+
+    <!-- Bookmarks -->
+    <string name="vm_bookmark_enter_link">Please enter a drive link</string>
+    <string name="vm_bookmark_added">Bookmarked</string>
+    <string name="vm_bookmark_moved">Moved to \"%1$s\"</string>
+    <string name="vm_bookmark_deleted">Deleted</string>
+    <string name="vm_bookmark_pinned">Added to home</string>
+    <string name="vm_bookmark_unpinned">Removed from home</string>
+    <string name="vm_bookmark_label_auto">Restored automatic label</string>
+    <string name="vm_bookmark_label_updated">Shortcut label updated</string>
+
+    <!-- Account ViewModels -->
+    <string name="vm_ilanzou_enter_account_password">Please enter your Lanzou Premium account and password</string>
+    <string name="vm_ilanzou_login_failed">Lanzou Premium login failed. Please check your account and password.</string>
+    <string name="vm_guangya_enter_account_password">Please enter your Guangya account and password</string>
+    <string name="vm_guangya_login_failed">Guangya login failed. Please check your account and password, or switch to web login.</string>
+    <string name="vm_guangya_enter_phone">Please enter your phone number</string>
+    <string name="vm_guangya_send_sms_failed">Failed to send verification code</string>
+    <string name="vm_guangya_get_code_first">Please get a verification code first</string>
+    <string name="vm_guangya_enter_code">Please enter the verification code</string>
+    <string name="vm_guangya_sms_invalid">The SMS code is incorrect or expired. Please request a new one.</string>
+    <string name="vm_video_account_set_primary">Set as primary account</string>
+    <string name="vm_video_account_remark_updated">Remark updated</string>
+    <string name="vm_video_account_logged_out">Signed out of this account</string>
+    <string name="vm_video_account_logged_out_all">Signed out of all %1$s accounts</string>
+    <string name="vm_xunlei_sms_send_failed_retry">Failed to send SMS. Please try again or check your network.</string>
+    <string name="vm_xunlei_sms_send_failed">Failed to send SMS</string>
+    <string name="vm_xunlei_login_failed_credentials">Login failed. Unable to obtain credentials.</string>
+    <string name="vm_xunlei_login_failed_account">Login failed. Please check your account and password.</string>
+    <string name="vm_xunlei_network_error">Network error</string>
+    <string name="vm_xunlei_sms_login_failed">Failed to send SMS. Please check your network and try again.</string>
+    <string name="vm_xunlei_code_verify_failed">Verification code check failed</string>
+
+    <!-- Video platforms -->
+    <string name="vm_video_platform_douyin">Douyin</string>
+    <string name="vm_video_platform_xhs">Xiaohongshu</string>
+    <string name="vm_video_platform_kuaishou">Kuaishou</string>
+    <string name="vm_video_platform_weibo">Weibo</string>
+    <string name="vm_video_platform_acfun">AcFun</string>
+    <string name="vm_video_platform_bilibili">Bilibili</string>
+    <string name="vm_video_platform_pixiv">Pixiv</string>
+    <string name="vm_video_benefit_xhs">Xiaohongshu requires login on its web version to view posts; parsing will fail without login.</string>
+    <string name="vm_video_benefit_bilibili">Logging in allows higher resolution; without login you only get a very low-quality single file.</string>
+    <string name="vm_video_benefit_pixiv">Without login only some public works are available; paste the cookie from your browser to resolve all works (including R18 and restricted works).</string>
+</resources>

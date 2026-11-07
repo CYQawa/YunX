@@ -1,0 +1,98 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    E3 分组：数据层 Repository 的异常 / 错误消息（经 e.message 上屏）。
+    默认语言 = 简体中文。其余语言见 values-b+zh+Hant / values-en / values-ja / values-fr。
+-->
+<resources>
+    <string name="er_share_link_unrecognized">无法识别分享链接</string>
+    <string name="er_login_account_missing">登录态缺少账号信息，请重新登录</string>
+    <string name="er_get_download_url_failed">获取下载链接失败</string>
+    <string name="er_create_transfer_task_failed">创建转存任务失败</string>
+    <string name="er_save_timeout_or_failed">转存超时或失败</string>
+    <string name="er_c139_kouling_invalid">139 云盘口令解析失败：返回的分享链接无效</string>
+    <string name="er_c139_transfer_not_needed">139 分享无需转存</string>
+    <string name="er_c139_use_share_download_link">139 分享请使用 getShareDownloadLink</string>
+    <string name="er_guangya_share_title">光鸭分享</string>
+    <string name="er_guangya_temp_dir_not_needed">光鸭分享无需预建临时目录</string>
+    <string name="er_guangya_login_required">请先登录光鸭云盘</string>
+    <string name="er_guangya_use_share_download_link">光鸭分享请使用 getShareDownloadLink</string>
+    <string name="er_guangya_no_download_url">光鸭未返回有效下载地址，请确认下载权限</string>
+    <string name="er_guangya_duplicate_file">光鸭临时目录出现同名文件，无法确定下载目标</string>
+    <string name="er_guangya_size_mismatch">光鸭转存文件大小不一致</string>
+    <string name="er_guangya_target_not_visible">光鸭转存已提交，目标文件暂不可见，请稍后重试</string>
+    <string name="er_guangya_share_login_required">该光鸭分享需登录并转存后下载，请先登录光鸭云盘</string>
+    <string name="er_pan115_login_required">请先登录115网盘</string>
+    <string name="er_pan115_create_temp_dir_failed">创建115临时目录失败</string>
+    <string name="er_pan115_create_temp_subdir_failed">创建115临时转存目录失败</string>
+    <string name="er_pan115_file_not_found_after_save">转存已完成，但未在目标目录找到文件，请到115网盘查看</string>
+    <string name="er_pan115_use_share_download_link">115 分享请使用 getShareDownloadLink</string>
+    <string name="er_pan115_pc_required">该分享文件需要115电脑端才能下载，请先到「网盘」页登录115网盘</string>
+    <string name="er_pan115_pc_url_unavailable">该分享文件暂时无法获取电脑端下载链接，请稍后重试</string>
+    <string name="er_share_file_no_url_after_save">分享文件转存后未取到下载链接，请稍后重试</string>
+    <string name="er_space_insufficient">网盘剩余空间不足：该分享内容需要 %1$s，可用 %2$s，请先清理空间或改用其它方式下载</string>
+    <string name="er_pan123_transfer_not_needed">123 分享无需转存</string>
+    <string name="er_pan123_login_required">请先登录123云盘</string>
+    <string name="er_pan123_use_share_download_link">123 分享请使用 getShareDownloadLink</string>
+    <string name="er_share_token_missing">未获取到分享凭证</string>
+    <string name="er_get_file_list_failed">未获取到文件列表</string>
+    <string name="er_get_dir_failed">获取网盘目录失败</string>
+    <string name="er_create_temp_dir_failed">创建临时目录失败</string>
+    <string name="er_create_temp_subdir_failed">创建临时转存目录失败</string>
+    <string name="er_save_failed">转存失败</string>
+    <string name="er_save_timeout">转存超时，请稍后重试</string>
+    <string name="er_xunlei_login_required">请先登录迅雷网盘</string>
+    <string name="er_xunlei_login_expired">迅雷登录已过期，请重新登录</string>
+    <string name="er_device_id_missing">缺少设备标识</string>
+    <string name="er_share_info_missing">未获取到分享信息</string>
+    <string name="er_guest_download_unsupported">该平台未登录时无法下载，请先登录后再试</string>
+    <string name="er_lanzou_pwd_required">此蓝奏分享需要提取码，请填写后重新解析</string>
+    <string name="er_lanzou_session_expired">蓝奏分享会话已失效，请重新解析</string>
+    <string name="er_lanzou_transfer_unsupported">蓝奏分享暂不支持直接转存，请下载后上传</string>
+    <string name="er_lanzou_use_share_download_link">蓝奏分享请使用 getShareDownloadLink</string>
+    <string name="er_folder_download_unsupported">文件夹无法直接下载</string>
+    <string name="er_ilanzou_share_title">蓝奏云优享版分享</string>
+    <string name="er_ilanzou_login_required">请先登录蓝奏云优享版</string>
+    <string name="er_ilanzou_save_processing">蓝奏优享仍在处理转存，请稍后刷新列表</string>
+    <string name="er_ilanzou_use_share_download_link">蓝奏优享分享请使用 getShareDownloadLink</string>
+    <string name="er_ilanzou_temp_dir_not_needed">蓝奏优享分享无需临时目录</string>
+    <string name="er_video_platform_unsupported">暂不支持解析 %1$s</string>
+    <string name="er_lanzou_credential_check_failed">蓝奏云登录凭据校验失败，请重试</string>
+    <string name="er_lanzou_credential_invalid">蓝奏云登录凭据无效，请重试</string>
+    <string name="er_xunlei_captcha_method_mismatch">验证码与当前登录方式不匹配，请重新登录迅雷网页版</string>
+    <string name="er_xunlei_web_login_expired">迅雷网页登录已过期，请在迅雷登录页重新登录</string>
+    <string name="er_announcement_empty_response">响应为空（HTTP %1$d）</string>
+    <string name="er_announcement_network_error">网络异常</string>
+    <string name="er_announcement_bad_response">响应格式异常</string>
+    <string name="er_announcement_request_failed">请求失败</string>
+    <string name="er_announcement_empty_data">响应数据为空</string>
+    <string name="er_announcement_parse_failed">数据解析失败</string>
+    <string name="er_time_just_now">刚刚</string>
+    <string name="er_time_minutes_ago">%1$d 分钟前</string>
+    <string name="er_time_hours_ago">%1$d 小时前</string>
+    <string name="er_time_days_ago">%1$d 天前</string>
+    <string name="er_baidu_default_nickname">百度用户</string>
+    <string name="er_c139_default_nickname">139用户</string>
+    <string name="er_guangya_default_nickname">光鸭用户</string>
+    <string name="er_lanzou_default_nickname">蓝奏云用户</string>
+    <string name="er_pan115_default_nickname">115用户</string>
+    <string name="er_quark_default_nickname">夸克用户</string>
+    <string name="er_uc_default_nickname">UC用户</string>
+    <string name="er_xunlei_default_nickname">迅雷用户</string>
+</resources>

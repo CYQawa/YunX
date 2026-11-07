@@ -50,8 +50,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.resolve.BackToParentItem
@@ -99,7 +101,7 @@ internal fun C139SaveContent(
     val snackbarHostState = rememberGlobalSnackbarHostState()
 
     SaveStepScaffold(
-        title = "转存到139网盘",
+        title = stringResource(R.string.csa_save_to_139),
         subtitle = resolveViewModel.saveTarget?.fname ?: "",
         onBack = onBack
     ) {
@@ -111,7 +113,7 @@ internal fun C139SaveContent(
             Spacer(modifier = Modifier.height(16.dp))
 
             CrumbBar(
-                rootTitle = "根目录",
+                rootTitle = stringResource(R.string.csa_root_dir),
                 pathNames = (cloudState as? C139CloudUiState.Loaded)?.pathNames ?: emptyList(),
                 onNavigate = { cloudViewModel.navigateToLevel(it) }
             )
@@ -155,7 +157,7 @@ internal fun C139SaveContent(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         TextButton(onClick = { cloudViewModel.loadRoot() }) {
-                            Text("重试")
+                            Text(stringResource(R.string.csa_retry))
                         }
                     }
                 }
@@ -170,7 +172,7 @@ internal fun C139SaveContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "当前目录没有子文件夹，可直接转存到此目录",
+                                text = stringResource(R.string.csa_no_subfolders_save_here),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -200,7 +202,7 @@ internal fun C139SaveContent(
             Spacer(modifier = Modifier.height(20.dp))
 
             val currentDirName =
-                (cloudState as? C139CloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+                (cloudState as? C139CloudUiState.Loaded)?.pathNames?.lastOrNull() ?: stringResource(R.string.csa_root_dir)
             Button(
                 onClick = {
                     val dirId = (cloudState as? C139CloudUiState.Loaded)?.dirId ?: "/"
@@ -224,7 +226,7 @@ internal fun C139SaveContent(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("转存到此目录（$currentDirName）")
+                    Text(stringResource(R.string.csa_save_here, currentDirName))
                 }
             }
 

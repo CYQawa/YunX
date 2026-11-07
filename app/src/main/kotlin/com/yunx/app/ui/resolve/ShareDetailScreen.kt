@@ -88,6 +88,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,6 +102,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import com.yunx.app.R
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.SharePlatform
 import com.yunx.app.data.network.model.ShareFile
@@ -260,38 +262,66 @@ fun ShareDetailScreen(
                         if (viewModel.multiSelectMode) {
                             // 多选模式：取消选择
                             IconButton(onClick = { viewModel.exitMultiSelect() }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "取消选择")
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.rs_cancel_selection)
+                                )
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "已选 ${viewModel.selected.size} 项",
+                                    text = stringResource(
+                                        R.string.rs_selected_count,
+                                        viewModel.selected.size
+                                    ),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = if (viewModel.selected.size == displayFiles.size) "已全选" else "点击选择更多文件",
+                                    text = if (viewModel.selected.size == displayFiles.size) {
+                                        stringResource(R.string.rs_all_selected)
+                                    } else {
+                                        stringResource(R.string.rs_tap_select_more)
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             TextButton(onClick = { viewModel.toggleSelectAll(displayFiles) }) {
-                                Text(if (viewModel.selected.size == displayFiles.size) "取消全选" else "全选")
+                                Text(
+                                    if (viewModel.selected.size == displayFiles.size) {
+                                        stringResource(R.string.rs_deselect_all)
+                                    } else {
+                                        stringResource(R.string.rs_select_all)
+                                    }
+                                )
                             }
                         } else {
                             IconButton(onClick = onExit) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.rs_back)
+                                )
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = session.title.ifBlank { "分享内容" },
+                                    text = session.title.ifBlank {
+                                        stringResource(R.string.rs_share_content)
+                                    },
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (searchQuery.isBlank()) "共 ${files.size} 项"
-                                    else "匹配 ${displayFiles.size} / ${files.size} 项",
+                                    text = if (searchQuery.isBlank()) {
+                                        stringResource(R.string.rs_total_items, files.size)
+                                    } else {
+                                        stringResource(
+                                            R.string.rs_match_items,
+                                            displayFiles.size,
+                                            files.size
+                                        )
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -299,14 +329,18 @@ fun ShareDetailScreen(
                             IconButton(onClick = { showAddBookmark = true }) {
                                 Icon(
                                     imageVector = Icons.Outlined.BookmarkAdd,
-                                    contentDescription = "添加至收藏",
+                                    contentDescription = stringResource(R.string.rs_add_to_bookmark),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                             IconButton(onClick = { showSearch = !showSearch }) {
                                 Icon(
                                     imageVector = Icons.Outlined.Search,
-                                    contentDescription = if (showSearch) "关闭搜索" else "搜索文件",
+                                    contentDescription = if (showSearch) {
+                                        stringResource(R.string.rs_close_search)
+                                    } else {
+                                        stringResource(R.string.rs_search_files)
+                                    },
                                     tint = if (showSearch) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
@@ -319,7 +353,9 @@ fun ShareDetailScreen(
                     // 可点击面包屑（多选模式下隐藏）
                     if (!viewModel.multiSelectMode) {
                         CrumbBar(
-                            rootTitle = session.title.ifBlank { "分享内容" },
+                            rootTitle = session.title.ifBlank {
+                                stringResource(R.string.rs_share_content)
+                            },
                             pathNames = pathNames,
                             onNavigate = { level ->
                                 scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
@@ -339,12 +375,15 @@ fun ShareDetailScreen(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text("搜索当前目录文件") },
+                                placeholder = { Text(stringResource(R.string.rs_search_current_dir)) },
                                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                                 trailingIcon = {
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(onClick = { searchQuery = "" }) {
-                                            Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.rs_clear_search)
+                                            )
                                         }
                                     }
                                 },
@@ -382,7 +421,11 @@ fun ShareDetailScreen(
             if (displayFiles.isEmpty()) {
                 item {
                     Text(
-                        text = if (files.isEmpty()) "此目录为空" else "未找到匹配「${searchQuery.trim()}」的文件",
+                        text = if (files.isEmpty()) {
+                            stringResource(R.string.rs_dir_empty)
+                        } else {
+                            stringResource(R.string.rs_no_match_files, searchQuery.trim())
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -455,13 +498,21 @@ fun ShareDetailScreen(
                     // 转存仅夸克分享支持
                     if (viewModel.canSave) {
                         add(
-                            MultiSelectAction("转存", Icons.Outlined.SaveAlt, MaterialTheme.colorScheme.primary) {
+                            MultiSelectAction(
+                                stringResource(R.string.rs_transfer),
+                                Icons.Outlined.SaveAlt,
+                                MaterialTheme.colorScheme.primary
+                            ) {
                                 viewModel.batchSaveToCloud()
                             }
                         )
                     }
                     add(
-                        MultiSelectAction("下载", Icons.Outlined.Download, MaterialTheme.colorScheme.primary) {
+                        MultiSelectAction(
+                            stringResource(R.string.rs_download),
+                            Icons.Outlined.Download,
+                            MaterialTheme.colorScheme.primary
+                        ) {
                             // 百度批量下载：选中项含 >300MB 文件时先弹限速提示
                             val hasBig = viewModel.selected.any { it.fsize > BAIDU_LIMIT_BYTES }
                             if (viewModel.isBaidu && !baiduLimitDismissed && hasBig) {
@@ -496,17 +547,20 @@ fun ShareDetailScreen(
         var neverShow by remember { mutableStateOf(baiduLimitDismissed) }
         AlertDialog(
             onDismissRequest = { showBaiduLimitDialog = false },
-            title = { Text("下载大文件提示") },
+            title = { Text(stringResource(R.string.rs_large_file_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "百度网盘非会员超过300MB会被限速，下载速度可能较慢。是否继续下载？",
+                        text = stringResource(R.string.rs_baidu_limit_message),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = neverShow, onCheckedChange = { neverShow = it })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("不再显示此提示", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            stringResource(R.string.rs_dont_show_again),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             },
@@ -519,10 +573,12 @@ fun ShareDetailScreen(
                         pendingBaiduAction?.invoke()
                         pendingBaiduAction = null
                     }
-                ) { Text("继续下载") }
+                ) { Text(stringResource(R.string.rs_continue_download)) }
             },
             dismissButton = {
-                TextButton(onClick = { showBaiduLimitDialog = false }) { Text("取消") }
+                TextButton(onClick = { showBaiduLimitDialog = false }) {
+                    Text(stringResource(R.string.rs_cancel))
+                }
             }
         )
     }
@@ -534,17 +590,18 @@ fun ShareDetailScreen(
             confirmButton = { },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelBatch() }) {
-                    Text("中断", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.rs_interrupt), color = MaterialTheme.colorScheme.error)
                 }
             },
-            title = { Text("批量处理中") },
+            title = { Text(stringResource(R.string.rs_batch_processing)) },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     YunXLoading(modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = viewModel.batchProgress?.let { "正在获取下载链接 $it" }
-                            ?: "正在批量处理，请稍候…",
+                        text = viewModel.batchProgress?.let {
+                            stringResource(R.string.rs_fetching_link_progress, it)
+                        } ?: stringResource(R.string.rs_batch_processing_wait),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -555,7 +612,7 @@ fun ShareDetailScreen(
     // 添加至收藏弹窗（当前分享链接，支持自定义标题与分类）
     if (showAddBookmark) {
         AddToBookmarkDialog(
-            title = session.title.ifBlank { "分享内容" },
+            title = session.title.ifBlank { stringResource(R.string.rs_share_content) },
             initialCategory = BookmarkEntity.DEFAULT_CATEGORY,
             categories = BookmarkEntity.PRESET_CATEGORIES,
             onConfirm = { title, category ->
@@ -651,11 +708,11 @@ private fun GuestBrowseNotice(platform: SharePlatform) {
             Text(
                 text = when (platform) {
                     SharePlatform.QUARK ->
-                        "未登录浏览：可直接下载约 50MB 以内的小文件；更大的文件和转存需先到「网盘」页登录"
+                        stringResource(R.string.rs_guest_notice_quark)
                     SharePlatform.UC ->
-                        "未登录浏览：可直接下载（不限大小）；转存需先到「网盘」页登录"
+                        stringResource(R.string.rs_guest_notice_uc)
                     else ->
-                        "未登录浏览：可查看文件列表，下载/转存需先到「网盘」页登录"
+                        stringResource(R.string.rs_guest_notice_default)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -688,7 +745,7 @@ internal fun BackToParentItem(onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = "返回上一级",
+                text = stringResource(R.string.rs_go_up),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Medium
@@ -710,7 +767,7 @@ internal fun CrumbBar(
     modifier: Modifier = Modifier
 ) {
     val crumbs = buildList {
-        add(rootTitle.ifBlank { "根目录" })
+        add(rootTitle.ifBlank { stringResource(R.string.rs_root_dir) })
         pathNames.forEach { add(it) }
     }
     val scroll = rememberScrollState()
@@ -826,7 +883,10 @@ internal fun ShareFileRow(
                 // 副标题行：文件夹/大小 + 修改时间（同一行展示）
                 Text(
                     text = buildString {
-                        append(if (file.isdir) "文件夹" else formatSize(file.fsize))
+                        append(
+                            if (file.isdir) stringResource(R.string.rs_folder)
+                            else formatSize(file.fsize)
+                        )
                         val time = formatModifyTime(file.modifyTime)
                         if (time.isNotBlank()) {
                             append("  ·  ")
@@ -858,7 +918,7 @@ internal fun ShareFileRow(
                         IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 imageVector = Icons.Outlined.MoreVert,
-                                contentDescription = "更多",
+                                contentDescription = stringResource(R.string.rs_more),
                                 modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )

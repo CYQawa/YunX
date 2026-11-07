@@ -18,6 +18,7 @@
 
 package com.yunx.app
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,6 +31,7 @@ import com.yunx.app.ui.MainScreen
 import com.yunx.app.ui.navigation.MainTab
 import com.yunx.app.ui.screens.SafetyNoticeDialog
 import com.yunx.app.ui.theme.ComposeEmptyActivityTheme
+import com.yunx.app.ui.theme.LocaleController
 import com.yunx.app.util.ArchiveProbe
 import com.yunx.app.util.DeepLinks
 
@@ -44,8 +46,16 @@ class MainActivity : ComponentActivity() {
     /** 深链接 / 分享 / 选中文本拿到的待解析文本（分享链接、中文口令、带链接的文案都行） */
     private val pendingLink = mutableStateOf<String?>(null)
 
-    /** 深链接拿到的直链 / 磁力：交给下载页「添加下载任务」预填（磁力只有 Gopeed 引擎能下） */
+    /** 直链 / 磁力：交给下载页「添加下载任务」预填（磁力只有 Gopeed 引擎能下） */
     private val pendingAddUrl = mutableStateOf<String?>(null)
+
+    /**
+     * 应用内语言：在 Activity 建立 Context 前就按已保存语言替换 Configuration，
+     * 这样整页字符串（以及 Compose 里所有 stringResource）从第一次组合起就是目标语言。
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleController.wrap(newBase))
+    }
 
     // ★ 通知权限不再在启动时申请/引导：统一收到引导页第 3 页（见 ui/screens/OnboardingPermissionPage.kt），
     //   之后只有设置页里的手动入口（「通知栏下载进度」）会再申请，避免每次启动都弹窗打扰。

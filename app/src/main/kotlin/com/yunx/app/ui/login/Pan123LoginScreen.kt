@@ -74,16 +74,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.yunx.app.R
 import com.yunx.app.data.network.Pan123Constants
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.YunXWavyLoading
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.Pan123AccountViewModel
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.launch
 
@@ -173,10 +176,10 @@ fun Pan123LoginScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("123云盘登录", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.lg_pan123_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = { if (!isSaving && !isSavingManual && !isLoggingIn) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 actions = {
@@ -188,7 +191,7 @@ fun Pan123LoginScreen(
                         ) {
                             Icon(
                                 Icons.Outlined.ContentPaste,
-                                contentDescription = "手动输入 Token",
+                                contentDescription = stringResource(R.string.lg_manual_token),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -201,10 +204,10 @@ fun Pan123LoginScreen(
                                         val token = webView?.evaluateJsEncoded(READ_AUTHOR_TOKEN_JS).orEmpty()
                                         val saved = if (token.isBlank()) false else viewModel.saveToken(token)
                                         if (saved) {
-                                            SnackbarController.show("登录成功")
+                                            SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                             onSaved()
                                         } else {
-                                            SnackbarController.show("未检测到登录态，请先完成登录")
+                                            SnackbarController.show(AppStrings.get(R.string.lg_no_login_state))
                                         }
                                     } finally {
                                         // 必须 finally：抛异常时按钮要能恢复可点
@@ -220,7 +223,7 @@ fun Pan123LoginScreen(
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                Text("保存")
+                                Text(stringResource(R.string.lg_save))
                             }
                         }
                     }
@@ -241,12 +244,12 @@ fun Pan123LoginScreen(
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     onClick = { mode = MODE_WEB },
                     selected = mode == MODE_WEB
-                ) { Text("网页登录") }
+                ) { Text(stringResource(R.string.lg_mode_web)) }
                 SegmentedButton(
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     onClick = { mode = MODE_PASSWORD },
                     selected = mode == MODE_PASSWORD
-                ) { Text("账号密码") }
+                ) { Text(stringResource(R.string.lg_mode_password)) }
             }
 
             if (mode == MODE_WEB) {
@@ -278,7 +281,7 @@ fun Pan123LoginScreen(
                             try {
                                 val error = viewModel.login(account, password)
                                 if (error == null) {
-                                    SnackbarController.show("登录成功")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                     onSaved()
                                 } else {
                                     loginError = error
@@ -298,34 +301,34 @@ fun Pan123LoginScreen(
         AlertDialog(
             onDismissRequest = { showTutorial = false },
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-            title = { Text("登录教程") },
+            title = { Text(stringResource(R.string.lg_login_tutorial)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "1. 在下方网页中登录 123 云盘账号（支持账号密码 / 短信验证码）",
+                        text = stringResource(R.string.lg_pan123_tutorial_1),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "2. 登录完成后将自动检测并登录，无需手动操作",
+                        text = stringResource(R.string.lg_pan123_tutorial_2),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "3. 若自动登录未触发，可点右上角「保存」手动提取（读取网页 localStorage 的 authorToken）",
+                        text = stringResource(R.string.lg_pan123_tutorial_3),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "4. 或点击「粘贴」图标，手动粘贴 Token",
+                        text = stringResource(R.string.lg_pan123_tutorial_4),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "5. Token 长期有效，失效后需重新登录",
+                        text = stringResource(R.string.lg_pan123_tutorial_5),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showTutorial = false }) { Text("知道了") }
+                TextButton(onClick = { showTutorial = false }) { Text(stringResource(R.string.lg_got_it)) }
             }
         )
     }
@@ -334,11 +337,11 @@ fun Pan123LoginScreen(
     if (showTokenDialog) {
         AlertDialog(
             onDismissRequest = { if (!isSavingManual) showTokenDialog = false },
-            title = { Text("手动输入 Token") },
+            title = { Text(stringResource(R.string.lg_manual_token)) },
             text = {
                 Column {
                     Text(
-                        text = "登录 123 云盘网页后，复制其 localStorage 中的 authorToken 值粘贴到这里（可用浏览器开发者工具查看）",
+                        text = stringResource(R.string.lg_pan123_token_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -347,7 +350,7 @@ fun Pan123LoginScreen(
                         value = tokenInput,
                         onValueChange = { tokenInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("粘贴 authorToken…") },
+                        placeholder = { Text(stringResource(R.string.lg_paste_token_hint)) },
                         minLines = 4,
                         maxLines = 8
                     )
@@ -361,11 +364,11 @@ fun Pan123LoginScreen(
                             try {
                                 val saved = viewModel.saveToken(tokenInput.trim())
                                 if (saved) {
-                                    SnackbarController.show("登录成功")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                     showTokenDialog = false
                                     onSaved()
                                 } else {
-                                    SnackbarController.show("Token 无效，请检查是否为完整的 authorToken")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_pan123_token_invalid))
                                 }
                             } finally {
                                 isSavingManual = false
@@ -380,7 +383,7 @@ fun Pan123LoginScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("保存")
+                        Text(stringResource(R.string.lg_save))
                     }
                 }
             },
@@ -388,7 +391,7 @@ fun Pan123LoginScreen(
                 TextButton(
                     onClick = { if (!isSavingManual) showTokenDialog = false },
                     enabled = !isSavingManual
-                ) { Text("取消") }
+                ) { Text(stringResource(R.string.lg_cancel)) }
             }
         )
     }
@@ -419,12 +422,12 @@ private fun AccountPasswordForm(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "账号密码登录",
+            text = stringResource(R.string.lg_pan123_password_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
         )
         Text(
-            text = "直接使用 123 云盘账号登录，不需要打开网页；若提示需要安全验证，请改用「网页登录」",
+            text = stringResource(R.string.lg_pan123_password_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -432,7 +435,7 @@ private fun AccountPasswordForm(
             value = account,
             onValueChange = onAccountChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("手机号 / 邮箱") },
+            label = { Text(stringResource(R.string.lg_phone_or_email)) },
             leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
             singleLine = true,
             shape = MaterialTheme.shapes.large
@@ -441,13 +444,13 @@ private fun AccountPasswordForm(
             value = password,
             onValueChange = onPasswordChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("密码") },
+            label = { Text(stringResource(R.string.lg_password)) },
             leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
             trailingIcon = {
                 IconButton(onClick = onTogglePasswordVisible) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                        contentDescription = if (passwordVisible) stringResource(R.string.lg_hide_password) else stringResource(R.string.lg_show_password)
                     )
                 }
             },
@@ -473,7 +476,7 @@ private fun AccountPasswordForm(
             if (busy) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             } else {
-                Text("登录")
+                Text(stringResource(R.string.lg_login))
             }
         }
     }

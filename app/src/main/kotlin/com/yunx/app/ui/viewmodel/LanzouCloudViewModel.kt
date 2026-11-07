@@ -20,6 +20,7 @@ package com.yunx.app.ui.viewmodel
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.upload.UploadProgress
 import com.yunx.app.data.upload.UploadRunner
@@ -39,6 +40,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.repository.LanzouAccountRepository
 import com.yunx.app.ui.preview.CloudPreview
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -121,10 +123,10 @@ class LanzouCloudViewModel(
     }
 
     private suspend fun creds(): LanzouCreds {
-        val acc = accountRepository.getAccount() ?: throw IllegalStateException("请先登录蓝奏云")
+        val acc = accountRepository.getAccount() ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_lanzou))
         cachedCreds?.let { if (it.cookie == acc.cookie) return it }
         val params = api.fetchLoginParams(acc.cookie)
-            ?: throw IllegalStateException("蓝奏登录态已失效，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.vc_lanzou_session_expired))
         return LanzouCreds(acc.cookie, params.uid, params.vei).also { cachedCreds = it }
     }
 
@@ -260,7 +262,7 @@ class LanzouCloudViewModel(
                 val files = api.listCloudFiles(cred.cookie, cred.uid, cred.vei, dirId).filter { it.isdir }
                 _moveUiState.value = LanzouCloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _moveUiState.value = LanzouCloudUiState.Error(e.message ?: "加载失败")
+                _moveUiState.value = LanzouCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -301,21 +303,21 @@ class LanzouCloudViewModel(
         if (!folder.isdir) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cred = creds()
                 val tasks = mutableListOf<Triple<ShareFile, String, ShareInfo>>()
                 downloadFolderFiles(cred, folder, folder.fname, tasks, 0)
                 if (tasks.isEmpty()) {
-                    cloudMessage = "文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_folder_empty)
                     actionFile = null
                     return@launch
                 }
                 var okCount = 0
                 tasks.forEachIndexed { index, (file, relPath, info) ->
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val page = api.resolveShare(info.shareUrl, info.passcode)
                         val link = api.getShareDownloadLink(page, file, info.passcode.takeIf { it.isNotBlank() })
@@ -330,14 +332,14 @@ class LanzouCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断下载"
+                    cloudMessage = AppStrings.get(R.string.vc_download_interrupted)
                     actionFile = null
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 actionFile = null
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_folder_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -361,7 +363,7 @@ class LanzouCloudViewModel(
                 )
                 downloadLink = link
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -384,7 +386,7 @@ class LanzouCloudViewModel(
                 actionFile = null
                 CloudPreview.open(file, link.downloadUrl, downloadHeaders(link.downloadUrl), isHls = link.isHls)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "预览失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_preview_failed)
             } finally {
                 isOperating = false
             }
@@ -405,11 +407,11 @@ class LanzouCloudViewModel(
                     platform = DownloadPlatform.LANZOU,
                     headers = pd.headers
                 )
-                cloudMessage = "已加入下载：${pd.fileName}"
+                cloudMessage = AppStrings.get(R.string.vc_download_added_named, pd.fileName)
                 actionFile = null
                 downloadTriggered++
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -434,11 +436,11 @@ class LanzouCloudViewModel(
                 } else {
                     api.renameFile(cred.cookie, cred.uid, cred.vei, fileNumeric(file.fid), newName)
                 }
-                cloudMessage = "已重命名"
+                cloudMessage = AppStrings.get(R.string.vc_renamed)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "重命名失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_rename_failed)
             } finally {
                 isOperating = false
             }
@@ -454,10 +456,10 @@ class LanzouCloudViewModel(
             try {
                 val cred = creds()
                 api.createFolder(cred.cookie, cred.uid, cred.vei, parentId, newName)
-                cloudMessage = "已创建文件夹「$newName」"
+                cloudMessage = AppStrings.get(R.string.vc_folder_created, newName)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "新建文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_create_folder_failed)
             } finally {
                 isOperating = false
             }
@@ -467,7 +469,7 @@ class LanzouCloudViewModel(
     fun moveFile(toDirId: String) {
         val file = actionFile ?: return
         if (file.isdir) {
-            cloudMessage = "蓝奏云暂不支持移动文件夹"
+            cloudMessage = AppStrings.get(R.string.vc_lanzou_move_folder_unsupported)
             return
         }
         viewModelScope.launch {
@@ -475,11 +477,11 @@ class LanzouCloudViewModel(
             try {
                 val cred = creds()
                 api.moveFile(cred.cookie, cred.uid, cred.vei, toDirId, fileNumeric(file.fid))
-                cloudMessage = "已移动到目标目录"
+                cloudMessage = AppStrings.get(R.string.vc_moved)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -500,7 +502,7 @@ class LanzouCloudViewModel(
                 }
                 shareResult = info.copy(title = file.fname)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -518,11 +520,11 @@ class LanzouCloudViewModel(
                 } else {
                     api.deleteFile(cred.cookie, cred.uid, cred.vei, fileNumeric(file.fid))
                 }
-                cloudMessage = "已删除「${file.fname}」"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_named, file.fname)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -536,7 +538,7 @@ class LanzouCloudViewModel(
         if (files.isEmpty()) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cred = creds()
@@ -551,14 +553,14 @@ class LanzouCloudViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    cloudMessage = "所选文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_selected_folder_empty)
                     exitMultiSelect()
                     return@launch
                 }
                 var okCount = 0
                 tasks.forEachIndexed { index, (file, relPath, info) ->
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = if (info == null) {
                             api.getPersonalDownloadLink(cred.cookie, cred.uid, cred.vei, fileNumeric(file.fid), file.fname)
@@ -577,14 +579,14 @@ class LanzouCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断批量下载"
+                    cloudMessage = AppStrings.get(R.string.vc_batch_download_interrupted)
                     exitMultiSelect()
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "批量下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_batch_download_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -607,10 +609,10 @@ class LanzouCloudViewModel(
                     api.createFileShare(cred.cookie, cred.uid, cred.vei, fileNumeric(file.fid))
                 }
                 shareResult = info.copy(title = file.fname)
-                if (files.size > 1) cloudMessage = "蓝奏一次只能分享一个文件或文件夹，已分享第一项"
+                if (files.size > 1) cloudMessage = AppStrings.get(R.string.vc_lanzou_share_single_only)
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -626,15 +628,15 @@ class LanzouCloudViewModel(
                 val cred = creds()
                 val movable = files.filter { !it.isdir }
                 if (movable.isEmpty()) {
-                    cloudMessage = "蓝奏云暂不支持移动文件夹"
+                    cloudMessage = AppStrings.get(R.string.vc_lanzou_move_folder_unsupported)
                     return@launch
                 }
                 movable.forEach { api.moveFile(cred.cookie, cred.uid, cred.vei, toDirId, fileNumeric(it.fid)) }
-                cloudMessage = "已移动 ${movable.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_moved_items, movable.size)
                 exitMultiSelect()
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -655,11 +657,11 @@ class LanzouCloudViewModel(
                         api.deleteFile(cred.cookie, cred.uid, cred.vei, fileNumeric(it.fid))
                     }
                 }
-                cloudMessage = "已删除 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_items, files.size)
                 exitMultiSelect()
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -681,7 +683,7 @@ class LanzouCloudViewModel(
                 val files = api.listCloudFiles(cred.cookie, cred.uid, cred.vei, current.dirId)
                 _uiState.value = LanzouCloudUiState.Loaded(files, current.pathNames, current.dirId)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "刷新失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_refresh_failed)
             } finally {
                 refreshing = false
             }
@@ -705,7 +707,7 @@ class LanzouCloudViewModel(
                 val files = api.listCloudFiles(cred.cookie, cred.uid, cred.vei, dirId)
                 _uiState.value = LanzouCloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _uiState.value = LanzouCloudUiState.Error(e.message ?: "加载失败")
+                _uiState.value = LanzouCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -720,8 +722,8 @@ class LanzouCloudViewModel(
         if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
         cloudMessage = when {
             outcome.error != null -> outcome.error
-            outcome.cancelled -> "已取消上传"
-            else -> "已上传 ${outcome.uploaded} 个文件"
+            outcome.cancelled -> AppStrings.get(R.string.vc_upload_cancelled)
+            else -> AppStrings.get(R.string.vc_upload_done, outcome.uploaded)
         }
     }
 

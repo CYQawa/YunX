@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -222,7 +224,7 @@ class XunleiApi(
                 needSms = true,
                 smsCreditKey = json.optString("creditkey"),
                 smsToken = json.optString("token"),
-                message = json.optString("errorDesc").ifBlank { "短信已发送" }
+                message = json.optString("errorDesc").ifBlank { AppStrings.get(R.string.e2_xunlei_sms_sent) }
             )
         }
     }
@@ -427,7 +429,7 @@ class XunleiApi(
                 sessionId = json.optString("sessionID"),
                 nickname = json.optString("nickName"),
                 userID = json.optString("userID"),
-                message = "登录成功"
+                message = AppStrings.get(R.string.e2_xunlei_login_success)
             )
         }
         // 触发验证面板（review_panel）→ 需要短信验证
@@ -550,7 +552,7 @@ class XunleiApi(
         deviceId: String,
         captchaToken: String
     ): String? = withContext(Dispatchers.IO) {
-        require(file.size > 0L) { "迅雷云盘不支持上传空文件" }
+        require(file.size > 0L) { AppStrings.get(R.string.e2_xunlei_empty_file_unsupported) }
         io.progress(UploadPhase.PREPARING)
         var blockSize = 0x40000L
         while (file.size / blockSize > 0x200 && blockSize < 0x200000L) blockSize *= 2
@@ -638,9 +640,9 @@ class XunleiApi(
             // 提取码状态检查：PASS_CODE_EMPTY（没填）/ PASS_CODE_ERROR（错误）/ PASS_CODE_NEED（需要）
             // 这三种情况 files 为空数组且 HTTP 200，若不识别会被误判为「此目录为空」
             when (data.optString("share_status")) {
-                "PASS_CODE_EMPTY" -> throw QuarkApiException("请输入提取码")
-                "PASS_CODE_ERROR" -> throw QuarkApiException("提取码错误")
-                "PASS_CODE_NEED" -> throw QuarkApiException("该分享需要提取码")
+                "PASS_CODE_EMPTY" -> throw QuarkApiException(AppStrings.get(R.string.e2_xunlei_share_enter_passcode))
+                "PASS_CODE_ERROR" -> throw QuarkApiException(AppStrings.get(R.string.e2_xunlei_share_passcode_wrong))
+                "PASS_CODE_NEED" -> throw QuarkApiException(AppStrings.get(R.string.e2_xunlei_share_passcode_required))
             }
             val files = data.optJSONArray("files")?.let(::parseFileArray) ?: emptyList()
             XunleiShareResult(
@@ -1022,9 +1024,9 @@ class XunleiApi(
         }
         repeat(2) { attempt ->
             val response = client.newCall(build(token)).execute()
-            val body = response.use { it.body?.string() ?: throw QuarkApiException("请求失败：响应为空") }
+            val body = response.use { it.body?.string() ?: throw QuarkApiException(AppStrings.get(R.string.e2_xunlei_response_empty)) }
             val json = runCatching { JSONObject(body) }.getOrElse {
-                throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
+                throw QuarkApiException(AppStrings.get(R.string.e2_xunlei_response_parse_failed_http, response.code))
             }
             if (!response.isSuccessful || json.has("error")) {
                 val err = json.optString("error")
@@ -1047,7 +1049,7 @@ class XunleiApi(
                     // client_id 配错：回退网页会话也救不回来（网页会话同样只认网页 client_id），
                     // 只会白等十几秒再失败，所以直接报错。
                     if (isClientIdMismatch(json)) {
-                        throw QuarkApiException("验证码与当前登录方式不匹配，请重新登录迅雷网页版")
+                        throw QuarkApiException(AppStrings.get(R.string.e2_xunlei_captcha_mismatch))
                     }
                     // 网页账号：本地 9 盐签名换 token（被拒时由实现内部回退网页会话）；
                     // 非网页账号返回 null，继续走原来的 App 通道 captcha_sign 重签。
@@ -1061,12 +1063,12 @@ class XunleiApi(
                     }
                 }
                 val msg = json.optString("error_description").ifBlank { json.optString("message") }
-                    .ifBlank { err }.ifBlank { "请求失败" }
+                    .ifBlank { err }.ifBlank { AppStrings.get(R.string.e2_xunlei_request_failed) }
                 throw QuarkApiException(msg)
             }
             return parse(json.optJSONObject("data") ?: json)
         }
-        throw QuarkApiException("验证码刷新后仍失败")
+        throw QuarkApiException(AppStrings.get(R.string.e2_xunlei_captcha_refresh_failed))
     }
 
     /** 服务端是否明确回了 client_id 配错（`error_details[].detail = "client_id not match"`） */
@@ -1215,13 +1217,13 @@ class XunleiApi(
             .build()
         client.newCall(request).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) throw IllegalStateException("口令解析失败（HTTP ${resp.code}）")
+            if (!resp.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_xunlei_kouling_http_failed, resp.code))
             val json = runCatching { JSONObject(body) }.getOrNull()
-                ?: throw IllegalStateException("口令解析失败：响应格式异常")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_xunlei_kouling_bad_response))
             val type = json.optJSONObject("ext")?.optString("kouling_type").orEmpty()
-            if (type != "share_page") throw IllegalStateException("口令「$keyword」没有对应的网盘分享")
+            if (type != "share_page") throw IllegalStateException(AppStrings.get(R.string.e2_xunlei_kouling_no_share, keyword))
             XunleiKouling.shareUrlFromLocation(json.optString("location"))
-                ?: throw IllegalStateException("口令「$keyword」没有对应的网盘分享")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_xunlei_kouling_no_share, keyword))
         }
     }
 

@@ -92,6 +92,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -111,6 +112,7 @@ import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.util.AppLinks
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.PermissionState
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -325,7 +327,7 @@ private fun WelcomePage(context: Context) {
         ) {
             Image(
                 painter = painterResource(R.drawable.icon),
-                contentDescription = "云析图标",
+                contentDescription = stringResource(R.string.rs_app_icon_desc),
                 modifier = Modifier
                     .size(112.dp)
                     .clip(RoundedCornerShape(30.dp)),
@@ -335,7 +337,7 @@ private fun WelcomePage(context: Context) {
 
         Spacer(modifier = Modifier.height(26.dp))
         Text(
-            text = "云析",
+            text = stringResource(R.string.rs_app_name),
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.SemiBold,
             // 显式给色：全屏覆盖页里不依赖 LocalContentColor（默认黑色，深色模式下会变黑字）
@@ -349,7 +351,7 @@ private fun WelcomePage(context: Context) {
         )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "网盘与视频链接解析 · 在线预览 · 高速下载",
+            text = stringResource(R.string.rs_onboarding_tagline),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
@@ -361,10 +363,10 @@ private fun WelcomePage(context: Context) {
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FactChip("10 大网盘")
-            FactChip("7 大视频平台")
-            FactChip("分片下载")
-            FactChip("完全免费")
+            FactChip(stringResource(R.string.rs_fact_drives))
+            FactChip(stringResource(R.string.rs_fact_video_platforms))
+            FactChip(stringResource(R.string.rs_fact_chunked_download))
+            FactChip(stringResource(R.string.rs_fact_free))
         }
 
         Spacer(modifier = Modifier.height(30.dp))
@@ -426,7 +428,7 @@ private fun GitHubCard(context: Context) {
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "开源仓库",
+                    text = stringResource(R.string.rs_open_source_repo),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium
                 )
@@ -461,7 +463,7 @@ private fun QQGroupPill(context: Context) {
             // 优先拉起 QQ 群卡片（openQQGroup 内部靠 ActivityNotFoundException 判断有没有 QQ），失败才复制群号
             if (!AppLinks.openQQGroup(context)) {
                 copyToClipboard(context, AppLinks.QQ_GROUP)
-                Toast.makeText(context, "未安装 QQ，群号已复制：${AppLinks.QQ_GROUP}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, AppStrings.get(R.string.rs_qq_not_installed, AppLinks.QQ_GROUP), Toast.LENGTH_SHORT).show()
             }
         },
         shape = CircleShape,
@@ -481,14 +483,14 @@ private fun QQGroupPill(context: Context) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "QQ 群 ${AppLinks.QQ_GROUP}",
+                text = stringResource(R.string.rs_qq_group, AppLinks.QQ_GROUP),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
                 imageVector = Icons.Outlined.OpenInNew,
-                contentDescription = "打开 QQ",
+                contentDescription = stringResource(R.string.rs_open_qq),
                 modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -513,7 +515,7 @@ private fun TermsPage() {
             .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 20.dp)
     ) {
         Text(
-            text = "使用前请阅读",
+            text = stringResource(R.string.rs_read_before_use),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
             // 同上：不依赖 LocalContentColor，避免深色模式下黑字
@@ -521,7 +523,7 @@ private fun TermsPage() {
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "云析是开源工具，以下是使用条款与免责说明",
+            text = stringResource(R.string.rs_terms_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -529,37 +531,37 @@ private fun TermsPage() {
 
         TermsCard(
             icon = Icons.Outlined.Description,
-            title = "用户协议",
+            title = stringResource(R.string.rs_terms_title),
             paragraphs = listOf(
-                "本应用是开源的网盘分享链接解析与下载工具，仅供个人学习、技术交流使用，请勿用于任何商业用途。",
-                "请遵守你所使用网盘的服务条款及当地法律法规；不得利用本应用下载、传播侵权或违法内容。",
-                "网盘账号凭证（Cookie / Token）仅保存在本机，不会上传到任何服务器。",
-                "应用按「现状」提供，不保证解析成功率与下载速度，也不对你的使用结果作出任何承诺。"
+                stringResource(R.string.rs_terms_1),
+                stringResource(R.string.rs_terms_2),
+                stringResource(R.string.rs_terms_3),
+                stringResource(R.string.rs_terms_4)
             )
         )
         Spacer(modifier = Modifier.height(12.dp))
 
         TermsCard(
             icon = Icons.Outlined.Shield,
-            title = "免责声明",
+            title = stringResource(R.string.rs_disclaimer_title),
             paragraphs = listOf(
-                "下载内容的版权归原作者所有，请于下载后 24 小时内删除。",
-                "使用本应用产生的任何后果由使用者自行承担，开发者不承担由此引起的任何责任。"
+                stringResource(R.string.rs_disclaimer_1),
+                stringResource(R.string.rs_disclaimer_2)
             )
         )
         Spacer(modifier = Modifier.height(12.dp))
 
         TermsCard(
             icon = Icons.Outlined.Code,
-            title = "开源协议",
+            title = stringResource(R.string.rs_license_title),
             paragraphs = listOf(
-                "本项目基于 GNU AGPL-3.0 协议开源，源码公开于 ${AppLinks.GITHUB_REPO_DISPLAY}。"
+                stringResource(R.string.rs_license_body, AppLinks.GITHUB_REPO_DISPLAY)
             )
         )
 
         Spacer(modifier = Modifier.height(18.dp))
         Text(
-            text = "点击下方「开始使用」即表示你已阅读并同意以上条款",
+            text = stringResource(R.string.rs_terms_agree),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -684,7 +686,7 @@ private fun OnboardingBottomBar(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(2.dp))
-                Text(text = "上一步", style = MaterialTheme.typography.labelLarge)
+                Text(text = stringResource(R.string.rs_previous), style = MaterialTheme.typography.labelLarge)
             }
         }
 
@@ -711,7 +713,7 @@ private fun OnboardingBottomBar(
                     Spacer(modifier = Modifier.width(6.dp))
                 }
                 Text(
-                    text = if (last) "开始使用" else "下一步",
+                    text = if (last) stringResource(R.string.rs_get_started) else stringResource(R.string.rs_next),
                     style = MaterialTheme.typography.labelLarge
                 )
                 if (!last) {

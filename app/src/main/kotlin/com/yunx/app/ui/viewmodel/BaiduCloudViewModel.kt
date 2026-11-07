@@ -20,6 +20,7 @@ package com.yunx.app.ui.viewmodel
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.upload.UploadProgress
 import com.yunx.app.data.upload.UploadRunner
@@ -39,6 +40,7 @@ import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.ui.preview.CloudPreview
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -117,7 +119,7 @@ class BaiduCloudViewModel(
     }
 
     private suspend fun cookie(): String =
-        cookieProvider() ?: throw IllegalStateException("请先登录百度网盘")
+        cookieProvider() ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_baidu))
 
     // ---------- 目录浏览 ----------
 
@@ -238,7 +240,7 @@ class BaiduCloudViewModel(
                 val files = api.listCloudFiles(dirPath, cookie()) ?: emptyList()
                 _moveUiState.value = BaiduCloudUiState.Loaded(files, pathNames, dirPath)
             } catch (e: Exception) {
-                _moveUiState.value = BaiduCloudUiState.Error(e.message ?: "加载失败")
+                _moveUiState.value = BaiduCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -277,14 +279,14 @@ class BaiduCloudViewModel(
         if (!folder.isdir) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cookie = cookie()
                 val tasks = mutableListOf<Pair<ShareFile, String>>()
                 collectFolderFiles(folder.fidToken, folder.fname, cookie, tasks, 0)
                 if (tasks.isEmpty()) {
-                    cloudMessage = "文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_folder_empty)
                     actionFile = null
                     return@launch
                 }
@@ -292,7 +294,7 @@ class BaiduCloudViewModel(
                 tasks.forEachIndexed { index, (file, relPath) ->
                     // 用户点击「中断」：跳过剩余项（已入队任务保留下载）
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = api.locateDownload(
                             path = file.fidToken,
@@ -311,14 +313,14 @@ class BaiduCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断下载"
+                    cloudMessage = AppStrings.get(R.string.vc_download_interrupted)
                     actionFile = null
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 actionFile = null
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_folder_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -364,7 +366,7 @@ class BaiduCloudViewModel(
                 )
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -393,7 +395,7 @@ class BaiduCloudViewModel(
                 actionFile = null
                 CloudPreview.open(file, url, downloadHeaders(ck))
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "预览失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_preview_failed)
             } finally {
                 isOperating = false
             }
@@ -415,11 +417,11 @@ class BaiduCloudViewModel(
                     platform = DownloadPlatform.BAIDU,
                     headers = pd.headers
                 )
-                cloudMessage = "已加入下载：${pd.fileName}"
+                cloudMessage = AppStrings.get(R.string.vc_download_added_named, pd.fileName)
                 actionFile = null
                 downloadTriggered++
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -439,14 +441,14 @@ class BaiduCloudViewModel(
             isOperating = true
             try {
                 if (api.renameFile(file.fidToken, newName, cookie())) {
-                    cloudMessage = "已重命名"
+                    cloudMessage = AppStrings.get(R.string.vc_renamed)
                     actionFile = null
                     reloadCurrent()
                 } else {
-                    cloudMessage = "重命名失败"
+                    cloudMessage = AppStrings.get(R.string.vc_rename_failed)
                 }
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "重命名失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_rename_failed)
             } finally {
                 isOperating = false
             }
@@ -464,13 +466,13 @@ class BaiduCloudViewModel(
             isOperating = true
             try {
                 if (api.createDir(path, cookie())) {
-                    cloudMessage = "已创建文件夹「$newName」"
+                    cloudMessage = AppStrings.get(R.string.vc_folder_created, newName)
                     reloadCurrent()
                 } else {
-                    cloudMessage = "新建文件夹失败"
+                    cloudMessage = AppStrings.get(R.string.vc_create_folder_failed)
                 }
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "新建文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_create_folder_failed)
             } finally {
                 isOperating = false
             }
@@ -484,12 +486,12 @@ class BaiduCloudViewModel(
             isOperating = true
             try {
                 api.moveFiles(listOf(file.fidToken), toDirPath, cookie())
-                cloudMessage = "已移动到目标目录"
+                cloudMessage = AppStrings.get(R.string.vc_moved)
                 actionFile = null
                 kotlinx.coroutines.delay(1500)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -517,7 +519,7 @@ class BaiduCloudViewModel(
                     expiredType = result.expiredType?.let { expireType(it) } ?: expiredType
                 )
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -531,12 +533,12 @@ class BaiduCloudViewModel(
             isOperating = true
             try {
                 api.deleteFiles(listOf(file.fidToken), cookie())
-                cloudMessage = "已删除「${file.fname}」"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_named, file.fname)
                 actionFile = null
                 kotlinx.coroutines.delay(1200)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -551,7 +553,7 @@ class BaiduCloudViewModel(
         if (files.isEmpty()) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cookie = cookie()
@@ -565,7 +567,7 @@ class BaiduCloudViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    cloudMessage = "所选文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_selected_folder_empty)
                     exitMultiSelect()
                     return@launch
                 }
@@ -574,7 +576,7 @@ class BaiduCloudViewModel(
                 tasks.forEachIndexed { index, (file, relPath) ->
                     // 用户点击「中断」：跳过剩余项（已入队任务保留下载）
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = api.locateDownload(
                             path = file.fidToken,
@@ -593,18 +595,18 @@ class BaiduCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断批量下载"
+                    cloudMessage = AppStrings.get(R.string.vc_batch_download_interrupted)
                     exitMultiSelect()
                     return@launch
                 }
                 cloudMessage = if (failCount > 0) {
-                    "已加入 $okCount 个下载任务（$failCount 个失败）"
+                    AppStrings.get(R.string.vc_download_added_with_failures, okCount, failCount)
                 } else {
-                    "已加入 $okCount 个下载任务"
+                    AppStrings.get(R.string.vc_download_added, okCount)
                 }
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "批量下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_batch_download_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -627,12 +629,12 @@ class BaiduCloudViewModel(
                     shareUrl = result.link,
                     passcode = result.pwd,
                     pwdId = result.shareId,
-                    title = if (files.size == 1) files[0].fname else "分享 ${files.size} 个文件",
+                    title = if (files.size == 1) files[0].fname else AppStrings.get(R.string.vc_share_n_files, files.size),
                     expiredType = result.expiredType?.let { expireType(it) } ?: expiredType
                 )
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -647,12 +649,12 @@ class BaiduCloudViewModel(
             isOperating = true
             try {
                 api.moveFiles(files.map { it.fidToken }, toDirPath, cookie())
-                cloudMessage = "已移动 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_moved_items, files.size)
                 exitMultiSelect()
                 kotlinx.coroutines.delay(1500)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -667,12 +669,12 @@ class BaiduCloudViewModel(
             isOperating = true
             try {
                 api.deleteFiles(files.map { it.fidToken }, cookie())
-                cloudMessage = "已删除 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_items, files.size)
                 exitMultiSelect()
                 kotlinx.coroutines.delay(1200)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -694,7 +696,7 @@ class BaiduCloudViewModel(
                 val files = api.listCloudFiles(current.dirPath, cookie())
                 _uiState.value = BaiduCloudUiState.Loaded(files, current.pathNames, current.dirPath)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "刷新失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_refresh_failed)
             } finally {
                 refreshing = false
             }
@@ -717,7 +719,7 @@ class BaiduCloudViewModel(
                 val files = api.listCloudFiles(dirPath, cookie())
                 _uiState.value = BaiduCloudUiState.Loaded(files, pathNames, dirPath)
             } catch (e: Exception) {
-                _uiState.value = BaiduCloudUiState.Error(e.message ?: "加载失败")
+                _uiState.value = BaiduCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -741,8 +743,8 @@ class BaiduCloudViewModel(
         if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
         cloudMessage = when {
             outcome.error != null -> outcome.error
-            outcome.cancelled -> "已取消上传"
-            else -> "已上传 ${outcome.uploaded} 个文件"
+            outcome.cancelled -> AppStrings.get(R.string.vc_upload_cancelled)
+            else -> AppStrings.get(R.string.vc_upload_done, outcome.uploaded)
         }
     }
 
@@ -755,7 +757,7 @@ class BaiduCloudViewModel(
     fun uploadFiles(resolver: ContentResolver, uris: List<Uri>) {
         val dir = (uiState.value as? BaiduCloudUiState.Loaded)?.dirPath ?: "/"
         uploadRunner.start(resolver, uris) { io, source ->
-            val cookie = cookieProvider() ?: throw IllegalStateException("请先登录百度网盘")
+            val cookie = cookieProvider() ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_baidu))
             api.upload(io, source, dir, cookie)
         }
     }

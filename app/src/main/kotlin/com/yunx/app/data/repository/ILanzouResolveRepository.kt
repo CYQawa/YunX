@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.ILanzouApi
 import com.yunx.app.data.network.ILanzouConstants
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.delay
 
 /**
@@ -45,8 +47,8 @@ class ILanzouResolveRepository(
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> =
         runCatching {
             val shareId = ShareLinkParser.parse(link)?.shareId?.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("无法识别蓝奏云优享版分享链接")
-            ShareSession(shareId = shareId, stoken = shareId, title = "蓝奏云优享版分享")
+                ?: throw IllegalStateException(AppStrings.get(R.string.er_share_link_unrecognized))
+            ShareSession(shareId = shareId, stoken = shareId, title = AppStrings.get(R.string.er_ilanzou_share_title))
         }
 
     override suspend fun listFiles(
@@ -62,7 +64,7 @@ class ILanzouResolveRepository(
         file: ShareFile,
         cookie: String
     ): Result<DownloadLink> = runCatching {
-        if (file.isdir) throw IllegalStateException("文件夹无法直接下载")
+        if (file.isdir) throw IllegalStateException(AppStrings.get(R.string.er_folder_download_unsupported))
         val fileId = file.fid.removePrefix(ILanzouConstants.FILE_PREFIX)
         // downloadId = AES('<fileId>|<userId>')：未登录传空串，登录则用当前账号 userId
         val userId = accountRepository.getAccount()?.userId.orEmpty()
@@ -73,7 +75,7 @@ class ILanzouResolveRepository(
         session: ShareSession,
         file: ShareFile
     ): Result<DownloadLink> = runCatching {
-        if (file.isdir) throw IllegalStateException("文件夹无法直接下载")
+        if (file.isdir) throw IllegalStateException(AppStrings.get(R.string.er_folder_download_unsupported))
         val fileId = file.fid.removePrefix(ILanzouConstants.FILE_PREFIX)
         api.shareDownload(session.stoken, fileId, "", uuid())
     }
@@ -86,7 +88,7 @@ class ILanzouResolveRepository(
     ): Result<String> = runCatching {
         val appToken = cookie.takeIf { it.isNotBlank() }
             ?: accountRepository.getAccount()?.appToken?.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("请先登录蓝奏云优享版")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_ilanzou_login_required))
         val target = toDirFid.ifBlank { ILanzouConstants.ROOT_FOLDER_ID }
         val fileIds = if (file.isdir) emptyList() else listOf(file.fid.removePrefix(ILanzouConstants.FILE_PREFIX))
         val folderIds = if (file.isdir) listOf(file.fid.removePrefix(ILanzouConstants.FOLDER_PREFIX)) else emptyList()
@@ -98,16 +100,16 @@ class ILanzouResolveRepository(
                 delay(500)
                 if (runCatching { api.transferCount(appToken, uuid(), key) }.getOrDefault(0) == 1) done = true
             }
-            if (!done) throw IllegalStateException("蓝奏优享仍在处理转存，请稍后刷新列表")
+            if (!done) throw IllegalStateException(AppStrings.get(R.string.er_ilanzou_save_processing))
         }
         target
     }
 
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> =
-        Result.failure(UnsupportedOperationException("蓝奏优享分享请使用 getShareDownloadLink"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_ilanzou_use_share_download_link)))
 
     override suspend fun ensureTempDir(cookie: String): Result<String> =
-        Result.failure(UnsupportedOperationException("蓝奏优享分享无需临时目录"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_ilanzou_temp_dir_not_needed)))
 
     private fun folderIdOf(dirFid: String): String? = when {
         dirFid.isBlank() -> null

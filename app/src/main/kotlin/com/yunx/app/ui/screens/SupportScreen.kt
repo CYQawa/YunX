@@ -31,6 +31,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -90,6 +91,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -99,6 +101,7 @@ import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.util.AppStrings
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sign
@@ -138,10 +141,10 @@ fun SupportScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("支持开发", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.vm_support_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.vm_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -192,14 +195,14 @@ fun SupportScreen(
                     Spacer(modifier = Modifier.width(14.dp))
                     Column {
                         Text(
-                            text = "支持开发",
+                            text = stringResource(R.string.vm_support_title),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "你的支持，是持续维护与更新的动力",
+                            text = stringResource(R.string.vm_support_tagline),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
                         )
@@ -239,9 +242,7 @@ fun SupportScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "云析完全免费开源，所有功能无需捐赠即可正常使用。" +
-                            "如果你觉得它帮到了你，愿意的话可以扫码表达一下心意，" +
-                            "你的支持会成为持续维护与更新的动力～",
+                        text = stringResource(R.string.vm_support_free_notice),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         lineHeight = 21.sp
@@ -251,7 +252,7 @@ fun SupportScreen(
 
             // ---------- 感谢语 ----------
             Text(
-                text = "感谢每一位支持者 ❤",
+                text = stringResource(R.string.vm_support_thanks),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -276,7 +277,7 @@ fun SupportScreen(
                             deferred.await()
                         }
                         if (!granted) {
-                            SnackbarController.show("未授予存储权限，无法保存到相册")
+                            SnackbarController.show(AppStrings.get(R.string.vm_support_no_storage_permission))
                             return@launch
                         }
                         val current = sponsorCards[cardIndex]
@@ -284,7 +285,13 @@ fun SupportScreen(
                             saveQrToGallery(context, current.drawableRes, current.fileTag)
                         }
                         if (ok) saved = true
-                        SnackbarController.show(if (ok) "已保存到相册（Pictures/YunX）" else "保存失败")
+                        SnackbarController.show(
+                            if (ok) {
+                                AppStrings.get(R.string.vm_support_saved_to_gallery)
+                            } else {
+                                AppStrings.get(R.string.vm_support_save_failed)
+                            }
+                        )
                     }
                 },
                 modifier = Modifier
@@ -298,12 +305,21 @@ fun SupportScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 // 说清存的是哪张：翻过卡片后用户需要知道这一下存的是谁的码
-                Text(if (saved) "已保存到相册" else "保存 ${sponsorCards[cardIndex].role} 的二维码")
+                Text(
+                    if (saved) {
+                        stringResource(R.string.vm_support_saved)
+                    } else {
+                        stringResource(
+                            R.string.vm_support_save_qr_of,
+                            stringResource(sponsorCards[cardIndex].roleRes)
+                        )
+                    }
+                )
             }
             // 保存成功本地反馈（避免覆盖层遮挡全局 Snackbar 时无提示）
             if (saved) {
                 Text(
-                    text = "✓ 二维码已保存到 相册/Pictures/YunX",
+                    text = stringResource(R.string.vm_support_saved_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     textAlign = TextAlign.Center
@@ -321,27 +337,27 @@ fun SupportScreen(
  */
 private data class SponsorCard(
     /** 是谁的码（作者 / 协作者）——两张码必须一眼分得清，存错人就白扫了 */
-    val role: String,
+    @StringRes val roleRes: Int,
     @DrawableRes val drawableRes: Int,
     /** 存到相册时的文件名标记 */
     val fileTag: String,
     /** 扫码提示 */
-    val hint: String
+    @StringRes val hintRes: Int
 )
 
 /** 页面上的全部赞助码：作者在前（第一张就应该是它） */
 private val sponsorCards = listOf(
     SponsorCard(
-        role = "作者 CYQawa",
+        roleRes = R.string.vm_support_role_author,
         drawableRes = R.drawable.weixin,
         fileTag = "cyqawa",
-        hint = "保存二维码到相册后，打开微信「扫一扫」即可捐赠"
+        hintRes = R.string.vm_support_qr_hint
     ),
     SponsorCard(
-        role = "协作者 tidain",
+        roleRes = R.string.vm_support_role_collaborator,
         drawableRes = R.drawable.sponsor_tidain_weixin,
         fileTag = "tidain",
-        hint = "保存二维码到相册后，打开微信「扫一扫」即可捐赠"
+        hintRes = R.string.vm_support_qr_hint
     )
 )
 
@@ -593,7 +609,7 @@ private fun SponsorCardStack(
             SponsorCodeCard(
                 card = cards[otherIndex],
                 backness = 1f - approachProgress,
-                contentDescriptionSuffix = "（下一张）",
+                contentDescriptionSuffix = stringResource(R.string.vm_support_next_card),
                 modifier = Modifier
                     .zIndex(if (exitOffScreen) 1f else 0f)
                     .graphicsLayer {
@@ -645,7 +661,7 @@ private fun SponsorCardStack(
                 }
             }
             Text(
-                text = "左右滑动切换",
+                text = stringResource(R.string.vm_support_swipe_hint),
                 modifier = Modifier.padding(top = 6.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -700,7 +716,7 @@ private fun SponsorCodeCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "微信扫码捐赠",
+                    text = stringResource(R.string.vm_support_wechat_donate),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
@@ -712,7 +728,7 @@ private fun SponsorCodeCard(
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
                 Text(
-                    text = card.role,
+                    text = stringResource(card.roleRes),
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -729,7 +745,11 @@ private fun SponsorCodeCard(
             ) {
                 Image(
                     painter = painterResource(card.drawableRes),
-                    contentDescription = "${card.role} 的微信捐赠码$contentDescriptionSuffix",
+                    contentDescription = stringResource(
+                        R.string.vm_support_qr_content_desc,
+                        stringResource(card.roleRes),
+                        contentDescriptionSuffix
+                    ),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(10.dp),
@@ -739,7 +759,7 @@ private fun SponsorCodeCard(
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = card.hint,
+                text = stringResource(card.hintRes),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

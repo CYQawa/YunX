@@ -1,0 +1,97 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    Groupe E3 : messages d\'exception / d\'erreur de la couche données (affichés via e.message).
+-->
+<resources>
+    <string name="er_share_link_unrecognized">Lien de partage non reconnu</string>
+    <string name="er_login_account_missing">La session de connexion ne contient pas d\'informations de compte. Veuillez vous reconnecter</string>
+    <string name="er_get_download_url_failed">Échec de l\'obtention du lien de téléchargement</string>
+    <string name="er_create_transfer_task_failed">Échec de la création de la tâche d\'enregistrement</string>
+    <string name="er_save_timeout_or_failed">L\'enregistrement a expiré ou a échoué</string>
+    <string name="er_c139_kouling_invalid">Échec de l\'analyse du code de partage 139 Drive : le lien de partage renvoyé est invalide</string>
+    <string name="er_c139_transfer_not_needed">Les partages 139 Drive ne nécessitent pas d\'enregistrement</string>
+    <string name="er_c139_use_share_download_link">Pour les partages 139 Drive, utilisez getShareDownloadLink</string>
+    <string name="er_guangya_share_title">Partage GuangYa</string>
+    <string name="er_guangya_temp_dir_not_needed">Les partages GuangYa ne nécessitent pas de répertoire temporaire pré-créé</string>
+    <string name="er_guangya_login_required">Veuillez d\'abord vous connecter à GuangYa Drive</string>
+    <string name="er_guangya_use_share_download_link">Pour les partages GuangYa, utilisez getShareDownloadLink</string>
+    <string name="er_guangya_no_download_url">GuangYa n\'a pas renvoyé d\'adresse de téléchargement valide. Vérifiez les autorisations de téléchargement</string>
+    <string name="er_guangya_duplicate_file">Fichiers de même nom dans le répertoire temporaire GuangYa ; impossible de déterminer la cible du téléchargement</string>
+    <string name="er_guangya_size_mismatch">La taille du fichier enregistré sur GuangYa ne correspond pas</string>
+    <string name="er_guangya_target_not_visible">Enregistrement GuangYa soumis, mais le fichier cible n\'est pas encore visible. Veuillez réessayer plus tard</string>
+    <string name="er_guangya_share_login_required">Ce partage GuangYa nécessite une connexion et un enregistrement avant téléchargement. Veuillez d\'abord vous connecter à GuangYa Drive</string>
+    <string name="er_pan115_login_required">Veuillez d\'abord vous connecter à 115 Drive</string>
+    <string name="er_pan115_create_temp_dir_failed">Échec de la création du répertoire temporaire 115</string>
+    <string name="er_pan115_create_temp_subdir_failed">Échec de la création du répertoire temporaire d\'enregistrement 115</string>
+    <string name="er_pan115_file_not_found_after_save">Enregistrement terminé, mais le fichier est introuvable dans le répertoire cible. Veuillez vérifier 115 Drive</string>
+    <string name="er_pan115_use_share_download_link">Pour les partages 115 Drive, utilisez getShareDownloadLink</string>
+    <string name="er_pan115_pc_required">Ce fichier partagé ne peut être téléchargé que via le client PC 115. Veuillez d\'abord vous connecter à 115 Drive depuis la page Drive</string>
+    <string name="er_pan115_pc_url_unavailable">Impossible d\'obtenir le lien de téléchargement PC pour ce fichier partagé. Veuillez réessayer plus tard</string>
+    <string name="er_share_file_no_url_after_save">Aucun lien de téléchargement obtenu après l\'enregistrement du fichier partagé. Veuillez réessayer plus tard</string>
+    <string name="er_space_insufficient">Espace insuffisant : ce partage nécessite %1$s, mais seulement %2$s sont disponibles. Libérez de l\'espace ou téléchargez autrement</string>
+    <string name="er_pan123_transfer_not_needed">Les partages 123 Drive ne nécessitent pas d\'enregistrement</string>
+    <string name="er_pan123_login_required">Veuillez d\'abord vous connecter à 123 Drive</string>
+    <string name="er_pan123_use_share_download_link">Pour les partages 123 Drive, utilisez getShareDownloadLink</string>
+    <string name="er_share_token_missing">Impossible d\'obtenir les identifiants du partage</string>
+    <string name="er_get_file_list_failed">Impossible d\'obtenir la liste des fichiers</string>
+    <string name="er_get_dir_failed">Échec de l\'obtention du répertoire du lecteur</string>
+    <string name="er_create_temp_dir_failed">Échec de la création du répertoire temporaire</string>
+    <string name="er_create_temp_subdir_failed">Échec de la création du répertoire temporaire d\'enregistrement</string>
+    <string name="er_save_failed">Échec de l\'enregistrement</string>
+    <string name="er_save_timeout">L\'enregistrement a expiré. Veuillez réessayer plus tard</string>
+    <string name="er_xunlei_login_required">Veuillez d\'abord vous connecter à Xunlei Drive</string>
+    <string name="er_xunlei_login_expired">La connexion Xunlei a expiré. Veuillez vous reconnecter</string>
+    <string name="er_device_id_missing">Identifiant de l\'appareil manquant</string>
+    <string name="er_share_info_missing">Impossible d\'obtenir les informations du partage</string>
+    <string name="er_guest_download_unsupported">Cette plateforme ne permet pas le téléchargement sans connexion. Veuillez vous connecter et réessayer</string>
+    <string name="er_lanzou_pwd_required">Ce partage Lanzou nécessite un code d\'accès. Veuillez le saisir et relancer l\'analyse</string>
+    <string name="er_lanzou_session_expired">La session de partage Lanzou a expiré. Veuillez relancer l\'analyse</string>
+    <string name="er_lanzou_transfer_unsupported">L\'enregistrement direct n\'est pas pris en charge pour les partages Lanzou. Veuillez télécharger puis importer</string>
+    <string name="er_lanzou_use_share_download_link">Pour les partages Lanzou, utilisez getShareDownloadLink</string>
+    <string name="er_folder_download_unsupported">Les dossiers ne peuvent pas être téléchargés directement</string>
+    <string name="er_ilanzou_share_title">Partage Lanzou Cloud Premium</string>
+    <string name="er_ilanzou_login_required">Veuillez d\'abord vous connecter à Lanzou Cloud Premium</string>
+    <string name="er_ilanzou_save_processing">Lanzou Premium traite encore l\'enregistrement. Veuillez actualiser la liste plus tard</string>
+    <string name="er_ilanzou_use_share_download_link">Pour les partages Lanzou Premium, utilisez getShareDownloadLink</string>
+    <string name="er_ilanzou_temp_dir_not_needed">Les partages Lanzou Premium ne nécessitent pas de répertoire temporaire</string>
+    <string name="er_video_platform_unsupported">L\'analyse de %1$s n\'est pas encore prise en charge</string>
+    <string name="er_lanzou_credential_check_failed">Échec de la vérification des identifiants Lanzou Cloud. Veuillez réessayer</string>
+    <string name="er_lanzou_credential_invalid">Les identifiants Lanzou Cloud sont invalides. Veuillez réessayer</string>
+    <string name="er_xunlei_captcha_method_mismatch">Le code de vérification ne correspond pas à la méthode de connexion actuelle. Veuillez vous reconnecter à la version web de Xunlei</string>
+    <string name="er_xunlei_web_login_expired">La connexion web Xunlei a expiré. Veuillez vous reconnecter depuis la page de connexion Xunlei</string>
+    <string name="er_announcement_empty_response">Réponse vide (HTTP %1$d)</string>
+    <string name="er_announcement_network_error">Erreur réseau</string>
+    <string name="er_announcement_bad_response">Format de réponse inattendu</string>
+    <string name="er_announcement_request_failed">Échec de la requête</string>
+    <string name="er_announcement_empty_data">Les données de réponse sont vides</string>
+    <string name="er_announcement_parse_failed">Échec de l\'analyse des données</string>
+    <string name="er_time_just_now">À l\'instant</string>
+    <string name="er_time_minutes_ago">Il y a %1$d min</string>
+    <string name="er_time_hours_ago">Il y a %1$d h</string>
+    <string name="er_time_days_ago">Il y a %1$d jours</string>
+    <string name="er_baidu_default_nickname">Utilisateur Baidu</string>
+    <string name="er_c139_default_nickname">Utilisateur 139</string>
+    <string name="er_guangya_default_nickname">Utilisateur GuangYa</string>
+    <string name="er_lanzou_default_nickname">Utilisateur Lanzou Cloud</string>
+    <string name="er_pan115_default_nickname">Utilisateur 115</string>
+    <string name="er_quark_default_nickname">Utilisateur Quark</string>
+    <string name="er_uc_default_nickname">Utilisateur UC</string>
+    <string name="er_xunlei_default_nickname">Utilisateur Xunlei</string>
+</resources>

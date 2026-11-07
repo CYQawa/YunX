@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    E5 グループ：解析 / アップロード / 更新 / Gopeed エンジン / バックアップ暗号化 / ログ出力で画面に表示される文言。
+-->
+<resources>
+    <!-- ネットワークリクエスト共通エラー -->
+    <string name="em_http_blocked">%1$s がリスクコントロールによりブロックされました（HTTP %2$d）</string>
+    <string name="em_http_not_found">%1$s が見つかりません（HTTP %2$d）</string>
+    <string name="em_http_failed">%1$s のリクエストに失敗しました（HTTP %2$d）</string>
+    <string name="em_http_not_json">%1$s の応答が有効な JSON ではありません</string>
+    <string name="em_http_request_failed">リクエストに失敗しました：%1$s</string>
+    <string name="em_what_parse">解析</string>
+
+    <!-- 解析結果のエラー通知 -->
+    <string name="em_parse_blocked">プラットフォームのリスクコントロールによりブロックされました。しばらくしてから再試行してください</string>
+    <string name="em_parse_not_found">コンテンツが存在しない、削除済み、または非公開です</string>
+    <string name="em_parse_network">ネットワークリクエストに失敗しました。通信状態を確認して再試行してください</string>
+    <string name="em_parse_unsupported">このリンクはまだ対応していません</string>
+    <string name="em_parse_failed">解析に失敗しました。しばらくしてから再試行してください</string>
+
+    <!-- リクエスト対象の名称 -->
+    <string name="em_what_acfun_video">AcFun 動画</string>
+    <string name="em_what_bili_cookie">Bilibili ログイン状態確認</string>
+    <string name="em_what_bili_video">Bilibili 動画情報</string>
+    <string name="em_what_bili_playurl">Bilibili 直リンク取得</string>
+    <string name="em_what_bili_dash">Bilibili DASH 直リンク取得</string>
+    <string name="em_what_douyin_page">Douyin シェアページ</string>
+    <string name="em_what_kuaishou_page">Kuaishou 作品ページ</string>
+    <string name="em_what_xhs_note">Xiaohongshu ノート</string>
+    <string name="em_what_weibo_video">Weibo 動画</string>
+    <string name="em_what_pixiv_artwork">Pixiv 作品情報</string>
+    <string name="em_what_pixiv_pages">Pixiv 原画リスト</string>
+
+    <!-- メディア画質ラベル -->
+    <string name="em_quality_original">原画</string>
+    <string name="em_quality_motion">モーション画像</string>
+    <string name="em_quality_dash">%1$s（分離トラック、ダウンロード後に結合）</string>
+    <string name="em_quality_number">画質 %1$d</string>
+
+    <!-- AcFun -->
+    <string name="em_acfun_no_video_info">AcFun 動画情報の解析に失敗しました（ページに videoInfo がありません。削除された可能性があります）</string>
+    <string name="em_acfun_parse_failed">AcFun 動画情報の解析に失敗しました</string>
+    <string name="em_acfun_no_stream">AcFun の動画ストリーム URL を取得できませんでした</string>
+
+    <!-- Kuaishou -->
+    <string name="em_kuaishou_no_init_state">Kuaishou ページに window.INIT_STATE がありません（作品が削除されたか、ページ構成が変更された可能性があります）</string>
+    <string name="em_kuaishou_invalid_json">window.INIT_STATE が有効な JSON ではありません</string>
+    <string name="em_kuaishou_no_photo">window.INIT_STATE に作品データがありません</string>
+
+    <!-- Bilibili -->
+    <string name="em_bili_api_error">Bilibili 動画情報 API が code=%1$d msg=%2$s を返しました</string>
+    <string name="em_bili_missing_data">Bilibili 動画情報に data フィールドがありません</string>
+    <string name="em_bili_missing_ids">Bilibili 動画情報に bvid/cid がありません</string>
+    <string name="em_bili_no_stream">Bilibili は単一ファイルの直リンクも、結合可能な分離ストリームも返しませんでした（code=%1$d msg=%2$s）：この動画はアニメ/有料コンテンツの可能性があります</string>
+    <string name="em_bili_durl_empty">Bilibili の durl が空です</string>
+    <string name="em_bili_url_empty">Bilibili の直リンクが空です（ログインが必要か、リスクコントロールによりブロックされた可能性があります）</string>
+
+    <!-- Douyin -->
+    <string name="em_douyin_no_router_data">Douyin シェアページに window._ROUTER_DATA がありません（作品が削除されたか、ページ構成が変更された可能性があります）</string>
+    <string name="em_douyin_parse_failed">Douyin の解析に失敗しました</string>
+    <string name="em_douyin_router_invalid_json">window._ROUTER_DATA が有効な JSON ではありません</string>
+    <string name="em_douyin_no_loader_data">window._ROUTER_DATA に loaderData がありません</string>
+    <string name="em_douyin_no_page">window._ROUTER_DATA に video_(id)/page も note_(id)/page もありません</string>
+    <string name="em_douyin_no_data">Douyin がこの作品のデータを返しませんでした（作品が削除されたか非公開、またはリスクコントロールによりブロックされた可能性があります）[%1$s]</string>
+    <string name="em_douyin_ttwid_request_failed">ttwid 登録リクエストに失敗しました</string>
+    <string name="em_douyin_ttwid_failed">ttwid 登録に失敗しました（HTTP %1$d）</string>
+    <string name="em_douyin_ttwid_no_cookie">ttwid 登録が有効な Cookie を返しませんでした</string>
+    <string name="em_flag_present">あり</string>
+    <string name="em_flag_missing">なし</string>
+    <string name="em_detail_length">長さ %1$d</string>
+    <string name="em_detail_request_id">, リクエストID=</string>
+
+    <!-- Xiaohongshu -->
+    <string name="em_xhs_parse_failed">Xiaohongshu の解析に失敗しました</string>
+    <string name="em_xhs_no_note">Xiaohongshu ページにこのノートのデータがありません</string>
+    <string name="em_xhs_login_required">Xiaohongshu ではノートの閲覧にログインが必要です。先に「アカウント」ページで Xiaohongshu にログインしてください</string>
+    <string name="em_xhs_no_note_data">Xiaohongshu ページにノートデータがありません（リスクコントロールによるブロック、またはページ構成の変更の可能性があります）</string>
+    <string name="em_xhs_state_parse_failed">Xiaohongshu ページデータの解析に失敗しました</string>
+    <string name="em_xhs_video_no_stream">Xiaohongshu 動画ノートの直リンクを取得できませんでした（ノートに video フィールドはありますが、media.stream に使用可能なアドレスがありません）</string>
+    <string name="em_xhs_link_invalid">Xiaohongshu のシェアリンクが無効か、コンテンツが削除されています</string>
+    <string name="em_xhs_note_deleted">Xiaohongshu ページにノートデータがありません（コンテンツが削除された可能性があります）</string>
+    <string name="em_xhs_watermark_fallback">%1$d 枚の画像に透かしなしの原画がないため、プラットフォームの URL を使用しました（透かしが入る場合があります）</string>
+
+    <!-- Weibo -->
+    <string name="em_weibo_unsupported_kind">未対応の Weibo リンク形式です：%1$s</string>
+    <string name="em_weibo_blocked">Weibo がリスクコントロールによりブロックされました（HTTP %1$d）。UA/Referer を変更するか、しばらくしてから再試行してください</string>
+    <string name="em_weibo_not_found_code">Weibo のコンテンツが存在しないか削除されています（HTTP %1$d）</string>
+    <string name="em_weibo_fetch_failed">Weibo データの取得に失敗しました（HTTP %1$d）</string>
+    <string name="em_weibo_not_json">Weibo API が JSON 以外を返しました（content-type: %1$s）。リスクコントロールによりブロックされた可能性が高いです</string>
+    <string name="em_weibo_parse_failed">Weibo の応答データの解析に失敗しました</string>
+    <string name="em_weibo_not_found">Weibo のコンテンツが存在しないか削除されています</string>
+    <string name="em_weibo_video_parse_failed">Weibo 動画 API の応答データの解析に失敗しました</string>
+    <string name="em_weibo_video_empty">Weibo 動画データが空です（作品が削除された可能性があります）</string>
+
+    <!-- Pixiv -->
+    <string name="em_pixiv_login_expired">Pixiv のログイン状態が失効しました。「アカウント」ページで Cookie を貼り直してください</string>
+    <string name="em_pixiv_login_required">この作品の解析にはログインが必要です（多くは R18 または制限作品です）。「アカウント」ページでブラウザの Cookie を貼り付けてください</string>
+    <string name="em_pixiv_error_message">Pixiv 作品情報がエラーを返しました：%1$s</string>
+    <string name="em_pixiv_missing_body">Pixiv 作品情報に body がありません</string>
+    <string name="em_pixiv_ugoira_unsupported">Pixiv の ugoira は GIF 合成が必要ですが、現在のバージョンでは未対応です</string>
+    <string name="em_pixiv_no_images">Pixiv がダウンロード可能な原画を返しませんでした</string>
+
+    <!-- アップロード -->
+    <string name="em_upload_invalid_range">アップロードの読み取り範囲が無効です</string>
+    <string name="em_upload_open_failed">選択したファイルを開けません</string>
+    <string name="em_upload_read_incomplete">ローカルファイルの読み取りが不完全です。もう一度選択してください</string>
+    <string name="em_upload_unnamed_file">名前のないファイル</string>
+    <string name="em_upload_size_unreadable">選択したファイルのサイズを読み取れません。別のファイルを選んで再試行してください</string>
+    <string name="em_upload_file_failed">「%1$s」のアップロードに失敗しました：%2$s</string>
+    <string name="em_upload_network_error">通信エラーです。再試行してください</string>
+    <string name="em_upload_interrupted">アップロードが中断されました。再試行してください</string>
+    <string name="em_upload_cancelled">アップロードはキャンセルされました</string>
+    <string name="em_upload_bad_credentials">クラウドストレージが完全なアップロード認証情報を返しませんでした</string>
+    <string name="em_upload_service_error">クラウドストレージのアップロードサービスがエラーを返しました（HTTP %1$d）</string>
+    <string name="em_upload_create_multipart_failed">クラウドストレージが分割アップロードを作成できませんでした（HTTP %1$d）</string>
+    <string name="em_upload_no_multipart_task">クラウドストレージが分割アップロードタスクを作成しませんでした</string>
+    <string name="em_upload_part_failed">ファイルのアップロードに失敗しました（HTTP %1$d）</string>
+    <string name="em_upload_part_unconfirmed">クラウドストレージがアップロードパートを確認しませんでした</string>
+    <string name="em_upload_merge_failed">クラウドストレージがパートの結合を完了しませんでした</string>
+
+    <!-- Gopeed エンジン -->
+    <string name="em_engine_path_absolute">絶対パスを入力してください（/ で始まる）</string>
+    <string name="em_engine_dir_create_failed">このディレクトリを作成できません：%1$s（パスが正しいか、親ディレクトリが存在するか確認してください）</string>
+    <string name="em_engine_need_all_files">（先に「すべてのファイルへのアクセス」を許可してください）</string>
+    <string name="em_engine_dir_not_writable">このディレクトリは書き込みできません：%1$s%2$s</string>
+    <string name="em_engine_stop_before_install">先にエンジンを停止してから、新しいエンジンファイルをインポートしてください</string>
+    <string name="em_engine_dir_unavailable">エンジンディレクトリが使用できません</string>
+    <string name="em_engine_cannot_create_dir">ディレクトリを作成できません：%1$s</string>
+    <string name="em_engine_cannot_read_file">選択したファイルを読み取れません</string>
+    <string name="em_engine_aar_missing_so">この AAR には jni/%1$s/%2$s が含まれていません（本機の優先 ABI：%3$s）</string>
+    <string name="em_engine_empty_so">展開されたエンジンファイルが空です</string>
+    <string name="em_engine_overwrite_failed">古いエンジンファイルを上書きできません：%1$s</string>
+    <string name="em_engine_write_failed">エンジンファイルを書き込めません：%1$s</string>
+    <string name="em_engine_restart_required">エンジンはこのプロセスで既に読み込まれています。新しいファイルはアプリを再起動してから有効になります</string>
+    <string name="em_engine_stop_first">先にエンジンを停止してください</string>
+    <string name="em_engine_delete_failed">削除に失敗しました：%1$s</string>
+    <string name="em_engine_not_installed">Gopeed エンジンがまだインポートされていません（%1$s がありません）</string>
+    <string name="em_engine_not_started">エンジンが起動していません</string>
+    <string name="em_engine_invoke_timeout">エンジン呼び出しがタイムアウトしました（60 秒）：%1$s %2$s</string>
+    <string name="em_engine_invoke_failed">エンジン呼び出しに失敗しました：%1$s %2$s</string>
+    <string name="em_engine_response_unparsable">エンジンの応答を解析できません：%1$s</string>
+    <string name="em_engine_error_code">エンジンがエラーコード %1$d を返しました</string>
+    <string name="em_engine_no_config">エンジンが設定を返しませんでした</string>
+    <string name="em_engine_no_task_status">エンジンがタスク状態を返しませんでした</string>
+    <string name="em_engine_no_task_detail">エンジンがタスク詳細を返しませんでした</string>
+    <string name="em_engine_load_failed">エンジン共有ライブラリの読み込みに失敗しました（両方の方法で失敗）\n① System.load(%1$s)：%2$s\n② System.loadLibrary(\"gojni\")：%3$s</string>
+
+    <!-- Gopeed カーネルのダウンロード -->
+    <string name="em_kernel_notify_downloading">Gopeed カーネルをダウンロード中</string>
+    <string name="em_kernel_fetch_version_failed">カーネルバージョンの取得に失敗しました：%1$s</string>
+    <string name="em_kernel_fetch_version_failed_short">カーネルバージョンの取得に失敗しました</string>
+    <string name="em_kernel_asset_missing">このバージョン（%1$s）には %2$s がありません（本機 ABI：%3$s）。既存のアセット：%4$s</string>
+    <string name="em_kernel_none">なし</string>
+    <string name="em_kernel_no_pan_link">このバージョンの説明にクラウドストレージのリンクがありません。GitHub からダウンロードしてください</string>
+    <string name="em_kernel_source_github">GitHub 直リンク</string>
+    <string name="em_kernel_source_mirror">GitHub ミラー</string>
+    <string name="em_kernel_notify_importing">Gopeed カーネルをインポート中</string>
+    <string name="em_kernel_unknown_link">認識できないクラウドストレージのリンクです：%1$s</string>
+    <string name="em_kernel_only_quark">現在は Quark クラウドストレージの自動ダウンロードのみ対応しています（このリンクは %1$s）。GitHub からダウンロードしてください</string>
+    <string name="em_kernel_open_share_failed">共有を開くのに失敗しました：%1$s</string>
+    <string name="em_kernel_unknown_error">不明なエラー</string>
+    <string name="em_kernel_guest_link_failed">ゲストのリンク取得に失敗しました：%1$s</string>
+    <string name="em_kernel_link_failed">リンク取得に失敗しました：%1$s</string>
+    <string name="em_kernel_quark_guest">Quark クラウドストレージ（ゲスト）</string>
+    <string name="em_kernel_quark_logged_in">Quark クラウドストレージ（ログイン済み）</string>
+    <string name="em_kernel_list_failed">共有ディレクトリの一覧取得に失敗しました：%1$s</string>
+    <string name="em_kernel_asset_not_in_root">共有に %1$s がありません（ルート：%2$s）</string>
+    <string name="em_kernel_asset_not_in_sub">共有に %1$s がありません（%2$s/ 内：%3$s）</string>
+    <string name="em_kernel_list_empty">空</string>
+    <string name="em_kernel_download_failed">ダウンロードに失敗しました</string>
+    <string name="em_kernel_download_failed_single">ダウンロードに失敗しました（単一ストリーム）</string>
+    <string name="em_kernel_downloaded_empty">ダウンロードしたファイルが空です</string>
+    <string name="em_kernel_chunk_failed">チャンクのダウンロードに失敗しました（%1$s）</string>
+    <string name="em_kernel_notify_merging">Gopeed カーネルのチャンクを結合中</string>
+    <string name="em_kernel_size_mismatch">ファイルサイズの検証に失敗しました：期待値 %1$d バイト、実際 %2$d バイト（破損したパッケージのインポートを拒否しました）</string>
+    <string name="em_kernel_sha_mismatch">カーネルパッケージの検証に失敗しました（sha256 不一致）。破棄しました：%1$s</string>
+
+    <!-- 更新チェック -->
+    <string name="em_update_unknown_error">不明なエラー</string>
+    <string name="em_update_bad_format">応答形式が不正です</string>
+    <string name="em_update_no_release">リポジトリにまだ Release がありません</string>
+    <string name="em_update_rate_limited">GitHub API のレート制限（HTTP %1$d）。しばらくしてから再試行してください</string>
+    <string name="em_update_empty_response">応答が空です</string>
+    <string name="em_update_missing_tag">Release データにバージョンタグがありません</string>
+
+    <!-- バックアップと暗号化 -->
+    <string name="em_backup_password_too_short">バックアップのパスフレーズは 8 文字以上必要です</string>
+    <string name="em_backup_not_encrypted">有効な暗号化バックアップファイルではありません</string>
+    <string name="em_backup_corrupted">暗号化バックアップファイルが破損しています</string>
+    <string name="em_backup_not_valid">有効な YunX 認証バックアップファイルではありません</string>
+    <string name="em_credential_legacy_key_missing">旧暗号化キーが存在しないため、過去の認証情報を復号できません</string>
+
+    <!-- ログ出力 -->
+    <string name="em_log_export_title">YunX ログエクスポート\n</string>
+    <string name="em_log_export_time">エクスポート日時：%1$s\n</string>
+    <string name="em_log_app_version">アプリバージョン：%1$s（%2$d）\n</string>
+    <string name="em_log_device">デバイス：%1$s %2$s\n</string>
+    <string name="em_log_system">システム：Android %1$s（SDK %2$d）\n</string>
+    <string name="em_log_diagnostic_mode">診断モード：%1$s\n</string>
+    <string name="em_log_enabled">有効</string>
+    <string name="em_log_disabled">オフ</string>
+    <string name="em_log_uid_pid">本アプリの uid=%1$d、今回の pid=%2$d\n</string>
+    <string name="em_log_runtime_section">========== 実行ログ（logcat -d -v time）==========\n</string>
+    <string name="em_log_logcat_unavailable">（ログの読み取りに失敗：本機の logcat が使用できません）\n</string>
+    <string name="em_log_no_output">（出力なし）\n</string>
+    <string name="em_log_share_title">ログを共有</string>
+</resources>

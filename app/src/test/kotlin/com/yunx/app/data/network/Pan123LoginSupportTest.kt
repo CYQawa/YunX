@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.data.network.Pan123LoginSupport.Failure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,6 +26,9 @@ import org.junit.Test
 
 /**
  * 123 云盘账号密码登录的错误映射与令牌校验（纯逻辑，不联网）。
+ *
+ * 用户可见文案已本地化，JVM 单测里没有资源表（AppStrings 未装配时取到空串），
+ * 所以这里断言的是**分类**结果而不是具体字符串。
  *
  * 重点锁两件事：
  * 1. **绝不回显服务端原文**——登录接口的响应可能把账号甚至密码原样带回来，任何分支都不能把它抛给 UI；
@@ -37,30 +41,30 @@ class Pan123LoginSupportTest {
     @Test
     fun mapsHttpLevelFailures() {
         assertEquals(
-            "123 登录接口发生变化，请稍后重试",
-            Pan123LoginSupport.describeFailure(httpStatus = 302, code = 0, serverMessage = "")
+            Failure.API_CHANGED,
+            Pan123LoginSupport.classifyFailure(httpStatus = 302, code = 0, serverMessage = "")
         )
         assertEquals(
-            Pan123LoginSupport.MESSAGE_TOO_FREQUENT,
-            Pan123LoginSupport.describeFailure(httpStatus = 429, code = 0, serverMessage = "")
+            Failure.TOO_FREQUENT,
+            Pan123LoginSupport.classifyFailure(httpStatus = 429, code = 0, serverMessage = "")
         )
         assertEquals(
-            "123 登录服务暂时不可用，请稍后重试",
-            Pan123LoginSupport.describeFailure(httpStatus = 503, code = 0, serverMessage = "")
+            Failure.SERVICE_UNAVAILABLE,
+            Pan123LoginSupport.classifyFailure(httpStatus = 503, code = 0, serverMessage = "")
         )
     }
 
     @Test
     fun mapsBusinessRateLimitMessages() {
         assertEquals(
-            Pan123LoginSupport.MESSAGE_TOO_FREQUENT,
-            Pan123LoginSupport.describeFailure(httpStatus = 200, code = 429, serverMessage = "")
+            Failure.TOO_FREQUENT,
+            Pan123LoginSupport.classifyFailure(httpStatus = 200, code = 429, serverMessage = "")
         )
         listOf("请求频繁", "频率过高", "次数超限", "请稍后再试").forEach { message ->
             assertEquals(
                 message,
-                Pan123LoginSupport.MESSAGE_TOO_FREQUENT,
-                Pan123LoginSupport.describeFailure(httpStatus = 200, code = -1, serverMessage = message)
+                Failure.TOO_FREQUENT,
+                Pan123LoginSupport.classifyFailure(httpStatus = 200, code = -1, serverMessage = message)
             )
         }
     }
@@ -70,8 +74,8 @@ class Pan123LoginSupportTest {
         listOf("请完成安全验证", "需要滑块验证", "验证码错误", "captcha required", "Verify failed").forEach { message ->
             assertEquals(
                 message,
-                Pan123LoginSupport.MESSAGE_VERIFY_REQUIRED,
-                Pan123LoginSupport.describeFailure(httpStatus = 200, code = 401, serverMessage = message)
+                Failure.VERIFY_REQUIRED,
+                Pan123LoginSupport.classifyFailure(httpStatus = 200, code = 401, serverMessage = message)
             )
         }
     }
@@ -79,17 +83,23 @@ class Pan123LoginSupportTest {
     @Test
     fun mapsFrozenAccountMessages() {
         listOf("账号已冻结", "封禁中", "已封停", "账号注销", "禁用").forEach { message ->
-            val text = Pan123LoginSupport.describeFailure(httpStatus = 200, code = 401, serverMessage = message)
-            assertTrue(message, text.contains("官方客户端"))
+            assertEquals(
+                message,
+                Failure.ACCOUNT_LOCKED,
+                Pan123LoginSupport.classifyFailure(httpStatus = 200, code = 401, serverMessage = message)
+            )
         }
     }
 
     @Test
     fun fallsBackWithoutEchoingServerMessage() {
         val message = "账号 fixture-phone 密码 Password123 不正确"
+        assertEquals(
+            Failure.UNKNOWN,
+            Pan123LoginSupport.classifyFailure(httpStatus = 200, code = 401, serverMessage = message)
+        )
+        // 关键：提示只由资源文案拼成，服务端原文（含账号密码）一个字都不会回显
         val text = Pan123LoginSupport.describeFailure(httpStatus = 200, code = 401, serverMessage = message)
-        assertEquals(Pan123LoginSupport.MESSAGE_FALLBACK, text)
-        // 关键：服务端原文（含账号密码）一个字都不能出现在给用户的提示里
         assertFalse(text.contains("fixture-phone"))
         assertFalse(text.contains("Password123"))
     }

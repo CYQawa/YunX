@@ -24,6 +24,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.yunx.app.R
 import com.yunx.app.data.db.BaiduAccountDao
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.C139AccountDao
@@ -48,6 +49,7 @@ import com.yunx.app.data.db.VideoAccountDao
 import com.yunx.app.data.db.VideoAccountEntity
 import com.yunx.app.data.network.GitHubTokenStore
 import com.yunx.app.data.network.video.VideoPlatform
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -97,7 +99,9 @@ class AuthBackupManager(
      */
     suspend fun export(password: String? = null, onlyLoggedIn: Boolean = true, context: Context): String =
         withContext(Dispatchers.IO) {
-            require(!password.isNullOrBlank() && password.length >= 8) { "备份口令至少 8 位" }
+            require(!password.isNullOrBlank() && password.length >= 8) {
+                AppStrings.get(R.string.em_backup_password_too_short)
+            }
             val json = exportJson(onlyLoggedIn, context)
             AuthCrypto.encrypt(json, password)
         }
@@ -257,7 +261,7 @@ class AuthBackupManager(
     suspend fun importJson(json: String, context: Context): Int = withContext(Dispatchers.IO) {
         val root = JSONObject(json)
         if (root.optString("app") != APP_TAG) {
-            throw IllegalArgumentException("不是有效的云析认证备份文件")
+            throw IllegalArgumentException(AppStrings.get(R.string.em_backup_not_valid))
         }
         val accounts = root.optJSONArray("accounts") ?: return@withContext 0
         var count = 0

@@ -18,6 +18,10 @@
 
 package com.yunx.app.ui.resolve
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -94,17 +98,16 @@ fun DownloadLinkDialog(
             ) {
                 Text(
                     text = if (isP2p) {
-                        "百度 P2P 任务已生成（只下载、不上传做种）"
+                        stringResource(R.string.sh_baidu_p2p_task_generated)
                     } else {
-                        "下载直链已生成（有效期约 15-30 分钟）"
+                        stringResource(R.string.sh_direct_link_generated)
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (isP2p) {
                     Text(
-                        text = "该任务使用 Seed / POP / TPDATA 取分片，不是可直接复制的 HTTP 直链。" +
-                            "本机只发起下载请求，不监听端口、不接受上传。",
+                        text = stringResource(R.string.sh_baidu_p2p_task_description),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -121,10 +124,12 @@ fun DownloadLinkDialog(
                                 .padding(12.dp)
                                 .combinedClickable(
                                     onClick = {},
-                                    onLongClickLabel = "复制下载链接",
+                                    onLongClickLabel = stringResource(R.string.sh_copy_download_link),
                                     onLongClick = {
                                         copyToClipboard(context, link.downloadUrl)
-                                        SnackbarController.show("下载链接已复制")
+                                        SnackbarController.show(
+                                            AppStrings.get(R.string.sh_download_link_copied)
+                                        )
                                     }
                                 ),
                             style = MaterialTheme.typography.labelSmall.copy(
@@ -139,15 +144,15 @@ fun DownloadLinkDialog(
                     }
                     TextButton(onClick = {
                         copyToClipboard(context, link.downloadUrl)
-                        SnackbarController.show("下载链接已复制")
+                        SnackbarController.show(AppStrings.get(R.string.sh_download_link_copied))
                     }) {
                         Icon(Icons.Outlined.ContentCopy, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("复制下载链接")
+                        Text(stringResource(R.string.sh_copy_download_link))
                     }
                 }
                 Text(
-                    text = "开始下载后，可在「下载」页查看保存进度",
+                    text = stringResource(R.string.sh_download_start_hint),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -165,12 +170,12 @@ fun DownloadLinkDialog(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("开始下载")
+                Text(stringResource(R.string.sh_start_download))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("关闭")
+                Text(stringResource(R.string.sh_close))
             }
         },
         modifier = modifier

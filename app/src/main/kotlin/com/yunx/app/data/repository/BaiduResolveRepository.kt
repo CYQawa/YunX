@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.BaiduConstants
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 
 /**
  * 百度分享解析仓库：verify 拿 sekey → xpan/share 列文件 → 转存临时目录（自动创建，失败回退根目录）→ locatedownload 拿 appall 高速链 → 立即删除临时转存。
@@ -41,7 +43,7 @@ class BaiduResolveRepository(private val api: BaiduApi) : ShareResolveRepository
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> =
         runCatching {
             val parsed = ShareLinkParser.parse(link)
-                ?: throw IllegalArgumentException("无法识别百度分享链接")
+                ?: throw IllegalArgumentException(AppStrings.get(R.string.er_share_link_unrecognized))
             val surl = parsed.shareId
             // 修复：公共分享（pwd 为空）不强制提取码——跳过 verify，sekey 置空，
             // listShare 将不带 sekey 直接列出（抓包实证：公共分享无需 sekey/Cookie 即 errno=0）

@@ -53,12 +53,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yunx.app.R
 import com.yunx.app.util.PermissionState
 
 /**
@@ -111,7 +113,7 @@ internal fun PermissionPage(
     ) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "权限准备",
+            text = stringResource(R.string.rs_permissions_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
@@ -119,10 +121,9 @@ internal fun PermissionPage(
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = if (storageRequired) {
-                "云析只用下面这几项系统授权。存储权限是 Android 9 及以下保存文件的必要权限，必须授权；" +
-                    "其余两项可以跳过，之后也能在「设置」里随时更改"
+                stringResource(R.string.rs_permissions_intro_required)
             } else {
-                "云析只用下面这几项系统授权，都可以跳过，之后也能在「设置」里随时更改"
+                stringResource(R.string.rs_permissions_intro_optional)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -131,11 +132,11 @@ internal fun PermissionPage(
 
         PermissionCard(
             icon = Icons.Outlined.Notifications,
-            title = "通知权限",
-            desc = "下载进度、完成提醒显示在通知栏，也能让前台服务更稳地活下去；关闭后下载照常进行，只是看不到进度。",
+            title = stringResource(R.string.rs_perm_notification_title),
+            desc = stringResource(R.string.rs_perm_notification_desc),
             granted = notificationsEnabled,
-            grantedText = "已开启",
-            actionText = if (PermissionState.canRequestNotifications(context)) "授权" else "去设置",
+            grantedText = stringResource(R.string.rs_perm_granted),
+            actionText = if (PermissionState.canRequestNotifications(context)) stringResource(R.string.rs_perm_grant) else stringResource(R.string.rs_perm_go_settings),
             onAction = {
                 if (PermissionState.canRequestNotifications(context)) {
                     notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -149,28 +150,28 @@ internal fun PermissionPage(
 
         PermissionCard(
             icon = Icons.Outlined.BatteryChargingFull,
-            title = "后台运行",
-            desc = "把云析加入「忽略电池优化」白名单，锁屏或切到后台后下载不会被系统冻结（推荐开启）。",
+            title = stringResource(R.string.rs_perm_background_title),
+            desc = stringResource(R.string.rs_perm_background_desc),
             granted = batteryIgnored,
-            grantedText = "已加入白名单",
-            actionText = "去设置",
+            grantedText = stringResource(R.string.rs_perm_whitelisted),
+            actionText = stringResource(R.string.rs_perm_go_settings),
             onAction = { PermissionState.requestIgnoreBatteryOptimizations(context) }
         )
         Spacer(modifier = Modifier.height(12.dp))
 
         PermissionCard(
             icon = Icons.Outlined.Storage,
-            title = "存储权限",
+            title = stringResource(R.string.rs_perm_storage_title),
             desc = if (storageRequired) {
-                "保存文件到系统「下载」目录需要存储权限；Android 9 及以下这是必要权限，必须授权才能保存文件。"
+                stringResource(R.string.rs_perm_storage_desc_required)
             } else {
-                "Android 10 及以上保存文件走系统媒体库，不需要存储权限。"
+                stringResource(R.string.rs_perm_storage_desc_optional)
             },
             granted = storageGranted,
-            grantedText = if (storageRequired) "已授权" else "无需授权",
+            grantedText = if (storageRequired) stringResource(R.string.rs_perm_authorized) else stringResource(R.string.rs_perm_no_need),
             actionText = if (storageRequired && !storageGranted) {
                 // 授权框已被拒过一次：再点也弹不出来（或被勾了"不再询问"），只能去应用详情页手动开
-                if (storageDenied) "去设置授权" else "授权"
+                if (storageDenied) stringResource(R.string.rs_perm_go_settings_grant) else stringResource(R.string.rs_perm_grant)
             } else {
                 null
             },
@@ -180,11 +181,9 @@ internal fun PermissionPage(
         Spacer(modifier = Modifier.height(18.dp))
         Text(
             text = if (storageRequired) {
-                "跳过的影响：没有通知权限 → 通知栏看不到下载进度；没有后台运行白名单 → 息屏后下载可能被暂停。" +
-                    "存储权限是必要权限，未授权无法保存文件，所以必须授权后才能开始使用。"
+                stringResource(R.string.rs_perm_skip_impact_required)
             } else {
-                "跳过的影响：没有通知权限 → 通知栏看不到下载进度；没有后台运行白名单 → 息屏后下载可能被暂停。" +
-                    "Android 10 及以上保存文件不需要存储权限。"
+                stringResource(R.string.rs_perm_skip_impact_optional)
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

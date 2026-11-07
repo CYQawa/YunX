@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.BookmarkDao
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.download.DownloadManager
@@ -91,6 +92,7 @@ import com.yunx.app.ui.preview.PreviewKind
 import com.yunx.app.ui.preview.PreviewLauncher
 import com.yunx.app.ui.preview.PreviewMedia
 import com.yunx.app.ui.preview.PreviewTypes
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -254,7 +256,7 @@ class ResolveViewModel(
     fun requestSave(file: ShareFile) {
         // 游客模式只开放列目录：转存需要登录，直接给提示，别让用户进到空的目录选择
         if (isGuest) {
-            downloadError = "转存需要先登录${platformName()}（未登录仅能浏览文件列表）"
+            downloadError = AppStrings.get(R.string.rs_login_required_save, platformName())
             return
         }
         saveTarget = file
@@ -281,124 +283,124 @@ class ResolveViewModel(
                     SharePlatform.XUNLEI -> {
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录迅雷网盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         xunleiResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到迅雷网盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                     SharePlatform.BAIDU -> {
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录百度网盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         baiduResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到百度网盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                     SharePlatform.C139 -> {
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录139网盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         c139ResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到139网盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                     SharePlatform.UC -> {
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录UC网盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         ucResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到UC网盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                     SharePlatform.PAN123 -> {
                         // 123 保存到个人盘：copy/save（mshare 无需签名）+ 轮询 task
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录123云盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         pan123ResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到123云盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                     SharePlatform.PAN115 -> {
                         // 115 保存到个人盘：share/receive（不回传新 fid，仓库内部转存后回查）
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录115网盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         pan115ResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到115网盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                     SharePlatform.GUANGYA -> {
                         // 光鸭保存到个人盘：restore_share（accessToken + fileIds + parentId）
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录光鸭云盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         guangyaResolveRepository.transferFile(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到光鸭云盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                     else -> {
                         val credential = currentCredential()
                         if (credential.isNullOrBlank()) {
-                            saveMessage = "请先登录夸克网盘"
+                            saveMessage = AppStrings.get(R.string.rs_login_first, platformName())
                             return@launch
                         }
                         resolveRepository.saveToCloud(s, file, toDirFid, credential)
                             .onSuccess {
-                                saveMessage = "已保存到夸克网盘"
+                                saveMessage = AppStrings.get(R.string.rs_saved_to, platformName())
                                 saveTarget = null
                             }
                             .onFailure {
-                                saveMessage = it.message ?: "转存失败"
+                                saveMessage = it.message ?: AppStrings.get(R.string.rs_transfer_failed)
                             }
                     }
                 }
@@ -474,7 +476,7 @@ class ResolveViewModel(
                 val credential = currentCredential()
                 if (credential.isNullOrBlank()) {
                     // 游客模式只开放列目录：转存需要登录
-                    downloadError = "转存需要先登录${platformName()}（未登录仅能浏览文件列表）"
+                    downloadError = AppStrings.get(R.string.rs_login_required_save, platformName())
                     return@launch
                 }
                 var okCount = 0
@@ -483,7 +485,7 @@ class ResolveViewModel(
                     // 用户点击「中断」：停止剩余项，已转存的不回滚
                     if (batchCancelRequested) {
                         interrupted = true
-                        downloadError = "已中断批量转存"
+                        downloadError = AppStrings.get(R.string.rs_transfer_interrupted)
                         break
                     }
                     runCatching {
@@ -527,7 +529,7 @@ class ResolveViewModel(
                     }.onSuccess { okCount++ }
                 }
                 if (!interrupted) {
-                    downloadError = if (okCount > 0) "已转存 $okCount 项到${platformName()}" else "转存失败"
+                    downloadError = if (okCount > 0) AppStrings.get(R.string.rs_transferred_count, okCount, platformName()) else AppStrings.get(R.string.rs_transfer_failed)
                 }
                 exitMultiSelect()
             } finally {
@@ -557,13 +559,13 @@ class ResolveViewModel(
         val s = session ?: return
         viewModelScope.launch {
             isBatchWorking = true
-            batchProgress = "正在收集文件…"
+            batchProgress = AppStrings.get(R.string.rs_collecting_files)
             batchCancelRequested = false
             try {
                 // 游客模式：夸克/UC 的小文件直链不要求登录（走游客取链），其余平台必须登录
                 val credential = currentCredential().orEmpty()
                 if (credential.isBlank() && !supportsGuestDownload()) {
-                    downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
+                    downloadError = AppStrings.get(R.string.rs_login_required_download, platformName())
                     return@launch
                 }
                 // 夸克/UC 共用 __puus：取链与下载必须用同一份已刷新 Cookie（直链签名绑定取链时刻的 __puus）
@@ -586,7 +588,7 @@ class ResolveViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    downloadError = "所选文件夹为空"
+                    downloadError = AppStrings.get(R.string.rs_folder_empty)
                     exitMultiSelect()
                     return@launch
                 }
@@ -598,7 +600,7 @@ class ResolveViewModel(
                     // 用户点击「中断」：停止剩余项，已入队的任务保留下载
                     if (batchCancelRequested) {
                         interrupted = true
-                        downloadError = "已中断批量下载"
+                        downloadError = AppStrings.get(R.string.rs_download_interrupted)
                         break
                     }
                     val (file, relPath) = task
@@ -615,7 +617,7 @@ class ResolveViewModel(
                         //   表现为「整个文件夹只加入了几个文件，其余像没发生一样」，用户只会看到下载目录里
                         //   少文件 / 混着上一次的残留，根本不知道是失败了
                         val link = linkResult.getOrNull()
-                            ?: throw IllegalStateException(linkResult.exceptionOrNull()?.message ?: "未获取到下载直链")
+                            ?: throw IllegalStateException(linkResult.exceptionOrNull()?.message ?: AppStrings.get(R.string.rs_no_direct_link))
                         // 文件夹内文件用相对路径（保持目录结构）；根目录文件用取链返回的文件名
                         enqueueDownload(link, quarkCred, if (relPath.isBlank()) link.filename else relPath)
                         okCount++
@@ -630,9 +632,9 @@ class ResolveViewModel(
                 }
                 if (!interrupted) {
                     downloadError = when {
-                        failCount == 0 -> if (okCount > 0) "已加入 $okCount 个下载任务" else "获取下载链接失败"
-                        else -> "已加入 $okCount 个，$failCount 个失败" +
-                            (firstFailReason?.let { "（原因：$it）" } ?: "")
+                        failCount == 0 -> if (okCount > 0) AppStrings.get(R.string.rs_added_downloads, okCount) else AppStrings.get(R.string.rs_download_link_failed)
+                        else -> AppStrings.get(R.string.rs_added_and_failed, okCount, failCount) +
+                            (firstFailReason?.let { AppStrings.get(R.string.rs_failure_reason, it) } ?: "")
                     }
                     // 全部获取完再一次性切到下载页
                     if (okCount > 0) downloadStarted = true
@@ -677,7 +679,7 @@ class ResolveViewModel(
     private fun batchGitHubDownload(files: List<ShareFile>) {
         viewModelScope.launch {
             isBatchWorking = true
-            batchProgress = "正在收集文件…"
+            batchProgress = AppStrings.get(R.string.rs_collecting_files)
             batchCancelRequested = false
             try {
                 val prefix = mirrorPrefixProvider()
@@ -709,14 +711,14 @@ class ResolveViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    downloadError = "所选内容无可下载文件"
+                    downloadError = AppStrings.get(R.string.rs_no_downloadable)
                     exitMultiSelect()
                     return@launch
                 }
                 var okCount = 0
                 for ((index, t) in tasks.withIndex()) {
                     if (batchCancelRequested) {
-                        downloadError = "已中断批量下载"
+                        downloadError = AppStrings.get(R.string.rs_download_interrupted)
                         break
                     }
                     batchProgress = "${index + 1}/${tasks.size}"
@@ -733,7 +735,7 @@ class ResolveViewModel(
                     }
                 }
                 if (!batchCancelRequested) {
-                    downloadError = if (okCount > 0) "已加入 $okCount 个下载任务" else "下载失败"
+                    downloadError = if (okCount > 0) AppStrings.get(R.string.rs_added_downloads, okCount) else AppStrings.get(R.string.rs_download_failed)
                     if (okCount > 0) downloadStarted = true
                 }
                 exitMultiSelect()
@@ -1009,17 +1011,17 @@ class ResolveViewModel(
     }
 
     private fun platformName(): String = when (currentPlatform) {
-        SharePlatform.UC -> "UC 网盘"
-        SharePlatform.XUNLEI -> "迅雷网盘"
-        SharePlatform.BAIDU -> "百度网盘"
-        SharePlatform.C139 -> "139 网盘"
-        SharePlatform.PAN123 -> "123云盘"
-        SharePlatform.PAN115 -> "115网盘"
-        SharePlatform.GUANGYA -> "光鸭云盘"
-        SharePlatform.ILANZOU -> "蓝奏云优享版"
-        SharePlatform.LANZOU -> "蓝奏云"
+        SharePlatform.UC -> AppStrings.get(R.string.rs_platform_uc)
+        SharePlatform.XUNLEI -> AppStrings.get(R.string.rs_platform_xunlei)
+        SharePlatform.BAIDU -> AppStrings.get(R.string.rs_platform_baidu)
+        SharePlatform.C139 -> AppStrings.get(R.string.rs_platform_139)
+        SharePlatform.PAN123 -> AppStrings.get(R.string.rs_platform_123)
+        SharePlatform.PAN115 -> AppStrings.get(R.string.rs_platform_115)
+        SharePlatform.GUANGYA -> AppStrings.get(R.string.rs_platform_guangya)
+        SharePlatform.ILANZOU -> AppStrings.get(R.string.rs_platform_ilanzou)
+        SharePlatform.LANZOU -> AppStrings.get(R.string.rs_platform_lanzou)
         SharePlatform.GITHUB -> "GitHub"
-        else -> "夸克网盘"
+        else -> AppStrings.get(R.string.rs_platform_quark)
     }
 
     // ---------- 视频解析（抖音/小红书/快手/微博/AcFun/B站/Pixiv） ----------
@@ -1050,7 +1052,7 @@ class ResolveViewModel(
             } catch (e: VideoParseException) {
                 uiState = ResolveUiState.Error(e.userMessage())
             } catch (e: Exception) {
-                uiState = ResolveUiState.Error("解析失败，请稍后重试")
+                uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_parse_failed_retry))
             }
         }
     }
@@ -1080,7 +1082,7 @@ class ResolveViewModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                downloadError = "加入下载任务失败，请稍后重试"
+                downloadError = AppStrings.get(R.string.rs_add_download_failed)
             }
         }
     }
@@ -1137,11 +1139,11 @@ class ResolveViewModel(
                 failReason = e.message
             }
             if (okCount > 0) {
-                downloadError = "已加入 $okCount 个下载任务"
+                downloadError = AppStrings.get(R.string.rs_added_downloads, okCount)
                 downloadStarted = true
             } else {
                 // 一个都没入队：把原因写出来，不要静默失败
-                downloadError = failReason?.takeIf { it.isNotBlank() } ?: "加入下载任务失败，请稍后重试"
+                downloadError = failReason?.takeIf { it.isNotBlank() } ?: AppStrings.get(R.string.rs_add_download_failed)
             }
         }
     }
@@ -1174,7 +1176,7 @@ class ResolveViewModel(
                 } else {
                     // 没有独立音轨：先说清楚会「下完整段视频再抽」，否则用户看到任务体积与视频一样，
                     // 会以为点错了入口（各平台都没有「只取音频」的请求方式，这是平台侧的限制）
-                    SnackbarController.show("该平台没有独立音频流，会先下完整段视频再提取音轨")
+                    SnackbarController.show(AppStrings.get(R.string.rs_no_audio_stream))
                     downloadManager.enqueue(
                         url = media.url,
                         fileName = name,
@@ -1188,7 +1190,7 @@ class ResolveViewModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                downloadError = "加入下载任务失败，请稍后重试"
+                downloadError = AppStrings.get(R.string.rs_add_download_failed)
             }
         }
     }
@@ -1268,7 +1270,7 @@ class ResolveViewModel(
             val parsed = ShareLinkParser.parse(effectiveLink)
             if (parsed == null) {
                 // 口令服务给不出结果时，把最近一次服务的具体原因带出去，而不是只报“无法识别”。
-                uiState = ResolveUiState.Error(commandError ?: "无法识别分享链接")
+                uiState = ResolveUiState.Error(commandError ?: AppStrings.get(R.string.rs_unrecognized_link))
                 return@launch
             }
             // 口令已换成真实分享链接：收藏 / 复制 / 重新解析都用它，而不是原始口令
@@ -1290,10 +1292,10 @@ class ResolveViewModel(
                     loadFiles(s, currentDirFid, credential, repo)
                 }
                 .onFailure { e ->
-                    val msg = e.message ?: "解析失败"
+                    val msg = e.message ?: AppStrings.get(R.string.rs_parse_failed)
                     // 游客模式失败时补一句可执行的引导，而不是只抛服务端原文
                     uiState = ResolveUiState.Error(
-                        if (isGuest) "$msg（当前未登录，可到「网盘」页登录${platformName()}后重试）" else msg
+                        if (isGuest) AppStrings.get(R.string.rs_guest_retry_hint, msg, platformName()) else msg
                     )
                 }
         }
@@ -1346,7 +1348,7 @@ class ResolveViewModel(
                 fallbackToResolve(
                     link,
                     parsed.pwd,
-                    "该更新包超出夸克游客下载上限（约 50MB），登录夸克网盘后可直接下载"
+                    AppStrings.get(R.string.rs_update_quark_guest_limit)
                 )
                 return@launch
             }
@@ -1404,7 +1406,7 @@ class ResolveViewModel(
                     currentLink = "https://github.com/${linkType.owner}/${linkType.repo}"
                     val repo = githubApi?.getRepo(linkType.owner, linkType.repo)
                     if (repo == null) {
-                        uiState = ResolveUiState.Error("无法获取仓库信息：${linkType.owner}/${linkType.repo}")
+                        uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_repo_info_failed, linkType.owner, linkType.repo))
                         return@launch
                     }
                     session = ShareSession(shareId = "github:${repo.fullName}", stoken = "", title = repo.fullName)
@@ -1447,7 +1449,7 @@ class ResolveViewModel(
             pathNames = emptyList()
             val repo = githubApi?.getRepo(owner, repoName)
             if (repo == null) {
-                uiState = ResolveUiState.Error("无法打开上游仓库：$parent")
+                uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_parent_repo_failed, parent))
                 return@launch
             }
             session = ShareSession(shareId = "github:${repo.fullName}", stoken = "", title = repo.fullName)
@@ -1469,7 +1471,7 @@ class ResolveViewModel(
         val files = listOf(
             ShareFile(
                 fid = "github:code:${repo.defaultBranch}",
-                fname = "代码",
+                fname = AppStrings.get(R.string.rs_github_code),
                 fsize = -1,
                 isdir = true,
                 pdirFid = "",
@@ -1493,7 +1495,7 @@ class ResolveViewModel(
         val repo = currentGitHubRepo ?: return
         val entries = githubApi?.getTree(repo.owner, repo.name, sha)
         if (entries == null) {
-            uiState = ResolveUiState.Error("加载目录失败")
+            uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_github_load_dir_failed))
             return
         }
         // 目录令牌：每次加载自增；异步时间请求回来时比对，防止切换目录后旧结果串层
@@ -1504,7 +1506,7 @@ class ResolveViewModel(
             files.add(
                 ShareFile(
                     fid = "github:zip",
-                    fname = "下载完整源码 ZIP",
+                    fname = AppStrings.get(R.string.rs_github_download_zip),
                     fsize = -1,
                     isdir = false,
                     pdirFid = "",
@@ -1583,7 +1585,7 @@ class ResolveViewModel(
         }
         val rels = githubApi?.getReleases(repo.owner, repo.name, page = page)
         if (rels == null && page == 1) {
-            uiState = ResolveUiState.Error("加载 Releases 失败")
+            uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_github_load_releases_failed))
             return
         }
         if (rels != null) {
@@ -1598,10 +1600,10 @@ class ResolveViewModel(
         for (rel in currentGitHubReleases) {
             val fid = "github:release:${rel.tagName}"
             when {
-                rel.draft -> badgeMap[fid] = "草稿"
-                rel.prerelease -> badgeMap[fid] = "预发布"
+                rel.draft -> badgeMap[fid] = AppStrings.get(R.string.rs_badge_draft)
+                rel.prerelease -> badgeMap[fid] = AppStrings.get(R.string.rs_badge_prerelease)
                 !latestMarked -> {
-                    badgeMap[fid] = "最新"
+                    badgeMap[fid] = AppStrings.get(R.string.rs_badge_latest)
                     latestMarked = true
                 }
             }
@@ -1623,7 +1625,7 @@ class ResolveViewModel(
             files.add(
                 ShareFile(
                     fid = "github:more_rel:${page + 1}",
-                    fname = "加载更多",
+                    fname = AppStrings.get(R.string.rs_load_more),
                     fsize = -1,
                     isdir = true,
                     pdirFid = "",
@@ -1638,7 +1640,7 @@ class ResolveViewModel(
     private suspend fun loadGitHubReleaseAssets(tag: String) {
         val rel = currentGitHubReleases.firstOrNull { it.tagName == tag }
         if (rel == null) {
-            uiState = ResolveUiState.Error("未找到 Release：$tag")
+            uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_release_not_found, tag))
             return
         }
         githubBadges = emptyMap()
@@ -1677,7 +1679,7 @@ class ResolveViewModel(
             repos = githubApi?.getOrgRepos(owner, page = page)
         }
         if (repos == null && page == 1) {
-            uiState = ResolveUiState.Error("无法获取 $owner 的仓库列表")
+            uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_owner_repos_failed, owner))
             return
         }
         if (repos != null) {
@@ -1711,7 +1713,7 @@ class ResolveViewModel(
             files.add(
                 ShareFile(
                     fid = "github:more_acct:${page + 1}",
-                    fname = "加载更多",
+                    fname = AppStrings.get(R.string.rs_load_more),
                     fsize = -1,
                     isdir = true,
                     pdirFid = "",
@@ -1744,14 +1746,14 @@ class ResolveViewModel(
                 val repoName = fullName.substringAfter('/')
                 val repo = githubApi?.getRepo(owner, repoName)
                 if (repo == null) {
-                    uiState = ResolveUiState.Error("无法打开仓库：$fullName")
+                    uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_open_repo_failed, fullName))
                     return
                 }
                 currentGitHubRepo = repo
                 githubReadme = null
                 loadGitHubRoot()
             }
-            else -> uiState = ResolveUiState.Error("未知目录：$fid")
+            else -> uiState = ResolveUiState.Error(AppStrings.get(R.string.rs_unknown_dir, fid))
         }
     }
 
@@ -1868,7 +1870,7 @@ class ResolveViewModel(
     fun addCurrentToBookmark(title: String, category: String) {
         val link = currentLink?.takeIf { it.isNotBlank() }
         if (link == null) {
-            SnackbarController.show("缺少分享链接")
+            SnackbarController.show(AppStrings.get(R.string.rs_missing_link))
             return
         }
         val cat = category.ifBlank { BookmarkEntity.DEFAULT_CATEGORY }
@@ -1883,7 +1885,7 @@ class ResolveViewModel(
                     category = cat
                 )
             )
-            SnackbarController.show("已收藏到「$cat」")
+            SnackbarController.show(AppStrings.get(R.string.rs_bookmarked_to, cat))
         }
     }
 
@@ -1961,7 +1963,7 @@ class ResolveViewModel(
                     // 直链文件（DirectFile）在 startGitHubResolve 已设置 downloadLink；这里仅处理列表内文件
                     val url = githubUrlForFid(file.fid)
                     if (url == null) {
-                        downloadError = "无法获取下载链接"
+                        downloadError = AppStrings.get(R.string.rs_cannot_get_link)
                         return@launch
                     }
                     downloadLink = DownloadLink(
@@ -1983,7 +1985,7 @@ class ResolveViewModel(
             try {
                 val s = session
                 if (s == null) {
-                    downloadError = "请先解析分享"
+                    downloadError = AppStrings.get(R.string.rs_resolve_first)
                     return@launch
                 }
                 val credential = currentCredential()
@@ -1991,12 +1993,12 @@ class ResolveViewModel(
                     // 游客模式：夸克/UC 的分享直链本身不要求登录（夸克约 50MB 以内，超出报 23018；
                     // UC 实测 4GB 文件都放行），走各自的游客取链；其余平台必须登录
                     if (!supportsGuestDownload()) {
-                        downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
+                        downloadError = AppStrings.get(R.string.rs_login_required_download, platformName())
                         return@launch
                     }
                     currentRepo().getGuestShareDownloadLink(s, file)
                         .onSuccess { downloadLink = it }
-                        .onFailure { downloadError = it.message ?: "获取下载链接失败" }
+                        .onFailure { downloadError = it.message ?: AppStrings.get(R.string.rs_download_link_failed) }
                     // 游客链路只有一个身份，不存在多源
                     pendingAltLinks = emptyList()
                     return@launch
@@ -2015,7 +2017,7 @@ class ResolveViewModel(
                         // 下载时由内置分片下载器按分片轮流使用（见 DownloadManager 的「多源分片」）
                         pendingAltLinks = fetchAltLinks(file, quarkCred)
                     }
-                    .onFailure { downloadError = it.message ?: "获取下载链接失败" }
+                    .onFailure { downloadError = it.message ?: AppStrings.get(R.string.rs_download_link_failed) }
             } finally {
                 isFetchingDownloadLink = false
             }
@@ -2053,14 +2055,14 @@ class ResolveViewModel(
         if (currentPlatform == SharePlatform.GITHUB) return
         // 入口可见性已由 PreviewTypes 判断，这里再挡一次：不可预览的类型（压缩包/未知）不进取链流程
         val kind = PreviewTypes.kindOf(file.fname) ?: return
-        val title = file.fname.ifBlank { "在线预览" }
+        val title = file.fname.ifBlank { AppStrings.get(R.string.rs_online_preview) }
         viewModelScope.launch {
             downloadError = null
             isFetchingDownloadLink = true
             try {
                 val s = session
                 if (s == null) {
-                    downloadError = "请先解析分享"
+                    downloadError = AppStrings.get(R.string.rs_resolve_first)
                     return@launch
                 }
                 val credential = currentCredential().orEmpty()
@@ -2069,11 +2071,11 @@ class ResolveViewModel(
                 if (credential.isBlank()) {
                     // 游客态：与 fetchDownloadLink 一致，仅夸克/UC/光鸭/蓝奏支持匿名取链，其余平台必须登录
                     if (!supportsGuestDownload()) {
-                        downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
+                        downloadError = AppStrings.get(R.string.rs_login_required_download, platformName())
                         return@launch
                     }
                     link = currentRepo().getGuestShareDownloadLink(s, file).getOrElse {
-                        downloadError = it.message ?: "获取下载链接失败"
+                        downloadError = it.message ?: AppStrings.get(R.string.rs_download_link_failed)
                         return@launch
                     }
                     // 游客链路只有一个身份：请求头走「游客态 Cookie」分支（guestCookie 非空）
@@ -2086,7 +2088,7 @@ class ResolveViewModel(
                         else -> credential
                     }
                     link = resolveShareLink(currentRepo(), s, file, quarkCred).getOrElse {
-                        downloadError = it.message ?: "获取下载链接失败"
+                        downloadError = it.message ?: AppStrings.get(R.string.rs_download_link_failed)
                         return@launch
                     }
                     effectiveCredential = effectiveDownloadCredential(credential)
@@ -2340,7 +2342,7 @@ class ResolveViewModel(
             // 游客模式：夸克/UC 的小文件直链不要求登录（link 里已带游客 __pugs）
             val credential = currentCredential().orEmpty()
             if (credential.isBlank() && !supportsGuestDownload()) {
-                downloadError = "下载需要先登录${platformName()}（未登录仅能浏览文件列表）"
+                downloadError = AppStrings.get(R.string.rs_login_required_download, platformName())
                 return@launch
             }
             // 单文件多源分片（实验性 C2）：把取链时预取的备选源一起交给下载器；用完即弃
@@ -2362,7 +2364,7 @@ class ResolveViewModel(
                 uiState = ResolveUiState.Detail(s, files)
             }
             .onFailure { e ->
-                uiState = ResolveUiState.Error(e.message ?: "获取文件列表失败")
+                uiState = ResolveUiState.Error(e.message ?: AppStrings.get(R.string.rs_file_list_failed))
             }
     }
 

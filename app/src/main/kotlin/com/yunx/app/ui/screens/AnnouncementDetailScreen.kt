@@ -64,11 +64,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
+import com.yunx.app.R
 import com.yunx.app.data.announcement.AnnouncementApi
 import com.yunx.app.data.announcement.formatLocalDateTime
 import com.yunx.app.data.announcement.parseIsoMillis
@@ -119,17 +121,17 @@ fun AnnouncementDetailPage(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("公告详情", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.vm_announcement_detail_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.vm_back))
                     }
                 },
                 actions = {
                     // 只有真的拿到内容才给刷新：加载中/失败态下重试按钮已经在页面中间了
                     if (state is AnnouncementViewModel.DetailUiState.Loaded) {
                         IconButton(onClick = onRefresh) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新公告")
+                            Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.vm_announcement_refresh))
                         }
                     }
                 },
@@ -195,7 +197,7 @@ private fun AnnouncementDetailContent(
             Column {
                 if (item.isPinned) {
                     AnnouncementChip(
-                        text = "置顶公告",
+                        text = stringResource(R.string.vm_announcement_pinned),
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                     )
@@ -209,7 +211,7 @@ private fun AnnouncementDetailContent(
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     AnnouncementAvatar(
-                        name = publisher.ifBlank { "公告" },
+                        name = publisher.ifBlank { stringResource(R.string.vm_announcement_publisher_fallback) },
                         avatarUrl = item.publisher.avatarUrl,
                         size = 32.dp
                     )
@@ -269,7 +271,7 @@ private fun AnnouncementDetailContent(
                 // 只有真的一张图都没有时才提示"没有正文"：纯图片公告（正文空、只有图集）不该出现这句话
                 if (gallery.isEmpty()) {
                     Text(
-                        text = "（本条公告没有正文）",
+                        text = stringResource(R.string.vm_announcement_no_content),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -304,13 +306,13 @@ private fun AnnouncementDetailContent(
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "图片",
+                                text = stringResource(R.string.vm_announcement_images),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${gallery.size} 张",
+                                text = stringResource(R.string.vm_announcement_image_count, gallery.size),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -355,13 +357,17 @@ private fun AnnouncementDetailContent(
                 val updatedMillis = parseIsoMillis(item.updatedAt) ?: item.effectiveMillis
                 if (updatedMillis > 0L) {
                     Text(
-                        text = buildString {
-                            append("最后更新 ")
-                            append(formatLocalDateTime(updatedMillis))
-                            if (item.author.isNotBlank() && item.author != publisher) {
-                                append(" · 作者 ")
-                                append(item.author)
-                            }
+                        text = if (item.author.isNotBlank() && item.author != publisher) {
+                            stringResource(
+                                R.string.vm_announcement_last_updated_author,
+                                formatLocalDateTime(updatedMillis),
+                                item.author
+                            )
+                        } else {
+                            stringResource(
+                                R.string.vm_announcement_last_updated,
+                                formatLocalDateTime(updatedMillis)
+                            )
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -473,7 +479,11 @@ private fun AnnouncementGalleryImage(
             ) {
                 RemoteImage(
                     url = image.url,
-                    contentDescription = if (image.isCover) "封面图片" else "公告图片",
+                    contentDescription = if (image.isCover) {
+                        stringResource(R.string.vm_announcement_cover_image)
+                    } else {
+                        stringResource(R.string.vm_announcement_image)
+                    },
                     shape = shape,
                     // 横向列表里的缩略图统一 Crop 成方块（原图比例差异很大，Fit 会让行高参差不齐）；
                     // 单图（hero）铺满宽度、按原始比例完整显示
@@ -483,7 +493,7 @@ private fun AnnouncementGalleryImage(
                 )
                 if (image.isCover) {
                     AnnouncementChip(
-                        text = "封面",
+                        text = stringResource(R.string.vm_announcement_cover),
                         // 标签压在图片上：用实心 primary 而不是容器色，保证任何底图上都看得清
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -514,7 +524,7 @@ private fun AnnouncementDetailError(
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(12.dp))
-        Text(text = "公告加载失败", style = MaterialTheme.typography.titleSmall)
+        Text(text = stringResource(R.string.vm_announcement_load_failed), style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = message,
@@ -523,6 +533,6 @@ private fun AnnouncementDetailError(
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("重试") }
+        Button(onClick = onRetry) { Text(stringResource(R.string.vm_retry)) }
     }
 }

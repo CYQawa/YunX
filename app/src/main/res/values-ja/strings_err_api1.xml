@@ -1,0 +1,97 @@
+<!--
+    日本語。values/strings_err_api1.xml に対応。
+    i18n バッチ E1（接頭辞 e1_）で生成。
+-->
+<resources>
+    <!-- 共通のエラー連結 -->
+    <string name="e1_errno_suffix">（errno=%1$d）</string>
+    <string name="e1_with_errno">%1$s（errno=%2$d）</string>
+    <string name="e1_with_code">%1$s（code=%2$d）</string>
+    <string name="e1_request_failed_http">リクエストに失敗しました（HTTP %1$d）</string>
+    <string name="e1_response_empty">リクエストに失敗しました：応答が空です</string>
+    <string name="e1_response_empty_http">リクエストに失敗しました：応答が空です（%1$d）</string>
+    <string name="e1_response_parse_failed_http">応答の解析に失敗しました（HTTP %1$d）</string>
+    <string name="e1_upload_failed_http">ファイルのアップロードに失敗しました（HTTP %1$d）</string>
+    <string name="e1_get_user_info_failed">ユーザー情報の取得に失敗しました</string>
+    <string name="e1_get_space_info_failed">容量情報の取得に失敗しました</string>
+    <string name="e1_get_space_detail_failed">容量の詳細取得に失敗しました</string>
+    <string name="e1_get_file_list_failed">ファイル一覧の取得に失敗しました</string>
+    <string name="e1_get_share_list_failed">共有一覧の取得に失敗しました</string>
+    <string name="e1_get_download_link_failed">ダウンロードリンクの取得に失敗しました</string>
+    <string name="e1_merge_upload_failed">アップロード分割の結合に失敗しました</string>
+    <string name="e1_upload_task_create_failed">アップロードタスクの作成に失敗しました</string>
+    <string name="e1_get_upload_url_failed">アップロード URL の取得に失敗しました</string>
+    <string name="e1_create_folder_failed">フォルダの作成に失敗しました</string>
+    <string name="e1_rename_failed">名前の変更に失敗しました</string>
+    <string name="e1_move_failed">移動に失敗しました</string>
+    <string name="e1_delete_failed">削除に失敗しました</string>
+    <string name="e1_copy_save_failed">転存に失敗しました</string>
+    <string name="e1_create_share_failed">共有の作成に失敗しました</string>
+    <string name="e1_no_download_link">ダウンロードリンクが返されませんでした</string>
+
+    <!-- Baidu Netdisk -->
+    <string name="e1_baidu_verify_pwd_failed">抽出コードの検証に失敗しました</string>
+    <string name="e1_baidu_no_share_key">共有キーが返されませんでした</string>
+    <string name="e1_baidu_no_share_link">共有リンクが返されませんでした</string>
+    <string name="e1_baidu_need_pwd_or_login_errno">この共有には抽出コードが必要か、Baidu Netdisk へのログインが必要です（errno=%1$d）</string>
+    <string name="e1_baidu_need_pwd_errno">この共有には抽出コードが必要です（errno=%1$d）</string>
+    <string name="e1_baidu_get_share_list_failed">共有ファイル一覧の取得に失敗しました</string>
+    <string name="e1_baidu_empty_file_unsupported">Baidu Netdisk は空のファイルのアップロードに対応していません</string>
+    <string name="e1_baidu_session_token_failed">Baidu のセッショントークンを取得できませんでした。再度ログインしてください</string>
+    <string name="e1_baidu_bdstoken_failed">bdstoken を取得できませんでした。再度ログインしてください</string>
+    <string name="e1_baidu_no_upload_task">Baidu がアップロードタスクを作成しませんでした</string>
+    <string name="e1_baidu_no_upload_blocks">Baidu がアップロードする分割データを返しませんでした</string>
+    <string name="e1_baidu_no_upload_node">Baidu が利用可能なアップロードノードを返しませんでした。後でもう一度お試しください</string>
+    <string name="e1_baidu_invalid_block_index">Baidu が返したアップロード分割の番号が無効です</string>
+    <string name="e1_baidu_block_response_error">Baidu の分割アップロード応答が異常です。再試行してください</string>
+    <string name="e1_baidu_block_verify_failed">Baidu の分割アップロード検証に失敗しました。再試行してください</string>
+    <string name="e1_baidu_transfer_no_file">転存に失敗しました：新しいファイルが返されませんでした</string>
+    <string name="e1_baidu_get_fast_link_failed">高速ダウンロードリンクの取得に失敗しました</string>
+    <string name="e1_baidu_list_failed">Baidu のファイル一覧の読み込みに失敗しました</string>
+    <string name="e1_baidu_list_failed_errno">Baidu のファイル一覧の読み込みに失敗しました（errno=%1$d）</string>
+    <string name="e1_baidu_list_failed_errno_msg">Baidu のファイル一覧の読み込みに失敗しました（errno=%1$d）：%2$s</string>
+    <string name="e1_baidu_list_incomplete">Baidu のファイル一覧の応答が不完全です。更新して再試行してください</string>
+    <string name="e1_baidu_login_expired_suffix">。ログインの有効期限が切れました。Baidu Netdisk に再ログインしてください</string>
+
+    <!-- 123 クラウドドライブ -->
+    <string name="e1_123_enter_account_pwd">アカウントとパスワードを入力してください</string>
+    <string name="e1_123_account_pwd_too_long">アカウントまたはパスワードが長すぎます</string>
+    <string name="e1_123_login_network_error">ネットワークエラー: 123 のログインサービスに接続できません。後でもう一度お試しください</string>
+    <string name="e1_123_share_expired">この共有は期限切れです</string>
+    <string name="e1_123_share_id_missing">共有 ID を特定できません（S3KeyFlag がありません）</string>
+    <string name="e1_123_copy_save_failed_msg">転存に失敗しました：%1$s</string>
+    <string name="e1_123_no_folder_id">123 がフォルダ ID を返しませんでした</string>
+    <string name="e1_123_no_upload_task">123 がアップロードタスクを返しませんでした</string>
+    <string name="e1_123_no_upload_file_id">123 がアップロードされたファイル ID を返しませんでした</string>
+    <string name="e1_123_upload_task_not_created">123 がアップロードタスクを作成しませんでした</string>
+    <string name="e1_123_no_upload_credential">123 がアップロード認証情報を返しませんでした</string>
+    <string name="e1_123_no_upload_url">123 がアップロード URL を返しませんでした</string>
+    <string name="e1_123_create_share_no_data">共有の作成に失敗しました：データが返されませんでした</string>
+    <string name="e1_123_create_share_no_key">共有の作成に失敗しました：ShareKey が返されませんでした</string>
+
+    <!-- 115 クラウドドライブ -->
+    <string name="e1_115_missing_pickcode">pickcode がありません。ダウンロードリンクを取得できません</string>
+    <string name="e1_115_upload_too_large">115 の Web 版は 1 ファイル最大 5 GB です。それより大きいファイルは公式クライアントでアップロードしてください</string>
+    <string name="e1_115_invalid_upload_server">115 が無効なアップロードサーバーを返しました</string>
+    <string name="e1_115_incomplete_upload_credential">115 のアップロード認証情報が不完全です</string>
+    <string name="e1_115_upload_failed">115 へのアップロードに失敗しました</string>
+    <string name="e1_115_select_files_to_move">移動するファイルを選択してください</string>
+    <string name="e1_115_select_files_to_delete">削除するファイルを選択してください</string>
+    <string name="e1_115_missing_sharer_id">共有者の識別子がありません。共有リンクを再解析してください</string>
+    <string name="e1_115_missing_user_id">ログイン状態にユーザー識別子がありません。115 に再ログインしてください</string>
+    <string name="e1_115_select_files_to_share">共有するファイルを選択してください</string>
+    <string name="e1_115_create_share_no_code">共有の作成に失敗しました：応答に共有番号がありません</string>
+    <string name="e1_115_unknown_reason">不明な理由</string>
+    <string name="e1_115_share_expiry_warning">共有は作成されましたが、有効期限の設定が反映されませんでした（サーバーの既定値が適用されています）：%1$s</string>
+    <string name="e1_115_login_expired">ログインの有効期限が切れました。115 に再ログインしてください</string>
+    <string name="e1_115_need_access_code">この共有にはアクセスコードが必要です。入力して再試行してください</string>
+    <string name="e1_115_wrong_access_code">アクセスコードが違います。確認して再試行してください</string>
+    <string name="e1_115_share_gone">共有リンクが存在しないか、削除されています</string>
+    <string name="e1_115_empty_folder_share">空のフォルダは共有できません</string>
+    <string name="e1_115_busy">前回の操作がまだ完了していません。後でもう一度お試しください</string>
+    <string name="e1_115_web_size_limit">115 が Web 版への直リンク提供を拒否しました（ファイルが大きすぎます）。115 の PC/モバイルクライアントでダウンロードしてください</string>
+    <string name="e1_115_client_too_old">115 が現在の識別子のバージョンを古いと判定し、直リンクの提供を拒否しました。115 の PC/モバイルクライアントでダウンロードしてください</string>
+    <string name="e1_115_download_protocol_key_16">115 のダウンロードプロトコルは 16 バイトのキーを要求します</string>
+    <string name="e1_115_download_response_length">115 のダウンロード応答の長さが異常です</string>
+    <string name="e1_115_download_missing_rsa_sep">115 のダウンロード応答に RSA 区切りがありません</string>
+</resources>

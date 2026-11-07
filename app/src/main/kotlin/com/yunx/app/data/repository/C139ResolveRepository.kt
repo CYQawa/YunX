@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.C139Api
 import com.yunx.app.data.network.C139Constants
 import com.yunx.app.data.network.C139Kouling
@@ -26,6 +27,7 @@ import com.yunx.app.data.network.SharePlatform
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 
 /**
  * 139（和彩云）分享解析仓库：cookie → getOutLinkInfoV6 列目录 → dlFromOutLinkV3 直链。
@@ -49,14 +51,14 @@ class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
         val resolved = api.resolveKouling(command, cookie, authorization)
         val parsed = ShareLinkParser.parse(resolved.shareUrl)
         if (parsed?.platform != SharePlatform.C139) {
-            throw IllegalStateException("139 云盘口令解析失败：返回的分享链接无效")
+            throw IllegalStateException(AppStrings.get(R.string.er_c139_kouling_invalid))
         }
         resolved.shareUrl
     }
 
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
-            ?: return Result.failure(IllegalArgumentException("无法识别分享链接"))
+            ?: return Result.failure(IllegalArgumentException(AppStrings.get(R.string.er_share_link_unrecognized)))
         // 游客模式：不再要求 cookie 里含账号信息 —— 139 的列表端点（getOutLinkInfoV6）本身就是
         // 匿名调用（account 固定空串、不带 authorization/mcloud-sign，见 C139Api.getShareFiles），
         // 空 cookie 也能列出目录。下载/转存仍会在各自入口要求登录（见 Agent.md §3.19）。
@@ -96,7 +98,7 @@ class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
 
     /** 139 分享不需要转存/个人网盘直链，保留空实现避免误用 */
     override suspend fun ensureTempDir(cookie: String): Result<String> =
-        Result.failure(UnsupportedOperationException("139 分享无需转存"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_c139_transfer_not_needed)))
 
     override suspend fun transferFile(
         session: ShareSession,
@@ -105,7 +107,7 @@ class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
         cookie: String
     ): Result<String> = runCatching {
         val account = C139Constants.extractAccountFull(cookie)
-            ?: throw IllegalStateException("登录态缺少账号信息，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_login_account_missing))
         val authorization = C139Constants.extractAuthorization(cookie)
         // 139 转存：创建批量任务（AES 加密接口）→ 轮询查询结果 → 返回转存后新 fileId
         val taskId = api.createTransferTask(
@@ -115,7 +117,7 @@ class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
             linkID = session.shareId,
             account = account,
             authorization = authorization
-        ) ?: throw IllegalStateException("创建转存任务失败")
+        ) ?: throw IllegalStateException(AppStrings.get(R.string.er_create_transfer_task_failed))
         var newId: String? = null
         for (i in 0 until 30) {
             kotlinx.coroutines.delay(800)
@@ -125,14 +127,14 @@ class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
                 break
             }
         }
-        newId ?: throw IllegalStateException("转存超时或失败")
+        newId ?: throw IllegalStateException(AppStrings.get(R.string.er_save_timeout_or_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
     )
 
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> =
-        Result.failure(UnsupportedOperationException("139 分享请使用 getShareDownloadLink"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_c139_use_share_download_link)))
 
     override suspend fun getShareDownloadLink(
         session: ShareSession,
@@ -140,10 +142,10 @@ class C139ResolveRepository(private val api: C139Api) : ShareResolveRepository {
         cookie: String
     ): Result<DownloadLink> = runCatching {
         val account = C139Constants.extractAccountFull(cookie)
-            ?: throw IllegalStateException("登录态缺少账号信息，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_login_account_missing))
         val authorization = C139Constants.extractAuthorization(cookie)
         val link = api.getShareDownloadLink(file.fid, session.shareId, account, authorization)
-            ?: throw IllegalStateException("获取下载链接失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
         // 文件名用列表里的 coName（dlFromOutLinkV3 响应不含文件名，否则会 fallback 成 coID 乱码）
         link.copy(filename = file.fname.ifBlank { link.filename })
     }.fold(

@@ -18,6 +18,10 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -206,8 +210,8 @@ private fun VideoPlatformCardContent(
 
         when {
             !enabled -> Unit
-            account != null -> TextButton(onClick = { onManage(platform) }) { Text("管理") }
-            else -> TextButton(onClick = { onLogin(platform) }) { Text("登录") }
+            account != null -> TextButton(onClick = { onManage(platform) }) { Text(stringResource(R.string.sh_manage)) }
+            else -> TextButton(onClick = { onLogin(platform) }) { Text(stringResource(R.string.sh_login)) }
         }
     }
 }
@@ -218,10 +222,10 @@ private fun videoStatusText(
     account: VideoAccountEntity?,
     accountCount: Int
 ): String = when {
-    !platform.needsLogin -> "无需登录，直接解析"
-    account == null -> "未登录"
+    !platform.needsLogin -> AppStrings.get(R.string.sh_no_login_needed)
+    account == null -> AppStrings.get(R.string.sh_not_logged_in)
     else -> {
-        val name = account.remark.ifBlank { account.nickname }.ifBlank { "已登录" }
-        if (accountCount > 1) "$name · 共 $accountCount 个账号" else name
+        val name = account.remark.ifBlank { account.nickname }.ifBlank { AppStrings.get(R.string.sh_logged_in) }
+        if (accountCount > 1) AppStrings.get(R.string.sh_name_accounts, name, accountCount) else name
     }
 }
