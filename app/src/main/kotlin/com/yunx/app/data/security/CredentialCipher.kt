@@ -19,6 +19,8 @@
 package com.yunx.app.data.security
 
 import android.util.Base64
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -83,7 +85,7 @@ internal class PlaintextCredentialCipher : CredentialCipher {
     private fun legacyKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
         return keyStore.getKey(KEY_ALIAS, null) as? SecretKey
-            ?: throw IllegalStateException("旧加密密钥已不存在，无法解密历史凭证")
+            ?: throw IllegalStateException(AppStrings.get(R.string.em_credential_legacy_key_missing))
     }
 
     companion object {

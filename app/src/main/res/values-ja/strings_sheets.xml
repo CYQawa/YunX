@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    G4 グループ：アカウントシート / 動画アカウント / クラウド保存 / 解析ページのファイル操作 / ダウンロードリンク（key 接頭辞 sh_）。
+    日本語。key の集合は values/strings_sheets.xml と完全に一致させること。
+-->
+<resources>
+    <!-- AccountListSection / VideoAccountSheet 共通 -->
+    <string name="sh_accounts_count">アカウント（%1$d）</string>
+    <string name="sh_add_account">アカウントを追加</string>
+    <string name="sh_account_list_hint">メインアカウントは、一覧表示・保存・アップロードなど単一のIDが必要な操作に使われます。「マルチアカウントダウンロード」を有効にすると、ダウンロードは同じドライブの他のアカウントを自動的に使用します。</string>
+    <string name="sh_primary_account">メインアカウント</string>
+    <string name="sh_tap_to_set_primary">タップしてメインに設定</string>
+    <string name="sh_account_actions">アカウント操作</string>
+    <string name="sh_rename_remark">メモを名前変更</string>
+    <string name="sh_logout_account">このアカウントを削除</string>
+    <string name="sh_remark">メモ</string>
+    <string name="sh_remark_placeholder">空欄の場合はニックネームを表示</string>
+    <string name="sh_remark_hint">同じドライブに複数のアカウントでログインしている場合、メモで見分けられます（メモを消すとニックネームを表示）。</string>
+    <string name="sh_video_remark_hint">同じプラットフォームに複数のアカウントでログインしている場合、メモで見分けられます（メモを消すとニックネームを表示）。</string>
+    <string name="sh_save">保存</string>
+    <string name="sh_cancel">キャンセル</string>
+    <string name="sh_logout_confirm">「%1$s」を削除しますか？このアカウントの本機のログイン情報のみ削除され、他のアカウントには影響しません。</string>
+    <string name="sh_logout">削除</string>
+    <string name="sh_unnamed_account">名称未設定のアカウント</string>
+
+    <!-- ドライブ別アカウントシート -->
+    <string name="sh_baidu_logged_in">百度網盤 · ログイン済み</string>
+    <string name="sh_c139_logged_in">139ドライブ · ログイン済み</string>
+    <string name="sh_guangya_logged_in">光鴨ドライブ · ログイン済み</string>
+    <string name="sh_ilanzou_logged_in">藍奏雲プレミアム · ログイン済み</string>
+    <string name="sh_lanzou_logged_in">藍奏雲 · ログイン済み</string>
+    <string name="sh_pan115_logged_in">115ドライブ · ログイン済み</string>
+    <string name="sh_pan123_logged_in">123ドライブ · ログイン済み</string>
+    <string name="sh_quark_logged_in">Quarkドライブ · ログイン済み</string>
+    <string name="sh_uc_logged_in">UCドライブ · ログイン済み</string>
+    <string name="sh_xunlei_logged_in">迅雷ドライブ · ログイン済み</string>
+    <string name="sh_login_info">ログイン情報</string>
+    <string name="sh_login_time">ログイン日時</string>
+    <string name="sh_login_account">ログインアカウント</string>
+    <string name="sh_pan115_login_cookie">ログイン Cookie</string>
+    <string name="sh_collapse">折りたたむ</string>
+    <string name="sh_expand_all">すべて表示</string>
+    <string name="sh_copy">コピー</string>
+    <string name="sh_cookie_copied">Cookieをコピーしました</string>
+    <string name="sh_token_copied">Tokenをコピーしました</string>
+    <string name="sh_apptoken_copied">appTokenをコピーしました</string>
+    <string name="sh_device_id">デバイスID</string>
+    <string name="sh_guangya_user">光鴨ユーザー</string>
+    <string name="sh_guangya_avatar">光</string>
+    <string name="sh_ilanzou_user">藍奏プレミアムユーザー</string>
+    <string name="sh_lanzou_user">藍奏雲ユーザー</string>
+    <string name="sh_lanzou_avatar">藍</string>
+
+    <!-- 動画アカウントシート / 動画アカウントセクション -->
+    <string name="sh_logged_in_accounts">ログイン済み · %1$d 個のアカウント</string>
+    <string name="sh_logged_in">ログイン済み</string>
+    <string name="sh_logout_all_accounts">すべてのアカウントを削除</string>
+    <string name="sh_logout_all_confirm">「%1$s」の %2$d 個のアカウントをすべて削除しますか？本機に保存されたログイン情報のみ削除されます。</string>
+    <string name="sh_logout_all">すべて削除</string>
+    <string name="sh_manage">管理</string>
+    <string name="sh_login">ログイン</string>
+    <string name="sh_no_login_needed">ログイン不要で直接解析</string>
+    <string name="sh_not_logged_in">未ログイン</string>
+    <string name="sh_name_accounts">%1$s · %2$d 個のアカウント</string>
+
+    <!-- 動画解析結果セクション -->
+    <string name="sh_download_selected">選択項目をダウンロード</string>
+    <string name="sh_back">戻る</string>
+    <string name="sh_video_content">動画コンテンツ</string>
+    <string name="sh_exit_multi_select">選択を終了</string>
+    <string name="sh_selected_count_images">%1$d 件選択中</string>
+    <string name="sh_all_selected">すべて選択済み</string>
+    <string name="sh_tap_image_to_select">画像をタップして選択を続行</string>
+    <string name="sh_deselect_all">すべて選択解除</string>
+    <string name="sh_select_all">すべて選択</string>
+    <string name="sh_page_info">全 %1$d 枚 · %2$d/%3$d ページ</string>
+    <string name="sh_prev_page">前へ</string>
+    <string name="sh_next_page">次へ</string>
+    <string name="sh_image_index">%1$d 枚目の画像</string>
+    <string name="sh_download_this_image">この画像をダウンロード</string>
+    <string name="sh_download_all_count">すべてダウンロード（%1$d 件）</string>
+    <string name="sh_total_items">全 %1$d 件</string>
+    <string name="sh_expand">展開</string>
+    <string name="sh_copy_caption">キャプションをコピー</string>
+    <string name="sh_caption_copied">キャプションをコピーしました</string>
+    <string name="sh_media_row_title">%1$d. %2$s</string>
+    <string name="sh_media_video">動画</string>
+    <string name="sh_media_image">画像</string>
+    <string name="sh_media_audio">音声</string>
+    <string name="sh_preview">プレビュー</string>
+    <string name="sh_download_audio_only">音声のみダウンロード</string>
+    <string name="sh_download">ダウンロード</string>
+
+    <!-- クラウドへ保存 -->
+    <string name="sh_save_to_quark">Quarkドライブに保存</string>
+    <string name="sh_root_dir">ルート</string>
+    <string name="sh_retry">再試行</string>
+    <string name="sh_empty_dir_hint">このフォルダにサブフォルダはありません。直接このフォルダに保存できます</string>
+    <string name="sh_save_here">このフォルダに保存（%1$s）</string>
+
+    <!-- 解析ページのファイル操作シート -->
+    <string name="sh_download_folder">フォルダをダウンロード</string>
+    <string name="sh_download_folder_desc">フォルダ全体をディレクトリ構造を保ったまま再帰的にダウンロード</string>
+    <string name="sh_download_desc">ダウンロードリンクを取得して本機に保存</string>
+    <string name="sh_preview_online">オンラインプレビュー</string>
+    <string name="sh_preview_online_desc">ダウンロードせず、アプリ内で直接表示</string>
+    <string name="sh_save_to_cloud">保存</string>
+    <string name="sh_save_folder_desc">フォルダ全体をマイドライブに保存</string>
+    <string name="sh_save_file_desc">ファイルをマイドライブに保存</string>
+
+    <!-- ダウンロード直リンクダイアログ -->
+    <string name="sh_direct_link_generated">ダウンロードリンクを生成しました（有効期限 約15〜30分）</string>
+    <string name="sh_copy_download_link">ダウンロードリンクをコピー</string>
+    <string name="sh_download_link_copied">ダウンロードリンクをコピーしました</string>
+    <string name="sh_download_start_hint">ダウンロード開始後、「ダウンロード」ページで保存の進捗を確認できます</string>
+    <string name="sh_start_download">ダウンロード開始</string>
+    <string name="sh_close">閉じる</string>
+</resources>

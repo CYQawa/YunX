@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.XunleiAccountDao
 import com.yunx.app.data.db.XunleiAccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
@@ -29,6 +30,7 @@ import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.XunleiLoginStep
 import com.yunx.app.data.network.XunleiWebCredential
 import com.yunx.app.data.network.video.HeadlessWebView
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -105,7 +107,7 @@ class XunleiAccountRepository(
                 refreshToken = tokens.second,
                 deviceId = deviceId,
                 captchaToken = captchaToken,
-                nickname = step.nickname.ifBlank { "迅雷用户" },
+                nickname = step.nickname.ifBlank { AppStrings.get(R.string.er_xunlei_default_nickname) },
                 isPrimary = slot.isPrimary,
                 remark = slot.remark
             )
@@ -135,7 +137,7 @@ class XunleiAccountRepository(
                 refreshToken = tokens.second,
                 deviceId = deviceId,
                 captchaToken = captchaToken,
-                nickname = step.nickname.ifBlank { "迅雷用户" },
+                nickname = step.nickname.ifBlank { AppStrings.get(R.string.er_xunlei_default_nickname) },
                 isPrimary = slot.isPrimary,
                 remark = slot.remark
             )
@@ -171,7 +173,7 @@ class XunleiAccountRepository(
                 refreshToken = tokens.refreshToken,
                 deviceId = deviceId,
                 captchaToken = tokens.captchaToken,
-                nickname = tokens.nickname.ifBlank { "迅雷用户" },
+                nickname = tokens.nickname.ifBlank { AppStrings.get(R.string.er_xunlei_default_nickname) },
                 authType = XunleiWebCredential.AUTH_TYPE,
                 isPrimary = slot.isPrimary,
                 remark = slot.remark
@@ -235,12 +237,12 @@ class XunleiAccountRepository(
             is WebCaptchaInit.Ok -> return local.captcha
             // 签名没问题但 client_id 对不上：网页会话同样只认网页 client_id，回退只会白等十几秒
             WebCaptchaInit.ClientIdMismatch ->
-                throw QuarkApiException("验证码与当前登录方式不匹配，请重新登录迅雷网页版")
+                throw QuarkApiException(AppStrings.get(R.string.er_xunlei_captcha_method_mismatch))
             // 盐/版本轮换导致签名被拒：回退网页会话自签
             WebCaptchaInit.Failed -> Unit
         }
         if (!refreshWebSession()) {
-            throw QuarkApiException("迅雷网页登录已过期，请在迅雷登录页重新登录")
+            throw QuarkApiException(AppStrings.get(R.string.er_xunlei_web_login_expired))
         }
         val token = dao.getAccount()?.captchaToken?.takeIf { it.isNotBlank() } ?: return null
         // 网页会话里的 token 同样是 300s 的短命 token，按保守有效期返回

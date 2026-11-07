@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.GuangYaAccountDao
 import com.yunx.app.data.db.GuangYaAccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
@@ -27,6 +28,7 @@ import com.yunx.app.data.network.GuangYaConstants
 import com.yunx.app.data.network.GuangYaDevice
 import com.yunx.app.data.network.GuangYaSmsChallenge
 import com.yunx.app.data.network.GuangYaTokens
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -177,7 +179,11 @@ class GuangYaAccountRepository(
     /** 新用户昵称规则（文档 §2.8）：手机号前 3 位 + **** + 后 4 位。 */
     private fun smsName(normalizedPhone: String): String {
         val local = normalizedPhone.filter { it.isDigit() }.removePrefix("86")
-        return if (local.length >= 11) local.take(3) + "****" + local.takeLast(4) else "光鸭用户"
+        return if (local.length >= 11) {
+            local.take(3) + "****" + local.takeLast(4)
+        } else {
+            AppStrings.get(R.string.er_guangya_default_nickname)
+        }
     }
 
     private fun deviceOf(entity: GuangYaAccountEntity?): GuangYaDevice {

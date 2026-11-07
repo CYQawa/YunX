@@ -19,6 +19,7 @@
 package com.yunx.app.data.network
 
 import android.util.Base64
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
@@ -28,6 +29,7 @@ import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -234,16 +236,16 @@ class C139Api(
             .build()
         val response = client.newCall(request).execute()
         val responseText = response.use {
-            it.body?.string() ?: throw IllegalStateException("139 云盘口令解析失败：响应为空")
+            it.body?.string() ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_kouling_response_empty))
         }
         if (!response.isSuccessful) {
-            throw IllegalStateException("139 云盘口令解析失败（HTTP ${response.code}）")
+            throw IllegalStateException(AppStrings.get(R.string.e2_c139_kouling_failed_code, response.code))
         }
         return runCatching { decryptBody(responseText, shareCodeAesKey) }
             .getOrElse {
                 // 兼容网关未触发加密而直接透传 XML 的情况。
                 if (responseText.trimStart().startsWith("<")) responseText
-                else throw IllegalStateException("139 云盘口令解析失败：响应解密失败", it)
+                else throw IllegalStateException(AppStrings.get(R.string.e2_c139_kouling_decrypt_failed), it)
             }
     }
 
@@ -321,10 +323,10 @@ class C139Api(
         val respJson = sharePostAnonymous(C139Constants.SHARE_LIST_URL, plain)
         val resultCode = respJson.optString("resultCode")
         if (resultCode.isNotBlank() && resultCode != "0") {
-            throw IllegalStateException(respJson.optString("desc").ifBlank { "获取文件列表失败（$resultCode）" })
+            throw IllegalStateException(respJson.optString("desc").ifBlank { AppStrings.get(R.string.e2_get_file_list_failed_code, resultCode) })
         }
         if (!respJson.optBoolean("success", true)) {
-            throw IllegalStateException(respJson.optString("desc").ifBlank { "获取文件列表失败" })
+            throw IllegalStateException(respJson.optString("desc").ifBlank { AppStrings.get(R.string.e2_get_file_list_failed) })
         }
         val data = respJson.optJSONObject("data") ?: return@withContext emptyList()
         val result = mutableListOf<ShareFile>()
@@ -389,10 +391,10 @@ class C139Api(
         val respJson = sharePostEncrypted(C139Constants.SHARE_LINK_URL, plain, authorization)
         val resultCode = respJson.optString("resultCode")
         if (resultCode.isNotBlank() && resultCode != "0") {
-            throw IllegalStateException(respJson.optString("desc").ifBlank { "获取下载链接失败（$resultCode）" })
+            throw IllegalStateException(respJson.optString("desc").ifBlank { AppStrings.get(R.string.e2_get_download_link_failed_code, resultCode) })
         }
         if (!respJson.optBoolean("success", true)) {
-            throw IllegalStateException(respJson.optString("desc").ifBlank { "获取下载链接失败" })
+            throw IllegalStateException(respJson.optString("desc").ifBlank { AppStrings.get(R.string.e2_get_download_link_failed) })
         }
         val data = respJson.optJSONObject("data") ?: return@withContext null
         val url = data.optString("redrUrl")
@@ -460,7 +462,7 @@ class C139Api(
         pageCursor: String?
     ): Pair<List<ShareFile>, String?>? = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         // ⚠️ pageCursor 必须是真正的 JSON null；若误传字符串 "null"，服务端会当作无效游标忽略
         //    并回吐第一页，导致翻页原地打转（抓包表现为重复发同一个请求直到封顶）
         val cursorValue: Any =
@@ -472,7 +474,7 @@ class C139Api(
             .put("parentFileId", parentFileId)
             .put("imageThumbnailStyleList", JSONArray().put("Small").put("Large"))
         val resp = cloudPost(C139Constants.FILE_LIST_URL, req.toString(), authorization)
-        checkCloud(resp, "获取文件列表失败")
+        checkCloud(resp, AppStrings.get(R.string.e2_get_file_list_failed))
         val data = resp.optJSONObject("data") ?: return@withContext null
         val thumbHeaders = thumbnailHeaders()
         val files = buildList {
@@ -534,7 +536,7 @@ class C139Api(
     /** 仅列文件夹（移动到…目标选择） */
     suspend fun listFolders(parentFileId: String, cookie: String): List<ShareFile> = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         val req = JSONObject()
             .put("pageInfo", JSONObject().put("pageSize", 100).put("pageCursor", JSONObject.NULL))
             .put("orderBy", "updated_at")
@@ -543,7 +545,7 @@ class C139Api(
             .put("imageThumbnailStyleList", JSONArray().put("Small").put("Large"))
             .put("type", "folder")
         val resp = cloudPost(C139Constants.FILE_LIST_URL, req.toString(), authorization)
-        checkCloud(resp, "获取文件夹列表失败")
+        checkCloud(resp, AppStrings.get(R.string.e2_get_folder_list_failed))
         val data = resp.optJSONObject("data") ?: return@withContext emptyList()
         buildList {
             data.optJSONArray("items")?.let { arr ->
@@ -575,7 +577,7 @@ class C139Api(
     suspend fun createDir(parentFileId: String, name: String, cookie: String): String =
         withContext(Dispatchers.IO) {
             val authorization = C139Constants.extractAuthorization(cookie)
-                ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
             val req = JSONObject()
                 .put("parentFileId", parentFileId)
                 .put("name", name)
@@ -583,9 +585,9 @@ class C139Api(
                 .put("type", "folder")
                 .put("fileRenameMode", "force_rename")
             val resp = cloudPost(C139Constants.FILE_CREATE_URL, req.toString(), authorization)
-            checkCloud(resp, "新建文件夹失败")
+            checkCloud(resp, AppStrings.get(R.string.e2_create_folder_failed))
             resp.optJSONObject("data")?.optString("fileId")?.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("移动云盘未返回文件夹编号")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_no_folder_id))
         }
 
     // ---------- 上传 ----------
@@ -607,7 +609,7 @@ class C139Api(
         cookie: String
     ): String = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         io.progress(UploadPhase.PREPARING)
         val hash = io.digest("SHA-256")
         val partSize = if (file.size > 30L * 1024 * 1024 * 1024) {
@@ -634,20 +636,20 @@ class C139Api(
             .put("type", "file")
             .put("fileRenameMode", "auto_rename")
         val created = cloudPost(C139Constants.FILE_UPLOAD_CREATE_URL, createBody.toString(), authorization)
-        checkCloud(created, "创建上传任务失败")
+        checkCloud(created, AppStrings.get(R.string.e2_create_upload_task_failed))
         val created1 = created.optJSONObject("data")
-            ?: throw IllegalStateException("移动云盘未返回上传任务")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_no_upload_task))
         if (created1.optBoolean("exist")) {
-            throw IllegalStateException("移动云盘已有同名文件，请重新命名后上传")
+            throw IllegalStateException(AppStrings.get(R.string.e2_c139_same_name_exists))
         }
         val fileId = created1.optString("fileId").takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("移动云盘未创建上传任务")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_upload_task_not_created))
         if (created1.optBoolean("rapidUpload")) {
             io.progress(UploadPhase.FINISHING, file.size)
             return@withContext fileId
         }
         val uploadId = created1.optString("uploadId").takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("移动云盘未返回上传标识")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_no_upload_id))
         var batch = created1
         var first = 0L
         while (first < count) {
@@ -662,23 +664,23 @@ class C139Api(
                         }
                     )
                 val resp = cloudPost(C139Constants.FILE_UPLOAD_URL_URL, body.toString(), authorization)
-                checkCloud(resp, "获取上传地址失败")
+                checkCloud(resp, AppStrings.get(R.string.e2_get_upload_url_failed))
                 batch = resp.optJSONObject("data")
-                    ?: throw IllegalStateException("移动云盘未返回上传地址")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_no_upload_url))
             }
             val addresses = batch.optJSONArray("partInfos")
-                ?: throw IllegalStateException("移动云盘未返回完整上传分段")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_incomplete_parts))
             if (addresses.length() != minOf(100L, count - first).toInt()) {
-                throw IllegalStateException("移动云盘未返回完整上传分段")
+                throw IllegalStateException(AppStrings.get(R.string.e2_c139_incomplete_parts))
             }
             for (i in 0 until addresses.length()) {
                 val part = addresses.optJSONObject(i) ?: continue
                 val index = part.optInt("partNumber") - 1
                 if (index.toLong() != first + i) {
-                    throw IllegalStateException("移动云盘上传分段序号无效")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_c139_invalid_part_index))
                 }
                 val url = part.optString("uploadUrl")
-                if (url.isBlank()) throw IllegalStateException("移动云盘未返回上传地址")
+                if (url.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_c139_no_upload_url))
                 val start = index * partSize
                 val response = io.send(
                     url = url,
@@ -693,7 +695,7 @@ class C139Api(
                     retries = 1
                 )
                 if (!response.isSuccessful) {
-                    throw IllegalStateException("文件上传失败（HTTP ${response.code}）")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_upload_failed_http, response.code))
                 }
             }
             first += addresses.length()
@@ -705,52 +707,52 @@ class C139Api(
             .put("fileId", fileId)
             .put("uploadId", uploadId)
         val completed = cloudPost(C139Constants.FILE_UPLOAD_COMPLETE_URL, completeBody.toString(), authorization)
-        checkCloud(completed, "合并上传分段失败")
+        checkCloud(completed, AppStrings.get(R.string.e2_merge_upload_failed))
         fileId
     }
 
     /** 重命名 */
     suspend fun renameFile(fileId: String, newName: String, cookie: String): Boolean = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         val req = JSONObject()
             .put("fileId", fileId)
             .put("name", newName)
             .put("description", "")
         val resp = cloudPost(C139Constants.FILE_UPDATE_URL, req.toString(), authorization)
-        checkCloud(resp, "重命名失败")
+        checkCloud(resp, AppStrings.get(R.string.e2_rename_failed))
         true
     }
 
     /** 移动（异步），返回 taskId */
     suspend fun moveFiles(fileIds: List<String>, toParentFileId: String, cookie: String): String? = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         val req = JSONObject()
             .put("fileIds", JSONArray().apply { fileIds.forEach { put(it) } })
             .put("toParentFileId", toParentFileId)
         val resp = cloudPost(C139Constants.BATCH_MOVE_URL, req.toString(), authorization)
-        checkCloud(resp, "移动失败")
+        checkCloud(resp, AppStrings.get(R.string.e2_move_failed))
         resp.optJSONObject("data")?.optString("taskId")?.takeIf { it.isNotBlank() }
     }
 
     /** 删除（异步，移入回收站），返回 taskId */
     suspend fun deleteFiles(fileIds: List<String>, cookie: String): String? = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         val req = JSONObject().put("fileIds", JSONArray().apply { fileIds.forEach { put(it) } })
         val resp = cloudPost(C139Constants.BATCH_TRASH_URL, req.toString(), authorization)
-        checkCloud(resp, "删除失败")
+        checkCloud(resp, AppStrings.get(R.string.e2_delete_failed))
         resp.optJSONObject("data")?.optString("taskId")?.takeIf { it.isNotBlank() }
     }
 
     /** 异步任务轮询（移动/删除），返回状态 */
     suspend fun getTask(taskId: String, cookie: String): C139TaskStatus = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         val req = JSONObject().put("taskId", taskId)
         val resp = cloudPost(C139Constants.TASK_GET_URL, req.toString(), authorization)
-        checkCloud(resp, "查询任务失败")
+        checkCloud(resp, AppStrings.get(R.string.e2_query_task_failed))
         val data = resp.optJSONObject("data") ?: return@withContext C139TaskStatus("", 0, emptyList())
         val taskInfo = data.optJSONObject("taskInfo")
         val status = taskInfo?.optString("status") ?: ""
@@ -769,10 +771,10 @@ class C139Api(
     /** 下载直链（OBS 预签名，900s 有效） */
     suspend fun getDownloadUrl(fileId: String, cookie: String): DownloadLink? = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         val req = JSONObject().put("fileId", fileId)
         val resp = cloudPost(C139Constants.DOWNLOAD_URL, req.toString(), authorization)
-        checkCloud(resp, "获取下载链接失败")
+        checkCloud(resp, AppStrings.get(R.string.e2_get_download_link_failed))
         val data = resp.optJSONObject("data") ?: return@withContext null
         val url = data.optString("url")
         if (url.isBlank()) return@withContext null
@@ -799,9 +801,9 @@ class C139Api(
         cookie: String
     ): ShareInfo = withContext(Dispatchers.IO) {
         val authorization = C139Constants.extractAuthorization(cookie)
-            ?: throw IllegalStateException("登录态缺少 authorization，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_missing_authorization))
         val account = accountFromAuthorization(authorization)
-            ?: throw IllegalStateException("无法从登录态解析账号，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_account_parse_failed))
         val getOutLinkReq = JSONObject()
             .put("subLinkType", 0)
             .put("encrypt", 1)
@@ -818,15 +820,15 @@ class C139Api(
         val resp = cloudPost(C139Constants.OUTLINK_CREATE_URL, plain, authorization, cookie, needSkey = true)
         // 分享接口成功码为 "0"
         if (!resp.optBoolean("success", true) || resp.optString("code") != "0") {
-            throw IllegalStateException(resp.optString("message").ifBlank { "创建分享失败" })
+            throw IllegalStateException(resp.optString("message").ifBlank { AppStrings.get(R.string.e2_create_share_failed) })
         }
         val set = resp.optJSONObject("data")
             ?.optJSONObject("getOutLinkRes")
             ?.optJSONArray("getOutLinkResSet")
             ?.optJSONObject(0)
-            ?: throw IllegalStateException("创建分享失败：未返回链接")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_create_share_no_link))
         val linkUrl = set.optString("linkUrl")
-        if (linkUrl.isBlank()) throw IllegalStateException("创建分享失败：未返回链接")
+        if (linkUrl.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_create_share_no_link))
         ShareInfo(
             shareUrl = linkUrl,
             passcode = set.optString("passwd"),
@@ -858,7 +860,7 @@ class C139Api(
                 "https://user-njs.yun.139.com/user/disk/quota/detail",
                 req.toString(), authorization, cookie, needSkey = true
             )
-            checkCloud(resp, "获取空间详情失败")
+            checkCloud(resp, AppStrings.get(R.string.e2_get_quota_failed))
             val data = resp.optJSONObject("data") ?: return@runCatching null
             val total = data.optLong("diskSize") * 1024L * 1024L
             val used = data.optLong("freeDiskSize").let { free ->
@@ -900,7 +902,7 @@ class C139Api(
         val resp = sharePostEncrypted(C139Constants.TRANSFER_CREATE_URL, req.toString(), authorization)
         val code = resp.optString("resultCode").ifBlank { resp.optString("code") }
         if (code.isNotBlank() && code != "0") {
-            throw IllegalStateException(resp.optString("desc").ifBlank { "创建转存任务失败（$code）" })
+            throw IllegalStateException(resp.optString("desc").ifBlank { AppStrings.get(R.string.e2_c139_transfer_create_failed, code) })
         }
         resp.optJSONObject("data")?.optString("taskID")?.takeIf { it.isNotBlank() }
     }
@@ -918,7 +920,7 @@ class C139Api(
             val resp = sharePostEncrypted(C139Constants.TRANSFER_QUERY_URL, req.toString(), authorization)
             val code = resp.optString("resultCode").ifBlank { resp.optString("code") }
             if (code.isNotBlank() && code != "0") {
-                throw IllegalStateException(resp.optString("desc").ifBlank { "查询转存结果失败（$code）" })
+                throw IllegalStateException(resp.optString("desc").ifBlank { AppStrings.get(R.string.e2_c139_transfer_query_failed, code) })
             }
             val data = resp.optJSONObject("data") ?: return@withContext C139TransferResult(false, emptyMap())
             val task = data.optJSONObject("batchOprTask")
@@ -994,7 +996,7 @@ class C139Api(
         }
         val request = builder.post(plainBody.toRequestBody(jsonMediaType)).build()
         val response = client.newCall(request).execute()
-        val body = response.use { it.body?.string() ?: throw IllegalStateException("请求失败：响应为空") }
+        val body = response.use { it.body?.string() ?: throw IllegalStateException(AppStrings.get(R.string.e2_request_empty_response)) }
         return JSONObject(body)   // 管理接口明文响应
     }
 
@@ -1003,7 +1005,7 @@ class C139Api(
         val code = json.optString("code")
         if (json.optBoolean("success", true) && (code == "0000" || code == "0")) return
         val msg = json.optString("message").ifBlank { fallback }
-        throw IllegalStateException("$msg（code=$code）")
+        throw IllegalStateException(AppStrings.get(R.string.e2_error_with_code, msg, code))
     }
 
     // ---------- 请求构造与响应解析 ----------
@@ -1030,7 +1032,7 @@ class C139Api(
             .post(encrypted.toRequestBody(jsonMediaType))
             .build()
         val response = client.newCall(request).execute()
-        val body = response.use { it.body?.string() ?: throw IllegalStateException("请求失败：响应为空") }
+        val body = response.use { it.body?.string() ?: throw IllegalStateException(AppStrings.get(R.string.e2_request_empty_response)) }
         // 响应体应为加密 base64（§14）；网关透传明文时兜底
         return runCatching { JSONObject(decryptBody(body)) }.getOrElse { JSONObject(body) }
     }
@@ -1057,7 +1059,7 @@ class C139Api(
             .post(encrypted.toRequestBody(jsonMediaType))
             .build()
         val response = client.newCall(request).execute()
-        val body = response.use { it.body?.string() ?: throw IllegalStateException("请求失败：响应为空") }
+        val body = response.use { it.body?.string() ?: throw IllegalStateException(AppStrings.get(R.string.e2_request_empty_response)) }
         // 响应体应为加密 base64（§14）；网关透传明文时兜底
         return runCatching { JSONObject(decryptBody(body)) }.getOrElse { JSONObject(body) }
     }

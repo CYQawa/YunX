@@ -18,11 +18,13 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.LanzouAccountDao
 import com.yunx.app.data.db.LanzouAccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.LanzouApi
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -54,15 +56,15 @@ class LanzouAccountRepository(
     ): Result<LanzouAccountEntity> = runCatching {
         val cookie = api.login(account, password)
         val params = api.fetchLoginParams(cookie)
-            ?: throw IllegalStateException("蓝奏云登录凭据校验失败，请重试")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_lanzou_credential_check_failed))
         if (params.uid.isBlank() || params.vei.isBlank()) {
-            throw IllegalStateException("蓝奏云登录凭据无效，请重试")
+            throw IllegalStateException(AppStrings.get(R.string.er_lanzou_credential_invalid))
         }
         val slot = resolveAccountSlot(DownloadPlatform.LANZOU, dao.getAccount(), newAccount)
         val entity = LanzouAccountEntity(
             id = slot.id,
             cookie = cookie,
-            nickname = account.trim().ifBlank { "蓝奏云用户" },
+            nickname = account.trim().ifBlank { AppStrings.get(R.string.er_lanzou_default_nickname) },
             isPrimary = slot.isPrimary,
             remark = slot.remark
         )
@@ -85,7 +87,7 @@ class LanzouAccountRepository(
             LanzouAccountEntity(
                 id = slot.id,
                 cookie = c,
-                nickname = "蓝奏云用户",
+                nickname = AppStrings.get(R.string.er_lanzou_default_nickname),
                 isPrimary = slot.isPrimary,
                 remark = slot.remark
             )

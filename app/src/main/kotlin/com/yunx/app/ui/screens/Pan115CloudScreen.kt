@@ -18,6 +18,7 @@
 
 package com.yunx.app.ui.screens
 
+import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -86,6 +87,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -229,8 +231,8 @@ fun Pan115CloudScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = onExit) { Text("返回") }
-                            TextButton(onClick = { viewModel.loadRoot() }) { Text("重试") }
+                            OutlinedButton(onClick = onExit) { Text(stringResource(R.string.csb_cloud_back)) }
+                            TextButton(onClick = { viewModel.loadRoot() }) { Text(stringResource(R.string.csb_cloud_retry)) }
                         }
                     }
                 }
@@ -266,38 +268,38 @@ fun Pan115CloudScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         if (viewModel.multiSelectMode) {
                                             IconButton(onClick = { viewModel.exitMultiSelect() }) {
-                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "取消选择")
+                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.csb_cloud_cancel_select))
                                             }
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "已选 ${viewModel.selected.size} 项",
+                                                    text = stringResource(R.string.csb_cloud_selected_count, viewModel.selected.size),
                                                     style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                                 Text(
-                                                    text = if (viewModel.selected.size == displayFiles.size) "已全选" else "点击选择更多文件",
+                                                    text = if (viewModel.selected.size == displayFiles.size) stringResource(R.string.csb_cloud_all_selected) else stringResource(R.string.csb_cloud_select_more),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
                                             TextButton(onClick = { viewModel.toggleSelectAll(displayFiles) }) {
-                                                Text(if (viewModel.selected.size == displayFiles.size) "取消全选" else "全选")
+                                                Text(if (viewModel.selected.size == displayFiles.size) stringResource(R.string.csb_cloud_deselect_all) else stringResource(R.string.csb_cloud_select_all))
                                             }
                                         } else {
                                             IconButton(onClick = onExit) {
-                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.csb_cloud_back))
                                             }
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "115网盘",
+                                                    text = stringResource(R.string.csb_drive_name_pan115),
                                                     style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Medium,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    text = if (searchQuery.isBlank()) "共 ${s.files.size} 项"
-                                                    else "匹配 ${displayFiles.size} / ${s.files.size} 项",
+                                                    text = if (searchQuery.isBlank()) stringResource(R.string.csb_cloud_total_count, s.files.size)
+                                                    else stringResource(R.string.csb_cloud_match_count, displayFiles.size, s.files.size),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -306,7 +308,7 @@ fun Pan115CloudScreen(
                                             IconButton(onClick = { showSearch = !showSearch }) {
                                                 Icon(
                                                     imageVector = Icons.Outlined.Search,
-                                                    contentDescription = if (showSearch) "关闭搜索" else "搜索文件",
+                                                    contentDescription = if (showSearch) stringResource(R.string.csb_cloud_close_search) else stringResource(R.string.csb_cloud_search_files),
                                                     tint = if (showSearch) {
                                                         MaterialTheme.colorScheme.primary
                                                     } else {
@@ -323,7 +325,7 @@ fun Pan115CloudScreen(
                                     }
                                     if (!viewModel.multiSelectMode) {
                                         CrumbBar(
-                                            rootTitle = "115网盘",
+                                            rootTitle = stringResource(R.string.csb_drive_name_pan115),
                                             pathNames = s.pathNames,
                                             onNavigate = { level ->
                                                 scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
@@ -343,12 +345,12 @@ fun Pan115CloudScreen(
                                                 value = searchQuery,
                                                 onValueChange = { searchQuery = it },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                placeholder = { Text("搜索当前目录文件") },
+                                                placeholder = { Text(stringResource(R.string.csb_cloud_search_placeholder)) },
                                                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                                                 trailingIcon = {
                                                     if (searchQuery.isNotEmpty()) {
                                                         IconButton(onClick = { searchQuery = "" }) {
-                                                            Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.csb_cloud_clear_search))
                                                         }
                                                     }
                                                 },
@@ -376,7 +378,7 @@ fun Pan115CloudScreen(
                             if (displayFiles.isEmpty()) {
                                 item {
                                     Text(
-                                        text = if (s.files.isEmpty()) "此目录为空" else "未找到匹配「${searchQuery.trim()}」的文件",
+                                        text = if (s.files.isEmpty()) stringResource(R.string.csb_cloud_empty_dir) else stringResource(R.string.csb_cloud_no_match, searchQuery.trim()),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier
@@ -444,18 +446,18 @@ fun Pan115CloudScreen(
                             busy = viewModel.isOperating,
                             count = viewModel.selected.size,
                             actions = listOf(
-                                MultiSelectAction("下载", Icons.Outlined.Download, MaterialTheme.colorScheme.primary) {
+                                MultiSelectAction(stringResource(R.string.csb_action_download), Icons.Outlined.Download, MaterialTheme.colorScheme.primary) {
                                     viewModel.downloadSelected()
                                 },
-                                MultiSelectAction("分享", Icons.Outlined.Share, MaterialTheme.colorScheme.primary) {
+                                MultiSelectAction(stringResource(R.string.csb_action_share), Icons.Outlined.Share, MaterialTheme.colorScheme.primary) {
                                     batchInitial = BatchStep.SHARE
                                     showBatchActions = true
                                 },
-                                MultiSelectAction("移动", Icons.Outlined.DriveFileMove, MaterialTheme.colorScheme.primary) {
+                                MultiSelectAction(stringResource(R.string.csb_action_move), Icons.Outlined.DriveFileMove, MaterialTheme.colorScheme.primary) {
                                     batchInitial = BatchStep.MOVE
                                     showBatchActions = true
                                 },
-                                MultiSelectAction("删除", Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
+                                MultiSelectAction(stringResource(R.string.csb_action_delete), Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
                                     showDeleteConfirm = true
                                 }
                             )
@@ -470,8 +472,8 @@ fun Pan115CloudScreen(
     // ★ 删除确认与操作弹窗互斥展示：确认期间不关掉操作弹窗，否则 dismissActions() 会清空 actionFile
     val pendingDeleteTarget = when {
         !showDeleteConfirm -> null
-        viewModel.multiSelectMode -> "选中的 ${viewModel.selected.size} 项"
-        else -> viewModel.actionFile?.let { "「${it.fname}」" }
+        viewModel.multiSelectMode -> stringResource(R.string.csb_cloud_selected_items_count, viewModel.selected.size)
+        else -> viewModel.actionFile?.let { stringResource(R.string.csb_cloud_quote_name, it.fname) }
     }
     if (pendingDeleteTarget != null) {
         ConfirmDeleteSheet(
@@ -529,7 +531,7 @@ fun Pan115CloudScreen(
             initialStep = batchInitial,
             moveStep = { onBack, onDone ->
                 Pan115MoveStep(
-                    subtitle = "已选 ${viewModel.selected.size} 项",
+                    subtitle = stringResource(R.string.csb_cloud_selected_count, viewModel.selected.size),
                     viewModel = viewModel,
                     onBack = onBack,
                     onDone = onDone
@@ -563,16 +565,16 @@ fun Pan115CloudScreen(
             confirmButton = { },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelDownload() }) {
-                    Text("中断", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.csb_cloud_interrupt), color = MaterialTheme.colorScheme.error)
                 }
             },
-            title = { Text("处理中") },
+            title = { Text(stringResource(R.string.csb_cloud_processing_title)) },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     YunXLoading(modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = viewModel.folderProgress ?: "正在处理，请稍候…",
+                        text = viewModel.folderProgress ?: stringResource(R.string.csb_cloud_processing_body),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -597,10 +599,10 @@ private fun Pan115MoveStep(
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        StepHeader(title = "移动到", subtitle = subtitle, onBack = onBack)
+        StepHeader(title = stringResource(R.string.csb_move_to_title), subtitle = subtitle, onBack = onBack)
         Spacer(modifier = Modifier.height(8.dp))
         CrumbBar(
-            rootTitle = "根目录",
+            rootTitle = stringResource(R.string.csb_move_root_dir),
             pathNames = (moveState as? Pan115CloudUiState.Loaded)?.pathNames ?: emptyList(),
             onNavigate = { viewModel.moveNavigateToLevel(it) }
         )
@@ -633,7 +635,7 @@ private fun Pan115MoveStep(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "当前目录没有子文件夹，可直接移动到此处",
+                                stringResource(R.string.csb_move_no_subfolder),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -658,7 +660,7 @@ private fun Pan115MoveStep(
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        val dirName = (moveState as? Pan115CloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+        val dirName = (moveState as? Pan115CloudUiState.Loaded)?.pathNames?.lastOrNull() ?: stringResource(R.string.csb_move_root_dir)
         Button(
             onClick = {
                 val to = (moveState as? Pan115CloudUiState.Loaded)?.dirId ?: Pan115Constants.ROOT_CID
@@ -669,7 +671,7 @@ private fun Pan115MoveStep(
         ) {
             Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("移动到此处（$dirName）")
+            Text(stringResource(R.string.csb_move_here_with_dir, dirName))
         }
     }
 }

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common -->
+    <string name="lg_back">Back</string>
+    <string name="lg_cancel">Cancel</string>
+    <string name="lg_save">Save</string>
+    <string name="lg_continue">Continue</string>
+    <string name="lg_got_it">Got it</string>
+    <string name="lg_login_success">Signed in successfully</string>
+    <string name="lg_no_login_state">No sign-in detected. Please sign in first.</string>
+    <string name="lg_manual_cookie">Enter Cookie manually</string>
+    <string name="lg_paste_cookie_hint">Paste Cookie…</string>
+    <string name="lg_login_tutorial">Sign-in guide</string>
+
+    <!-- Baidu -->
+    <string name="lg_baidu_title">Baidu Netdisk sign-in</string>
+    <string name="lg_baidu_risk_title">Read before use</string>
+    <string name="lg_baidu_risk_1">Baidu Netdisk has strict risk control, which may restrict your account.</string>
+    <string name="lg_baidu_risk_2">The following issues are usually caused by risk control, not a software fault:\n· Failed to obtain bdstoken\n· Personal netdisk file list will not load</string>
+    <string name="lg_baidu_risk_3">Avoid high-frequency operations (frequent parsing/transfers/downloads/uploads). If issues occur, reduce usage or try again later.</string>
+    <string name="lg_baidu_risk_ack">I have read and understood the risks above</string>
+    <string name="lg_baidu_tutorial_1">1. Sign in to your Baidu account in the web page below</string>
+    <string name="lg_baidu_tutorial_2">2. Sign-in is detected automatically. If not, tap \"Save\" in the top-right corner</string>
+    <string name="lg_baidu_tutorial_3">3. Or tap the \"Paste\" icon to enter the Cookie manually (must include BDUSS=)</string>
+    <string name="lg_baidu_tutorial_4">4. The Cookie is long-lived; sign in again once it expires</string>
+    <string name="lg_baidu_cookie_hint">Copy the full Cookie from the signed-in web session (must include BDUSS=)</string>
+    <string name="lg_baidu_cookie_invalid">Invalid Cookie. Please check that it includes BDUSS=</string>
+
+    <!-- Xunlei account / SMS -->
+    <string name="lg_xunlei_title">Xunlei Netdisk sign-in</string>
+    <string name="lg_mode_password">Account password</string>
+    <string name="lg_mode_sms">SMS sign-in</string>
+    <string name="lg_security_verify">Security verification</string>
+    <string name="lg_xunlei_login_prompt">Sign in with your Xunlei account</string>
+    <string name="lg_xunlei_sms_sent_to">Password sign-in triggered security verification. The code was sent to %1$s</string>
+    <string name="lg_xunlei_sms_prompt">Password sign-in triggered security verification. Tap \"Send code\" below</string>
+    <string name="lg_xunlei_password_hint">Enter your phone number / email and password to parse and download shared files</string>
+    <string name="lg_sms_login_title">SMS code sign-in</string>
+    <string name="lg_sms_login_hint">No password needed: enter your phone number and get a code to sign in (use this if you never set a password or forgot it)</string>
+    <string name="lg_sms_code">SMS code</string>
+    <string name="lg_verify_and_login">Verify and sign in</string>
+    <string name="lg_sms_not_received_hint">If you never receive the SMS, check that your phone number is correct, or try again later / switch networks</string>
+    <string name="lg_verify_in_app">No SMS? Verify in the app</string>
+    <string name="lg_verify_in_app_hint">After verification in the app, sign-in will resume automatically</string>
+    <string name="lg_phone">Phone number</string>
+    <string name="lg_sms_note">You must send the SMS yourself and enter the code; unregistered numbers are handled by Xunlei official process</string>
+    <string name="lg_phone_or_email">Phone / Email</string>
+    <string name="lg_password">Password</string>
+    <string name="lg_hide_password">Hide password</string>
+    <string name="lg_show_password">Show password</string>
+    <string name="lg_login">Sign in</string>
+    <string name="lg_web_login">Web sign-in (QR / code)</string>
+    <string name="lg_xunlei_web_login_hint">Open Xunlei web sign-in inside the app; the session is saved automatically. Use this when SMS fails or password sign-in is blocked</string>
+    <string name="lg_set_password">No password set. Tap to set one</string>
+    <string name="lg_resend_in_seconds">Resend in %1$d s</string>
+    <string name="lg_resend_code">Resend code</string>
+    <string name="lg_send_code">Send code</string>
+
+    <!-- Lanzou -->
+    <string name="lg_lanzou_title">Lanzou sign-in</string>
+    <string name="lg_lanzou_hint">Sign in with your Lanzou account (official API, captcha passed automatically)</string>
+    <string name="lg_lanzou_username_label">Username / Account / Phone</string>
+    <string name="lg_lanzou_tutorial_1">1. Enter your Lanzou account (username or phone) and password, then tap \"Sign in\".</string>
+    <string name="lg_lanzou_tutorial_2">2. After sign-in, the Cookie is encrypted and stored locally for personal drive and share transfers.</string>
+    <string name="lg_lanzou_tutorial_3">3. If the password is reported wrong, check it and retry (wait a while after repeated failures).</string>
+    <string name="lg_login_failed_check">Sign-in failed. Please check your account and password</string>
+
+    <!-- Lanzou Pro -->
+    <string name="lg_ilanzou_title">Lanzou Pro sign-in</string>
+    <string name="lg_ilanzou_hint">Sign in with your Lanzou Pro account (the password is stored to auto sign in after credentials expire)</string>
+    <string name="lg_ilanzou_tutorial_1">1. Enter your Lanzou Pro username and password, then tap \"Sign in\".</string>
+    <string name="lg_ilanzou_tutorial_2">2. After sign-in, the appToken and device ID are encrypted and stored locally.</string>
+    <string name="lg_ilanzou_tutorial_3">3. If access verification fails, try again later or use web sign-in.</string>
+
+    <!-- Common (extra) -->
+    <string name="lg_username">Username</string>
+    <string name="lg_logging_in">Signing in…</string>
+    <string name="lg_login_instructions">Sign-in instructions</string>
+
+    <!-- GuangYa -->
+    <string name="lg_guangya_title">GuangYa Cloud sign-in</string>
+    <string name="lg_guangya_sms_hint">Sign in / sign up with an SMS code sent to your phone (new users are registered automatically)</string>
+    <string name="lg_guangya_password_hint">Sign in with your GuangYa Cloud account (if no password is set, set one on the official website)</string>
+    <string name="lg_guangya_tutorial_1">1. Enter your GuangYa Cloud account and password, then tap \"Sign in\".</string>
+    <string name="lg_guangya_tutorial_2">2. You can also tap \"Code sign-in\" and use an SMS code sent to your phone (new users are registered automatically).</string>
+    <string name="lg_guangya_tutorial_3">3. After sign-in, the access / refresh tokens and device ID are encrypted and stored locally.</string>
+    <string name="lg_guangya_tutorial_4">4. If security verification is required, retry or use another sign-in method.</string>
+    <string name="lg_sms_sent">Code sent</string>
+    <string name="lg_account">Account</string>
+    <string name="lg_account_placeholder">Phone / Email / Username</string>
+    <string name="lg_sms_login_entry">Code sign-in</string>
+    <string name="lg_resend_after_seconds">Resend in %1$d s</string>
+    <string name="lg_get_sms_code">Get code</string>
+    <string name="lg_login_or_register">Sign in / Sign up</string>
+    <string name="lg_back_to_password">Back to password sign-in</string>
+
+    <!-- Video platform web sign-in -->
+    <string name="lg_error_host_lookup">Host lookup failed, usually due to no network</string>
+    <string name="lg_error_connect">Connection timed out, usually due to no network</string>
+    <string name="lg_error_unknown">Unknown error</string>
+    <string name="lg_platform_login_title">%1$s sign-in</string>
+    <string name="lg_refresh_page">Refresh page</string>
+    <string name="lg_web_load_failed">Failed to load page</string>
+    <string name="lg_web_load_failed_hint">If this platform is unreachable locally (for example, a blocked overseas site), connect to a proxy and retry</string>
+    <string name="lg_retry">Retry</string>
+    <string name="lg_video_tutorial_1">1. Sign in to your %1$s account in the web page below</string>
+    <string name="lg_video_tutorial_2">2. Sign-in is detected and saved automatically; no manual action needed</string>
+    <string name="lg_video_tutorial_3">3. If it is not saved automatically, tap \"Save\" in the top-right corner; you can also tap the \"Paste\" icon to enter the Cookie manually</string>
+    <string name="lg_video_tutorial_4">4. The Cookie is encrypted and stored locally; sign in again once it expires</string>
+    <string name="lg_video_cookie_hint">Copy the full Cookie from a browser or capture tool and paste it here</string>
+    <string name="lg_cookie_invalid_expired">Invalid or expired Cookie. Please copy it again</string>
+    <string name="lg_why_no_web_login">Why is there no web sign-in?</string>
+    <string name="lg_manual_only_reason">The %1$s sign-in page uses risk-control verification (reCAPTCHA), which cannot be completed in the in-app web view, so web sign-in is not offered here. Paste the Cookie directly instead.</string>
+    <string name="lg_cookie">Cookie</string>
+    <string name="lg_cookie_howto">How to get it: sign in to %1$s in a desktop browser, open Developer Tools (F12) → Application / Storage → Cookies, and copy the entire Cookie for the site.</string>
+
+    <!-- Xunlei web sign-in -->
+    <string name="lg_xunlei_web_title">Xunlei web sign-in</string>
+    <string name="lg_manual_paste_credential">Paste sign-in credential manually</string>
+    <string name="lg_no_login_state_web">No sign-in detected. Please sign in on the web page first.</string>
+    <string name="lg_web_login_instructions">Web sign-in instructions</string>
+    <string name="lg_xunlei_web_tutorial_1">1. Sign in to your Xunlei account in the web page below (SMS code / QR / password all work)</string>
+    <string name="lg_xunlei_web_tutorial_2">2. Sign-in is detected and completed automatically; no manual action is usually needed</string>
+    <string name="lg_xunlei_web_tutorial_3">3. If it does not sign in automatically, tap \"Save\" in the top-right corner to extract it once</string>
+    <string name="lg_xunlei_web_tutorial_4">4. If it still fails, tap the \"Paste\" icon and paste the credential JSON from the web session</string>
+    <string name="lg_xunlei_web_tutorial_5">5. Web sign-in tokens renew automatically; sign in again once they expire</string>
+
+    <!-- 139 Netdisk -->
+    <string name="lg_c139_title">139 Netdisk sign-in</string>
+    <string name="lg_c139_tutorial_1">1. Sign in to your 139 Netdisk account in the web page below (phone number)</string>
+    <string name="lg_c139_tutorial_2">2. Sign-in is detected automatically. If not, tap \"Save\" in the top-right corner</string>
+    <string name="lg_c139_tutorial_3">3. Or tap the \"Paste\" icon to enter the Cookie manually (must include Os_SSo_Sid= and RMKEY=)</string>
+    <string name="lg_c139_tutorial_4">4. If the page is blank: sign in at yun.139.com in a system browser, then copy and paste the Cookie; the result is the same</string>
+    <string name="lg_c139_tutorial_5">5. The Cookie has a limited lifetime; sign in again once it expires</string>
+    <string name="lg_c139_cookie_hint">Copy the full Cookie from the signed-in web session (must include Os_SSo_Sid= and RMKEY=)</string>
+    <string name="lg_c139_cookie_invalid">Invalid Cookie. Please check that it includes Os_SSo_Sid= and RMKEY=</string>
+    <string name="lg_page_load_error_retry">Page load error, retrying…</string>
+
+    <!-- 115 Netdisk -->
+    <string name="lg_pan115_title">115 Netdisk sign-in</string>
+    <string name="lg_pan115_tutorial_1">1. Sign in to your 115 account in the web page below (QR / SMS / password supported)</string>
+    <string name="lg_pan115_tutorial_2">2. Sign-in is detected and completed automatically; no manual action needed</string>
+    <string name="lg_pan115_tutorial_3">3. If automatic sign-in is not triggered, tap \"Save\" in the top-right corner to extract manually (reads the web Cookie)</string>
+    <string name="lg_pan115_tutorial_4">4. Or tap the \"Paste\" icon to paste the entire Cookie manually</string>
+    <string name="lg_pan115_tutorial_5">5. 115 Cookies rotate regularly; sign in again once expired</string>
+    <string name="lg_pan115_cookie_hint">After signing in to 115 web, copy the Cookie from your browser and paste it here (must include UID and SEID)</string>
+    <string name="lg_pan115_cookie_invalid">Invalid or expired Cookie. Please check that it includes UID and SEID</string>
+
+    <!-- 123 Cloud -->
+    <string name="lg_pan123_title">123 Cloud sign-in</string>
+    <string name="lg_manual_token">Enter Token manually</string>
+    <string name="lg_mode_web">Web sign-in</string>
+    <string name="lg_pan123_password_title">Account password sign-in</string>
+    <string name="lg_pan123_password_hint">Sign in directly with your 123 Cloud account without opening a web page; if security verification is required, use \"Web sign-in\" instead</string>
+    <string name="lg_pan123_tutorial_1">1. Sign in to your 123 Cloud account in the web page below (password or SMS code supported)</string>
+    <string name="lg_pan123_tutorial_2">2. Sign-in is detected and completed automatically; no manual action needed</string>
+    <string name="lg_pan123_tutorial_3">3. If automatic sign-in is not triggered, tap \"Save\" in the top-right corner to extract manually (reads the web localStorage authorToken)</string>
+    <string name="lg_pan123_tutorial_4">4. Or tap the \"Paste\" icon to paste the Token manually</string>
+    <string name="lg_pan123_tutorial_5">5. The Token is long-lived; sign in again once it expires</string>
+    <string name="lg_pan123_token_hint">After signing in to 123 Cloud web, copy the authorToken value from localStorage and paste it here (you can view it in browser Developer Tools)</string>
+    <string name="lg_paste_token_hint">Paste authorToken…</string>
+    <string name="lg_pan123_token_invalid">Invalid Token. Please check that it is the complete authorToken</string>
+
+    <!-- Quark -->
+    <string name="lg_quark_title">Quark Netdisk sign-in</string>
+    <string name="lg_quark_tutorial_1">1. Sign in to your Quark account in the web page below</string>
+    <string name="lg_quark_tutorial_2">2. Sign-in is detected automatically. If not, tap \"Save\" in the top-right corner</string>
+    <string name="lg_quark_tutorial_3">3. Or tap the \"Paste\" icon to enter the Cookie manually (must include __pus= and __puus=)</string>
+    <string name="lg_quark_tutorial_4">4. The Cookie is valid for about 30 days; sign in again once it expires</string>
+    <string name="lg_quark_cookie_hint">Copy the full Cookie from the signed-in web session (must include __pus= and __puus=)</string>
+    <string name="lg_quark_cookie_invalid">Invalid Cookie. Please check that it includes __pus= and __puus=</string>
+
+    <!-- UC Netdisk -->
+    <string name="lg_uc_title">UC Netdisk sign-in</string>
+    <string name="lg_uc_tutorial_1">1. Sign in to your UC account in the web page below</string>
+    <string name="lg_uc_tutorial_2">2. Sign-in is detected automatically. If not, tap \"Save\" in the top-right corner</string>
+    <string name="lg_uc_tutorial_3">3. Or tap the \"Paste\" icon to enter the Cookie manually (must include __pus= and __puus=)</string>
+    <string name="lg_uc_tutorial_4">4. The Cookie has a limited lifetime; sign in again once it expires</string>
+    <string name="lg_uc_cookie_hint">Copy the full Cookie from the signed-in web session (must include __pus= and __puus=)</string>
+    <string name="lg_uc_cookie_invalid">Invalid Cookie. Please check that it includes __pus= and __puus=</string>
+
+    <!-- Xunlei verification / credential paste -->
+    <string name="lg_xunlei_verify_title">Xunlei security verification</string>
+    <string name="lg_xunlei_paste_hint">After signing in to pan.xunlei.com in a desktop browser, copy the value of %1$s from localStorage in Developer Tools (the whole JSON is fine)</string>
+    <string name="lg_paste_credential_hint">Paste credential JSON…</string>
+    <string name="lg_credential_invalid">Invalid or expired credential. Please make sure you copied the complete content</string>
+</resources>

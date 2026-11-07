@@ -20,6 +20,7 @@ package com.yunx.app.ui.viewmodel
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.upload.UploadProgress
 import com.yunx.app.data.upload.UploadRunner
@@ -40,6 +41,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.repository.GuangYaAccountRepository
 import com.yunx.app.ui.preview.CloudPreview
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -117,7 +119,7 @@ class GuangYaCloudViewModel(
     }
 
     private suspend fun token(): String =
-        accountRepository.ensureAccessToken() ?: throw IllegalStateException("请先登录光鸭云盘")
+        accountRepository.ensureAccessToken() ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_guangya))
 
     // ---------- 目录浏览 ----------
 
@@ -236,7 +238,7 @@ class GuangYaCloudViewModel(
                 val files = api.listCloudFiles(token(), dirId).filter { it.isdir }
                 _moveUiState.value = GuangYaCloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _moveUiState.value = GuangYaCloudUiState.Error(e.message ?: "加载失败")
+                _moveUiState.value = GuangYaCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -268,21 +270,21 @@ class GuangYaCloudViewModel(
         if (!folder.isdir) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val tk = token()
                 val tasks = mutableListOf<Pair<ShareFile, String>>()
                 collectFolderFiles(folder.fid, folder.fname, tk, tasks, 0)
                 if (tasks.isEmpty()) {
-                    cloudMessage = "文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_folder_empty)
                     actionFile = null
                     return@launch
                 }
                 var okCount = 0
                 tasks.forEachIndexed { index, (file, relPath) ->
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = api.getDownloadLink(tk, file) ?: return@runCatching
                         downloadManager.enqueue(
@@ -296,14 +298,14 @@ class GuangYaCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断下载"
+                    cloudMessage = AppStrings.get(R.string.vc_download_interrupted)
                     actionFile = null
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 actionFile = null
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_folder_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -318,7 +320,7 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 val link = api.getDownloadLink(token(), file)
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 pendingDownload = PendingDownload(
                     url = link.downloadUrl,
                     fileName = file.fname.ifBlank { link.filename },
@@ -327,7 +329,7 @@ class GuangYaCloudViewModel(
                 )
                 downloadLink = link
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -345,12 +347,12 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 val link = api.getDownloadLink(token(), file)
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
                 CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "预览失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_preview_failed)
             } finally {
                 isOperating = false
             }
@@ -371,11 +373,11 @@ class GuangYaCloudViewModel(
                     platform = DownloadPlatform.GUANGYA,
                     headers = pd.headers
                 )
-                cloudMessage = "已加入下载：${pd.fileName}"
+                cloudMessage = AppStrings.get(R.string.vc_download_added_named, pd.fileName)
                 actionFile = null
                 downloadTriggered++
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -393,11 +395,11 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 api.renameFile(token(), file.fid, newName)
-                cloudMessage = "已重命名"
+                cloudMessage = AppStrings.get(R.string.vc_renamed)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "重命名失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_rename_failed)
             } finally {
                 isOperating = false
             }
@@ -412,10 +414,10 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 api.createDir(token(), parentId, newName)
-                cloudMessage = "已创建文件夹「$newName」"
+                cloudMessage = AppStrings.get(R.string.vc_folder_created, newName)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "新建文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_create_folder_failed)
             } finally {
                 isOperating = false
             }
@@ -428,11 +430,11 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 api.moveFiles(token(), listOf(file.fid), toDirId)
-                cloudMessage = "已移动到目标目录"
+                cloudMessage = AppStrings.get(R.string.vc_moved)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -454,7 +456,7 @@ class GuangYaCloudViewModel(
                 )
                 shareResult = info.copy(expiredType = expiredType)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -467,11 +469,11 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 api.deleteFiles(token(), listOf(file.fid))
-                cloudMessage = "已删除「${file.fname}」"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_named, file.fname)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -485,7 +487,7 @@ class GuangYaCloudViewModel(
         if (files.isEmpty()) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val tk = token()
@@ -498,14 +500,14 @@ class GuangYaCloudViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    cloudMessage = "所选文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_selected_folder_empty)
                     exitMultiSelect()
                     return@launch
                 }
                 var okCount = 0
                 tasks.forEachIndexed { index, (file, relPath) ->
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = api.getDownloadLink(tk, file) ?: return@runCatching
                         downloadManager.enqueue(
@@ -519,14 +521,14 @@ class GuangYaCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断批量下载"
+                    cloudMessage = AppStrings.get(R.string.vc_batch_download_interrupted)
                     exitMultiSelect()
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "批量下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_batch_download_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -541,7 +543,7 @@ class GuangYaCloudViewModel(
         viewModelScope.launch {
             isOperating = true
             try {
-                val title = if (files.size == 1) files[0].fname else "分享 ${files.size} 个文件"
+                val title = if (files.size == 1) files[0].fname else AppStrings.get(R.string.vc_share_n_files, files.size)
                 val info = api.createShare(
                     accessToken = token(),
                     fileIds = files.map { it.fid },
@@ -552,7 +554,7 @@ class GuangYaCloudViewModel(
                 shareResult = info.copy(expiredType = expiredType)
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -566,11 +568,11 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 api.moveFiles(token(), files.map { it.fid }, toDirId)
-                cloudMessage = "已移动 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_moved_items, files.size)
                 exitMultiSelect()
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -584,11 +586,11 @@ class GuangYaCloudViewModel(
             isOperating = true
             try {
                 api.deleteFiles(token(), files.map { it.fid })
-                cloudMessage = "已删除 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_items, files.size)
                 exitMultiSelect()
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -609,7 +611,7 @@ class GuangYaCloudViewModel(
                 val files = api.listCloudFiles(token(), current.dirId)
                 _uiState.value = GuangYaCloudUiState.Loaded(files, current.pathNames, current.dirId)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "刷新失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_refresh_failed)
             } finally {
                 refreshing = false
             }
@@ -632,7 +634,7 @@ class GuangYaCloudViewModel(
                 val files = api.listCloudFiles(token(), dirId)
                 _uiState.value = GuangYaCloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _uiState.value = GuangYaCloudUiState.Error(e.message ?: "加载失败")
+                _uiState.value = GuangYaCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -647,8 +649,8 @@ class GuangYaCloudViewModel(
         if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
         cloudMessage = when {
             outcome.error != null -> outcome.error
-            outcome.cancelled -> "已取消上传"
-            else -> "已上传 ${outcome.uploaded} 个文件"
+            outcome.cancelled -> AppStrings.get(R.string.vc_upload_cancelled)
+            else -> AppStrings.get(R.string.vc_upload_done, outcome.uploaded)
         }
     }
 

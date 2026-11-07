@@ -18,7 +18,9 @@
 
 package com.yunx.app.data.network.video
 
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -81,7 +83,11 @@ object VideoHttp {
         val response: Response = try {
             client.newCall(builder.build()).execute()
         } catch (e: java.io.IOException) {
-            throw VideoParseException(VideoParseErrorKind.NETWORK, "请求失败：$url", e)
+            throw VideoParseException(
+                VideoParseErrorKind.NETWORK,
+                AppStrings.get(R.string.em_http_request_failed, url),
+                e
+            )
         }
         response.use {
             RawResponse(
@@ -105,15 +111,18 @@ object VideoHttp {
         throw when (response.status) {
             // 各平台风控：微博/小红书/抖音都会用这几个码挡匿名请求
             403, 418, 429 -> VideoParseException(
-                VideoParseErrorKind.BLOCKED, "$what 被风控拦截（HTTP ${response.status}）"
+                VideoParseErrorKind.BLOCKED,
+                AppStrings.get(R.string.em_http_blocked, what, response.status)
             )
 
             404, 410 -> VideoParseException(
-                VideoParseErrorKind.NOT_FOUND, "$what 不存在（HTTP ${response.status}）"
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_http_not_found, what, response.status)
             )
 
             else -> VideoParseException(
-                VideoParseErrorKind.UNKNOWN, "$what 请求失败（HTTP ${response.status}）"
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_http_failed, what, response.status)
             )
         }
     }
@@ -122,7 +131,7 @@ object VideoHttp {
     suspend fun getText(
         url: String,
         headers: Map<String, String> = emptyMap(),
-        what: String = "解析",
+        what: String = AppStrings.get(R.string.em_what_parse),
         clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
     ): String {
         val response = request(url, headers = headers, clientProvider = clientProvider)
@@ -134,12 +143,16 @@ object VideoHttp {
     suspend fun getJson(
         url: String,
         headers: Map<String, String> = emptyMap(),
-        what: String = "解析",
+        what: String = AppStrings.get(R.string.em_what_parse),
         clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
     ): JSONObject {
         val text = getText(url, headers, what, clientProvider)
         return runCatching { JSONObject(text) }.getOrElse {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "$what 返回的不是合法 JSON", it)
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_http_not_json, what),
+                it
+            )
         }
     }
 
@@ -148,7 +161,7 @@ object VideoHttp {
         url: String,
         form: Map<String, String>,
         headers: Map<String, String> = emptyMap(),
-        what: String = "解析",
+        what: String = AppStrings.get(R.string.em_what_parse),
         clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
     ): String {
         val formBody = FormBody.Builder().apply {

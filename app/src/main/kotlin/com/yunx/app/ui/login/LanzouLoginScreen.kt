@@ -59,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -66,9 +67,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.LanzouAccountViewModel
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.launch
 
 /**
@@ -98,17 +101,17 @@ fun LanzouLoginScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("蓝奏云登录", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.lg_lanzou_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = { if (!isSaving) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showTutorial = true }, enabled = !isSaving) {
                         Icon(
                             Icons.Outlined.Info,
-                            contentDescription = "登录说明",
+                            contentDescription = stringResource(R.string.lg_login_instructions),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -126,7 +129,7 @@ fun LanzouLoginScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "使用蓝奏云账号密码登录（官方接口，自动通过人机校验）",
+                text = stringResource(R.string.lg_lanzou_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -138,7 +141,7 @@ fun LanzouLoginScreen(
                     error = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("用户名 / 账号 / 手机号") },
+                label = { Text(stringResource(R.string.lg_lanzou_username_label)) },
                 singleLine = true,
                 enabled = !isSaving,
                 shape = MaterialTheme.shapes.large
@@ -151,7 +154,7 @@ fun LanzouLoginScreen(
                     error = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("密码") },
+                label = { Text(stringResource(R.string.lg_password)) },
                 singleLine = true,
                 enabled = !isSaving,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -161,7 +164,7 @@ fun LanzouLoginScreen(
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
                             if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                            contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                            contentDescription = if (passwordVisible) stringResource(R.string.lg_hide_password) else stringResource(R.string.lg_show_password)
                         )
                     }
                 },
@@ -186,10 +189,10 @@ fun LanzouLoginScreen(
                         isSaving = false
                         result
                             .onSuccess {
-                                SnackbarController.show("登录成功")
+                                SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                 onSaved()
                             }
-                            .onFailure { error = it.message ?: "登录失败，请检查账号密码" }
+                            .onFailure { error = it.message ?: AppStrings.get(R.string.lg_login_failed_check) }
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -198,9 +201,9 @@ fun LanzouLoginScreen(
                 if (isSaving) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("登录中…")
+                    Text(stringResource(R.string.lg_logging_in))
                 } else {
-                    Text("登录")
+                    Text(stringResource(R.string.lg_login))
                 }
             }
         }
@@ -210,22 +213,22 @@ fun LanzouLoginScreen(
         AlertDialog(
             onDismissRequest = { showTutorial = false },
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-            title = { Text("登录说明") },
+            title = { Text(stringResource(R.string.lg_login_instructions)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("1. 输入蓝奏云账号（用户名或手机号）与密码后点击「登录」。", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.lg_lanzou_tutorial_1), style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "2. 登录成功后 Cookie 会加密保存在本机，用于个人盘与分享转存。",
+                        stringResource(R.string.lg_lanzou_tutorial_2),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "3. 若提示密码错误，请核对后重试（连续失败请稍后再试）。",
+                        stringResource(R.string.lg_lanzou_tutorial_3),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { showTutorial = false }) { Text("知道了") } }
+            confirmButton = { TextButton(onClick = { showTutorial = false }) { Text(stringResource(R.string.lg_got_it)) } }
         )
     }
 }

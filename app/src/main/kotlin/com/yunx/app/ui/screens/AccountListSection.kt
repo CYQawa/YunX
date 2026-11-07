@@ -18,6 +18,9 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,7 +84,7 @@ internal fun AccountListSection(
     LaunchedEffect(accounts.isEmpty()) { if (accounts.isEmpty()) onEmpty() }
 
     Text(
-        text = "账号（${accounts.size}）",
+        text = stringResource(R.string.sh_accounts_count, accounts.size),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -120,7 +123,7 @@ internal fun AccountListSection(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "添加账号",
+                    text = stringResource(R.string.sh_add_account),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -129,8 +132,7 @@ internal fun AccountListSection(
     }
     Spacer(modifier = Modifier.height(8.dp))
     Text(
-        text = "主账号用于列目录、转存、上传等需要单一身份的操作；" +
-            "开启「多账号下载」后，下载会自动用上同一网盘的其他账号。",
+        text = stringResource(R.string.sh_account_list_hint),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -176,7 +178,7 @@ private fun AccountRow(
             Text(text = displayName, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = if (account.isPrimary) "主账号" else "点一下设为主账号",
+                text = if (account.isPrimary) stringResource(R.string.sh_primary_account) else stringResource(R.string.sh_tap_to_set_primary),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (account.isPrimary) {
                     MaterialTheme.colorScheme.primary
@@ -189,20 +191,20 @@ private fun AccountRow(
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(
                     imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "账号操作",
+                    contentDescription = stringResource(R.string.sh_account_actions),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
-                    text = { Text("重命名备注") },
+                    text = { Text(stringResource(R.string.sh_rename_remark)) },
                     onClick = {
                         menuExpanded = false
                         showRename = true
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("退出该账号") },
+                    text = { Text(stringResource(R.string.sh_logout_account)) },
                     onClick = {
                         menuExpanded = false
                         showRemove = true
@@ -216,20 +218,20 @@ private fun AccountRow(
         var input by remember(account.id) { mutableStateOf(account.remark) }
         AlertDialog(
             onDismissRequest = { showRename = false },
-            title = { Text("重命名备注") },
+            title = { Text(stringResource(R.string.sh_rename_remark)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it },
                         singleLine = true,
-                        label = { Text("备注") },
-                        placeholder = { Text(account.nickname.ifBlank { "留空则显示昵称" }) },
+                        label = { Text(stringResource(R.string.sh_remark)) },
+                        placeholder = { Text(account.nickname.ifBlank { stringResource(R.string.sh_remark_placeholder) }) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "同一网盘登录多个账号时，备注能帮你区分（清空备注则显示昵称）。",
+                        text = stringResource(R.string.sh_remark_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -241,18 +243,18 @@ private fun AccountRow(
                         showRename = false
                         onRename(account.id, input)
                     }
-                ) { Text("保存") }
+                ) { Text(stringResource(R.string.sh_save)) }
             },
-            dismissButton = { TextButton(onClick = { showRename = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { showRename = false }) { Text(stringResource(R.string.sh_cancel)) } }
         )
     }
 
     if (showRemove) {
         AlertDialog(
             onDismissRequest = { showRemove = false },
-            title = { Text("退出该账号") },
+            title = { Text(stringResource(R.string.sh_logout_account)) },
             text = {
-                Text("确定要退出「$displayName」吗？只清除这一个账号在本机的登录凭证，其他账号不受影响。")
+                Text(stringResource(R.string.sh_logout_confirm, displayName))
             },
             confirmButton = {
                 TextButton(
@@ -261,14 +263,14 @@ private fun AccountRow(
                         onRemove(account.id)
                     }
                 ) {
-                    Text("退出", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.sh_logout), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { showRemove = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { showRemove = false }) { Text(stringResource(R.string.sh_cancel)) } }
         )
     }
 }
 
 /** 账号显示名：备注优先，回退昵称，再回退占位文案 */
 internal fun MultiAccountEntity.displayName(): String =
-    remark.ifBlank { nickname }.ifBlank { "未命名账号" }
+    remark.ifBlank { nickname }.ifBlank { AppStrings.get(R.string.sh_unnamed_account) }

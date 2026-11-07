@@ -18,7 +18,9 @@
 
 package com.yunx.app.data.network.video
 
+import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
+import com.yunx.app.util.AppStrings
 import org.json.JSONObject
 
 /**
@@ -74,7 +76,13 @@ object BilibiliParser : VideoParser {
      */
     override suspend fun validateCookie(cookie: String): String? {
         if (cookie.isBlank()) return null
-        val json = runCatching { VideoHttp.getJson(NAV_URL, apiHeaders(cookie), "B站登录态校验") }.getOrNull()
+        val json = runCatching {
+            VideoHttp.getJson(
+                NAV_URL,
+                apiHeaders(cookie),
+                AppStrings.get(R.string.em_what_bili_cookie)
+            )
+        }.getOrNull()
             ?: return null
         val data = json.optJSONObject("data") ?: return null
         if (!data.optBoolean("isLogin")) return null
@@ -87,20 +95,30 @@ object BilibiliParser : VideoParser {
         } else {
             "$VIEW_URL?aid=${link.id.removePrefix("av")}"
         }
-        val view = VideoHttp.getJson(viewUrl, apiHeaders(cookie), "B站视频信息")
+        val view = VideoHttp.getJson(viewUrl, apiHeaders(cookie), AppStrings.get(R.string.em_what_bili_video))
         if (view.optInt("code") != 0) {
             throw VideoParseException(
                 VideoParseErrorKind.NOT_FOUND,
-                "B站视频信息接口返回 code=${view.optInt("code")} msg=${view.optString("message")}"
+                AppStrings.get(
+                    R.string.em_bili_api_error,
+                    view.optInt("code"),
+                    view.optString("message")
+                )
             )
         }
         val data = view.optJSONObject("data")
-            ?: throw VideoParseException(VideoParseErrorKind.UNKNOWN, "B站视频信息缺少 data 字段")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_bili_missing_data)
+            )
 
         val bvid = data.optString("bvid")
         val cid = data.optJSONArray("pages")?.optJSONObject(0)?.optLong("cid") ?: data.optLong("cid")
         if (bvid.isBlank() || cid <= 0L) {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "B站视频信息缺少 bvid/cid")
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_bili_missing_ids)
+            )
         }
 
         val title = data.optString("title")
@@ -118,7 +136,10 @@ object BilibiliParser : VideoParser {
                         kind = VideoMediaKind.VIDEO,
                         fileName = "$fileBase.mp4",
                         headers = mediaHeaders(cookie),
-                        quality = "${qualityLabel(dash.quality)}（分轨，下载后合轨）",
+                        quality = AppStrings.get(
+                            R.string.em_quality_dash,
+                            qualityLabel(dash.quality)
+                        ),
                         audioUrl = dash.audioUrl,
                         audioHeaders = mediaHeaders(cookie)
                     )
@@ -130,22 +151,31 @@ object BilibiliParser : VideoParser {
         val play = VideoHttp.getJson(
             "$PLAY_URL?bvid=$bvid&cid=$cid&qn=80&fnval=1&fnver=0&fourk=1&platform=html5&high_quality=1",
             apiHeaders(cookie),
-            "B站取直链"
+            AppStrings.get(R.string.em_what_bili_playurl)
         )
         val playData = play.optJSONObject("data")
         val durl = playData?.optJSONArray("durl")
         if (durl == null || durl.length() == 0) {
             throw VideoParseException(
                 VideoParseErrorKind.UNSUPPORTED,
-                "B站既未返回单文件直链、也未返回可合轨的分轨流" +
-                    "（code=${play.optInt("code")} msg=${play.optString("message")}）：该视频可能是番剧/付费内容"
+                AppStrings.get(
+                    R.string.em_bili_no_stream,
+                    play.optInt("code"),
+                    play.optString("message")
+                )
             )
         }
         val first = durl.optJSONObject(0)
-            ?: throw VideoParseException(VideoParseErrorKind.UNKNOWN, "B站 durl 为空")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_bili_durl_empty)
+            )
         val url = first.optString("url")
         if (url.isBlank()) {
-            throw VideoParseException(VideoParseErrorKind.BLOCKED, "B站直链为空（可能需要登录或已被风控）")
+            throw VideoParseException(
+                VideoParseErrorKind.BLOCKED,
+                AppStrings.get(R.string.em_bili_url_empty)
+            )
         }
 
         return buildResult(
@@ -191,7 +221,7 @@ object BilibiliParser : VideoParser {
             VideoHttp.getJson(
                 "$PLAY_URL?bvid=$bvid&cid=$cid&qn=120&fnval=4048&fnver=0&fourk=1",
                 apiHeaders(cookie),
-                "B站取 DASH 直链"
+                AppStrings.get(R.string.em_what_bili_dash)
             )
         }.getOrNull() ?: return null
         val dash = json.optJSONObject("data")?.optJSONObject("dash") ?: return null
@@ -228,7 +258,7 @@ object BilibiliParser : VideoParser {
         112 -> "1080P+"
         116 -> "1080P60"
         120 -> "4K"
-        else -> if (qn > 0) "画质 $qn" else ""
+        else -> if (qn > 0) AppStrings.get(R.string.em_quality_number, qn) else ""
     }
 
     /** 接口偶尔给 `//` 开头的协议相对地址 */

@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.network.video.DetectedVideoLink
 import com.yunx.app.data.network.video.VideoHttp
@@ -27,6 +28,7 @@ import com.yunx.app.data.network.video.VideoParseException
 import com.yunx.app.data.network.video.VideoParseResult
 import com.yunx.app.data.network.video.VideoParsers
 import com.yunx.app.data.network.video.VideoPlatform
+import com.yunx.app.util.AppStrings
 import okhttp3.OkHttpClient
 
 /**
@@ -55,7 +57,7 @@ class VideoParseRepository internal constructor(
         val parser = VideoParsers.of(resolved.platform)
             ?: throw VideoParseException(
                 VideoParseErrorKind.UNSUPPORTED,
-                "暂不支持解析 ${resolved.platform.displayName}"
+                AppStrings.get(R.string.er_video_platform_unsupported, resolved.platform.displayName)
             )
         // Cookie 用「当前生效账号」（主账号优先）；未登录为空串，由解析器决定匿名可用还是提示登录
         val cookie = accounts.activeCookie(resolved.platform)

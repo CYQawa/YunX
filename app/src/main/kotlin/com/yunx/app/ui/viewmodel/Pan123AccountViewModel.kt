@@ -21,8 +21,10 @@ package com.yunx.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.Pan123AccountEntity
 import com.yunx.app.data.repository.Pan123AccountRepository
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -77,7 +79,7 @@ class Pan123AccountViewModel(
             throw e
         } catch (e: Exception) {
             // 登录接口自身已经把网络错误映射成文案了，这里是最后一道兜底（写库等非网络异常）
-            "登录失败，请稍后重试"
+            AppStrings.get(R.string.vm_login_failed_retry)
         }
 
     class Factory(

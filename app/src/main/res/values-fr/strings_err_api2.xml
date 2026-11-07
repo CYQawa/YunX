@@ -1,0 +1,226 @@
+<!--
+    Langue par défaut = chinois simplifié. Versions par langue : values-b+zh+Hant / values-en / values-ja / values-fr.
+    Généré par le lot i18n E2 (préfixe e2_), couvrant les exceptions et messages d'erreur réseau de UC / Quark / Lanzou / GuangYa / 139 / Xunlei / StarSea / GitHub.
+-->
+<resources>
+    <!-- Analyse des commandes chinoises StarSea -->
+    <string name="e2_starsea_missing_data">Échec de l\'analyse de la commande : la réponse ne contient pas de données</string>
+    <string name="e2_starsea_missing_pwd_id">Échec de l\'analyse de la commande : ID de partage introuvable</string>
+    <string name="e2_starsea_empty">La commande est vide ou mal formée</string>
+    <string name="e2_starsea_auth_failed">Échec de l\'authentification du service d\'analyse de commandes (clé invalide ou remplacée)</string>
+    <string name="e2_starsea_too_long">La commande est trop longue</string>
+    <string name="e2_starsea_rate_limited">Le service d\'analyse de commandes est limité, veuillez réessayer plus tard</string>
+    <string name="e2_starsea_unavailable">L\'adresse du service d\'analyse de commandes est indisponible</string>
+    <string name="e2_starsea_http_failed">Échec de l\'analyse de la commande (HTTP %1$d)</string>
+
+    <!-- Connexion à 123 cloud drive -->
+    <string name="e2_pan123_too_frequent">Les demandes de connexion 123 sont trop fréquentes, veuillez réessayer plus tard</string>
+    <string name="e2_pan123_login_failed">Échec de la connexion à 123, veuillez vérifier votre compte et votre mot de passe puis réessayer</string>
+    <string name="e2_pan123_verify_required">123 nécessite une vérification de sécurité supplémentaire, veuillez passer à la connexion web pour la terminer</string>
+    <string name="e2_pan123_api_changed">L\'API de connexion 123 a changé, veuillez réessayer plus tard</string>
+    <string name="e2_pan123_service_unavailable">Le service de connexion 123 est temporairement indisponible, veuillez réessayer plus tard</string>
+    <string name="e2_pan123_account_locked">Le compte 123 ne peut pas se connecter temporairement, veuillez d\'abord vérifier l\'état du compte dans le client officiel</string>
+    <!-- Durée de partage -->
+    <string name="e2_share_expire_unknown">Code de durée de partage inconnu : %1$d</string>
+
+    <!-- Commande 139 cloud drive -->
+    <string name="e2_c139_kouling_missing_info">Échec de l\'analyse de la commande 139 cloud drive : la réponse ne contient pas les informations de partage</string>
+    <string name="e2_c139_kouling_missing_link">Échec de l\'analyse de la commande 139 cloud drive : la réponse ne contient pas de lien de partage</string>
+    <string name="e2_c139_kouling_no_url">Échec de l\'analyse de la commande 139 cloud drive : aucun lien de partage renvoyé</string>
+    <string name="e2_c139_kouling_bad_response">Échec de l\'analyse de la commande 139 cloud drive : format de réponse du serveur inattendu</string>
+    <string name="e2_c139_kouling_failed_code">Échec de l\'analyse de la commande 139 cloud drive (%1$s)</string>
+    <string name="e2_c139_kouling_failed_desc">Échec de l\'analyse de la commande 139 cloud drive : %1$s (%2$s)</string>
+    <!-- Xunlei -->
+    <string name="e2_xunlei_sms_sent">SMS envoyé</string>
+    <string name="e2_xunlei_login_success">Connexion réussie</string>
+    <string name="e2_xunlei_empty_file_unsupported">Xunlei cloud drive ne prend pas en charge l\'envoi de fichiers vides</string>
+    <string name="e2_xunlei_share_enter_passcode">Veuillez saisir le code d\'accès</string>
+    <string name="e2_xunlei_share_passcode_wrong">Code d\'accès incorrect</string>
+    <string name="e2_xunlei_share_passcode_required">Ce partage nécessite un code d\'accès</string>
+    <string name="e2_xunlei_request_failed">Échec de la requête</string>
+    <string name="e2_xunlei_response_empty">Échec de la requête : réponse vide</string>
+    <string name="e2_xunlei_response_parse_failed_http">Échec de l\'analyse de la réponse (HTTP %1$d)</string>
+    <string name="e2_xunlei_captcha_mismatch">Le captcha ne correspond pas à la méthode de connexion actuelle, veuillez vous reconnecter à Xunlei web</string>
+    <string name="e2_xunlei_captcha_refresh_failed">L\'actualisation du captcha n\'a pas résolu l\'échec</string>
+    <string name="e2_xunlei_kouling_http_failed">Échec de l\'analyse de la commande (HTTP %1$d)</string>
+    <string name="e2_xunlei_kouling_bad_response">Échec de l\'analyse de la commande : format de réponse inattendu</string>
+    <string name="e2_xunlei_kouling_no_share">La commande « %1$s » n\'a pas de partage cloud correspondant</string>
+    <!-- 139 cloud drive -->
+    <string name="e2_c139_kouling_response_empty">Échec de l\'analyse de la commande 139 cloud drive : réponse vide</string>
+    <string name="e2_c139_kouling_decrypt_failed">Échec de l\'analyse de la commande 139 cloud drive : échec du déchiffrement de la réponse</string>
+    <string name="e2_c139_missing_authorization">L\'état de connexion ne contient pas d\'autorisation, veuillez vous reconnecter</string>
+    <string name="e2_c139_account_parse_failed">Impossible d\'analyser le compte depuis l\'état de connexion, veuillez vous reconnecter</string>
+    <string name="e2_c139_no_folder_id">China Mobile Cloud n\'a pas renvoyé d\'ID de dossier</string>
+    <string name="e2_c139_no_upload_task">China Mobile Cloud n\'a pas renvoyé de tâche d\'envoi</string>
+    <string name="e2_c139_same_name_exists">China Mobile Cloud contient déjà un fichier du même nom, veuillez le renommer puis réessayer</string>
+    <string name="e2_c139_upload_task_not_created">China Mobile Cloud n\'a pas créé de tâche d\'envoi</string>
+    <string name="e2_c139_no_upload_id">China Mobile Cloud n\'a pas renvoyé d\'ID d\'envoi</string>
+    <string name="e2_c139_no_upload_url">China Mobile Cloud n\'a pas renvoyé d\'URL d\'envoi</string>
+    <string name="e2_c139_incomplete_parts">China Mobile Cloud n\'a pas renvoyé de parties d\'envoi complètes</string>
+    <string name="e2_c139_invalid_part_index">L\'index de partie d\'envoi renvoyé par China Mobile Cloud est invalide</string>
+    <string name="e2_c139_transfer_create_failed">Échec de la création de la tâche de transfert (%1$s)</string>
+    <string name="e2_c139_transfer_query_failed">Échec de l\'interrogation du résultat du transfert (%1$s)</string>
+
+    <!-- Erreurs d\'opération cloud drive courantes -->
+    <string name="e2_get_file_list_failed">Échec de la récupération de la liste des fichiers</string>
+    <string name="e2_get_file_list_failed_code">Échec de la récupération de la liste des fichiers (%1$s)</string>
+    <string name="e2_get_folder_list_failed">Échec de la récupération de la liste des dossiers</string>
+    <string name="e2_get_download_link_failed">Échec de la récupération du lien de téléchargement</string>
+    <string name="e2_get_download_link_failed_code">Échec de la récupération du lien de téléchargement (%1$s)</string>
+    <string name="e2_get_upload_url_failed">Échec de la récupération de l\'URL d\'envoi</string>
+    <string name="e2_get_quota_failed">Échec de la récupération des détails du stockage</string>
+    <string name="e2_create_folder_failed">Échec de la création du dossier</string>
+    <string name="e2_create_upload_task_failed">Échec de la création de la tâche d\'envoi</string>
+    <string name="e2_create_share_failed">Échec de la création du partage</string>
+    <string name="e2_create_share_no_link">Échec de la création du partage : aucun lien renvoyé</string>
+    <string name="e2_upload_failed_http">Échec de l\'envoi du fichier (HTTP %1$d)</string>
+    <string name="e2_merge_upload_failed">Échec de la fusion des parties d\'envoi</string>
+    <string name="e2_rename_failed">Échec du renommage</string>
+    <string name="e2_move_failed">Échec du déplacement</string>
+    <string name="e2_delete_failed">Échec de la suppression</string>
+    <string name="e2_query_task_failed">Échec de l\'interrogation de la tâche</string>
+    <string name="e2_request_empty_response">Échec de la requête : réponse vide</string>
+    <string name="e2_error_with_code">%1$s (code=%2$s)</string>
+    <!-- GuangYa -->
+    <string name="e2_guangya_share_restricted">Ce partage GuangYa doit être enregistré sur votre espace avant le téléchargement, veuillez d\'abord vous connecter à GuangYa cloud</string>
+    <string name="e2_guangya_captcha_failed_login">La vérification de sécurité GuangYa a échoué, veuillez réessayer ou passer à la connexion web</string>
+    <string name="e2_guangya_web_captcha_required">GuangYa nécessite une vérification humaine web, veuillez réessayer plus tard ou vous connecter avec un compte et un mot de passe</string>
+    <string name="e2_guangya_captcha_failed_password">La vérification de sécurité GuangYa a échoué, veuillez réessayer ou vous connecter avec un compte et un mot de passe</string>
+    <string name="e2_send_sms_failed">Échec de l\'envoi du code de vérification</string>
+    <string name="e2_sms_too_frequent">Les demandes de code de vérification sont trop fréquentes, veuillez réessayer plus tard</string>
+    <string name="e2_sms_code_invalid">Le code de vérification SMS est incorrect ou expiré, veuillez en demander un nouveau</string>
+    <string name="e2_guangya_get_quota_failed">Échec de la récupération de la capacité de stockage</string>
+    <string name="e2_guangya_get_share_info_failed">Échec de la récupération des informations de partage</string>
+    <string name="e2_guangya_get_share_token_failed">Échec de la récupération du jeton d\'accès au partage</string>
+    <string name="e2_guangya_invalid_share_link">Lien de partage GuangYa invalide</string>
+    <string name="e2_guangya_get_share_files_failed">Échec de la récupération de la liste des fichiers partagés</string>
+    <string name="e2_guangya_get_download_url_failed">Échec de la récupération de l\'URL de téléchargement</string>
+    <string name="e2_guangya_no_valid_download_url">GuangYa n\'a pas renvoyé d\'URL de téléchargement valide, veuillez vérifier les droits de téléchargement</string>
+    <string name="e2_guangya_restore_failed">Échec de l\'enregistrement sur l\'espace</string>
+    <string name="e2_guangya_list_pagination_duplicate">La pagination de la liste des fichiers GuangYa est dupliquée, veuillez réessayer</string>
+    <string name="e2_guangya_folder_not_created">GuangYa n\'a pas créé le dossier, veuillez vérifier si un fichier du même nom existe</string>
+    <string name="e2_guangya_upload_task_not_created">GuangYa n\'a pas créé de tâche d\'envoi</string>
+    <string name="e2_guangya_query_upload_failed">Échec de l\'interrogation du résultat de l\'envoi</string>
+    <string name="e2_guangya_upload_verifying">GuangYa vérifie le contenu envoyé, veuillez actualiser la liste plus tard</string>
+    <string name="e2_guangya_task_status_failed">Échec de l\'interrogation de l\'état de la tâche</string>
+    <string name="e2_guangya_operation_failed">L\'opération GuangYa a échoué</string>
+    <string name="e2_guangya_operation_pending">L\'opération GuangYa est toujours en cours, veuillez actualiser la liste plus tard pour confirmer le résultat</string>
+    <string name="e2_guangya_login_failed">Échec de la connexion à GuangYa, veuillez vérifier votre compte et votre mot de passe, ou passer à la connexion web</string>
+    <string name="e2_guangya_login_too_frequent">Les tentatives de connexion à GuangYa sont trop fréquentes, veuillez réessayer plus tard</string>
+    <string name="e2_guangya_wrong_credentials">Compte ou mot de passe GuangYa incorrect, veuillez vérifier puis réessayer</string>
+    <string name="e2_guangya_password_not_set">Ce compte GuangYa n\'a pas de mot de passe défini, veuillez passer à la connexion web</string>
+    <string name="e2_guangya_sms_required">GuangYa nécessite une vérification SMS, veuillez passer à la connexion web pour continuer</string>
+    <string name="e2_guangya_share_passcode_invalid">Le code d\'accès du partage GuangYa est incorrect ou manquant</string>
+    <string name="e2_guangya_share_unavailable">Le partage GuangYa a été annulé, a expiré ou est inaccessible</string>
+    <string name="e2_guangya_download_restricted">Le téléchargement du partage GuangYa est restreint, veuillez confirmer les droits de téléchargement de ce partage sur le site officiel</string>
+    <string name="e2_guangya_no_space">L\'espace GuangYa cloud est plein</string>
+    <string name="e2_request_failed_http">Échec de la requête (HTTP %1$d)</string>
+    <!-- Erreurs communes de réponse et d\'envoi (UC / Quark) -->
+    <string name="e2_download_empty_response">Échec de l\'obtention du lien de téléchargement : réponse vide</string>
+    <string name="e2_response_parse_failed">Échec de l\'analyse de la réponse</string>
+    <string name="e2_response_parse_failed_http">Échec de l\'analyse de la réponse (HTTP %1$d)</string>
+    <string name="e2_response_missing_data">La réponse ne contient pas de data</string>
+    <string name="e2_download_link_missing">Aucun lien de téléchargement renvoyé</string>
+    <string name="e2_upload_request_failed">Échec de la requête d\'envoi</string>
+    <string name="e2_request_failed">Échec de la requête</string>
+
+    <!-- Limites invité Quark -->
+    <string name="e2_quark_guest_size_limit">Ce fichier dépasse la limite de taille pour les invités (environ 50 Mo pour Quark). Connectez-vous à Quark Drive avant de télécharger</string>
+    <string name="e2_quark_guest_login_required">Ce partage nécessite une connexion à Quark Drive pour être téléchargé</string>
+    <string name="e2_quark_login_expired">Votre session Quark a expiré. Reconnectez-vous depuis la page « Drive » puis réessayez</string>
+    <string name="e2_quark_guest_server_limit">Le serveur a refusé ce fichier en raison des limites invité (plafond d\'environ 50 Mo de Quark)</string>
+
+    <!-- Limites invité UC -->
+    <string name="e2_uc_guest_login_required">Ce partage nécessite une connexion à UC Drive pour être téléchargé</string>
+    <string name="e2_uc_guest_size_limit">Ce fichier dépasse la limite de taille pour les invités. Connectez-vous à UC Drive avant de télécharger</string>
+    <string name="e2_uc_share_invalid">Le partage a expiré ou le code d\'extraction est incorrect. Analysez-le à nouveau</string>
+    <string name="e2_uc_token_expired">Le jeton du fichier a expiré. Analysez à nouveau le partage</string>
+
+    <!-- Erreurs communes d\'envoi vers un drive -->
+    <string name="e2_upload_empty_file">Ce drive ne prend pas en charge l\'envoi de fichiers vides</string>
+    <string name="e2_upload_task_missing">Le drive n\'a pas renvoyé de tâche d\'envoi</string>
+    <string name="e2_upload_host_missing">Le drive n\'a pas renvoyé de serveur d\'envoi</string>
+    <string name="e2_upload_credential_missing">Le drive n\'a pas renvoyé d\'identifiants d\'envoi complets</string>
+    <string name="e2_upload_auth_missing">Le drive n\'a pas délivré d\'autorisation d\'envoi</string>
+    <string name="e2_upload_part_unconfirmed">Le drive n\'a pas confirmé le segment envoyé</string>
+    <string name="e2_upload_callback_missing">Le drive n\'a pas renvoyé de rappel d\'envoi</string>
+    <string name="e2_upload_merge_failed_generic">Le drive n\'a pas terminé la fusion des segments envoyés</string>
+
+    <!-- Lanzou -->
+    <string name="e2_lanzou_login_invalid">La session Lanzou est invalide. Reconnectez-vous</string>
+    <string name="e2_lanzou_credentials_required">Veuillez saisir votre compte et votre mot de passe Lanzou</string>
+    <string name="e2_lanzou_login_failed">La connexion à Lanzou a échoué. Réessayez plus tard</string>
+    <string name="e2_lanzou_login_failed_credentials">La connexion à Lanzou a échoué. Vérifiez votre compte et votre mot de passe</string>
+    <string name="e2_lanzou_login_no_credential">La connexion à Lanzou n\'a pas obtenu d\'identifiants valides. Réessayez</string>
+    <string name="e2_lanzou_file_paging_duplicate">La pagination des fichiers Lanzou se répète. Actualisez puis réessayez</string>
+    <string name="e2_lanzou_folder_info_missing">Lanzou n\'a pas renvoyé les informations du nouveau dossier</string>
+    <string name="e2_lanzou_login_expired">Votre session Lanzou a expiré. Reconnectez-vous via le site web</string>
+    <string name="e2_lanzou_verify_page_before_upload">Lanzou a renvoyé une page de vérification. Terminez la vérification sur le site officiel avant d\'envoyer</string>
+    <string name="e2_lanzou_upload_response_invalid">Réponse d\'envoi Lanzou inattendue. Réessayez</string>
+    <string name="e2_lanzou_too_frequent_short">Les requêtes vers Lanzou sont trop fréquentes. Réessayez plus tard</string>
+    <string name="e2_lanzou_upload_failed_zt">Échec de l\'envoi vers Lanzou (zt=%1$s)</string>
+    <string name="e2_lanzou_upload_failed_detail"> : %1$s</string>
+    <string name="e2_lanzou_upload_failed_hint">, vérifiez le type et la taille du fichier sur le site officiel</string>
+    <string name="e2_lanzou_upload_file_info_missing">Lanzou n\'a pas renvoyé les informations du fichier envoyé</string>
+    <string name="e2_lanzou_share_link_missing">Lanzou n\'a pas renvoyé de lien de partage</string>
+    <string name="e2_lanzou_share_paging_error">Erreur de pagination du partage Lanzou. Réessayez</string>
+    <string name="e2_lanzou_too_frequent">Les requêtes vers Lanzou sont trop fréquentes. Réessayez plus tard</string>
+    <string name="e2_lanzou_passcode_wrong">Le code d\'extraction Lanzou est incorrect. Vérifiez-le puis analysez à nouveau</string>
+    <string name="e2_lanzou_parse_failed">Échec de l\'analyse du partage Lanzou. Vérifiez le lien de partage et le code d\'extraction puis réessayez</string>
+    <string name="e2_lanzou_paging_duplicate">La pagination Lanzou se répète. Rouvrez le dossier</string>
+    <string name="e2_lanzou_download_page_invalid">L\'adresse de la page de téléchargement Lanzou est invalide. Vérifiez le lien de partage</string>
+    <string name="e2_lanzou_passcode_required">Ce partage Lanzou nécessite un code d\'extraction. Saisissez-le puis analysez à nouveau</string>
+    <string name="e2_lanzou_download_params_missing">La page de partage Lanzou manque de paramètres de téléchargement. Analysez à nouveau</string>
+    <string name="e2_lanzou_download_url_unavailable">L\'adresse de téléchargement Lanzou est temporairement indisponible. Réessayez plus tard</string>
+    <string name="e2_lanzou_download_url_loop">L\'adresse de téléchargement Lanzou boucle. Analysez à nouveau</string>
+    <string name="e2_lanzou_verify_required">Lanzou nécessite une vérification supplémentaire. Terminez la vérification sur la page de partage puis réessayez</string>
+    <string name="e2_lanzou_verify_page_no_task">Lanzou a renvoyé une page de vérification sans créer de tâche de téléchargement. Terminez la vérification sur la page de partage puis réessayez</string>
+    <string name="e2_lanzou_download_url_expired">L\'adresse de téléchargement Lanzou a expiré. Analysez à nouveau plus tard</string>
+    <string name="e2_lanzou_download_too_frequent">Les requêtes de téléchargement Lanzou sont trop fréquentes. Réessayez plus tard</string>
+    <string name="e2_lanzou_verify_service_unavailable">Le service de vérification du téléchargement Lanzou est temporairement indisponible. Réessayez plus tard</string>
+    <string name="e2_lanzou_verify_expired">La vérification du téléchargement Lanzou a expiré. Analysez à nouveau</string>
+    <string name="e2_lanzou_redirect_too_many">Trop de redirections de pages Lanzou. Analysez à nouveau</string>
+    <string name="e2_lanzou_share_link_invalid">Lien de partage Lanzou invalide</string>
+    <string name="e2_lanzou_share_page_too_large">La page de partage Lanzou est trop volumineuse ou anormale</string>
+    <string name="e2_lanzou_share_cancelled">Le partage du fichier Lanzou a été annulé ou n\'existe pas</string>
+    <string name="e2_lanzou_operation_failed">Échec de l\'opération sur le fichier Lanzou. Vérifiez les permissions et le type de fichier sur le site officiel</string>
+    <string name="e2_lanzou_operation_failed_zt">Échec de l\'opération sur le fichier Lanzou (%1$s). Vérifiez les permissions et le type de fichier sur le site officiel</string>
+    <string name="e2_lanzou_verify_page_retry">Lanzou a renvoyé une page de vérification. Réessayez plus tard ou terminez la vérification sur la page de partage</string>
+    <string name="e2_lanzou_parse_service_error">Le service d\'analyse Lanzou a renvoyé une réponse anormale. Réessayez plus tard</string>
+    <string name="e2_lanzou_parse_service_too_large">La réponse du service d\'analyse Lanzou est trop volumineuse. Réessayez plus tard</string>
+    <string name="e2_lanzou_parse_service_error_http">Le service d\'analyse Lanzou a renvoyé une réponse anormale (HTTP %1$d). Réessayez plus tard</string>
+
+    <!-- Lanzou Cloud Premium -->
+    <string name="e2_ilanzou_login_expired">Votre session Lanzou Cloud Premium a expiré. Veuillez vous reconnecter.</string>
+    <string name="e2_ilanzou_no_device_id">Lanzou Cloud Premium n\'a pas renvoyé d\'identifiant d\'appareil valide.</string>
+    <string name="e2_ilanzou_credentials_required">Veuillez saisir votre compte et votre mot de passe Lanzou Cloud Premium.</string>
+    <string name="e2_ilanzou_username_too_long">Le nom d\'utilisateur Lanzou Cloud Premium est trop long.</string>
+    <string name="e2_ilanzou_password_too_long">Le mot de passe Lanzou Cloud Premium est trop long.</string>
+    <string name="e2_ilanzou_no_login_token">Lanzou Cloud Premium n\'a pas renvoyé d\'identifiants de connexion. Veuillez passer à la connexion web.</string>
+    <string name="e2_ilanzou_default_nickname">Utilisateur Lanzou Cloud Premium</string>
+    <string name="e2_ilanzou_paging_duplicate">La pagination de Lanzou Cloud Premium est en double ou incomplète. Veuillez rouvrir le dossier.</string>
+    <string name="e2_ilanzou_folder_info_missing">Lanzou Cloud Premium n\'a pas renvoyé les informations du nouveau dossier. Veuillez actualiser pour confirmer.</string>
+    <string name="e2_ilanzou_upload_auth_missing">Lanzou Cloud Premium n\'a pas renvoyé d\'autorisation de téléversement.</string>
+    <string name="e2_ilanzou_instant_upload_unconfirmed">Lanzou Cloud Premium n\'a pas confirmé le téléversement instantané.</string>
+    <string name="e2_ilanzou_upload_account_missing">Lanzou Cloud Premium n\'a pas renvoyé les informations du compte de téléversement. Veuillez vous reconnecter et réessayer.</string>
+    <string name="e2_ilanzou_upload_failed_http">Échec du téléversement du fichier (HTTP %1$d)</string>
+    <string name="e2_ilanzou_multipart_create_failed">Lanzou Cloud Premium n\'a pas pu créer de téléversement multipartite.</string>
+    <string name="e2_ilanzou_multipart_id_missing">Lanzou Cloud Premium n\'a pas renvoyé d\'identifiant de téléversement multipartite.</string>
+    <string name="e2_ilanzou_part_unconfirmed">Lanzou Cloud Premium n\'a pas confirmé le segment téléversé.</string>
+    <string name="e2_ilanzou_multipart_merge_failed">Lanzou Cloud Premium n\'a pas pu fusionner les segments du téléversement.</string>
+    <string name="e2_ilanzou_upload_result_missing">Lanzou Cloud Premium n\'a pas renvoyé le résultat du téléversement.</string>
+    <string name="e2_ilanzou_upload_file_id_unconfirmed">Lanzou Cloud Premium n\'a pas confirmé l\'identifiant du fichier téléversé.</string>
+    <string name="e2_ilanzou_upload_still_processing">Lanzou Cloud Premium traite encore le téléversement. Veuillez actualiser la liste plus tard.</string>
+    <string name="e2_ilanzou_no_download_url">Lanzou Cloud Premium n\'a pas renvoyé d\'URL de téléchargement.</string>
+    <string name="e2_ilanzou_no_download_url_permission">Lanzou Cloud Premium n\'a pas renvoyé d\'URL de téléchargement. Veuillez vérifier les permissions du fichier.</string>
+    <string name="e2_ilanzou_share_request_failed">Échec de la demande de partage Lanzou Cloud Premium (%1$d)</string>
+    <string name="e2_ilanzou_access_challenge_failed">La vérification d\'accès de Lanzou Cloud Premium a échoué. Veuillez réessayer plus tard ou utiliser la connexion web.</string>
+    <string name="e2_ilanzou_access_challenge_failed_short">La vérification d\'accès de Lanzou Cloud Premium a échoué. Veuillez réessayer plus tard.</string>
+    <string name="e2_ilanzou_request_failed">Échec de la requête Lanzou Cloud Premium (%1$d)</string>
+    <string name="e2_ilanzou_login_failed">Échec de la connexion à Lanzou Cloud Premium. Veuillez vérifier votre compte et votre mot de passe.</string>
+    <string name="e2_ilanzou_request_failed_hint">Échec de la requête Lanzou Cloud Premium (%1$d). Veuillez vérifier vos informations de connexion ou réessayer plus tard.</string>
+
+    <!-- Titres par défaut des partages Lanzou -->
+    <string name="e2_lanzou_default_share_title">Partage Lanzou</string>
+    <string name="e2_lanzou_cloud_default_share_title">Partage Lanzou Cloud</string>
+</resources>

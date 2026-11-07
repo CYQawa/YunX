@@ -18,6 +18,9 @@
 
 package com.yunx.app.ui.resolve
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -136,16 +139,16 @@ internal fun ResolveFileActionSheet(
                     if (file.isdir) {
                         ActionItem(
                             icon = Icons.Outlined.Download,
-                            title = "下载文件夹",
-                            desc = "递归下载整个文件夹，保持目录结构",
+                            title = stringResource(R.string.sh_download_folder),
+                            desc = stringResource(R.string.sh_download_folder_desc),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = { act(onDownloadFolder) }
                         )
                     } else {
                         ActionItem(
                             icon = Icons.Outlined.Download,
-                            title = "下载",
-                            desc = "获取下载链接并保存到本机",
+                            title = stringResource(R.string.sh_download),
+                            desc = stringResource(R.string.sh_download_desc),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = { act(onDownload) }
                         )
@@ -155,8 +158,8 @@ internal fun ResolveFileActionSheet(
                     if (!file.isdir && onPreview != null) {
                         ActionItem(
                             icon = Icons.Outlined.Visibility,
-                            title = "在线预览",
-                            desc = "不下载，直接在应用内查看",
+                            title = stringResource(R.string.sh_preview_online),
+                            desc = stringResource(R.string.sh_preview_online_desc),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = { act(onPreview) }
                         )
@@ -165,8 +168,8 @@ internal fun ResolveFileActionSheet(
                     if (canSave) {
                         ActionItem(
                             icon = Icons.Outlined.SaveAlt,
-                            title = "转存",
-                            desc = if (file.isdir) "把整个文件夹存到我的网盘" else "把文件存到我的网盘",
+                            title = stringResource(R.string.sh_save_to_cloud),
+                            desc = if (file.isdir) stringResource(R.string.sh_save_folder_desc) else stringResource(R.string.sh_save_file_desc),
                             tint = MaterialTheme.colorScheme.primary,
                             // 不关弹窗：先准备转存状态，再切到转存步骤（内容淡入）
                             onClick = {

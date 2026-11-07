@@ -19,6 +19,8 @@
 package com.yunx.app.data.upload
 
 import android.content.ContentResolver
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import okhttp3.Call
 import okhttp3.Headers
@@ -96,8 +98,8 @@ class UploadIo(
     }
 
     private fun alive() {
-        if (cancelled) throw CancellationException("上传已取消")
-        if (Thread.currentThread().isInterrupted) throw CancellationException("上传已取消")
+        if (cancelled) throw CancellationException(AppStrings.get(R.string.em_upload_cancelled))
+        if (Thread.currentThread().isInterrupted) throw CancellationException(AppStrings.get(R.string.em_upload_cancelled))
     }
 
     fun progress(phase: UploadPhase, sent: Long = 0L) {
@@ -130,7 +132,7 @@ class UploadIo(
                 progress(UploadPhase.PREPARING, start + read)
             }
         }
-        if (read != end - start) throw IOException("读取本地文件不完整，请重新选择")
+        if (read != end - start) throw IOException(AppStrings.get(R.string.em_upload_read_incomplete))
         return digest.digest()
     }
 
@@ -202,7 +204,7 @@ class UploadIo(
                     return UploadResponse(response.code, response.headers, text)
                 }
             } catch (e: IOException) {
-                if (cancelled) throw CancellationException("上传已取消")
+                if (cancelled) throw CancellationException(AppStrings.get(R.string.em_upload_cancelled))
                 if (attempt >= retries) throw e
                 attempt++
                 runCatching { Thread.sleep(500L * attempt) }
@@ -281,7 +283,7 @@ class UploadIo(
                     progress(UploadPhase.UPLOADING, start + written)
                 }
             }
-            if (written != end - start) throw IOException("读取本地文件不完整，请重新选择")
+            if (written != end - start) throw IOException(AppStrings.get(R.string.em_upload_read_incomplete))
             if (closeBytes.isNotEmpty()) sink.write(closeBytes)
             progress(UploadPhase.UPLOADING, end)
         }
@@ -306,7 +308,7 @@ class UploadIo(
     ) {
         require(endpoint.isNotBlank() && bucket.isNotBlank() && objectKey.isNotBlank() &&
             accessKey.isNotBlank() && secretKey.isNotBlank()) {
-            "网盘未返回完整上传凭据"
+            AppStrings.get(R.string.em_upload_bad_credentials)
         }
         var base = endpoint.trim()
         if (!base.startsWith("http://") && !base.startsWith("https://")) base = "https://$base"
@@ -375,16 +377,16 @@ class UploadIo(
         if (file.size == 0L) {
             val response = request("PUT", start = 0L, end = 0L)
             require(response.isSuccessful && !xmlError(response.body)) {
-                "网盘上传服务返回错误（HTTP ${response.code}）"
+                AppStrings.get(R.string.em_upload_service_error, response.code)
             }
             return
         }
         val initiated = request("POST", parameters = mapOf("uploads" to ""))
         require(initiated.isSuccessful && !xmlError(initiated.body)) {
-            "网盘无法创建分段上传（HTTP ${initiated.code}）"
+            AppStrings.get(R.string.em_upload_create_multipart_failed, initiated.code)
         }
         val uploadId = xmlValue(initiated.body, "UploadId")
-        require(uploadId.isNotBlank()) { "网盘未创建分段上传任务" }
+        require(uploadId.isNotBlank()) { AppStrings.get(R.string.em_upload_no_multipart_task) }
         var completed = false
         try {
             val partSize = maxOf(MIN_PART_SIZE, (file.size + 8999) / 9000)
@@ -401,9 +403,11 @@ class UploadIo(
                     start = offset,
                     end = stop
                 )
-                require(response.isSuccessful) { "文件上传失败（HTTP ${response.code}）" }
+                require(response.isSuccessful) {
+                    AppStrings.get(R.string.em_upload_part_failed, response.code)
+                }
                 val etag = response.header("ETag")
-                require(etag.isNotBlank()) { "网盘未确认上传分段" }
+                require(etag.isNotBlank()) { AppStrings.get(R.string.em_upload_part_unconfirmed) }
                 etags.add(etag)
                 offset = stop
             }
@@ -413,7 +417,9 @@ class UploadIo(
                 parameters = mapOf("uploadId" to uploadId),
                 body = completeXml(etags)
             )
-            require(merged.isSuccessful && !xmlError(merged.body)) { "网盘未完成分段合并" }
+            require(merged.isSuccessful && !xmlError(merged.body)) {
+                AppStrings.get(R.string.em_upload_merge_failed)
+            }
             completed = true
         } finally {
             if (!completed && !cancelled) {
@@ -442,7 +448,7 @@ class UploadIo(
     ) {
         require(endpoint.isNotBlank() && bucket.isNotBlank() && objectKey.isNotBlank() &&
             accessKey.isNotBlank() && secretKey.isNotBlank()) {
-            "网盘未返回完整上传凭据"
+            AppStrings.get(R.string.em_upload_bad_credentials)
         }
         var base = endpoint.trim()
         if (!base.startsWith("http://") && !base.startsWith("https://")) base = "https://$base"
@@ -526,16 +532,16 @@ class UploadIo(
         if (file.size <= partSize) {
             val response = request("PUT", start = 0L, end = file.size)
             require(response.isSuccessful && !xmlError(response.body)) {
-                "网盘上传服务返回错误（HTTP ${response.code}）"
+                AppStrings.get(R.string.em_upload_service_error, response.code)
             }
             return
         }
         val initiated = request("POST", parameters = mapOf("uploads" to ""))
         require(initiated.isSuccessful && !xmlError(initiated.body)) {
-            "网盘无法创建分段上传（HTTP ${initiated.code}）"
+            AppStrings.get(R.string.em_upload_create_multipart_failed, initiated.code)
         }
         val uploadId = xmlValue(initiated.body, "UploadId")
-        require(uploadId.isNotBlank()) { "网盘未创建分段上传任务" }
+        require(uploadId.isNotBlank()) { AppStrings.get(R.string.em_upload_no_multipart_task) }
         var completed = false
         try {
             val etags = mutableListOf<String>()
@@ -551,9 +557,11 @@ class UploadIo(
                     start = offset,
                     end = stop
                 )
-                require(response.isSuccessful) { "文件上传失败（HTTP ${response.code}）" }
+                require(response.isSuccessful) {
+                    AppStrings.get(R.string.em_upload_part_failed, response.code)
+                }
                 val etag = response.header("ETag")
-                require(etag.isNotBlank()) { "网盘未确认上传分段" }
+                require(etag.isNotBlank()) { AppStrings.get(R.string.em_upload_part_unconfirmed) }
                 etags.add(etag)
                 offset = stop
             }
@@ -563,7 +571,9 @@ class UploadIo(
                 parameters = mapOf("uploadId" to uploadId),
                 body = completeXml(etags)
             )
-            require(merged.isSuccessful && !xmlError(merged.body)) { "网盘未完成分段合并" }
+            require(merged.isSuccessful && !xmlError(merged.body)) {
+                AppStrings.get(R.string.em_upload_merge_failed)
+            }
             completed = true
         } finally {
             if (!completed && !cancelled) {

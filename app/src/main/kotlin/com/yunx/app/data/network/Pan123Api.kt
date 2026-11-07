@@ -19,6 +19,7 @@
 package com.yunx.app.data.network
 
 import android.util.Base64
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
@@ -28,6 +29,7 @@ import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -119,10 +121,10 @@ class Pan123Api(
         withContext(Dispatchers.IO) {
             val passport = account.trim()
             if (passport.isEmpty() || password.isEmpty()) {
-                return@withContext Pan123LoginResult.Failure("请输入账号和密码")
+                return@withContext Pan123LoginResult.Failure(AppStrings.get(R.string.e1_123_enter_account_pwd))
             }
             if (passport.length > 254 || password.length > 256) {
-                return@withContext Pan123LoginResult.Failure("账号或密码过长")
+                return@withContext Pan123LoginResult.Failure(AppStrings.get(R.string.e1_123_account_pwd_too_long))
             }
             val body = JSONObject()
                 .put("passport", passport)
@@ -160,7 +162,7 @@ class Pan123Api(
                     }
                 }
             }.getOrElse {
-                Pan123LoginResult.Failure("网络异常，无法连接 123 登录服务，请稍后重试")
+                Pan123LoginResult.Failure(AppStrings.get(R.string.e1_123_login_network_error))
             }
         }
 
@@ -170,7 +172,7 @@ class Pan123Api(
     suspend fun fetchNickname(token: String): String? = withContext(Dispatchers.IO) {
         runCatching {
             val json = getAuth(Pan123Constants.USER_INFO_URL, "/b/api/user/info", token)
-            checkOk(json, "获取用户信息失败")
+            checkOk(json, AppStrings.get(R.string.e1_get_user_info_failed))
             json.optJSONObject("data")?.optString("Nickname")?.takeIf { it.isNotBlank() }
         }.getOrNull()
     }
@@ -179,7 +181,7 @@ class Pan123Api(
     suspend fun getQuota(token: String): QuotaInfo? = withContext(Dispatchers.IO) {
         runCatching {
             val json = getAuth(Pan123Constants.USER_INFO_URL, "/b/api/user/info", token)
-            checkOk(json, "获取空间详情失败")
+            checkOk(json, AppStrings.get(R.string.e1_get_space_detail_failed))
             val data = json.optJSONObject("data") ?: return@runCatching null
             QuotaInfo(
                 used = data.optLong("SpaceUsed"),
@@ -221,10 +223,10 @@ class Pan123Api(
             .get()
             .build()
         val json = executeJson(request)
-        checkOk(json, "获取文件列表失败")
+        checkOk(json, AppStrings.get(R.string.e1_get_file_list_failed))
         val data = json.optJSONObject("data") ?: return@withContext Pair(emptyList(), null)
         if (data.optBoolean("Expired", false)) {
-            throw IllegalStateException("分享已失效")
+            throw IllegalStateException(AppStrings.get(R.string.e1_123_share_expired))
         }
         val files = parseInfoList(data)
         // 文档 §5.2：Next=="-1" 无下一页；空串 "" 表示还有下一页（需继续翻页）；数字为游标
@@ -261,7 +263,7 @@ class Pan123Api(
             platform = Pan123Constants.PLATFORM_ANDROID,
             appVersion = Pan123Constants.APP_VERSION_ANDROID
         )
-        checkOk(json, "获取下载链接失败")
+        checkOk(json, AppStrings.get(R.string.e1_get_download_link_failed))
         val data = json.optJSONObject("data") ?: return@withContext null
         val downloadUrl = data.optString("DownloadURL")
         if (downloadUrl.isBlank()) return@withContext null
@@ -294,7 +296,7 @@ class Pan123Api(
             append("&event=homeListFile&operateType=1&inDirectSpace=false")
         }
         val json = getAuth(url, "/b/api/file/list/new", token)
-        checkOk(json, "获取文件列表失败")
+        checkOk(json, AppStrings.get(R.string.e1_get_file_list_failed))
         val data = json.optJSONObject("data") ?: return@withContext null
         val files = parseInfoList(data)
         // 文档 §5.4：Next=="-1" 表示末页（游标取 null 结束翻页）；空串 ""/数字表示还有下一页
@@ -331,7 +333,7 @@ class Pan123Api(
             body.toString(),
             token
         )
-        checkOk(json, "获取下载链接失败")
+        checkOk(json, AppStrings.get(R.string.e1_get_download_link_failed))
         val data = json.optJSONObject("data") ?: return@withContext null
         val raw = data.optString("DownloadUrl")
         if (raw.isBlank()) return@withContext null
@@ -366,7 +368,7 @@ class Pan123Api(
         token: String
     ): Pair<Long, String>? = withContext(Dispatchers.IO) {
         val shareId = shareIdOf(file)
-        if (shareId.isBlank()) throw IllegalStateException("无法识别分享 ID（缺少 S3KeyFlag）")
+        if (shareId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_123_share_id_missing))
         val (s3KeyFlag, etag, storageNode) = decodeToken(file.fidToken)
         val fileId = file.fid.toLongOrNull() ?: 0L
         val parentId = toDirFid.toLongOrNull() ?: 0L
@@ -405,7 +407,7 @@ class Pan123Api(
             .post(body.toString().toRequestBody(jsonMediaType))
             .build()
         val json = executeJson(request)
-        checkOk(json, "转存失败")
+        checkOk(json, AppStrings.get(R.string.e1_copy_save_failed))
         val taskId = json.optJSONObject("data")?.optLong("taskID") ?: return@withContext null
         taskId to shareId
     }
@@ -431,7 +433,9 @@ class Pan123Api(
             if (json.optInt("code", -1) != 0) {
                 // 任务失败/异常：读取 message 抛错（若只是进行中则继续轮询）
                 val msg = json.optString("message")
-                if (msg.isNotBlank()) throw IllegalStateException("转存失败：$msg")
+                if (msg.isNotBlank()) throw IllegalStateException(
+                    AppStrings.get(R.string.e1_123_copy_save_failed_msg, msg)
+                )
                 return@repeat
             }
             val data = json.optJSONObject("data") ?: return@repeat
@@ -481,7 +485,7 @@ class Pan123Api(
             .put("operatePlace", 1)
             .put("safeBox", false)
         val json = postAuth(Pan123Constants.FILE_TRASH_URL, "/b/api/file/trash", body.toString(), token)
-        checkOk(json, "删除失败")
+        checkOk(json, AppStrings.get(R.string.e1_delete_failed))
     }
 
     /** 重命名：POST /b/api/file/rename */
@@ -495,7 +499,7 @@ class Pan123Api(
             .put("operatePlace", "right")
             .put("RequestSource", JSONObject.NULL)
         val json = postAuth(Pan123Constants.FILE_RENAME_URL, "/b/api/file/rename", body.toString(), token)
-        checkOk(json, "重命名失败")
+        checkOk(json, AppStrings.get(R.string.e1_rename_failed))
     }
 
     /**
@@ -523,14 +527,16 @@ class Pan123Api(
                 body.toString(),
                 token
             )
-            checkOk(json, "新建文件夹失败")
-            val data = json.optJSONObject("data") ?: throw IllegalStateException("123 未返回文件夹编号")
+            checkOk(json, AppStrings.get(R.string.e1_create_folder_failed))
+            val data = json.optJSONObject("data") ?: throw IllegalStateException(
+                AppStrings.get(R.string.e1_123_no_folder_id)
+            )
             // 文档给的取法：data.Info.FileId → data.FileId → data.fileId（大小写三种都出现过）
             val id = data.optJSONObject("Info")?.optString("FileId").orEmpty()
                 .ifBlank { data.optString("FileId") }
                 .ifBlank { data.optString("fileId") }
             id.takeIf { it.isNotBlank() && it != "0" }
-                ?: throw IllegalStateException("123 未返回文件夹编号")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e1_123_no_folder_id))
         }
 
     // ---------- 上传 ----------
@@ -568,20 +574,24 @@ class Pan123Api(
             preBody.toString(),
             token
         )
-        checkOk(pre, "创建上传任务失败")
+        checkOk(pre, AppStrings.get(R.string.e1_upload_task_create_failed))
         val data = pre.optJSONObject("data")
-            ?: throw IllegalStateException("123 未返回上传任务")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e1_123_no_upload_task))
         val info = data.optJSONObject("Info")
         val fileId = info?.optString("FileId").orEmpty()
             .ifBlank { data.optString("FileId") }
             .ifBlank { data.optString("fileId") }
-        if (fileId.isBlank() || fileId == "0") throw IllegalStateException("123 未返回上传文件标识")
+        if (fileId.isBlank() || fileId == "0") throw IllegalStateException(
+            AppStrings.get(R.string.e1_123_no_upload_file_id)
+        )
         if (data.optBoolean("Reuse")) {
             // 秒传：服务端已有同内容文件，一步到位
             io.progress(UploadPhase.FINISHING, file.size)
             return@withContext fileId
         }
-        if (data.optString("Key").isBlank()) throw IllegalStateException("123 未创建上传任务")
+        if (data.optString("Key").isBlank()) throw IllegalStateException(
+            AppStrings.get(R.string.e1_123_upload_task_not_created)
+        )
 
         val accessKey = data.optString("AccessKeyId")
         val secretKey = data.optString("SecretAccessKey")
@@ -616,10 +626,10 @@ class Pan123Api(
                 JSONObject().put("fileId", fileId.toLongOrNull() ?: 0L).toString(),
                 token
             )
-            checkOk(completed, "合并上传分段失败")
+            checkOk(completed, AppStrings.get(R.string.e1_merge_upload_failed))
             return@withContext fileId
         }
-        if (uploadId.isBlank()) throw IllegalStateException("123 未返回上传凭据")
+        if (uploadId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_123_no_upload_credential))
 
         val common = JSONObject()
             // 字段必须存在（服务端按 key 判断），缺失时给显式 null 而不是删掉这一项
@@ -640,11 +650,11 @@ class Pan123Api(
                 body.toString(),
                 token
             )
-            checkOk(response, "获取上传地址失败")
+            checkOk(response, AppStrings.get(R.string.e1_get_upload_url_failed))
             val urls = response.optJSONObject("data")?.optJSONObject("presignedUrls")
-                ?: throw IllegalStateException("123 未返回上传地址")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e1_123_no_upload_url))
             val url = urls.optString((index + 1).toString())
-            if (url.isBlank()) throw IllegalStateException("123 未返回上传地址")
+            if (url.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_123_no_upload_url))
             val start = index * chunkSize
             val uploaded = io.send(
                 url = url,
@@ -654,7 +664,7 @@ class Pan123Api(
                 retries = 1
             )
             if (!uploaded.isSuccessful) {
-                throw IllegalStateException("文件上传失败（HTTP ${uploaded.code}）")
+                throw IllegalStateException(AppStrings.get(R.string.e1_upload_failed_http, uploaded.code))
             }
         }
         io.progress(UploadPhase.FINISHING, file.size)
@@ -668,7 +678,7 @@ class Pan123Api(
             completeBody.toString(),
             token
         )
-        checkOk(completed, "合并上传分段失败")
+        checkOk(completed, AppStrings.get(R.string.e1_merge_upload_failed))
         completed.optJSONObject("data")?.optJSONObject("file_info")?.optString("FileId")
             ?.takeIf { it.isNotBlank() && it != "0" }
             ?: fileId
@@ -685,7 +695,7 @@ class Pan123Api(
             .put("operatePlace", 1)
             .put("RequestSource", JSONObject.NULL)
         val json = postAuth(Pan123Constants.FILE_MOD_PID_URL, "/b/api/file/mod_pid", body.toString(), token)
-        checkOk(json, "移动失败")
+        checkOk(json, AppStrings.get(R.string.e1_move_failed))
     }
 
     /**
@@ -723,11 +733,11 @@ class Pan123Api(
             .put("fillPwdSwitch", 0)
             .apply { if (!sharePwd.isNullOrBlank()) put("sharePwd", sharePwd) }
         val json = postAuth(Pan123Constants.SHARE_CREATE_URL, "/b/api/share/create", body.toString(), token)
-        checkOk(json, "创建分享失败")
+        checkOk(json, AppStrings.get(R.string.e1_create_share_failed))
         val data = json.optJSONObject("data")
-            ?: throw IllegalStateException("创建分享失败：未返回数据")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e1_123_create_share_no_data))
         val shareKey = data.optString("ShareKey")
-        if (shareKey.isBlank()) throw IllegalStateException("创建分享失败：未返回 ShareKey")
+        if (shareKey.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_123_create_share_no_key))
         val linkList = data.optJSONObject("shareLinkList")
         val shareUrl = linkList?.optJSONArray("list")?.optString(0)
             ?.takeIf { it.isNotBlank() }
@@ -854,7 +864,7 @@ class Pan123Api(
         val code = json.optInt("code", -1)
         if (code == 0) return
         val msg = json.optString("message").ifBlank { fallback }
-        throw IllegalStateException("$msg（code=$code）")
+        throw IllegalStateException(AppStrings.get(R.string.e1_with_code, msg, code))
     }
 
     /** 鉴权 GET（带 auth-key/auth-value 签名头） */
@@ -903,9 +913,9 @@ class Pan123Api(
     private fun executeJson(request: Request): JSONObject {
         client.newCall(request).execute().use { response ->
             val body = response.body?.string()
-                ?: throw IllegalStateException("请求失败：响应为空（${response.code}）")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e1_response_empty_http, response.code))
             if (!response.isSuccessful && body.isBlank()) {
-                throw IllegalStateException("请求失败（HTTP ${response.code}）")
+                throw IllegalStateException(AppStrings.get(R.string.e1_request_failed_http, response.code))
             }
             return JSONObject(body)
         }

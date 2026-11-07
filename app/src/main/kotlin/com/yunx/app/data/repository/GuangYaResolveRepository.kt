@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.GuangYaApi
 import com.yunx.app.data.network.GuangYaConstants
 import com.yunx.app.data.network.GuangYaShareRestrictedException
@@ -25,6 +26,7 @@ import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.delay
 import java.util.UUID
 
@@ -57,13 +59,14 @@ class GuangYaResolveRepository(
 
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
-            ?: return Result.failure(IllegalArgumentException("无法识别分享链接"))
+            ?: return Result.failure(IllegalArgumentException(AppStrings.get(R.string.er_share_link_unrecognized)))
         return runCatching {
             val sharePwd = pwd?.takeIf { it.isNotBlank() } ?: parsed.pwd.orEmpty()
             // 记下提取码：后续每次列目录/取链都要用同一份重取分享令牌
             sharePwdCache[parsed.shareId] = sharePwd
             val accessToken = api.getShareAccessToken(parsed.shareId, sharePwd)
-            val title = api.getShareSummary(parsed.shareId)?.ifBlank { null } ?: "光鸭分享"
+            val title = api.getShareSummary(parsed.shareId)?.ifBlank { null }
+                ?: AppStrings.get(R.string.er_guangya_share_title)
             ShareSession(shareId = parsed.shareId, stoken = accessToken, title = title)
         }
     }
@@ -86,7 +89,7 @@ class GuangYaResolveRepository(
         }
 
     override suspend fun ensureTempDir(cookie: String): Result<String> =
-        Result.failure(UnsupportedOperationException("光鸭分享无需预建临时目录"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_guangya_temp_dir_not_needed)))
 
     override suspend fun transferFile(
         session: ShareSession,
@@ -95,14 +98,14 @@ class GuangYaResolveRepository(
         cookie: String
     ): Result<String> = runCatching {
         val token = cookie.ifBlank { tokenProvider() ?: "" }
-        if (token.isBlank()) throw IllegalStateException("请先登录光鸭云盘")
+        if (token.isBlank()) throw IllegalStateException(AppStrings.get(R.string.er_guangya_login_required))
         // body 用分享访问令牌，Authorization 用账号 token
         api.restoreShare(token, session.stoken, listOf(file.fid), toDirFid.ifBlank { "" })
         toDirFid
     }
 
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> =
-        Result.failure(UnsupportedOperationException("光鸭分享请使用 getShareDownloadLink"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_guangya_use_share_download_link)))
 
     override suspend fun getShareDownloadLink(
         session: ShareSession,
@@ -112,7 +115,7 @@ class GuangYaResolveRepository(
         try {
             // 取链前重取分享令牌：旧令牌过期时这里拿到的是新鲜的（失败才退回旧值）
             api.getShareDownloadUrl(file, freshShareToken(session))
-                ?: throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
+                ?: throw IllegalStateException(AppStrings.get(R.string.er_guangya_no_download_url))
         } catch (e: GuangYaShareRestrictedException) {
             // 分享者未开启免登录下载：已登录则转存到临时目录再从个人盘取链
             transferAndDownload(session, file, cookie)
@@ -129,7 +132,7 @@ class GuangYaResolveRepository(
         cookie: String
     ): DownloadLink {
         val token = cookie.takeIf { it.isNotBlank() } ?: tokenProvider()
-            ?: throw IllegalStateException("请先登录光鸭云盘")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_guangya_login_required))
         // 名称规则固定，便于识别与清理
         val folderName = "AsterLink临时转存_${UUID.randomUUID()}"
         val folderId = api.createDir(token, "", folderName)
@@ -137,7 +140,7 @@ class GuangYaResolveRepository(
             api.restoreShare(token, freshShareToken(session), listOf(file.fid), folderId)
             val target = pollCopiedFile(token, folderId, file)
             val link = api.getDownloadLink(token, target)
-                ?: throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
+                ?: throw IllegalStateException(AppStrings.get(R.string.er_guangya_no_download_url))
             return link.copy(fid = target.fid, filename = file.fname, cleanupDirFid = folderId)
         } catch (e: Exception) {
             // 取链/校验失败：清掉刚建的临时目录，避免残留
@@ -156,16 +159,16 @@ class GuangYaResolveRepository(
             delay(GuangYaConstants.TASK_DELAY_MS)
             val files = runCatching { api.listCloudFiles(token, folderId) }.getOrDefault(emptyList())
             val matches = files.filter { !it.isdir && it.fname == source.fname }
-            if (matches.size > 1) throw IllegalStateException("光鸭临时目录出现同名文件，无法确定下载目标")
+            if (matches.size > 1) throw IllegalStateException(AppStrings.get(R.string.er_guangya_duplicate_file))
             val target = matches.firstOrNull()
             if (target != null) {
                 if (source.fsize > 0 && target.fsize > 0 && source.fsize != target.fsize) {
-                    throw IllegalStateException("光鸭转存文件大小不一致")
+                    throw IllegalStateException(AppStrings.get(R.string.er_guangya_size_mismatch))
                 }
                 return target
             }
         }
-        throw IllegalStateException("光鸭转存已提交，目标文件暂不可见，请稍后重试")
+        throw IllegalStateException(AppStrings.get(R.string.er_guangya_target_not_visible))
     }
 
     /** 下载完成/放弃后清理临时转存目录（ResolveViewModel 通过 cleanupDirFid 回调）。 */
@@ -181,9 +184,9 @@ class GuangYaResolveRepository(
     ): Result<DownloadLink> = runCatching {
         try {
             api.getShareDownloadUrl(file, freshShareToken(session))
-                ?: throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
+                ?: throw IllegalStateException(AppStrings.get(R.string.er_guangya_no_download_url))
         } catch (e: GuangYaShareRestrictedException) {
-            throw IllegalStateException("该光鸭分享需登录并转存后下载，请先登录光鸭云盘")
+            throw IllegalStateException(AppStrings.get(R.string.er_guangya_share_login_required))
         }
     }
 }

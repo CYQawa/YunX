@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    E5 分组：解析器 / 上传 / 更新 / Gopeed 引擎 / 备份加密 / 日志导出中会显示到界面的文案。
+    默认语言 = 简体中文。其余语言见 values-b+zh+Hant / values-en / values-ja / values-fr。
+-->
+<resources>
+    <!-- 网络请求公共异常 -->
+    <string name="em_http_blocked">%1$s 被风控拦截（HTTP %2$d）</string>
+    <string name="em_http_not_found">%1$s 不存在（HTTP %2$d）</string>
+    <string name="em_http_failed">%1$s 请求失败（HTTP %2$d）</string>
+    <string name="em_http_not_json">%1$s 返回的不是合法 JSON</string>
+    <string name="em_http_request_failed">请求失败：%1$s</string>
+    <string name="em_what_parse">解析</string>
+
+    <!-- 解析结果错误提示 -->
+    <string name="em_parse_blocked">平台风控拦截了本次请求，请稍后重试</string>
+    <string name="em_parse_not_found">内容不存在、已删除或不可见</string>
+    <string name="em_parse_network">网络请求失败，请检查网络后重试</string>
+    <string name="em_parse_unsupported">暂不支持该链接</string>
+    <string name="em_parse_failed">解析失败，请稍后重试</string>
+
+    <!-- 请求对象名称 -->
+    <string name="em_what_acfun_video">AcFun 视频</string>
+    <string name="em_what_bili_cookie">B站登录态校验</string>
+    <string name="em_what_bili_video">B站视频信息</string>
+    <string name="em_what_bili_playurl">B站取直链</string>
+    <string name="em_what_bili_dash">B站取 DASH 直链</string>
+    <string name="em_what_douyin_page">抖音分享页</string>
+    <string name="em_what_kuaishou_page">快手作品页</string>
+    <string name="em_what_xhs_note">小红书笔记</string>
+    <string name="em_what_weibo_video">微博视频</string>
+    <string name="em_what_pixiv_artwork">Pixiv 作品信息</string>
+    <string name="em_what_pixiv_pages">Pixiv 原图列表</string>
+
+    <!-- 媒体清晰度 / 质量标签 -->
+    <string name="em_quality_original">原图</string>
+    <string name="em_quality_motion">动图</string>
+    <string name="em_quality_dash">%1$s（分轨，下载后合轨）</string>
+    <string name="em_quality_number">画质 %1$d</string>
+
+    <!-- AcFun -->
+    <string name="em_acfun_no_video_info">AcFun 视频信息解析失败（页面里没有 videoInfo，可能已删除）</string>
+    <string name="em_acfun_parse_failed">AcFun 视频信息解析失败</string>
+    <string name="em_acfun_no_stream">AcFun 未取到视频流地址</string>
+
+    <!-- 快手 -->
+    <string name="em_kuaishou_no_init_state">快手页面里没有 window.INIT_STATE（作品可能已删除或页面改版）</string>
+    <string name="em_kuaishou_invalid_json">window.INIT_STATE 不是合法 JSON</string>
+    <string name="em_kuaishou_no_photo">window.INIT_STATE 里没有作品数据</string>
+
+    <!-- B站 -->
+    <string name="em_bili_api_error">B站视频信息接口返回 code=%1$d msg=%2$s</string>
+    <string name="em_bili_missing_data">B站视频信息缺少 data 字段</string>
+    <string name="em_bili_missing_ids">B站视频信息缺少 bvid/cid</string>
+    <string name="em_bili_no_stream">B站既未返回单文件直链、也未返回可合轨的分轨流（code=%1$d msg=%2$s）：该视频可能是番剧/付费内容</string>
+    <string name="em_bili_durl_empty">B站 durl 为空</string>
+    <string name="em_bili_url_empty">B站直链为空（可能需要登录或已被风控）</string>
+
+    <!-- 抖音 -->
+    <string name="em_douyin_no_router_data">抖音分享页里没有 window._ROUTER_DATA（作品可能已删除或页面改版）</string>
+    <string name="em_douyin_parse_failed">抖音解析失败</string>
+    <string name="em_douyin_router_invalid_json">window._ROUTER_DATA 不是合法 JSON</string>
+    <string name="em_douyin_no_loader_data">window._ROUTER_DATA 里没有 loaderData</string>
+    <string name="em_douyin_no_page">window._ROUTER_DATA 里既没有 video_(id)/page 也没有 note_(id)/page</string>
+    <string name="em_douyin_no_data">抖音没有返回该作品的数据（作品可能已删除或不可见，也可能被风控拦截）[%1$s]</string>
+    <string name="em_douyin_ttwid_request_failed">ttwid 注册请求失败</string>
+    <string name="em_douyin_ttwid_failed">ttwid 注册失败（HTTP %1$d）</string>
+    <string name="em_douyin_ttwid_no_cookie">ttwid 注册未返回可用 Cookie</string>
+    <string name="em_flag_present">存在</string>
+    <string name="em_flag_missing">缺失</string>
+    <string name="em_detail_length">长度 %1$d</string>
+    <string name="em_detail_request_id">, 请求id=</string>
+
+    <!-- 小红书 -->
+    <string name="em_xhs_parse_failed">小红书解析失败</string>
+    <string name="em_xhs_no_note">小红书页面里没有该笔记数据</string>
+    <string name="em_xhs_login_required">小红书要求登录后才能查看笔记内容，请先到「账号」页登录小红书</string>
+    <string name="em_xhs_no_note_data">小红书页面里没有笔记数据（可能被风控拦截或页面改版）</string>
+    <string name="em_xhs_state_parse_failed">小红书页面数据解析失败</string>
+    <string name="em_xhs_video_no_stream">小红书视频笔记没有取到视频直链（笔记里有 video 字段，但 media.stream 里没有可用地址）</string>
+    <string name="em_xhs_link_invalid">小红书分享链接失效或内容已删除</string>
+    <string name="em_xhs_note_deleted">小红书页面里没有笔记数据（内容可能已删除）</string>
+    <string name="em_xhs_watermark_fallback">%1$d 张图片没有可用的去水印原图，已改用平台地址（可能带水印）</string>
+
+    <!-- 微博 -->
+    <string name="em_weibo_unsupported_kind">不支持的微博链接形态：%1$s</string>
+    <string name="em_weibo_blocked">微博被风控拦截（HTTP %1$d），可更换 UA/Referer 或稍后重试</string>
+    <string name="em_weibo_not_found_code">微博内容不存在或已删除（HTTP %1$d）</string>
+    <string name="em_weibo_fetch_failed">微博数据获取失败（HTTP %1$d）</string>
+    <string name="em_weibo_not_json">微博接口返回的不是 JSON（content-type: %1$s），多半被风控拦截</string>
+    <string name="em_weibo_parse_failed">微博返回数据解析失败</string>
+    <string name="em_weibo_not_found">微博内容不存在或已删除</string>
+    <string name="em_weibo_video_parse_failed">微博视频接口返回数据解析失败</string>
+    <string name="em_weibo_video_empty">微博视频数据为空（作品可能已删除）</string>
+
+    <!-- Pixiv -->
+    <string name="em_pixiv_login_expired">Pixiv 登录态已失效，请到「账号」页重新粘贴 Cookie</string>
+    <string name="em_pixiv_login_required">该作品需要登录后才能解析（多为 R18 或受限作品），请在「账号」页粘贴浏览器里的 Cookie</string>
+    <string name="em_pixiv_error_message">Pixiv 作品信息返回错误：%1$s</string>
+    <string name="em_pixiv_missing_body">Pixiv 作品信息缺少 body</string>
+    <string name="em_pixiv_ugoira_unsupported">Pixiv 动图（ugoira）需要合成 GIF，当前版本暂不支持</string>
+    <string name="em_pixiv_no_images">Pixiv 未返回任何可下载的原图</string>
+
+    <!-- 上传 -->
+    <string name="em_upload_invalid_range">上传读取范围无效</string>
+    <string name="em_upload_open_failed">无法打开所选文件</string>
+    <string name="em_upload_read_incomplete">读取本地文件不完整，请重新选择</string>
+    <string name="em_upload_unnamed_file">未命名文件</string>
+    <string name="em_upload_size_unreadable">无法读取所选文件的大小，请换一个文件后再试</string>
+    <string name="em_upload_file_failed">「%1$s」上传失败：%2$s</string>
+    <string name="em_upload_network_error">网络异常，请重试</string>
+    <string name="em_upload_interrupted">上传已中断，请重试</string>
+    <string name="em_upload_cancelled">上传已取消</string>
+    <string name="em_upload_bad_credentials">网盘未返回完整上传凭据</string>
+    <string name="em_upload_service_error">网盘上传服务返回错误（HTTP %1$d）</string>
+    <string name="em_upload_create_multipart_failed">网盘无法创建分段上传（HTTP %1$d）</string>
+    <string name="em_upload_no_multipart_task">网盘未创建分段上传任务</string>
+    <string name="em_upload_part_failed">文件上传失败（HTTP %1$d）</string>
+    <string name="em_upload_part_unconfirmed">网盘未确认上传分段</string>
+    <string name="em_upload_merge_failed">网盘未完成分段合并</string>
+
+    <!-- Gopeed 引擎 -->
+    <string name="em_engine_path_absolute">请输入绝对路径（以 / 开头）</string>
+    <string name="em_engine_dir_create_failed">建不出这个目录：%1$s（检查路径是否正确、上级目录在不在）</string>
+    <string name="em_engine_need_all_files">（先去授予「所有文件访问」）</string>
+    <string name="em_engine_dir_not_writable">这个目录不可写：%1$s%2$s</string>
+    <string name="em_engine_stop_before_install">请先停止引擎，再导入新的引擎文件</string>
+    <string name="em_engine_dir_unavailable">引擎目录不可用</string>
+    <string name="em_engine_cannot_create_dir">无法创建目录：%1$s</string>
+    <string name="em_engine_cannot_read_file">无法读取所选文件</string>
+    <string name="em_engine_aar_missing_so">这个 AAR 里没有 jni/%1$s/%2$s（本机首选 ABI：%3$s）</string>
+    <string name="em_engine_empty_so">解出的引擎文件是空的</string>
+    <string name="em_engine_overwrite_failed">无法覆盖旧的引擎文件：%1$s</string>
+    <string name="em_engine_write_failed">无法写入引擎文件：%1$s</string>
+    <string name="em_engine_restart_required">引擎已在本进程中加载过，新文件需重启应用后才会生效</string>
+    <string name="em_engine_stop_first">请先停止引擎</string>
+    <string name="em_engine_delete_failed">删除失败：%1$s</string>
+    <string name="em_engine_not_installed">还没有导入 Gopeed 引擎（缺少 %1$s）</string>
+    <string name="em_engine_not_started">引擎未启动</string>
+    <string name="em_engine_invoke_timeout">引擎调用超时（60 秒）：%1$s %2$s</string>
+    <string name="em_engine_invoke_failed">引擎调用失败：%1$s %2$s</string>
+    <string name="em_engine_response_unparsable">引擎返回内容无法解析：%1$s</string>
+    <string name="em_engine_error_code">引擎返回错误码 %1$d</string>
+    <string name="em_engine_no_config">引擎没有返回配置</string>
+    <string name="em_engine_no_task_status">引擎没有返回任务状态</string>
+    <string name="em_engine_no_task_detail">引擎没有返回任务详情</string>
+    <string name="em_engine_load_failed">引擎动态库加载失败（两种方式都失败）\n① System.load(%1$s)：%2$s\n② System.loadLibrary(\"gojni\")：%3$s</string>
+
+    <!-- Gopeed 内核下载 -->
+    <string name="em_kernel_notify_downloading">正在下载 Gopeed 内核</string>
+    <string name="em_kernel_fetch_version_failed">获取内核版本失败：%1$s</string>
+    <string name="em_kernel_fetch_version_failed_short">获取内核版本失败</string>
+    <string name="em_kernel_asset_missing">这个版本（%1$s）里没有 %2$s（本机 ABI：%3$s）；现有包：%4$s</string>
+    <string name="em_kernel_none">无</string>
+    <string name="em_kernel_no_pan_link">这个版本的说明里没有网盘链接，请改用 GitHub 下载</string>
+    <string name="em_kernel_source_github">GitHub 直链</string>
+    <string name="em_kernel_source_mirror">GitHub 镜像站</string>
+    <string name="em_kernel_notify_importing">正在导入 Gopeed 内核</string>
+    <string name="em_kernel_unknown_link">看不懂这个网盘链接：%1$s</string>
+    <string name="em_kernel_only_quark">目前只支持夸克网盘的自动下载（这个链接是 %1$s），请改用 GitHub 下载</string>
+    <string name="em_kernel_open_share_failed">打开分享失败：%1$s</string>
+    <string name="em_kernel_unknown_error">未知错误</string>
+    <string name="em_kernel_guest_link_failed">游客取链失败：%1$s</string>
+    <string name="em_kernel_link_failed">取链失败：%1$s</string>
+    <string name="em_kernel_quark_guest">夸克网盘（游客）</string>
+    <string name="em_kernel_quark_logged_in">夸克网盘（已登录）</string>
+    <string name="em_kernel_list_failed">列出分享目录失败：%1$s</string>
+    <string name="em_kernel_asset_not_in_root">分享里没有 %1$s（根目录：%2$s）</string>
+    <string name="em_kernel_asset_not_in_sub">分享里没有 %1$s（%2$s/ 下：%3$s）</string>
+    <string name="em_kernel_list_empty">空</string>
+    <string name="em_kernel_download_failed">下载失败</string>
+    <string name="em_kernel_download_failed_single">下载失败（单流）</string>
+    <string name="em_kernel_downloaded_empty">下载下来的文件是空的</string>
+    <string name="em_kernel_chunk_failed">分片下载失败（%1$s）</string>
+    <string name="em_kernel_notify_merging">正在合并 Gopeed 内核分片</string>
+    <string name="em_kernel_size_mismatch">文件大小校验失败：期望 %1$d 字节，实际 %2$d 字节（已拒绝导入损坏的包）</string>
+    <string name="em_kernel_sha_mismatch">内核包校验失败（sha256 不匹配），已丢弃：%1$s</string>
+
+    <!-- 更新检查 -->
+    <string name="em_update_unknown_error">未知错误</string>
+    <string name="em_update_bad_format">响应格式异常</string>
+    <string name="em_update_no_release">仓库暂无 Release</string>
+    <string name="em_update_rate_limited">GitHub 接口限流（HTTP %1$d），请稍后再试</string>
+    <string name="em_update_empty_response">响应为空</string>
+    <string name="em_update_missing_tag">Release 数据缺少版本号</string>
+
+    <!-- 备份与加密 -->
+    <string name="em_backup_password_too_short">备份口令至少 8 位</string>
+    <string name="em_backup_not_encrypted">不是有效的加密备份文件</string>
+    <string name="em_backup_corrupted">加密备份文件已损坏</string>
+    <string name="em_backup_not_valid">不是有效的云析认证备份文件</string>
+    <string name="em_credential_legacy_key_missing">旧加密密钥已不存在，无法解密历史凭证</string>
+
+    <!-- 日志导出 -->
+    <string name="em_log_export_title">云析（YunX）日志导出\n</string>
+    <string name="em_log_export_time">导出时间：%1$s\n</string>
+    <string name="em_log_app_version">应用版本：%1$s（%2$d）\n</string>
+    <string name="em_log_device">设备：%1$s %2$s\n</string>
+    <string name="em_log_system">系统：Android %1$s（SDK %2$d）\n</string>
+    <string name="em_log_diagnostic_mode">诊断模式：%1$s\n</string>
+    <string name="em_log_enabled">已开启</string>
+    <string name="em_log_disabled">关闭</string>
+    <string name="em_log_uid_pid">本应用 uid=%1$d，本次 pid=%2$d\n</string>
+    <string name="em_log_runtime_section">========== 运行日志（logcat -d -v time）==========\n</string>
+    <string name="em_log_logcat_unavailable">（读取日志失败：本机 logcat 不可用）\n</string>
+    <string name="em_log_no_output">（无输出）\n</string>
+    <string name="em_log_share_title">分享日志</string>
+</resources>

@@ -88,6 +88,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -96,6 +97,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yunx.app.R
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.network.C139KoulingParser
 import com.yunx.app.data.network.GitHubLinkParser
@@ -127,6 +129,7 @@ import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
+import com.yunx.app.util.AppStrings
 
 /**
  * 解析页：输入分享链接与提取码 → 解析 → 展示分享详情 → 获取下载直链。
@@ -460,7 +463,7 @@ fun ResolveScreen(
                     githubParsed != null -> "GitHub"
                     shareParsed != null -> shareParsed.platform.displayName
                     c139Parsed != null -> SharePlatform.C139.displayName
-                    else -> "网盘"
+                    else -> stringResource(R.string.rs_platform_generic)
                 }
                 val platformLogo = when {
                     videoParsed != null -> videoParsed.platform.logoRes()
@@ -495,13 +498,13 @@ fun ResolveScreen(
         AlertDialog(
             onDismissRequest = { },
             confirmButton = { },
-            title = { Text("获取下载链接") },
+            title = { Text(stringResource(R.string.rs_fetch_link_title)) },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     YunXLoading(modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "正在获取下载链接，请稍候…",
+                        text = stringResource(R.string.rs_fetching_link_wait),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -551,7 +554,7 @@ private fun ResolveInputContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "粘贴分享链接或口令，一键解析分享内容",
+            text = stringResource(R.string.rs_input_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -560,12 +563,12 @@ private fun ResolveInputContent(
             value = link,
             onValueChange = onLinkChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("例如：https://pan.quark.cn/s/xxxx、迅雷口令或 139 云盘口令") },
+            placeholder = { Text(stringResource(R.string.rs_input_placeholder)) },
             leadingIcon = { Icon(Icons.Outlined.Link, contentDescription = null) },
             trailingIcon = {
                 if (link.isNotEmpty()) {
                     IconButton(onClick = onClearLink) {
-                        Icon(Icons.Filled.Close, contentDescription = "清空链接")
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.rs_clear_link))
                     }
                 }
             },
@@ -578,12 +581,12 @@ private fun ResolveInputContent(
             value = pwd,
             onValueChange = onPwdChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("提取码（可选）") },
-            placeholder = { Text("自动识别或手动输入") },
+            label = { Text(stringResource(R.string.rs_extract_code_optional)) },
+            placeholder = { Text(stringResource(R.string.rs_auto_or_manual)) },
             trailingIcon = {
                 if (pwd.isNotEmpty()) {
                     IconButton(onClick = onClearPwd) {
-                        Icon(Icons.Filled.Close, contentDescription = "清空提取码")
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.rs_clear_code))
                     }
                 }
             },
@@ -607,9 +610,9 @@ private fun ResolveInputContent(
                     strokeWidth = 2.dp
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("解析中…")
+                Text(stringResource(R.string.rs_parsing))
             } else {
-                Text("开始解析")
+                Text(stringResource(R.string.rs_start_resolve))
             }
         }
 
@@ -674,7 +677,7 @@ private fun HomeShortcutsSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "快捷方式",
+                text = stringResource(R.string.rs_shortcuts),
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f)
             )
@@ -685,7 +688,7 @@ private fun HomeShortcutsSection(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "管理", style = MaterialTheme.typography.labelLarge)
+                Text(text = stringResource(R.string.rs_manage), style = MaterialTheme.typography.labelLarge)
             }
         }
 
@@ -709,13 +712,13 @@ private fun HomeShortcutsSection(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "还没有主页快捷方式",
+                            text = stringResource(R.string.rs_no_shortcuts),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "在「收藏网盘链接」页长按一条收藏 → 添加到主页",
+                            text = stringResource(R.string.rs_shortcuts_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -747,10 +750,10 @@ private fun HomeShortcutsSection(
     removing?.let { bookmark ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("从主页移除") },
+            title = { Text(stringResource(R.string.rs_remove_from_home)) },
             text = {
                 Text(
-                    text = "「${bookmark.title.ifBlank { bookmark.link }}」将不再显示在主页快捷方式中",
+                    text = stringResource(R.string.rs_remove_shortcut_msg, bookmark.title.ifBlank { bookmark.link }),
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -761,12 +764,12 @@ private fun HomeShortcutsSection(
                         removing = null
                     }
                 ) {
-                    Text(text = "移除", color = MaterialTheme.colorScheme.error)
+                    Text(text = stringResource(R.string.rs_remove), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { removing = null }) {
-                    Text(text = "取消")
+                    Text(text = stringResource(R.string.rs_cancel))
                 }
             }
         )
@@ -850,16 +853,16 @@ internal fun homeTileLabel(bookmark: BookmarkEntity): String {
 
 /** 平台简称（色块兜底文字）；未知平台返回 null，调用处退回通用链接图标 */
 private fun platformShortLabel(platform: String): String? = when (platform) {
-    "QUARK" -> "夸克"
+    "QUARK" -> AppStrings.get(R.string.rs_short_quark)
     "UC" -> "UC"
-    "XUNLEI" -> "迅雷"
-    "BAIDU" -> "百度"
+    "XUNLEI" -> AppStrings.get(R.string.rs_short_xunlei)
+    "BAIDU" -> AppStrings.get(R.string.rs_short_baidu)
     "C139" -> "139"
     "PAN123" -> "123"
     "PAN115" -> "115"
-    "GUANGYA" -> "光鸭"
-    "ILANZOU" -> "优享"
-    "LANZOU" -> "蓝奏"
+    "GUANGYA" -> AppStrings.get(R.string.rs_short_guangya)
+    "ILANZOU" -> AppStrings.get(R.string.rs_short_ilanzou)
+    "LANZOU" -> AppStrings.get(R.string.rs_short_lanzou)
     "GITHUB" -> "GitHub"
     else -> null
 }
@@ -875,7 +878,7 @@ private fun LoadingContent() {
             YunXLoading(modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "加载中…",
+                text = stringResource(R.string.rs_loading),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -929,13 +932,13 @@ private fun ClipboardSuggestCard(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "检测到 $platformName 分享链接",
+                        text = stringResource(R.string.rs_detected_share, platformName),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "是否粘贴到解析框并开始解析？",
+                        text = stringResource(R.string.rs_paste_and_resolve_q),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -948,7 +951,7 @@ private fun ClipboardSuggestCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onDismiss) {
-                    Text("忽略", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(stringResource(R.string.rs_ignore), color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
                 Spacer(modifier = Modifier.width(4.dp))
                 Button(
@@ -958,7 +961,7 @@ private fun ClipboardSuggestCard(
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
-                    Text("粘贴并解析")
+                    Text(stringResource(R.string.rs_paste_and_resolve))
                 }
             }
         }
@@ -970,10 +973,13 @@ private fun ClipboardSuggestCard(
  */
 @Composable
 private fun GitHubBadge(label: String) {
+    val latest = stringResource(R.string.rs_badge_latest)
+    val prerelease = stringResource(R.string.rs_badge_prerelease)
+    val draft = stringResource(R.string.rs_badge_draft)
     val (bg, fg) = when (label) {
-        "最新" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        "预发布" -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        "草稿" -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface
+        latest -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        prerelease -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        draft -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface
         else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
     Box(

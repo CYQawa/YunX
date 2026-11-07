@@ -20,6 +20,7 @@ package com.yunx.app.ui.viewmodel
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.upload.UploadProgress
 import com.yunx.app.data.upload.UploadRunner
@@ -38,6 +39,7 @@ import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.repository.ILanzouAccountRepository
 import com.yunx.app.ui.preview.CloudPreview
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,10 +115,10 @@ class ILanzouCloudViewModel(
 
     private suspend fun credential(): ILanzouCredential {
         val acc = accountRepository.getAccount()
-            ?: throw IllegalStateException("请先登录蓝奏云优享版")
+            ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_ilanzou))
         val token = acc.appToken.ifBlank {
             accountRepository.ensureAppToken()
-                ?: throw IllegalStateException("蓝奏优享登录已过期，请重新登录")
+                ?: throw IllegalStateException(AppStrings.get(R.string.vc_ilanzou_session_expired))
         }
         // 下载取链的 downloadId 需要 userId：库中缺失时先拉一次账号信息补全
         val userId = acc.userId.ifBlank { accountRepository.ensureUserId().orEmpty() }
@@ -242,7 +244,7 @@ class ILanzouCloudViewModel(
                 val files = api.listFiles(cred.appToken, cred.uuid, dirId).filter { it.isdir }
                 _moveUiState.value = ILanzouCloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _moveUiState.value = ILanzouCloudUiState.Error(e.message ?: "加载失败")
+                _moveUiState.value = ILanzouCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -278,21 +280,21 @@ class ILanzouCloudViewModel(
         if (!folder.isdir) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cred = credential()
                 val tasks = mutableListOf<Pair<ShareFile, String>>()
                 collectFolderFiles(cred, folderNumeric(folder.fid), folder.fname, tasks, 0)
                 if (tasks.isEmpty()) {
-                    cloudMessage = "文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_folder_empty)
                     actionFile = null
                     return@launch
                 }
                 var okCount = 0
                 tasks.forEachIndexed { index, (file, relPath) ->
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = fetchLink(cred, file) ?: return@runCatching
                         downloadManager.enqueue(
@@ -306,14 +308,14 @@ class ILanzouCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断下载"
+                    cloudMessage = AppStrings.get(R.string.vc_download_interrupted)
                     actionFile = null
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 actionFile = null
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_folder_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -328,7 +330,7 @@ class ILanzouCloudViewModel(
             isOperating = true
             try {
                 val link = fetchLink(credential(), file)
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 pendingDownload = PendingDownload(
                     url = link.downloadUrl,
                     fileName = file.fname.ifBlank { link.filename },
@@ -337,7 +339,7 @@ class ILanzouCloudViewModel(
                 )
                 downloadLink = link
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -355,12 +357,12 @@ class ILanzouCloudViewModel(
             isOperating = true
             try {
                 val link = fetchLink(credential(), file)
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
                 CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "预览失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_preview_failed)
             } finally {
                 isOperating = false
             }
@@ -381,11 +383,11 @@ class ILanzouCloudViewModel(
                     platform = DownloadPlatform.ILANZOU,
                     headers = pd.headers
                 )
-                cloudMessage = "已加入下载：${pd.fileName}"
+                cloudMessage = AppStrings.get(R.string.vc_download_added_named, pd.fileName)
                 actionFile = null
                 downloadTriggered++
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -408,11 +410,11 @@ class ILanzouCloudViewModel(
                 } else {
                     api.renameFile(cred.appToken, cred.uuid, fileNumeric(file.fid), newName)
                 }
-                cloudMessage = "已重命名"
+                cloudMessage = AppStrings.get(R.string.vc_renamed)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "重命名失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_rename_failed)
             } finally {
                 isOperating = false
             }
@@ -428,10 +430,10 @@ class ILanzouCloudViewModel(
             try {
                 val cred = credential()
                 api.createDir(cred.appToken, cred.uuid, parentId, newName)
-                cloudMessage = "已创建文件夹「$newName」"
+                cloudMessage = AppStrings.get(R.string.vc_folder_created, newName)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "新建文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_create_folder_failed)
             } finally {
                 isOperating = false
             }
@@ -449,11 +451,11 @@ class ILanzouCloudViewModel(
                 } else {
                     api.moveEntries(cred.appToken, cred.uuid, emptyList(), listOf(fileNumeric(file.fid)), toDirId)
                 }
-                cloudMessage = "已移动到目标目录"
+                cloudMessage = AppStrings.get(R.string.vc_moved)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -462,7 +464,7 @@ class ILanzouCloudViewModel(
 
     /** 蓝奏云优享版暂不提供创建分享接口。 */
     fun shareFile() {
-        cloudMessage = "蓝奏云优享版暂不支持创建分享"
+        cloudMessage = AppStrings.get(R.string.vc_ilanzou_share_unsupported)
     }
 
     fun deleteFile() {
@@ -476,11 +478,11 @@ class ILanzouCloudViewModel(
                 } else {
                     api.deleteEntries(cred.appToken, cred.uuid, emptyList(), listOf(fileNumeric(file.fid)))
                 }
-                cloudMessage = "已删除「${file.fname}」"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_named, file.fname)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -494,7 +496,7 @@ class ILanzouCloudViewModel(
         if (files.isEmpty()) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cred = credential()
@@ -507,14 +509,14 @@ class ILanzouCloudViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    cloudMessage = "所选文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_selected_folder_empty)
                     exitMultiSelect()
                     return@launch
                 }
                 var okCount = 0
                 tasks.forEachIndexed { index, (file, relPath) ->
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = fetchLink(cred, file) ?: return@runCatching
                         downloadManager.enqueue(
@@ -528,14 +530,14 @@ class ILanzouCloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断批量下载"
+                    cloudMessage = AppStrings.get(R.string.vc_batch_download_interrupted)
                     exitMultiSelect()
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "批量下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_batch_download_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -546,7 +548,7 @@ class ILanzouCloudViewModel(
 
     /** 蓝奏云优享版暂不提供创建分享接口。 */
     fun shareSelected() {
-        cloudMessage = "蓝奏云优享版暂不支持创建分享"
+        cloudMessage = AppStrings.get(R.string.vc_ilanzou_share_unsupported)
     }
 
     fun moveSelected(toDirId: String) {
@@ -559,11 +561,11 @@ class ILanzouCloudViewModel(
                 val folderIds = files.filter { it.isdir }.map { folderNumeric(it.fid) }
                 val fileIds = files.filter { !it.isdir }.map { fileNumeric(it.fid) }
                 api.moveEntries(cred.appToken, cred.uuid, folderIds, fileIds, toDirId)
-                cloudMessage = "已移动 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_moved_items, files.size)
                 exitMultiSelect()
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -580,11 +582,11 @@ class ILanzouCloudViewModel(
                 val folderIds = files.filter { it.isdir }.map { folderNumeric(it.fid) }
                 val fileIds = files.filter { !it.isdir }.map { fileNumeric(it.fid) }
                 api.deleteEntries(cred.appToken, cred.uuid, folderIds, fileIds)
-                cloudMessage = "已删除 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_items, files.size)
                 exitMultiSelect()
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -606,7 +608,7 @@ class ILanzouCloudViewModel(
                 val files = api.listFiles(cred.appToken, cred.uuid, current.dirId)
                 _uiState.value = ILanzouCloudUiState.Loaded(files, current.pathNames, current.dirId)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "刷新失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_refresh_failed)
             } finally {
                 refreshing = false
             }
@@ -630,7 +632,7 @@ class ILanzouCloudViewModel(
                 val files = api.listFiles(cred.appToken, cred.uuid, dirId)
                 _uiState.value = ILanzouCloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _uiState.value = ILanzouCloudUiState.Error(e.message ?: "加载失败")
+                _uiState.value = ILanzouCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -645,8 +647,8 @@ class ILanzouCloudViewModel(
         if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
         cloudMessage = when {
             outcome.error != null -> outcome.error
-            outcome.cancelled -> "已取消上传"
-            else -> "已上传 ${outcome.uploaded} 个文件"
+            outcome.cancelled -> AppStrings.get(R.string.vc_upload_cancelled)
+            else -> AppStrings.get(R.string.vc_upload_done, outcome.uploaded)
         }
     }
 

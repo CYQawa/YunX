@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.PlayLink
@@ -27,6 +28,7 @@ import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.network.model.ShareToken
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -399,16 +401,16 @@ class UCApi(
         val request = postJson(UCConstants.DOWNLOAD_URL, cookie, body)
         val response = client.newCall(request).execute()
         val bodyStr = response.use {
-            it.body?.string() ?: throw QuarkApiException("获取下载链接失败：响应为空")
+            it.body?.string() ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_empty_response))
         }
         val json = runCatching { JSONObject(bodyStr) }.getOrElse {
-            throw QuarkApiException("响应解析失败")
+            throw QuarkApiException(AppStrings.get(R.string.e2_response_parse_failed))
         }
         if (json.optInt("status") != 200) {
-            throw QuarkApiException(json.optString("message").ifBlank { "获取下载链接失败" })
+            throw QuarkApiException(json.optString("message").ifBlank { AppStrings.get(R.string.e2_get_download_link_failed) })
         }
         val item = json.optJSONArray("data")?.optJSONObject(0)
-            ?: throw QuarkApiException("未返回下载链接")
+            ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_link_missing))
         DownloadLink(
             fid = item.optString("fid"),
             filename = item.optString("file_name").ifEmpty { item.optString("filename") },
@@ -444,20 +446,20 @@ class UCApi(
         // 先取本次响应的 __pugs（与本次直链同响应绑定，不能用别的响应/上一次的值）
         val responsePugs = pugsFromSetCookies(response.headers("Set-Cookie"))
         val bodyStr = response.use {
-            it.body?.string() ?: throw QuarkApiException("获取下载链接失败：响应为空")
+            it.body?.string() ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_empty_response))
         }
         if (responsePugs != null) guestPugs = responsePugs
         val json = runCatching { JSONObject(bodyStr) }.getOrElse {
             // 非 JSON（风控页/HTML 错误页）时带上 HTTP 状态码，便于分辨 401/403 与分享失效
-            throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
+            throw QuarkApiException(AppStrings.get(R.string.e2_response_parse_failed_http, response.code))
         }
         val code = json.optInt("code")
         if (json.optInt("status") != 200 && code != 0) {
             throw QuarkApiException(guestErrorMessage(code, json.optString("message")), code)
         }
-        val array = json.optJSONArray("data") ?: throw QuarkApiException("响应缺少 data")
-        if (array.length() == 0) throw QuarkApiException("未返回下载链接")
-        val item = array.optJSONObject(0) ?: throw QuarkApiException("未返回下载链接")
+        val array = json.optJSONArray("data") ?: throw QuarkApiException(AppStrings.get(R.string.e2_response_missing_data))
+        if (array.length() == 0) throw QuarkApiException(AppStrings.get(R.string.e2_download_link_missing))
+        val item = array.optJSONObject(0) ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_link_missing))
         DownloadLink(
             fid = item.optString("fid"),
             filename = item.optString("file_name").ifEmpty { item.optString("filename") },
@@ -469,11 +471,11 @@ class UCApi(
 
     /** 游客取链的服务端错误码 → 中文提示（错误码表对齐 panweb-parser 的 UC 适配器） */
     private fun guestErrorMessage(code: Int, message: String): String = when (code) {
-        31001 -> "该分享需要登录 UC 网盘后才能下载"
-        23018 -> "该文件超出游客可获取的大小上限，请先登录 UC 网盘再下载"
-        14001 -> "分享已失效或提取码有误，请重新解析"
-        41020 -> "文件令牌已过期，请重新解析分享"
-        else -> message.ifBlank { "获取下载链接失败" }
+        31001 -> AppStrings.get(R.string.e2_uc_guest_login_required)
+        23018 -> AppStrings.get(R.string.e2_uc_guest_size_limit)
+        14001 -> AppStrings.get(R.string.e2_uc_share_invalid)
+        41020 -> AppStrings.get(R.string.e2_uc_token_expired)
+        else -> message.ifBlank { AppStrings.get(R.string.e2_get_download_link_failed) }
     }
 
     /** 从响应 Set-Cookie 里取出游客态令牌，返回可直接当 Cookie 头用的 `__pugs=值`；没有则 null */
@@ -498,20 +500,20 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
         val request = postJson(UCConstants.DOWNLOAD_URL, cookie, body)
         val response = client.newCall(request).execute()
         val bodyStr = response.use {
-            it.body?.string() ?: throw QuarkApiException("获取下载链接失败：响应为空")
+            it.body?.string() ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_empty_response))
         }
         val json = runCatching { JSONObject(bodyStr) }.getOrElse {
-            throw QuarkApiException("响应解析失败")
+            throw QuarkApiException(AppStrings.get(R.string.e2_response_parse_failed))
         }
         if (json.optInt("status") != 200 && json.optInt("code") != 0) {
             throw QuarkApiException(
-                json.optString("message").ifBlank { "获取下载链接失败" },
+                json.optString("message").ifBlank { AppStrings.get(R.string.e2_get_download_link_failed) },
                 json.optInt("code")
             )
         }
-        val array = json.optJSONArray("data") ?: throw QuarkApiException("响应缺少 data")
-        if (array.length() == 0) throw QuarkApiException("未返回下载链接")
-        val item = array.optJSONObject(0) ?: throw QuarkApiException("未返回下载链接")
+        val array = json.optJSONArray("data") ?: throw QuarkApiException(AppStrings.get(R.string.e2_response_missing_data))
+        if (array.length() == 0) throw QuarkApiException(AppStrings.get(R.string.e2_download_link_missing))
+        val item = array.optJSONObject(0) ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_link_missing))
         DownloadLink(
             fid = item.optString("fid"),
             filename = item.optString("file_name").ifEmpty { item.optString("filename") },
@@ -558,20 +560,20 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
             .build()
         val response = client.newCall(request).execute()
         val bodyStr = response.use {
-            it.body?.string() ?: throw QuarkApiException("获取下载链接失败：响应为空")
+            it.body?.string() ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_empty_response))
         }
         val json = runCatching { JSONObject(bodyStr) }.getOrElse {
-            throw QuarkApiException("响应解析失败")
+            throw QuarkApiException(AppStrings.get(R.string.e2_response_parse_failed))
         }
         if (json.optInt("status") != 200 && json.optInt("code") != 0) {
             throw QuarkApiException(
-                json.optString("message").ifBlank { "获取下载链接失败" },
+                json.optString("message").ifBlank { AppStrings.get(R.string.e2_get_download_link_failed) },
                 json.optInt("code")
             )
         }
-        val array = json.optJSONArray("data") ?: throw QuarkApiException("响应缺少 data")
-        if (array.length() == 0) throw QuarkApiException("未返回下载链接")
-        val item = array.optJSONObject(0) ?: throw QuarkApiException("未返回下载链接")
+        val array = json.optJSONArray("data") ?: throw QuarkApiException(AppStrings.get(R.string.e2_response_missing_data))
+        if (array.length() == 0) throw QuarkApiException(AppStrings.get(R.string.e2_download_link_missing))
+        val item = array.optJSONObject(0) ?: throw QuarkApiException(AppStrings.get(R.string.e2_download_link_missing))
         DownloadLink(
             fid = item.optString("fid"),
             filename = item.optString("file_name").ifEmpty { item.optString("filename") },
@@ -875,13 +877,13 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
         val response = client.newCall(request).execute()
         val text = response.use {
             mergeCookieFromResponse(request, it)
-            it.body?.string() ?: throw QuarkApiException("请求失败：响应为空")
+            it.body?.string() ?: throw QuarkApiException(AppStrings.get(R.string.e2_request_empty_response))
         }
         val json = runCatching { JSONObject(text) }.getOrElse {
-            throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
+            throw QuarkApiException(AppStrings.get(R.string.e2_response_parse_failed_http, response.code))
         }
         if (json.optInt("status") != 200) {
-            throw QuarkApiException(json.optString("message").ifBlank { "上传请求失败" })
+            throw QuarkApiException(json.optString("message").ifBlank { AppStrings.get(R.string.e2_upload_request_failed) })
         }
         return json.optJSONObject("data") ?: JSONObject()
     }
@@ -907,18 +909,18 @@ suspend fun getDownloadLink(fid: String, cookie: String): DownloadLink? = withCo
         val response = client.newCall(request).execute()
         val body = response.use {
             mergeCookieFromResponse(request, it)
-            it.body?.string() ?: throw QuarkApiException("请求失败：响应为空")
+            it.body?.string() ?: throw QuarkApiException(AppStrings.get(R.string.e2_request_empty_response))
         }
         val json = runCatching { JSONObject(body) }.getOrElse {
             // 服务端返回非 JSON（多半是 HTML 错误页/风控页）时带上 HTTP 状态码，
             // 便于分辨「未登录被拒（401/403）」与「分享已失效」
-            throw QuarkApiException("响应解析失败（HTTP ${response.code}）")
+            throw QuarkApiException(AppStrings.get(R.string.e2_response_parse_failed_http, response.code))
         }
         if (json.optInt("status") != 200) {
             // 透传服务端 message，如「提取码错误」「分享已失效」等
-            throw QuarkApiException(json.optString("message").ifBlank { "请求失败" })
+            throw QuarkApiException(json.optString("message").ifBlank { AppStrings.get(R.string.e2_request_failed) })
         }
-        return parser(json.optJSONObject("data") ?: throw QuarkApiException("响应缺少 data"))
+        return parser(json.optJSONObject("data") ?: throw QuarkApiException(AppStrings.get(R.string.e2_response_missing_data)))
     }
 
     /** 从响应 Set-Cookie 合并 __puus/__pus 回原 Cookie 并回调 cookieSink（保持会话新鲜，对齐 AList requestWithCookie） */

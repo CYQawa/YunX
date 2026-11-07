@@ -64,11 +64,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.yunx.app.R
 import com.yunx.app.data.network.UCConstants
 import com.yunx.app.ui.viewmodel.UCAccountViewModel
 import com.yunx.app.ui.components.YunXWavyLoading
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.launch
 
@@ -149,10 +152,10 @@ fun UCLoginScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("UC网盘登录", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.lg_uc_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = { if (!isSaving && !isSavingManual) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 actions = {
@@ -160,7 +163,7 @@ fun UCLoginScreen(
                         onClick = { if (!isSaving && !isSavingManual) showCookieDialog = true },
                         enabled = !isSaving && !isSavingManual
                     ) {
-                        Icon(Icons.Outlined.ContentPaste, contentDescription = "手动输入 Cookie",
+                        Icon(Icons.Outlined.ContentPaste, contentDescription = stringResource(R.string.lg_manual_cookie),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     TextButton(
@@ -172,10 +175,10 @@ fun UCLoginScreen(
                                 val saved = viewModel.saveUCAccount(cookie)
                                 isSaving = false
                                 if (saved) {
-                                    SnackbarController.show("登录成功")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                     onSaved()
                                 } else {
-                                    SnackbarController.show("未检测到登录态，请先完成登录")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_no_login_state))
                                 }
                             }
                         },
@@ -183,7 +186,7 @@ fun UCLoginScreen(
                     ) {
                         if (isSaving) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else { Text("保存") }
+                        } else { Text(stringResource(R.string.lg_save)) }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -200,33 +203,33 @@ fun UCLoginScreen(
         AlertDialog(
             onDismissRequest = { showTutorial = false },
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-            title = { Text("登录教程") },
+            title = { Text(stringResource(R.string.lg_login_tutorial)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("1. 在下方网页中登录 UC 账号", style = MaterialTheme.typography.bodyMedium)
-                    Text("2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」", style = MaterialTheme.typography.bodyMedium)
-                    Text("3. 或点击「粘贴」图标，手动输入 Cookie（需含 __pus= 与 __puus=）", style = MaterialTheme.typography.bodyMedium)
-                    Text("4. Cookie 有效期有限，失效后需重新登录", style = MaterialTheme.typography.bodyMedium,
+                    Text(stringResource(R.string.lg_uc_tutorial_1), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.lg_uc_tutorial_2), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.lg_uc_tutorial_3), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.lg_uc_tutorial_4), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
-            confirmButton = { TextButton(onClick = { showTutorial = false }) { Text("知道了") } }
+            confirmButton = { TextButton(onClick = { showTutorial = false }) { Text(stringResource(R.string.lg_got_it)) } }
         )
     }
 
     if (showCookieDialog) {
         AlertDialog(
             onDismissRequest = { if (!isSavingManual) showCookieDialog = false },
-            title = { Text("手动输入 Cookie") },
+            title = { Text(stringResource(R.string.lg_manual_cookie)) },
             text = {
                 Column {
-                    Text("从网页登录态复制完整的 Cookie（需包含 __pus= 与 __puus=）",
+                    Text(stringResource(R.string.lg_uc_cookie_hint),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = cookieInput, onValueChange = { cookieInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("粘贴 Cookie…") }, minLines = 4, maxLines = 8
+                        placeholder = { Text(stringResource(R.string.lg_paste_cookie_hint)) }, minLines = 4, maxLines = 8
                     )
                 }
             },
@@ -238,21 +241,21 @@ fun UCLoginScreen(
                             val saved = viewModel.saveUCAccount(cookieInput.trim())
                             isSavingManual = false
                             if (saved) {
-                                SnackbarController.show("登录成功")
+                                SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                 showCookieDialog = false
                                 onSaved()
                             } else {
-                                SnackbarController.show("Cookie 无效，请检查是否包含 __pus= 与 __puus=")
+                                SnackbarController.show(AppStrings.get(R.string.lg_uc_cookie_invalid))
                             }
                         }
                     },
                     enabled = cookieInput.isNotBlank() && !isSavingManual
                 ) {
                     if (isSavingManual) { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }
-                    else { Text("保存") }
+                    else { Text(stringResource(R.string.lg_save)) }
                 }
             },
-            dismissButton = { TextButton(onClick = { if (!isSavingManual) showCookieDialog = false }, enabled = !isSavingManual) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { if (!isSavingManual) showCookieDialog = false }, enabled = !isSavingManual) { Text(stringResource(R.string.lg_cancel)) } }
         )
     }
 }

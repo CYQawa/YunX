@@ -19,7 +19,9 @@
 package com.yunx.app.data.download
 
 import android.util.Log
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
@@ -75,7 +77,7 @@ object HlsDownloader {
             if (rawSegments.isEmpty()) return@runCatching false
             val segments = rawSegments.map { raw ->
                 HlsRequestPolicy.resolve(media.finalUrl, raw)
-                    ?: throw IllegalArgumentException("HLS 分片地址不是受支持的 HTTPS URL")
+                    ?: throw IllegalArgumentException(AppStrings.get(R.string.ed_hls_segment_url_invalid))
             }
 
             destFile.parentFile?.mkdirs()
@@ -143,7 +145,7 @@ object HlsDownloader {
                 redirectTarget(response, current)?.let { return@executeCancellable it to null }
                 if (!response.isSuccessful) return@executeCancellable null
                 val body = response.body ?: return@executeCancellable null
-                if (body.contentLength() > maxBytes) throw IllegalStateException("HLS 分片超过大小限制")
+                if (body.contentLength() > maxBytes) throw IllegalStateException(AppStrings.get(R.string.ed_hls_segment_too_large))
                 var written = 0L
                 val buffer = ByteArray(COPY_BUFFER_SIZE)
                 body.byteStream().use { input ->
@@ -152,7 +154,7 @@ object HlsDownloader {
                         if (count < 0) break
                         if (count == 0) continue
                         written += count
-                        if (written > maxBytes) throw IllegalStateException("HLS 分片超过大小限制")
+                        if (written > maxBytes) throw IllegalStateException(AppStrings.get(R.string.ed_hls_segment_too_large))
                         output.write(buffer, 0, count)
                         onBytes(count.toLong())
                     }
@@ -184,7 +186,7 @@ object HlsDownloader {
         if (response.code !in 300..399) return null
         val location = response.header("Location") ?: return null
         return HlsRequestPolicy.resolve(current, location)
-            ?: throw IllegalArgumentException("HLS 重定向到非 HTTPS 地址")
+            ?: throw IllegalArgumentException(AppStrings.get(R.string.ed_hls_redirect_insecure))
     }
 
     private suspend fun <T> executeCancellable(request: Request, block: suspend (Response) -> T): T {
@@ -200,7 +202,7 @@ object HlsDownloader {
     }
 
     private fun readBoundedText(input: java.io.InputStream, declaredLength: Long): String {
-        if (declaredLength > MAX_PLAYLIST_BYTES) throw IllegalStateException("HLS 播放列表超过大小限制")
+        if (declaredLength > MAX_PLAYLIST_BYTES) throw IllegalStateException(AppStrings.get(R.string.ed_hls_playlist_too_large))
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(16 * 1024)
         input.use {
@@ -209,7 +211,7 @@ object HlsDownloader {
                 if (count < 0) break
                 if (count == 0) continue
                 if (output.size().toLong() + count > MAX_PLAYLIST_BYTES) {
-                    throw IllegalStateException("HLS 播放列表超过大小限制")
+                    throw IllegalStateException(AppStrings.get(R.string.ed_hls_playlist_too_large))
                 }
                 output.write(buffer, 0, count)
             }
@@ -219,7 +221,7 @@ object HlsDownloader {
 
     private fun checkedTotal(current: Long, added: Long): Long {
         val total = Math.addExact(current, added)
-        if (total > MAX_TOTAL_BYTES) throw IllegalStateException("HLS 总下载量超过限制")
+        if (total > MAX_TOTAL_BYTES) throw IllegalStateException(AppStrings.get(R.string.ed_hls_total_too_large))
         return total
     }
 
@@ -240,7 +242,7 @@ object HlsDownloader {
         for (line in text.lineSequence()) {
             val value = line.trim()
             if (value.isNotBlank() && !value.startsWith("#")) {
-                if (size >= MAX_SEGMENTS) throw IllegalStateException("HLS 分片数量超过限制")
+                if (size >= MAX_SEGMENTS) throw IllegalStateException(AppStrings.get(R.string.ed_hls_too_many_segments))
                 add(value)
             }
         }

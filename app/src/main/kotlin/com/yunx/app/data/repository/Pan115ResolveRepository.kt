@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.Pan115Api
 import com.yunx.app.data.network.Pan115Constants
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.delay
 
 /**
@@ -41,7 +43,7 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
 
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
-            ?: return Result.failure(IllegalArgumentException("无法识别分享链接"))
+            ?: return Result.failure(IllegalArgumentException(AppStrings.get(R.string.er_share_link_unrecognized)))
         return runCatching {
             // 提取码优先级：用户手输 > 链接 ?password= 或文案「访问码：xxxx」
             val receiveCode = pwd?.takeIf { it.isNotBlank() } ?: parsed.pwd.orEmpty()
@@ -106,16 +108,16 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
      */
     override suspend fun ensureTempDir(cookie: String): Result<String> = runCatching {
         if (!Pan115Constants.hasLoginCookie(cookie)) {
-            throw IllegalStateException("请先登录115网盘")
+            throw IllegalStateException(AppStrings.get(R.string.er_pan115_login_required))
         }
         val root = api.listFiles(Pan115Constants.ROOT_CID, cookie, offset = 0)
         val tempRoot = root.files
             .firstOrNull { it.isdir && it.fname == Pan115Constants.TEMP_DIR_NAME }?.fid
             ?: api.createDir(Pan115Constants.ROOT_CID, Pan115Constants.TEMP_DIR_NAME, cookie)
-            ?: throw IllegalStateException("创建115临时目录失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_pan115_create_temp_dir_failed))
         val subName = "${Pan115Constants.TEMP_SUBDIR_PREFIX}${System.nanoTime()}"
         api.createDir(tempRoot, subName, cookie)
-            ?: throw IllegalStateException("创建115临时转存目录失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_pan115_create_temp_subdir_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -145,13 +147,13 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
         cookie: String
     ): Result<String> = runCatching {
         if (!Pan115Constants.hasLoginCookie(cookie)) {
-            throw IllegalStateException("请先登录115网盘")
+            throw IllegalStateException(AppStrings.get(R.string.er_pan115_login_required))
         }
         val (receiveCode, _) = Pan115Constants.decodeShareToken(session.stoken)
         val targetCid = toDirFid.ifBlank { Pan115Constants.ROOT_CID }
         api.receiveShare(session.shareId, receiveCode, file.fid, targetCid, cookie)
         waitNewFid(targetCid, file.fname, cookie)
-            ?: throw IllegalStateException("转存已完成，但未在目标目录找到文件，请到115网盘查看")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_pan115_file_not_found_after_save))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -183,7 +185,7 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
     }
 
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> =
-        Result.failure(UnsupportedOperationException("115 分享请使用 getShareDownloadLink"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_pan115_use_share_download_link)))
 
     /**
      * 分享直链。
@@ -212,7 +214,7 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
                 downloadViaTempTransfer(session, file, receiveCode, cookie)
             } else {
                 // 未登录只能走网页端，原样抛出 115 的提示（比如 50029）
-                throw webResult.exceptionOrNull() ?: IllegalStateException("获取下载链接失败")
+                throw webResult.exceptionOrNull() ?: IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
             }
         // 文件名以列表为准（downurl 的 fn 偶发为空，会 fallback 成 file_id）
         link.copy(filename = file.fname.ifBlank { link.filename })
@@ -232,7 +234,7 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
         cookie: String
     ): DownloadLink {
         if (!Pan115Constants.hasLoginCookie(cookie)) {
-            throw IllegalStateException("该分享文件需要115电脑端才能下载，请先到「网盘」页登录115网盘")
+            throw IllegalStateException(AppStrings.get(R.string.er_pan115_pc_required))
         }
         ensureEnoughSpace(file.fsize, cookie)
         val tempDir = ensureTempDir(cookie).getOrThrow()
@@ -240,14 +242,14 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
         val saved = waitNewFile(tempDir, file.fname, cookie) ?: run {
             // 转存成功但没认领到文件：别把垃圾留在用户网盘里
             cleanupTempDir(tempDir, cookie)
-            throw IllegalStateException("分享文件转存后未取到下载链接，请稍后重试")
+            throw IllegalStateException(AppStrings.get(R.string.er_share_file_no_url_after_save))
         }
         val link = runCatching { api.getAppDownloadLink(saved.fidToken, cookie) }
             .getOrNull()
             ?: run {
                 // 取链也失败：转存进来的文件同样不能留在用户网盘里
                 cleanupTempDir(tempDir, cookie)
-                throw IllegalStateException("该分享文件暂时无法获取电脑端下载链接，请稍后重试")
+                throw IllegalStateException(AppStrings.get(R.string.er_pan115_pc_url_unavailable))
             }
         return link.copy(
             fid = saved.fid,
@@ -267,8 +269,11 @@ class Pan115ResolveRepository(private val api: Pan115Api) : ShareResolveReposito
         val free = quota.total - quota.used
         if (free in 1 until size) {
             throw IllegalStateException(
-                "网盘剩余空间不足：该分享内容需要 ${readableSize(size)}，可用 ${readableSize(free)}，" +
-                    "请先清理空间或改用其它方式下载"
+                AppStrings.get(
+                    R.string.er_space_insufficient,
+                    readableSize(size),
+                    readableSize(free)
+                )
             )
         }
     }

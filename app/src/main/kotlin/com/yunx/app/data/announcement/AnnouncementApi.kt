@@ -19,7 +19,9 @@
 package com.yunx.app.data.announcement
 
 import android.util.Log
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -149,14 +151,14 @@ object AnnouncementApi {
                     if (text.isBlank()) {
                         // 服务端异常时可能连 JSON 都没有：这里只留 HTTP 码，够定位
                         Log.e(TAG, "公告响应为空（HTTP ${resp.code}，$url）")
-                        return@withContext Result.Failure("响应为空（HTTP ${resp.code}）")
+                        return@withContext Result.Failure(AppStrings.get(R.string.er_announcement_empty_response, resp.code))
                     }
                     // ★ 非 2xx 也可能带合法 JSON（业务失败），所以先取 body 再交给 parseEnvelope 判 success
                     text
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "公告请求异常（$url）：${e.javaClass.simpleName}: ${e.message}", e)
-                return@withContext Result.Failure("${e.javaClass.simpleName}: ${e.message ?: "网络异常"}")
+                return@withContext Result.Failure("${e.javaClass.simpleName}: ${e.message ?: AppStrings.get(R.string.er_announcement_network_error)}")
             }
             parseEnvelope(body, url, fromData)
         }
@@ -167,20 +169,20 @@ object AnnouncementApi {
             JSONObject(body)
         } catch (e: Exception) {
             Log.e(TAG, "公告响应不是合法 JSON（前 200 字=${body.take(200)}）", e)
-            return Result.Failure("响应格式异常")
+            return Result.Failure(AppStrings.get(R.string.er_announcement_bad_response))
         }
         if (!json.optBoolean("success")) {
             val code = json.optInt("code")
-            val message = json.stringOrNull("message") ?: "请求失败"
+            val message = json.stringOrNull("message") ?: AppStrings.get(R.string.er_announcement_request_failed)
             Log.e(TAG, "公告接口业务失败：[$code] $message（$url）")
             return Result.Failure(message)
         }
-        val data = json.optJSONObject("data") ?: return Result.Failure("响应数据为空")
+        val data = json.optJSONObject("data") ?: return Result.Failure(AppStrings.get(R.string.er_announcement_empty_data))
         return try {
             Result.Success(fromData(data))
         } catch (e: Exception) {
             Log.e(TAG, "公告数据解析失败（$url）：${e.message}", e)
-            Result.Failure("数据解析失败")
+            Result.Failure(AppStrings.get(R.string.er_announcement_parse_failed))
         }
     }
 

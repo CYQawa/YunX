@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Groupe G4 : fiches de compte / comptes vidéo / enregistrement vers le cloud / actions de fichier / lien de téléchargement (préfixe sh_).
+    Français. L'ensemble des clés doit être identique à values/strings_sheets.xml.
+-->
+<resources>
+    <!-- Partagé par AccountListSection / VideoAccountSheet -->
+    <string name="sh_accounts_count">Comptes (%1$d)</string>
+    <string name="sh_add_account">Ajouter un compte</string>
+    <string name="sh_account_list_hint">Le compte principal sert aux actions nécessitant une identité unique (lister, enregistrer, téléverser) ; une fois le « téléchargement multi-comptes » activé, les téléchargements utilisent automatiquement les autres comptes du même disque.</string>
+    <string name="sh_primary_account">Compte principal</string>
+    <string name="sh_tap_to_set_primary">Appuyez pour définir comme principal</string>
+    <string name="sh_account_actions">Actions du compte</string>
+    <string name="sh_rename_remark">Renommer la note</string>
+    <string name="sh_logout_account">Supprimer ce compte</string>
+    <string name="sh_remark">Note</string>
+    <string name="sh_remark_placeholder">Laisser vide pour afficher le pseudo</string>
+    <string name="sh_remark_hint">Lorsque plusieurs comptes du même disque sont connectés, une note permet de les distinguer (la vider affiche le pseudo).</string>
+    <string name="sh_video_remark_hint">Lorsque plusieurs comptes de la même plateforme sont connectés, une note permet de les distinguer (la vider affiche le pseudo).</string>
+    <string name="sh_save">Enregistrer</string>
+    <string name="sh_cancel">Annuler</string>
+    <string name="sh_logout_confirm">Voulez-vous vraiment supprimer « %1$s » ? Seuls les identifiants de ce compte sur cet appareil seront effacés ; les autres comptes ne sont pas affectés.</string>
+    <string name="sh_logout">Supprimer</string>
+    <string name="sh_unnamed_account">Compte sans nom</string>
+
+    <!-- Fiches de compte par disque -->
+    <string name="sh_baidu_logged_in">Baidu Netdisk · Connecté</string>
+    <string name="sh_c139_logged_in">139 Drive · Connecté</string>
+    <string name="sh_guangya_logged_in">GuangYa Drive · Connecté</string>
+    <string name="sh_ilanzou_logged_in">Lanzou Premium · Connecté</string>
+    <string name="sh_lanzou_logged_in">Lanzou · Connecté</string>
+    <string name="sh_pan115_logged_in">115 Drive · Connecté</string>
+    <string name="sh_pan123_logged_in">123 Drive · Connecté</string>
+    <string name="sh_quark_logged_in">Quark Drive · Connecté</string>
+    <string name="sh_uc_logged_in">UC Drive · Connecté</string>
+    <string name="sh_xunlei_logged_in">Xunlei Drive · Connecté</string>
+    <string name="sh_login_info">Infos de connexion</string>
+    <string name="sh_login_time">Date de connexion</string>
+    <string name="sh_login_account">Compte de connexion</string>
+    <string name="sh_pan115_login_cookie">Cookie de connexion</string>
+    <string name="sh_collapse">Réduire</string>
+    <string name="sh_expand_all">Tout afficher</string>
+    <string name="sh_copy">Copier</string>
+    <string name="sh_cookie_copied">Cookie copié</string>
+    <string name="sh_token_copied">Token copié</string>
+    <string name="sh_apptoken_copied">appToken copié</string>
+    <string name="sh_device_id">ID de l\'appareil</string>
+    <string name="sh_guangya_user">Utilisateur GuangYa</string>
+    <string name="sh_guangya_avatar">G</string>
+    <string name="sh_ilanzou_user">Utilisateur Lanzou Premium</string>
+    <string name="sh_lanzou_user">Utilisateur Lanzou</string>
+    <string name="sh_lanzou_avatar">L</string>
+
+    <!-- Fiche de compte vidéo / section des comptes vidéo -->
+    <string name="sh_logged_in_accounts">Connecté · %1$d comptes</string>
+    <string name="sh_logged_in">Connecté</string>
+    <string name="sh_logout_all_accounts">Supprimer tous les comptes</string>
+    <string name="sh_logout_all_confirm">Voulez-vous vraiment supprimer les %2$d comptes de « %1$s » ? Seuls les identifiants enregistrés sur cet appareil seront effacés.</string>
+    <string name="sh_logout_all">Tout supprimer</string>
+    <string name="sh_manage">Gérer</string>
+    <string name="sh_login">Se connecter</string>
+    <string name="sh_no_login_needed">Aucune connexion requise, analyse directe</string>
+    <string name="sh_not_logged_in">Non connecté</string>
+    <string name="sh_name_accounts">%1$s · %2$d comptes</string>
+
+    <!-- Section des résultats vidéo -->
+    <string name="sh_download_selected">Télécharger la sélection</string>
+    <string name="sh_back">Retour</string>
+    <string name="sh_video_content">Contenu vidéo</string>
+    <string name="sh_exit_multi_select">Quitter la sélection</string>
+    <string name="sh_selected_count_images">%1$d sélectionnée(s)</string>
+    <string name="sh_all_selected">Tout sélectionné</string>
+    <string name="sh_tap_image_to_select">Appuyez sur les images pour continuer la sélection</string>
+    <string name="sh_deselect_all">Tout désélectionner</string>
+    <string name="sh_select_all">Tout sélectionner</string>
+    <string name="sh_page_info">%1$d images · Page %2$d/%3$d</string>
+    <string name="sh_prev_page">Précédent</string>
+    <string name="sh_next_page">Suivant</string>
+    <string name="sh_image_index">Image %1$d</string>
+    <string name="sh_download_this_image">Télécharger cette image</string>
+    <string name="sh_download_all_count">Tout télécharger (%1$d éléments)</string>
+    <string name="sh_total_items">%1$d éléments</string>
+    <string name="sh_expand">Développer</string>
+    <string name="sh_copy_caption">Copier la légende</string>
+    <string name="sh_caption_copied">Légende copiée</string>
+    <string name="sh_media_row_title">%1$d. %2$s</string>
+    <string name="sh_media_video">Vidéo</string>
+    <string name="sh_media_image">Image</string>
+    <string name="sh_media_audio">Audio</string>
+    <string name="sh_preview">Aperçu</string>
+    <string name="sh_download_audio_only">Télécharger l\'audio uniquement</string>
+    <string name="sh_download">Télécharger</string>
+
+    <!-- Enregistrer vers le cloud -->
+    <string name="sh_save_to_quark">Enregistrer vers Quark Drive</string>
+    <string name="sh_root_dir">Racine</string>
+    <string name="sh_retry">Réessayer</string>
+    <string name="sh_empty_dir_hint">Aucun sous-dossier ici ; vous pouvez enregistrer directement dans ce dossier</string>
+    <string name="sh_save_here">Enregistrer dans ce dossier (%1$s)</string>
+
+    <!-- Fiche d\'actions de fichier (page d\'analyse) -->
+    <string name="sh_download_folder">Télécharger le dossier</string>
+    <string name="sh_download_folder_desc">Télécharger récursivement tout le dossier en conservant l\'arborescence</string>
+    <string name="sh_download_desc">Obtenir le lien de téléchargement et l\'enregistrer sur cet appareil</string>
+    <string name="sh_preview_online">Aperçu en ligne</string>
+    <string name="sh_preview_online_desc">Afficher directement dans l\'application sans télécharger</string>
+    <string name="sh_save_to_cloud">Enregistrer</string>
+    <string name="sh_save_folder_desc">Enregistrer tout le dossier vers mon disque</string>
+    <string name="sh_save_file_desc">Enregistrer le fichier vers mon disque</string>
+
+    <!-- Boîte de dialogue du lien de téléchargement -->
+    <string name="sh_direct_link_generated">Lien de téléchargement généré (valable environ 15-30 minutes)</string>
+    <string name="sh_copy_download_link">Copier le lien de téléchargement</string>
+    <string name="sh_download_link_copied">Lien de téléchargement copié</string>
+    <string name="sh_download_start_hint">Après le démarrage, suivez la progression sur la page « Téléchargements »</string>
+    <string name="sh_start_download">Démarrer le téléchargement</string>
+    <string name="sh_close">Fermer</string>
+</resources>

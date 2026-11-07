@@ -21,9 +21,11 @@ package com.yunx.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.BookmarkDao
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -68,7 +70,7 @@ class BookmarkViewModel(private val dao: BookmarkDao) : ViewModel() {
     ) {
         val trimmed = link.trim()
         if (trimmed.isBlank()) {
-            SnackbarController.show("请输入网盘链接")
+            SnackbarController.show(AppStrings.get(R.string.vm_bookmark_enter_link))
             return
         }
         viewModelScope.launch {
@@ -81,7 +83,7 @@ class BookmarkViewModel(private val dao: BookmarkDao) : ViewModel() {
                     category = category.ifBlank { BookmarkEntity.DEFAULT_CATEGORY }
                 )
             )
-            SnackbarController.show("已收藏")
+            SnackbarController.show(AppStrings.get(R.string.vm_bookmark_added))
         }
     }
 
@@ -89,14 +91,14 @@ class BookmarkViewModel(private val dao: BookmarkDao) : ViewModel() {
         val cat = category.ifBlank { BookmarkEntity.DEFAULT_CATEGORY }
         viewModelScope.launch {
             dao.updateCategory(id, cat)
-            SnackbarController.show("已移动到「$cat」")
+            SnackbarController.show(AppStrings.get(R.string.vm_bookmark_moved, cat))
         }
     }
 
     fun delete(id: Long) {
         viewModelScope.launch {
             dao.delete(id)
-            SnackbarController.show("已删除")
+            SnackbarController.show(AppStrings.get(R.string.vm_bookmark_deleted))
         }
     }
 
@@ -104,7 +106,13 @@ class BookmarkViewModel(private val dao: BookmarkDao) : ViewModel() {
     fun setHomePinned(id: Long, pinned: Boolean) {
         viewModelScope.launch {
             dao.updateHomePinned(id, pinned)
-            SnackbarController.show(if (pinned) "已添加到主页" else "已从主页移除")
+            SnackbarController.show(
+                if (pinned) {
+                    AppStrings.get(R.string.vm_bookmark_pinned)
+                } else {
+                    AppStrings.get(R.string.vm_bookmark_unpinned)
+                }
+            )
         }
     }
 
@@ -112,7 +120,13 @@ class BookmarkViewModel(private val dao: BookmarkDao) : ViewModel() {
     fun setHomeLabel(id: Long, label: String) {
         viewModelScope.launch {
             dao.updateHomeLabel(id, label.trim())
-            SnackbarController.show(if (label.isBlank()) "已恢复自动文字" else "已更新快捷方式文字")
+            SnackbarController.show(
+                if (label.isBlank()) {
+                    AppStrings.get(R.string.vm_bookmark_label_auto)
+                } else {
+                    AppStrings.get(R.string.vm_bookmark_label_updated)
+                }
+            )
         }
     }
 

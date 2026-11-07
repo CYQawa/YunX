@@ -25,7 +25,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 
 /**
  * 功能标识小徽标（默认「实验性」）：主色胶囊，放在功能入口标题行的右端（右上角）。
@@ -35,7 +37,7 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 internal fun ExperimentalBadge(
-    text: String = "实验性",
+    text: String? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -45,7 +47,7 @@ internal fun ExperimentalBadge(
         shape = RoundedCornerShape(6.dp)
     ) {
         Text(
-            text = text,
+            text = text ?: stringResource(R.string.badge_experimental),
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
         )

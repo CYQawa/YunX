@@ -19,7 +19,9 @@
 package com.yunx.app.data.network.video
 
 import android.util.Log
+import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.LogRedactor
 import org.json.JSONArray
 import org.json.JSONObject
@@ -72,7 +74,7 @@ object KuaishouParser : VideoParser {
         val pageUrl = resolvePageUrl(link.url, headers).replace("/fw/long-video/", "/fw/photo/")
 
         val response = VideoHttp.request(pageUrl, headers = headers)
-        VideoHttp.requireSuccess(response, "快手作品页")
+        VideoHttp.requireSuccess(response, AppStrings.get(R.string.em_what_kuaishou_page))
         val initJson = VideoHttp.extractInlineJson(response.body, "window.INIT_STATE")
             ?: run {
                 // 这类失败几乎都来自「拿到了非作品页」（入口页 / 验证页 / 改版），
@@ -84,7 +86,7 @@ object KuaishouParser : VideoParser {
                 )
                 throw VideoParseException(
                     VideoParseErrorKind.UNKNOWN,
-                    "快手页面里没有 window.INIT_STATE（作品可能已删除或页面改版）"
+                    AppStrings.get(R.string.em_kuaishou_no_init_state)
                 )
             }
         val photo = findPhoto(initJson)
@@ -139,13 +141,20 @@ object KuaishouParser : VideoParser {
         val initState = try {
             JSONObject(initJson)
         } catch (e: Exception) {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "window.INIT_STATE 不是合法 JSON", e)
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_kuaishou_invalid_json),
+                e
+            )
         }
         for (key in initState.keys()) {
             val photo = initState.optJSONObject(key)?.optJSONObject("photo")
             if (photo != null) return photo
         }
-        throw VideoParseException(VideoParseErrorKind.UNKNOWN, "window.INIT_STATE 里没有作品数据")
+        throw VideoParseException(
+            VideoParseErrorKind.UNKNOWN,
+            AppStrings.get(R.string.em_kuaishou_no_photo)
+        )
     }
 
     /**

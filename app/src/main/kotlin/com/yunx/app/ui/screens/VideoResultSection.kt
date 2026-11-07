@@ -18,6 +18,10 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -243,7 +247,7 @@ fun VideoResultSection(
                     count = selectedUrls.size,
                     actions = listOf(
                         MultiSelectAction(
-                            label = "下载所选",
+                            label = stringResource(R.string.sh_download_selected),
                             icon = Icons.Outlined.Download,
                             tint = MaterialTheme.colorScheme.primary
                         ) {
@@ -268,7 +272,7 @@ private fun VideoResultTopBar(result: VideoParseResult, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.sh_back))
         }
         // 平台 Logo：按图标自身形状原样画（不裁圆、不垫底色，理由见 PlatformLogos 的 KDoc）
         Image(
@@ -285,7 +289,7 @@ private fun VideoResultTopBar(result: VideoParseResult, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = result.title.ifBlank { "视频内容" },
+                text = result.title.ifBlank { stringResource(R.string.sh_video_content) },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
@@ -315,22 +319,22 @@ private fun ImageSelectionTopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onExit) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "退出多选")
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.sh_exit_multi_select))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "已选 $selectedCount 张",
+                text = stringResource(R.string.sh_selected_count_images, selectedCount),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = if (allSelected) "已全选" else "点击图片继续选择",
+                text = if (allSelected) stringResource(R.string.sh_all_selected) else stringResource(R.string.sh_tap_image_to_select),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         TextButton(onClick = onToggleSelectAll) {
-            Text(if (allSelected) "取消全选" else "全选")
+            Text(if (allSelected) stringResource(R.string.sh_deselect_all) else stringResource(R.string.sh_select_all))
         }
     }
 }
@@ -418,13 +422,13 @@ private fun ImagePagerBar(page: Int, pageCount: Int, total: Int, onPageChange: (
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "共 $total 张 · 第 ${page + 1}/$pageCount 页",
+            text = stringResource(R.string.sh_page_info, total, page + 1, pageCount),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f)
         )
-        TextButton(onClick = { onPageChange(page - 1) }, enabled = page > 0) { Text("上一页") }
-        TextButton(onClick = { onPageChange(page + 1) }, enabled = page < pageCount - 1) { Text("下一页") }
+        TextButton(onClick = { onPageChange(page - 1) }, enabled = page > 0) { Text(stringResource(R.string.sh_prev_page)) }
+        TextButton(onClick = { onPageChange(page + 1) }, enabled = page < pageCount - 1) { Text(stringResource(R.string.sh_next_page)) }
     }
 }
 
@@ -467,7 +471,7 @@ private fun ImageGridCell(
         Box {
             AsyncImage(
                 model = request,
-                contentDescription = "第 ${index + 1} 张图片",
+                contentDescription = stringResource(R.string.sh_image_index, index + 1),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
@@ -509,7 +513,7 @@ private fun ImageGridCell(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Download,
-                        contentDescription = "下载这一张",
+                        contentDescription = stringResource(R.string.sh_download_this_image),
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -549,7 +553,7 @@ private fun DownloadAllBar(result: VideoParseResult, onDownloadAll: () -> Unit) 
                 .padding(horizontal = 16.dp, vertical = 10.dp)
                 .height(48.dp)
         ) {
-            Text("全部下载（${result.medias.size} 项）")
+            Text(stringResource(R.string.sh_download_all_count, result.medias.size))
         }
     }
 }
@@ -563,7 +567,7 @@ private fun VideoMetaBlock(result: VideoParseResult, modifier: Modifier = Modifi
         if (result.author.isNotBlank()) add(result.author)
         val date = formatVideoDate(result.timestampSeconds)
         if (date.isNotBlank()) add(date)
-        if (result.medias.isNotEmpty()) add("共 ${result.medias.size} 项")
+        if (result.medias.isNotEmpty()) add(stringResource(R.string.sh_total_items, result.medias.size))
     }.joinToString("  ·  ")
 
     Column(modifier = modifier.padding(bottom = 12.dp)) {
@@ -593,7 +597,7 @@ private fun VideoMetaBlock(result: VideoParseResult, modifier: Modifier = Modifi
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                 if (canExpand) {
                     Text(
-                        text = if (expanded) "收起" else "展开",
+                        text = if (expanded) stringResource(R.string.sh_collapse) else stringResource(R.string.sh_expand),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
@@ -613,7 +617,7 @@ private fun VideoMetaBlock(result: VideoParseResult, modifier: Modifier = Modifi
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "复制文案",
+                        text = stringResource(R.string.sh_copy_caption),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 4.dp)
@@ -704,7 +708,7 @@ private fun VideoMediaRow(
                     IconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
                         Icon(
                             imageVector = Icons.Outlined.Visibility,
-                            contentDescription = "预览",
+                            contentDescription = stringResource(R.string.sh_preview),
                             modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -714,14 +718,14 @@ private fun VideoMediaRow(
                         IconButton(onClick = onDownloadAudio, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 imageVector = Icons.Outlined.MusicNote,
-                                contentDescription = "仅下载音频",
+                                contentDescription = stringResource(R.string.sh_download_audio_only),
                                 modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                     TextButton(onClick = onDownload) {
-                        Text("下载")
+                        Text(stringResource(R.string.sh_download))
                     }
                 }
             },
@@ -733,9 +737,9 @@ private fun VideoMediaRow(
 
 /** 媒体类型中文标签 */
 private fun videoMediaKindLabel(kind: VideoMediaKind): String = when (kind) {
-    VideoMediaKind.VIDEO -> "视频"
-    VideoMediaKind.IMAGE -> "图片"
-    VideoMediaKind.AUDIO -> "音频"
+    VideoMediaKind.VIDEO -> AppStrings.get(R.string.sh_media_video)
+    VideoMediaKind.IMAGE -> AppStrings.get(R.string.sh_media_image)
+    VideoMediaKind.AUDIO -> AppStrings.get(R.string.sh_media_audio)
 }
 
 /** 发布时间戳（秒）→ `yyyy-MM-dd`；为 0 或非法时返回空串（调用方据此不显示） */
@@ -757,7 +761,7 @@ private fun copyVideoCaption(context: Context, text: String) {
     runCatching {
         clipboard.setPrimaryClip(ClipData.newPlainText("yunx_video_caption", text))
     }.onSuccess {
-        SnackbarController.show("文案已复制")
+        SnackbarController.show(AppStrings.get(R.string.sh_caption_copied))
     }
 }
 

@@ -20,6 +20,8 @@ package com.yunx.app.data.download
 
 import android.content.Context
 import android.util.Log
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import com.yunx.app.util.DownloadFileNames
 import com.yunx.app.util.LogRedactor
@@ -822,10 +824,10 @@ class DownloadManager(
     private fun magnetBlockReason(isMagnet: Boolean): String? {
         if (!isMagnet) return null
         if (!GopeedEngine.isInstalled(context)) {
-            return "磁力下载需要先在「设置 → 下载 → 下载引擎」里导入 Gopeed 内核"
+            return AppStrings.get(R.string.ed_magnet_need_kernel)
         }
         if (settings.downloadEngine != SettingsRepository.ENGINE_GOPEED) {
-            return "磁力下载需要先在「设置 → 下载」里把下载引擎切换为 Gopeed"
+            return AppStrings.get(R.string.ed_magnet_need_engine)
         }
         return null
     }
@@ -864,7 +866,7 @@ class DownloadManager(
                 }
                 // 引擎不会替我们建目录：目录不存在就把任务建在了一个不存在的路径上
                 if (!destDir.exists() && !destDir.mkdirs()) {
-                    throw java.io.IOException("无法创建目录：$destDir")
+                    throw java.io.IOException(AppStrings.get(R.string.ed_engine_create_dir_failed, destDir))
                 }
                 GopeedEngine.createTask(
                     url = url,
@@ -934,7 +936,7 @@ class DownloadManager(
                                 summary = "task=${task.id} engineId=${task.engineTaskId} name=${task.fileName}"
                             )
                             dao.updateStatus(task.id, DownloadTaskEntity.STATUS_FAILED)
-                            dao.updateError(task.id, "Gopeed 引擎下载失败")
+                            dao.updateError(task.id, AppStrings.get(R.string.ed_engine_download_failed))
                             _stats.update { it - task.id }
                             taskEngineIds.remove(task.id)
                             taskStartTimes.remove(task.id)
@@ -942,7 +944,7 @@ class DownloadManager(
                             if (engineKeepAliveIds.remove(task.id)) onTaskFinished()
                             DownloadService.notifyResult(
                                 context, task.id, task.fileName,
-                                success = false, error = "Gopeed 引擎下载失败",
+                                success = false, error = AppStrings.get(R.string.ed_engine_download_failed),
                                 promote = showSpeedProvider()
                             )
                         }
@@ -1155,7 +1157,7 @@ class DownloadManager(
                         dao.updateError(id, reason)
                         // 终态通知：失败同样先出流体云胶囊，随后转为可划掉的普通通知
                         DownloadService.notifyResult(
-                            context, id, dao.get(id)?.fileName ?: "下载任务",
+                            context, id, dao.get(id)?.fileName ?: AppStrings.get(R.string.ed_default_task_name),
                             success = false, error = reason, promote = showSpeedProvider()
                         )
                     } else {
@@ -1185,7 +1187,8 @@ class DownloadManager(
     /** 任务开始/结束计数：控制前台服务生命周期（有任务在下载即保持前台） */
     private suspend fun onTaskStarted(id: Long) {
         if (activeTaskCount.getAndIncrement() == 0) {
-            val name = runCatching { dao.get(id)?.fileName }.getOrNull() ?: "下载任务"
+            val name = runCatching { dao.get(id)?.fileName }.getOrNull()
+                ?: AppStrings.get(R.string.ed_default_task_name)
             // 走引用计数版：内核包下载（KernelProvisioner）也在用同一条前台服务，谁都不能直接停
             DownloadService.acquire(context, name)
         }
@@ -1718,7 +1721,15 @@ class DownloadManager(
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                failReason.compareAndSet(null, "分片 ${i + 1}/$mainPoolCount：${e.message ?: e.javaClass.simpleName}")
+                                failReason.compareAndSet(
+                                    null,
+                                    AppStrings.get(
+                                        R.string.ed_chunk_failed_detail,
+                                        i + 1,
+                                        mainPoolCount,
+                                        e.message ?: e.javaClass.simpleName
+                                    )
+                                )
                                 ChunkResult.FAILED
                             } finally {
                                 inflightChunks.remove(diagKey)
@@ -1747,7 +1758,10 @@ class DownloadManager(
                                     Log.w(TAG, "runTask: id=$id 分片${i + 1} 检测到服务器忽略Range（累计 $n/$RANGE_IGNORED_TOLERANCE）")
                                     if (n >= RANGE_IGNORED_TOLERANCE) fallback.compareAndSet(false, true)
                                 }
-                                ChunkResult.FAILED -> failReason.compareAndSet(null, "分片 ${i + 1}/$mainPoolCount 下载失败")
+                                ChunkResult.FAILED -> failReason.compareAndSet(
+                                    null,
+                                    AppStrings.get(R.string.ed_chunk_download_failed, i + 1, mainPoolCount)
+                                )
                                 else -> {}
                             }
                         }
@@ -1820,7 +1834,10 @@ class DownloadManager(
                                 Log.w(TAG, "runTask: id=$id 弹性区间 $key 检测到服务器忽略Range（累计 $n/$RANGE_IGNORED_TOLERANCE）")
                                 if (n >= RANGE_IGNORED_TOLERANCE) fallback.compareAndSet(false, true)
                             }
-                            ChunkResult.FAILED -> failReason.compareAndSet(null, "弹性区间 ${s}-${e} 下载失败")
+                            ChunkResult.FAILED -> failReason.compareAndSet(
+                                null,
+                                AppStrings.get(R.string.ed_elastic_range_failed, s, e)
+                            )
                             else -> {}
                         }
                     }
@@ -1937,7 +1954,10 @@ class DownloadManager(
                             }
                             retryResults[pos] = res
                             if (res != ChunkResult.OK) {
-                                failReason.compareAndSet(null, "区间 ${m.start}-${m.end} 重试仍失败")
+                                failReason.compareAndSet(
+                                    null,
+                                    AppStrings.get(R.string.ed_range_retry_failed, m.start, m.end)
+                                )
                             }
                         }
                     }
@@ -1992,7 +2012,9 @@ class DownloadManager(
             persistProgressIfDue(id, new, total, force = false, lastAt = fullLastAt)
             notifyProgress(id, task.fileName, new, total)
         }
-        if (!ok) throw IllegalStateException(failReason.get() ?: "分片与单流下载均失败")
+        if (!ok) throw IllegalStateException(
+            failReason.get() ?: AppStrings.get(R.string.ed_all_chunks_failed)
+        )
         finishDownload(id, chunkDir, listOf(fullFile), task.fileName, total)
     }
 
@@ -2038,7 +2060,7 @@ class DownloadManager(
                 if (!isTaskActive()) return@downloadFull
                 persistProgressIfDue(id, new, 0, force = false, lastAt = streamLastAt)
             }
-            if (!ok2) throw IllegalStateException("下载失败（Range 与完整下载均失败）")
+            if (!ok2) throw IllegalStateException(AppStrings.get(R.string.ed_download_range_and_full_failed))
         }
         if (!isTaskActive()) return
         finishDownload(id, chunkDir, listOf(partFile), task.fileName, 0)
@@ -2061,17 +2083,17 @@ class DownloadManager(
         if (!isTaskActive()) return
         if (!ok) {
             hlsFile.delete()
-            throw IllegalStateException("HLS 转码流下载失败")
+            throw IllegalStateException(AppStrings.get(R.string.ed_hls_download_failed))
         }
         // Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
         if (!storagePermissionProvider()) {
             hlsFile.delete()
-            throw IllegalStateException("未授予存储权限，无法保存到下载目录")
+            throw IllegalStateException(AppStrings.get(R.string.ed_no_storage_permission))
         }
         val savedPath = withContext(Dispatchers.IO) {
             DownloadSaver.save(context, task.fileName, hlsFile, saveDirProvider())
         }
-            ?: throw IllegalStateException("保存到下载目录失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.ed_save_to_download_dir_failed))
         val hlsTotal = dao.get(id)?.totalSize ?: 0L
         completeWithAvg(id, savedPath, hlsTotal)
         Log.d(TAG, "hlsDownload: id=$id 下载完成 savedPath=$savedPath size=${hlsFile.length()}")
@@ -2097,7 +2119,7 @@ class DownloadManager(
         _stats.update { it + (id to DownloadStats(0L, -1L, 1)) }
         val workDir = File(context.cacheDir, "dash_$id")
         workDir.deleteRecursively()
-        if (!workDir.mkdirs()) throw IllegalStateException("无法创建合轨临时目录")
+        if (!workDir.mkdirs()) throw IllegalStateException(AppStrings.get(R.string.ed_create_merge_temp_dir_failed))
         val videoFile = File(workDir, "video.m4s")
         val audioFile = File(workDir, "audio.m4s")
         val mergedFile = File(workDir, "merged.mp4")
@@ -2141,15 +2163,15 @@ class DownloadManager(
                 DashMuxer.mux(videoFile, audioFile, mergedFile) { reportDashMergeProgress(it) }
             }
             if (!muxOk) {
-                throw IllegalStateException("分轨合轨失败（音视频轨道不配套或文件不完整），可改用未登录的单文件低清")
+                throw IllegalStateException(AppStrings.get(R.string.ed_dash_mux_failed))
             }
             // Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
             if (!storagePermissionProvider()) {
-                throw IllegalStateException("未授予存储权限，无法保存到下载目录")
+                throw IllegalStateException(AppStrings.get(R.string.ed_no_storage_permission))
             }
             val savedPath = withContext(Dispatchers.IO) {
                 DownloadSaver.save(context, task.fileName, mergedFile, saveDirProvider())
-            } ?: throw IllegalStateException("保存到下载目录失败")
+            } ?: throw IllegalStateException(AppStrings.get(R.string.ed_save_to_download_dir_failed))
             val total = mergedFile.length()
             completeWithAvg(id, savedPath, total)
             Log.d(TAG, "dashMergeDownload: id=$id 合轨完成 savedPath=$savedPath size=$total")
@@ -2181,7 +2203,7 @@ class DownloadManager(
         _stats.update { it + (id to DownloadStats(0L, -1L, 1)) }
         val workDir = File(context.cacheDir, "audio_$id")
         workDir.deleteRecursively()
-        if (!workDir.mkdirs()) throw IllegalStateException("无法创建抽音频临时目录")
+        if (!workDir.mkdirs()) throw IllegalStateException(AppStrings.get(R.string.ed_create_audio_temp_dir_failed))
         val source = File(workDir, "source")
         val audioFile = File(workDir, "audio.m4a")
         val progress = AtomicLong(0L)
@@ -2199,7 +2221,7 @@ class DownloadManager(
                     persistProgressIfDue(id, new, 0, force = false, lastAt = hlsLastAt)
                     notifyProgress(id, task.fileName, new, 0)
                 }
-                if (!hlsOk) throw IllegalStateException("HLS 转码流下载失败，无法提取音频")
+                if (!hlsOk) throw IllegalStateException(AppStrings.get(R.string.ed_hls_download_failed_audio))
             } else {
                 streamUrlToFile(task.url, headers, source, id, task.fileName, progress, lastAt, totalBytes, streamRecorder)
             }
@@ -2217,15 +2239,15 @@ class DownloadManager(
                 }
             }
             if (!extractOk) {
-                throw IllegalStateException("没有可提取的音轨（可能是静音视频，或音轨编码不受支持）")
+                throw IllegalStateException(AppStrings.get(R.string.ed_no_audio_track))
             }
             // Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
             if (!storagePermissionProvider()) {
-                throw IllegalStateException("未授予存储权限，无法保存到下载目录")
+                throw IllegalStateException(AppStrings.get(R.string.ed_no_storage_permission))
             }
             val savedPath = withContext(Dispatchers.IO) {
                 DownloadSaver.save(context, task.fileName, audioFile, saveDirProvider())
-            } ?: throw IllegalStateException("保存到下载目录失败")
+            } ?: throw IllegalStateException(AppStrings.get(R.string.ed_save_to_download_dir_failed))
             val total = audioFile.length()
             completeWithAvg(id, savedPath, total)
             Log.d(TAG, "audioOnlyDownload: id=$id 抽取完成 savedPath=$savedPath size=$total")
@@ -2256,7 +2278,7 @@ class DownloadManager(
         _stats.update { it + (id to DownloadStats(0L, -1L, 1)) }
         val workDir = File(context.cacheDir, "motion_$id")
         workDir.deleteRecursively()
-        if (!workDir.mkdirs()) throw IllegalStateException("无法创建动图临时目录")
+        if (!workDir.mkdirs()) throw IllegalStateException(AppStrings.get(R.string.ed_create_motion_temp_dir_failed))
         val stillFile = File(workDir, "still.img")
         val motionFile = File(workDir, "motion.bin")
         val remuxedFile = File(workDir, "motion.mp4")
@@ -2272,15 +2294,15 @@ class DownloadManager(
             // 动图资源在容器里声明为 video/mp4：微博给的是 .mov，先换封装；换封装失败则退回原文件再试
             val video = if (DashMuxer.remuxToMp4(motionFile, remuxedFile)) remuxedFile else motionFile
             if (!MotionPhotoWriter.write(stillFile, video, mergedFile)) {
-                throw IllegalStateException("动图合成失败（静图不是 JPEG，或动图轨道不可用）")
+                throw IllegalStateException(AppStrings.get(R.string.ed_motion_photo_failed))
             }
             // Android 9- 保存前检查存储权限（与其它路径一致）
             if (!storagePermissionProvider()) {
-                throw IllegalStateException("未授予存储权限，无法保存到下载目录")
+                throw IllegalStateException(AppStrings.get(R.string.ed_no_storage_permission))
             }
             val savedPath = withContext(Dispatchers.IO) {
                 DownloadSaver.save(context, task.fileName, mergedFile, saveDirProvider())
-            } ?: throw IllegalStateException("保存到下载目录失败")
+            } ?: throw IllegalStateException(AppStrings.get(R.string.ed_save_to_download_dir_failed))
             val total = mergedFile.length()
             completeWithAvg(id, savedPath, total)
             Log.d(TAG, "motionPhotoDownload: id=$id 动图合成完成 savedPath=$savedPath size=$total")
@@ -2334,13 +2356,19 @@ class DownloadManager(
                     // 续传时服务器若忽略 Range 返回 200 全量，append 会重复写入 → 视为不支持续传，抛错兜底
                     if (offset > 0 && response.code != 206) {
                         throw IllegalStateException(
-                            "分轨续传失败：服务器未按 Range 响应（HTTP ${response.code}，${LogRedactor.url(url)}）"
+                            AppStrings.get(
+                                R.string.ed_audio_track_resume_failed,
+                                response.code,
+                                LogRedactor.url(url)
+                            )
                         )
                     }
                     if (!response.isSuccessful) {
-                        throw IllegalStateException("分轨下载失败：HTTP ${response.code}（${LogRedactor.url(url)}）")
+                        throw IllegalStateException(
+                            AppStrings.get(R.string.ed_audio_track_download_failed, response.code, LogRedactor.url(url))
+                        )
                     }
-                    val body = response.body ?: throw IllegalStateException("分轨响应为空")
+                    val body = response.body ?: throw IllegalStateException(AppStrings.get(R.string.ed_audio_track_empty))
                     // 只有从头下载（offset==0）才把本轨完整长度累加进总大小；续传的 Content-Length 只是剩余部分
                     val declared = body.contentLength()
                     if (offset == 0L && declared > 0) totalBytes.addAndGet(declared)
@@ -2432,7 +2460,7 @@ class DownloadManager(
         for (part in chunkFiles) {
             if (!part.exists() || part.length() <= 0) {
                 Log.e(TAG, "finishDownload: id=$id 分片缺失/为空 $part")
-                throw IllegalStateException("分片文件缺失或为空，拒绝合并（防止文件损坏）")
+                throw IllegalStateException(AppStrings.get(R.string.ed_chunk_missing))
             }
         }
         // 下载调试：合并顺序 + 完整性与大小校验（校验口径 = 每片非空 + 每片字节数之和，见下方 written == total）
@@ -2447,7 +2475,7 @@ class DownloadManager(
         }
         // 2) Android 9- 保存前检查存储权限（动态申请，授权后继续；无权限则报错提示）
         if (!storagePermissionProvider()) {
-            throw IllegalStateException("未授予存储权限，无法保存到下载目录")
+            throw IllegalStateException(AppStrings.get(R.string.ed_no_storage_permission))
         }
         // 3) 流式写入最终位置（自定义目录经 SAF；默认目录走 MediaStore/传统路径）
         // ★ 同步阻塞写入必须切 IO 线程：任务跑在 Dispatchers.Default（CPU 池），
@@ -2493,9 +2521,9 @@ class DownloadManager(
         val fullShaEnabled = settings.downloadDebug && settings.fullFileSha256
         val savedPath = withContext(Dispatchers.IO) {
             val dest = DownloadSaver.openDestination(context, fileName, saveDirProvider())
-                ?: throw IllegalStateException("无法创建下载目标（下载目录不可用）")
+                ?: throw IllegalStateException(AppStrings.get(R.string.ed_create_target_failed))
             try {
-                val out = dest.open() ?: throw IllegalStateException("无法打开下载目标输出流")
+                val out = dest.open() ?: throw IllegalStateException(AppStrings.get(R.string.ed_open_target_failed))
                 val fullDigest = if (fullShaEnabled) MessageDigest.getInstance("SHA-256") else null
                 val sink = if (fullDigest != null) DigestOutputStream(out, fullDigest) else out
                 val written = sink.use {
@@ -2509,7 +2537,7 @@ class DownloadManager(
                                 "${part.name} 内容与下载时不一致（期望 $expected 实际 $hex）"
                             )
                             throw IllegalStateException(
-                                "分片 ${part.name} 校验失败：内容与下载时不一致（已拒绝保存损坏文件）"
+                                AppStrings.get(R.string.ed_chunk_digest_failed, part.name)
                             )
                         }
                     }
@@ -2525,7 +2553,7 @@ class DownloadManager(
                         id, "校验失败",
                         "期望 $total 字节，实际 $written 字节（拒绝保存损坏文件）"
                     )
-                    throw IllegalStateException("文件大小校验失败：期望 $total 字节，实际 $written 字节（已拒绝保存损坏文件）")
+                    throw IllegalStateException(AppStrings.get(R.string.ed_size_check_failed, total, written))
                 }
                 dest.commit()
                 dest.path

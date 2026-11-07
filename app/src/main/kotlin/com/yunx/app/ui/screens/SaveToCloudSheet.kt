@@ -18,6 +18,9 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -101,7 +104,7 @@ internal fun SaveToCloudContent(
     val snackbarHostState = rememberGlobalSnackbarHostState()
 
     SaveStepScaffold(
-        title = "转存到夸克网盘",
+        title = stringResource(R.string.sh_save_to_quark),
         subtitle = resolveViewModel.saveTarget?.fname ?: "",
         onBack = onBack
     ) {
@@ -114,7 +117,7 @@ internal fun SaveToCloudContent(
 
             // 当前目标目录面包屑（可点击回退）
             CrumbBar(
-                rootTitle = "根目录",
+                rootTitle = stringResource(R.string.sh_root_dir),
                 pathNames = (cloudState as? QuarkCloudUiState.Loaded)?.pathNames ?: emptyList(),
                 onNavigate = { cloudViewModel.navigateToLevel(it) }
             )
@@ -158,7 +161,7 @@ internal fun SaveToCloudContent(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         TextButton(onClick = { cloudViewModel.loadRoot() }) {
-                            Text("重试")
+                            Text(stringResource(R.string.sh_retry))
                         }
                     }
                 }
@@ -173,7 +176,7 @@ internal fun SaveToCloudContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "当前目录没有子文件夹，可直接转存到此目录",
+                                text = stringResource(R.string.sh_empty_dir_hint),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -204,7 +207,7 @@ internal fun SaveToCloudContent(
 
             // 转存按钮
             val currentDirName =
-                (cloudState as? QuarkCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+                (cloudState as? QuarkCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: stringResource(R.string.sh_root_dir)
             Button(
                 onClick = {
                     val dirFid = (cloudState as? QuarkCloudUiState.Loaded)?.dirFid ?: "0"
@@ -228,7 +231,7 @@ internal fun SaveToCloudContent(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("转存到此目录（$currentDirName）")
+                    Text(stringResource(R.string.sh_save_here, currentDirName))
                 }
             }
 

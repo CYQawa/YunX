@@ -18,6 +18,8 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
@@ -137,7 +139,7 @@ internal fun parseC139KoulingInfo(xml: String): C139KoulingInfo {
     val root = parseC139Xml(xml)
     checkC139Result(root)
     val info = root.firstElement("getOutLinkInfoRes")
-        ?: throw IllegalStateException("139 云盘口令解析失败：响应缺少分享信息")
+        ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_kouling_missing_info))
     return C139KoulingInfo(
         title = info.childText("lkName"),
         password = info.childText("password")
@@ -149,10 +151,10 @@ internal fun parseC139KoulingGeneral(xml: String): C139ResolvedKouling {
     val root = parseC139Xml(xml)
     checkC139Result(root)
     val outLink = root.firstElement("outLink")
-        ?: throw IllegalStateException("139 云盘口令解析失败：响应缺少分享链接")
+        ?: throw IllegalStateException(AppStrings.get(R.string.e2_c139_kouling_missing_link))
     val shareUrl = outLink.childText("url")
     if (shareUrl.isBlank()) {
-        throw IllegalStateException("139 云盘口令解析失败：未返回分享链接")
+        throw IllegalStateException(AppStrings.get(R.string.e2_c139_kouling_no_url))
     }
     return C139ResolvedKouling(
         shareUrl = shareUrl,
@@ -174,7 +176,7 @@ private fun parseC139Xml(xml: String): Element {
     return runCatching {
         factory.newDocumentBuilder().parse(InputSource(StringReader(xml))).documentElement
     }.getOrElse {
-        throw IllegalStateException("139 云盘口令解析失败：服务端响应格式异常", it)
+        throw IllegalStateException(AppStrings.get(R.string.e2_c139_kouling_bad_response), it)
     }
 }
 
@@ -183,8 +185,8 @@ private fun checkC139Result(root: Element) {
     if (code.isBlank() || code == "0") return
     val desc = root.getAttribute("desc").trim()
     throw IllegalStateException(
-        if (desc.isBlank()) "139 云盘口令解析失败（$code）"
-        else "139 云盘口令解析失败：$desc（$code）"
+        if (desc.isBlank()) AppStrings.get(R.string.e2_c139_kouling_failed_code, code)
+        else AppStrings.get(R.string.e2_c139_kouling_failed_desc, desc, code)
     )
 }
 

@@ -18,6 +18,10 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -111,30 +115,30 @@ fun UCAccountSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("UC网盘 · 已登录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.sh_uc_logged_in), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-            Text("登录信息", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.sh_login_info), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
             Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    InfoRow(label = "登录时间", value = loginTime)
+                    InfoRow(label = stringResource(R.string.sh_login_time), value = loginTime)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Cookie", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(displayCookie, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        if (cookieTruncated) TextButton(onClick = { showFullCookie = !showFullCookie }) { Text(if (showFullCookie) "收起" else "展开全部") }
+                        if (cookieTruncated) TextButton(onClick = { showFullCookie = !showFullCookie }) { Text(if (showFullCookie) stringResource(R.string.sh_collapse) else stringResource(R.string.sh_expand_all)) }
                         TextButton(onClick = {
                             copyToClipboard(context, account.cookie)
-                            SnackbarController.show("Cookie 已复制")
+                            SnackbarController.show(AppStrings.get(R.string.sh_cookie_copied))
                         }) {
                             Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp)); Text("复制")
+                            Spacer(modifier = Modifier.width(4.dp)); Text(stringResource(R.string.sh_copy))
                         }
                     }
                 }

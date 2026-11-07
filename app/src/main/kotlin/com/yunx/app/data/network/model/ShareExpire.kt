@@ -18,6 +18,9 @@
 
 package com.yunx.app.data.network.model
 
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 /**
  * 分享有效期（UI 中性码，六大网盘页共用，详见 Agent.md §3.20）。
  *
@@ -67,7 +70,7 @@ object ShareExpire {
         SEVEN_DAYS -> 7
         THIRTY_DAYS -> 30
         FOREVER -> null
-        else -> throw IllegalArgumentException("未知的分享有效期代码：$expiredType")
+        else -> throw IllegalArgumentException(AppStrings.get(R.string.e2_share_expire_unknown, expiredType))
     }
 
     /**
@@ -102,13 +105,14 @@ object ShareExpire {
     const val PAN115_FIFTEEN_DAYS = 105
 
     /** 115 有效期选项（展示文案 → 码位），由 115 云盘页传给 `CloudFileSheets` */
-    val PAN115_OPTIONS: List<Pair<String, Int>> = listOf(
-        "永久有效" to PAN115_FOREVER,
-        "1 天" to PAN115_ONE_DAY,
-        "3 天" to PAN115_THREE_DAYS,
-        "7 天" to PAN115_SEVEN_DAYS,
-        "15 天" to PAN115_FIFTEEN_DAYS
-    )
+    val PAN115_OPTIONS: List<Pair<String, Int>>
+        get() = listOf(
+            AppStrings.get(R.string.csa_expire_forever) to PAN115_FOREVER,
+            AppStrings.get(R.string.csa_expire_1day) to PAN115_ONE_DAY,
+            AppStrings.get(R.string.csa_expire_3days) to PAN115_THREE_DAYS,
+            AppStrings.get(R.string.csa_expire_7days) to PAN115_SEVEN_DAYS,
+            AppStrings.get(R.string.csa_expire_15days) to PAN115_FIFTEEN_DAYS
+        )
 
     /** 115 码位 → `share_duration`（`-1` = 长期，其余为天数串） */
     fun pan115Duration(expiredType: Int): String = when (expiredType) {
@@ -117,7 +121,7 @@ object ShareExpire {
         PAN115_THREE_DAYS -> "3"
         PAN115_SEVEN_DAYS -> "7"
         PAN115_FIFTEEN_DAYS -> "15"
-        else -> throw IllegalArgumentException("未知的分享有效期代码：$expiredType")
+        else -> throw IllegalArgumentException(AppStrings.get(R.string.e2_share_expire_unknown, expiredType))
     }
 
     /**

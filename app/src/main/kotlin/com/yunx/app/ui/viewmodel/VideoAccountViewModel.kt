@@ -22,11 +22,13 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.db.VideoAccountEntity
 import com.yunx.app.data.network.video.VideoPlatform
 import com.yunx.app.data.repository.VideoAccountRepository
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -72,28 +74,30 @@ class VideoAccountViewModel internal constructor(
     fun setPrimary(platform: VideoPlatform, id: String) {
         viewModelScope.launch {
             repository.setPrimary(platform, id)
-            SnackbarController.show("已设为主账号")
+            SnackbarController.show(AppStrings.get(R.string.vm_video_account_set_primary))
         }
     }
 
     fun updateRemark(id: String, remark: String) {
         viewModelScope.launch {
             repository.updateRemark(id, remark.trim())
-            SnackbarController.show("备注已更新")
+            SnackbarController.show(AppStrings.get(R.string.vm_video_account_remark_updated))
         }
     }
 
     fun remove(id: String) {
         viewModelScope.launch {
             repository.remove(id)
-            SnackbarController.show("已退出该账号")
+            SnackbarController.show(AppStrings.get(R.string.vm_video_account_logged_out))
         }
     }
 
     fun removeAll(platform: VideoPlatform) {
         viewModelScope.launch {
             repository.removeAll(platform)
-            SnackbarController.show("已退出${platform.displayName}全部账号")
+            SnackbarController.show(
+                AppStrings.get(R.string.vm_video_account_logged_out_all, platform.displayName)
+            )
         }
     }
 

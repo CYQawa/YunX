@@ -1,0 +1,64 @@
+<!--
+    日本語。values/strings_vm_cloud.xml に対応。
+    i18n バッチ G7（接頭辞 vc_）で生成。
+-->
+<resources>
+    <!-- 共通の操作メッセージ -->
+    <string name="vc_load_failed">読み込みに失敗しました</string>
+    <string name="vc_refresh_failed">更新に失敗しました</string>
+    <string name="vc_collecting_files">ファイルを収集中…</string>
+    <string name="vc_folder_empty">フォルダは空です</string>
+    <string name="vc_selected_folder_empty">選択したフォルダは空です</string>
+    <string name="vc_adding_download_progress">ダウンロードに追加中 %1$d/%2$d</string>
+    <string name="vc_download_interrupted">ダウンロードを中断しました</string>
+    <string name="vc_batch_download_interrupted">一括ダウンロードを中断しました</string>
+    <string name="vc_download_added">%1$d 件のダウンロードを追加しました</string>
+    <string name="vc_download_added_with_failures">%1$d 件のダウンロードを追加しました（%2$d 件失敗）</string>
+    <string name="vc_download_added_named">ダウンロードに追加しました：%1$s</string>
+    <string name="vc_download_folder_failed">フォルダのダウンロードに失敗しました</string>
+    <string name="vc_batch_download_failed">一括ダウンロードに失敗しました</string>
+    <string name="vc_download_failed">ダウンロードに失敗しました</string>
+    <string name="vc_get_download_link_failed">ダウンロードリンクの取得に失敗しました</string>
+    <string name="vc_preview_failed">プレビューに失敗しました</string>
+    <string name="vc_renamed">名前を変更しました</string>
+    <string name="vc_rename_failed">名前の変更に失敗しました</string>
+    <string name="vc_folder_created">フォルダ「%1$s」を作成しました</string>
+    <string name="vc_create_folder_failed">フォルダの作成に失敗しました</string>
+    <string name="vc_moved">移動先のフォルダに移動しました</string>
+    <string name="vc_move_failed">移動に失敗しました</string>
+    <string name="vc_moved_items">%1$d 件を移動しました</string>
+    <string name="vc_deleted_named">「%1$s」を削除しました</string>
+    <string name="vc_delete_failed">削除に失敗しました</string>
+    <string name="vc_deleted_items">%1$d 件を削除しました</string>
+    <string name="vc_share_failed">共有に失敗しました</string>
+    <string name="vc_create_share_failed">共有の作成に失敗しました</string>
+    <string name="vc_get_share_link_failed">共有リンクの取得に失敗しました</string>
+    <string name="vc_share_n_files">%1$d 件のファイルを共有</string>
+    <string name="vc_upload_cancelled">アップロードをキャンセルしました</string>
+    <string name="vc_upload_done">%1$d 件のファイルをアップロードしました</string>
+
+    <!-- ログイン要求 -->
+    <string name="vc_login_required_uc">先に UC ドライブにログインしてください</string>
+    <string name="vc_login_required_quark">先に Quark ドライブにログインしてください</string>
+    <string name="vc_login_required_xunlei">先に Xunlei ドライブにログインしてください</string>
+    <string name="vc_login_required_xunlei_cloud">先に迅雷クラウドにログインしてください</string>
+    <string name="vc_login_required_139">先に 139 ドライブにログインしてください</string>
+    <string name="vc_login_required_cmcc">先にモバイルクラウドにログインしてください</string>
+    <string name="vc_login_required_baidu">先に Baidu ネットディスクにログインしてください</string>
+    <string name="vc_login_required_pan123">先に 123 クラウドにログインしてください</string>
+    <string name="vc_login_required_pan123_spaced">先に 123 クラウドにログインしてください</string>
+    <string name="vc_login_required_guangya">先に光鴨ドライブにログインしてください</string>
+    <string name="vc_login_required_lanzou">先に藍奏クラウドにログインしてください</string>
+    <string name="vc_login_required_ilanzou">先に藍奏クラウド優享版にログインしてください</string>
+    <string name="vc_login_required_pan115">先に 115 ドライブにログインしてください</string>
+
+    <!-- プラットフォーム固有のメッセージ -->
+    <string name="vc_xunlei_device_id_missing">デバイス識別子が見つかりません。迅雷クラウドに再ログインしてください</string>
+    <string name="vc_task_failed">タスクに失敗しました（%1$s）</string>
+    <string name="vc_task_timeout">タスクがタイムアウトしました</string>
+    <string name="vc_lanzou_session_expired">藍奏のログイン状態が無効になりました。再ログインしてください</string>
+    <string name="vc_lanzou_move_folder_unsupported">藍奏クラウドはフォルダの移動に未対応です</string>
+    <string name="vc_lanzou_share_single_only">藍奏は一度に 1 つのファイルまたはフォルダしか共有できません。最初の項目を共有しました</string>
+    <string name="vc_ilanzou_share_unsupported">藍奏クラウド優享版は共有の作成に未対応です</string>
+    <string name="vc_ilanzou_session_expired">藍奏優享のログインが期限切れです。再ログインしてください</string>
+</resources>

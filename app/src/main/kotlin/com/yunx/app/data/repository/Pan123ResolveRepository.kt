@@ -18,11 +18,13 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.Pan123Api
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 
 class Pan123ResolveRepository(
     private val api: Pan123Api,
@@ -31,7 +33,7 @@ class Pan123ResolveRepository(
 
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
-            ?: return Result.failure(IllegalArgumentException("无法识别分享链接"))
+            ?: return Result.failure(IllegalArgumentException(AppStrings.get(R.string.er_share_link_unrecognized)))
         return runCatching {
             // 提取码优先级：用户手输 > 链接/文案自带
             val sharePwd = pwd?.takeIf { it.isNotBlank() } ?: parsed.pwd.orEmpty()
@@ -65,7 +67,7 @@ class Pan123ResolveRepository(
 
     /** 123 分享下载无需转存（文档 §4.2） */
     override suspend fun ensureTempDir(cookie: String): Result<String> =
-        Result.failure(UnsupportedOperationException("123 分享无需转存"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_pan123_transfer_not_needed)))
 
     /**
      * 保存他人分享到个人网盘（copy/save，文档 §4.3）：mshare 子域无需签名，仅 Bearer+LoginUuid；
@@ -79,23 +81,23 @@ class Pan123ResolveRepository(
         cookie: String
     ): Result<String> = runCatching {
         val token = cookie.ifBlank { tokenProvider() ?: "" }
-        if (token.isBlank()) throw IllegalStateException("请先登录123云盘")
+        if (token.isBlank()) throw IllegalStateException(AppStrings.get(R.string.er_pan123_login_required))
         val (taskId, shareId) = api.copySave(
             shareKey = session.shareId,
             sharePwd = session.stoken,
             file = file,
             toDirFid = toDirFid.ifBlank { "0" },
             token = token
-        ) ?: throw IllegalStateException("创建转存任务失败")
+        ) ?: throw IllegalStateException(AppStrings.get(R.string.er_create_transfer_task_failed))
         api.pollCopySave(taskId, shareId, token)
-            ?: throw IllegalStateException("转存超时或失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_save_timeout_or_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
     )
 
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> =
-        Result.failure(UnsupportedOperationException("123 分享请使用 getShareDownloadLink"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_pan123_use_share_download_link)))
 
     override suspend fun getShareDownloadLink(
         session: ShareSession,
@@ -104,9 +106,9 @@ class Pan123ResolveRepository(
     ): Result<DownloadLink> = runCatching {
         // cookie 参数即登录 token（ResolveViewModel.currentCredential 返回 accessToken）
         val token = cookie.ifBlank { tokenProvider() ?: "" }
-        if (token.isBlank()) throw IllegalStateException("请先登录123云盘")
+        if (token.isBlank()) throw IllegalStateException(AppStrings.get(R.string.er_pan123_login_required))
         val link = api.getShareDownloadLink(session.shareId, file, token)
-            ?: throw IllegalStateException("获取下载链接失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
         link.copy(filename = file.fname.ifBlank { link.filename })
     }.fold(
         onSuccess = { Result.success(it) },

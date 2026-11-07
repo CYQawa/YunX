@@ -72,11 +72,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.yunx.app.R
 import com.yunx.app.data.network.C139Constants
 import com.yunx.app.ui.viewmodel.C139AccountViewModel
 import com.yunx.app.ui.components.YunXWavyLoading
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.launch
 
 private const val TAG = "C139Login"
@@ -166,7 +169,7 @@ fun C139LoginScreen(
                     Log.e(TAG, "onRenderProcessGone: didCrash=${detail?.didCrash()} priority=${detail?.rendererPriorityAtExit()}")
                     // 渲染进程崩溃（139 PC 版页面较重/低端机内存不足）：提示并自动重载一次
                     isLoading = false
-                    SnackbarController.show("页面加载异常，正在重试…")
+                    SnackbarController.show(AppStrings.get(R.string.lg_page_load_error_retry))
                     view?.post { view.reload() }
                     return true
                 }
@@ -201,10 +204,10 @@ fun C139LoginScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("139网盘登录", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.lg_c139_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = { if (!isSaving && !isSavingManual) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 actions = {
@@ -214,7 +217,7 @@ fun C139LoginScreen(
                     ) {
                         Icon(
                             Icons.Outlined.ContentPaste,
-                            contentDescription = "手动输入 Cookie",
+                            contentDescription = stringResource(R.string.lg_manual_cookie),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -228,10 +231,10 @@ fun C139LoginScreen(
                                 val saved = viewModel.saveC139Account(cookie)
                                 isSaving = false
                                 if (saved) {
-                                    SnackbarController.show("登录成功")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                     onSaved()
                                 } else {
-                                    SnackbarController.show("未检测到登录态，请先完成登录")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_no_login_state))
                                 }
                             }
                         },
@@ -243,7 +246,7 @@ fun C139LoginScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("保存")
+                            Text(stringResource(R.string.lg_save))
                         }
                     }
                 },
@@ -273,35 +276,35 @@ fun C139LoginScreen(
         AlertDialog(
             onDismissRequest = { showTutorial = false },
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-            title = { Text("登录教程") },
+            title = { Text(stringResource(R.string.lg_login_tutorial)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "1. 在下方网页中登录 139 网盘账号（手机号）",
+                        text = stringResource(R.string.lg_c139_tutorial_1),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」",
+                        text = stringResource(R.string.lg_c139_tutorial_2),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "3. 或点击「粘贴」图标，手动输入 Cookie（需含 Os_SSo_Sid= 与 RMKEY=）",
+                        text = stringResource(R.string.lg_c139_tutorial_3),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "4. 若网页空白：用系统浏览器打开 yun.139.com 登录后复制 Cookie 粘贴，效果相同",
+                        text = stringResource(R.string.lg_c139_tutorial_4),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "5. Cookie 有效期有限，失效后需重新登录",
+                        text = stringResource(R.string.lg_c139_tutorial_5),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showTutorial = false }) { Text("知道了") }
+                TextButton(onClick = { showTutorial = false }) { Text(stringResource(R.string.lg_got_it)) }
             }
         )
     }
@@ -310,11 +313,11 @@ fun C139LoginScreen(
     if (showCookieDialog) {
         AlertDialog(
             onDismissRequest = { if (!isSavingManual) showCookieDialog = false },
-            title = { Text("手动输入 Cookie") },
+            title = { Text(stringResource(R.string.lg_manual_cookie)) },
             text = {
                 Column {
                     Text(
-                        text = "从网页登录态复制完整的 Cookie（需包含 Os_SSo_Sid= 与 RMKEY=）",
+                        text = stringResource(R.string.lg_c139_cookie_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -323,7 +326,7 @@ fun C139LoginScreen(
                         value = cookieInput,
                         onValueChange = { cookieInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("粘贴 Cookie…") },
+                        placeholder = { Text(stringResource(R.string.lg_paste_cookie_hint)) },
                         minLines = 4,
                         maxLines = 8
                     )
@@ -337,11 +340,11 @@ fun C139LoginScreen(
                             val saved = viewModel.saveC139Account(cookieInput.trim())
                             isSavingManual = false
                             if (saved) {
-                                SnackbarController.show("登录成功")
+                                SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                 showCookieDialog = false
                                 onSaved()
                             } else {
-                                SnackbarController.show("Cookie 无效，请检查是否包含 Os_SSo_Sid= 与 RMKEY=")
+                                SnackbarController.show(AppStrings.get(R.string.lg_c139_cookie_invalid))
                             }
                         }
                     },
@@ -353,7 +356,7 @@ fun C139LoginScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("保存")
+                        Text(stringResource(R.string.lg_save))
                     }
                 }
             },
@@ -361,7 +364,7 @@ fun C139LoginScreen(
                 TextButton(
                     onClick = { if (!isSavingManual) showCookieDialog = false },
                     enabled = !isSavingManual
-                ) { Text("取消") }
+                ) { Text(stringResource(R.string.lg_cancel)) }
             }
         )
     }

@@ -18,6 +18,9 @@
 
 package com.yunx.app.data.network.video
 
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 /** 媒体类型：视频（mp4/flv/m3u8）、图片（图集/九宫格）、音频（网易云那类单文件） */
 enum class VideoMediaKind { VIDEO, IMAGE, AUDIO }
 
@@ -125,9 +128,11 @@ class VideoParseException(
 
 /** 面向用户的一句话提示（细节留在 message 里给日志用） */
 fun VideoParseException.userMessage(): String = when (kind) {
-    VideoParseErrorKind.BLOCKED -> "平台风控拦截了本次请求，请稍后重试"
-    VideoParseErrorKind.NOT_FOUND -> "内容不存在、已删除或不可见"
-    VideoParseErrorKind.NETWORK -> "网络请求失败，请检查网络后重试"
-    VideoParseErrorKind.UNSUPPORTED -> message?.takeIf { it.isNotBlank() } ?: "暂不支持该链接"
-    VideoParseErrorKind.UNKNOWN -> message?.takeIf { it.isNotBlank() } ?: "解析失败，请稍后重试"
+    VideoParseErrorKind.BLOCKED -> AppStrings.get(R.string.em_parse_blocked)
+    VideoParseErrorKind.NOT_FOUND -> AppStrings.get(R.string.em_parse_not_found)
+    VideoParseErrorKind.NETWORK -> AppStrings.get(R.string.em_parse_network)
+    VideoParseErrorKind.UNSUPPORTED ->
+        message?.takeIf { it.isNotBlank() } ?: AppStrings.get(R.string.em_parse_unsupported)
+    VideoParseErrorKind.UNKNOWN ->
+        message?.takeIf { it.isNotBlank() } ?: AppStrings.get(R.string.em_parse_failed)
 }

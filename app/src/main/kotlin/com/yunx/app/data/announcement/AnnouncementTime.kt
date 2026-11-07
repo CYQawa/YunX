@@ -18,6 +18,8 @@
 
 package com.yunx.app.data.announcement
 
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,10 +73,10 @@ fun relativeTime(millis: Long): String {
     if (millis <= 0L) return ""
     val diff = System.currentTimeMillis() - millis
     return when {
-        diff < 60_000L -> "刚刚"
-        diff < 3_600_000L -> "${diff / 60_000L} 分钟前"
-        diff < 86_400_000L -> "${diff / 3_600_000L} 小时前"
-        diff < 7 * 86_400_000L -> "${diff / 86_400_000L} 天前"
+        diff < 60_000L -> AppStrings.get(R.string.er_time_just_now)
+        diff < 3_600_000L -> AppStrings.get(R.string.er_time_minutes_ago, diff / 60_000L)
+        diff < 86_400_000L -> AppStrings.get(R.string.er_time_hours_ago, diff / 3_600_000L)
+        diff < 7 * 86_400_000L -> AppStrings.get(R.string.er_time_days_ago, diff / 86_400_000L)
         else -> formatLocalDate(millis)
     }
 }

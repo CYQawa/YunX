@@ -65,8 +65,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.download.ChunkDebug
 import com.yunx.app.data.download.DownloadDebugLog
@@ -76,6 +78,7 @@ import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.FileNameText
 import com.yunx.app.ui.components.YunXWavyProgress
 import com.yunx.app.ui.viewmodel.DownloadViewModel
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.LogExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -136,10 +139,10 @@ internal fun DownloadDebugScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
                 Text(
-                    text = "下载调试",
+                    text = stringResource(R.string.dl_debug_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -186,17 +189,22 @@ internal fun DownloadDebugScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item { ResourcePanel(resources) }
-                item { SectionTitle("线程（每个在飞分片在干什么）") }
+                item { SectionTitle(stringResource(R.string.dl_debug_threads_section)) }
                 item {
                     // 线程概况：在飞 = 有分片的 worker，空闲 = 总 worker 数 - 在飞（worker 领到片之前为空闲）
                     val totalWorkers = stats?.chunkCount ?: 0
                     HintText(
                         when {
                             chunks.isEmpty() ->
-                                "当前没有在飞分片（未开始 / 已暂停 / 已完成，或该任务走的是单流 / Gopeed 引擎下载）。"
+                                stringResource(R.string.dl_debug_no_chunks)
                             totalWorkers > 0 ->
-                                "在飞 ${chunks.size} 路 · 空闲 ${(totalWorkers - chunks.size).coerceAtLeast(0)} 路（共 $totalWorkers 个 worker）"
-                            else -> "在飞 ${chunks.size} 路"
+                                stringResource(
+                                    R.string.dl_debug_chunks_summary,
+                                    chunks.size,
+                                    (totalWorkers - chunks.size).coerceAtLeast(0),
+                                    totalWorkers
+                                )
+                            else -> stringResource(R.string.dl_debug_chunks_inflight, chunks.size)
                         }
                     )
                 }
@@ -207,7 +215,7 @@ internal fun DownloadDebugScreen(
                             onForceReconnect = {
                                 val ok = viewModel.forcePreemptChunk(task.id, chunk.key)
                                 SnackbarController.show(
-                                    if (ok) "已标记 ${chunk.key} 断开换连接续传" else "该分片已结束，无法重连"
+                                    if (ok) AppStrings.get(R.string.dl_debug_snack_reconnect, chunk.key) else AppStrings.get(R.string.dl_debug_snack_chunk_ended)
                                 )
                             }
                         )
@@ -226,7 +234,7 @@ internal fun DownloadDebugScreen(
                                     env = DownloadDebugLog.environmentSnapshot(context)
                                 )
                             )
-                            SnackbarController.show("调试快照已复制")
+                            SnackbarController.show(AppStrings.get(R.string.dl_debug_snapshot_copied))
                         },
                         onExportLog = {
                             // 写文件 + 拉起分享要离开主线程（与设置页导出同一口径）
@@ -235,17 +243,17 @@ internal fun DownloadDebugScreen(
                                     DownloadDebugLog.exportToFile(context, task)
                                 }
                                 if (file != null && LogExporter.share(context, file)) {
-                                    SnackbarController.show("已导出完整下载日志（${file.name}）")
+                                    SnackbarController.show(AppStrings.get(R.string.dl_debug_log_exported, file.name))
                                 } else {
-                                    SnackbarController.show("导出失败，请稍后重试")
+                                    SnackbarController.show(AppStrings.get(R.string.dl_debug_export_failed))
                                 }
                             }
                         }
                     )
                 }
-                item { SectionTitle("实时日志（主要变更节点 / 错误节点）") }
+                item { SectionTitle(stringResource(R.string.dl_debug_logs_section)) }
                 if (logLines.isEmpty()) {
-                    item { HintText("暂无日志：该任务创建时「下载调试」未开启，或开关刚被关闭（关闭会清空日志）。") }
+                    item { HintText(stringResource(R.string.dl_debug_no_logs)) }
                 } else {
                     items(logLines.size) { i -> LogLine(logLines[i]) }
                 }
@@ -301,7 +309,7 @@ private fun DebugTaskCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = if (merging) "合并中 · $mergePercent%" else taskStatusLine(task),
+                        text = if (merging) stringResource(R.string.dl_merging_percent, mergePercent) else taskStatusLine(task),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -309,13 +317,13 @@ private fun DebugTaskCard(
                 when (task.status) {
                     DownloadTaskEntity.STATUS_DOWNLOADING,
                     DownloadTaskEntity.STATUS_PENDING -> IconButton(onClick = onPause) {
-                        Icon(Icons.Outlined.Pause, contentDescription = "暂停", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Outlined.Pause, contentDescription = stringResource(R.string.dl_pause), tint = MaterialTheme.colorScheme.primary)
                     }
                     DownloadTaskEntity.STATUS_PAUSED -> IconButton(onClick = onResume) {
-                        Icon(Icons.Outlined.PlayArrow, contentDescription = "继续", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Outlined.PlayArrow, contentDescription = stringResource(R.string.dl_resume), tint = MaterialTheme.colorScheme.primary)
                     }
                     DownloadTaskEntity.STATUS_FAILED -> IconButton(onClick = onResume) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "重试", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.dl_retry), tint = MaterialTheme.colorScheme.error)
                     }
                     else -> Unit // 已完成：调试页不提供「打开/删除」，回下载页操作
                 }
@@ -334,10 +342,17 @@ private fun DebugTaskCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             val liveText = when {
-                merging -> "正在合并分片 · $mergePercent%"
+                merging -> stringResource(R.string.dl_debug_merging_live, mergePercent)
                 else -> stats
                     ?.takeIf { it.speed > 0 }
-                    ?.let { "${formatSpeed(it.speed)} · 剩余 ${formatRemain(it.remainMillis)} · ${it.chunkCount} 线程" }
+                    ?.let {
+                        stringResource(
+                            R.string.dl_live_stats,
+                            formatSpeed(it.speed),
+                            formatRemain(it.remainMillis),
+                            it.chunkCount
+                        )
+                    }
             }
             Text(
                 text = liveText ?: progressText(task),
@@ -355,9 +370,9 @@ private fun DebugTaskCard(
 /** 全局资源面板：在飞配额占用 / 活跃任务数 / 堆内存 */
 @Composable
 private fun ResourcePanel(resources: DownloadResourceDebug?) {
-    SectionTitle("全局资源")
+    SectionTitle(stringResource(R.string.dl_debug_resource_section))
     if (resources == null) {
-        HintText("读取中…")
+        HintText(stringResource(R.string.dl_loading))
         return
     }
     Card(
@@ -369,12 +384,24 @@ private fun ResourcePanel(resources: DownloadResourceDebug?) {
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            InfoRow("在飞分片", "${resources.inflightUsed} / ${resources.inflightCap}")
-            InfoRow("活跃任务", resources.activeTasks.toString())
-            InfoRow("线程池", "线程 ${resources.poolSize} · 忙 ${resources.poolActive} · 队列 ${resources.poolQueue}")
+            InfoRow(stringResource(R.string.dl_debug_inflight_label), "${resources.inflightUsed} / ${resources.inflightCap}")
+            InfoRow(stringResource(R.string.dl_debug_active_tasks_label), resources.activeTasks.toString())
             InfoRow(
-                "堆内存",
-                "${resources.heapUsed / 1024 / 1024} MB / ${resources.heapMax / 1024 / 1024} MB"
+                stringResource(R.string.dl_debug_pool_label),
+                stringResource(
+                    R.string.dl_debug_pool_value,
+                    resources.poolSize,
+                    resources.poolActive,
+                    resources.poolQueue
+                )
+            )
+            InfoRow(
+                stringResource(R.string.dl_debug_heap_label),
+                stringResource(
+                    R.string.dl_debug_heap_value,
+                    resources.heapUsed / 1024 / 1024,
+                    resources.heapMax / 1024 / 1024
+                )
             )
         }
     }
@@ -385,11 +412,11 @@ private fun ResourcePanel(resources: DownloadResourceDebug?) {
 private fun ChunkRow(chunk: ChunkDebug, onForceReconnect: () -> Unit) {
     val percent = if (chunk.size > 0) (chunk.received * 100 / chunk.size).toInt() else 0
     val preemptNote = buildString {
-        if (chunk.preemptCount > 0) append(" · 已抢占 ${chunk.preemptCount} 次")
-        if (chunk.preempting) append(" · 待换连接")
+        if (chunk.preemptCount > 0) append(stringResource(R.string.dl_debug_preempt_count, chunk.preemptCount))
+        if (chunk.preempting) append(stringResource(R.string.dl_debug_preempt_pending))
     }
     // 「多久没收到字节」是判断卡死最直接的证据：不足 1s 不显示，免得满屏噪音
-    val idleNote = if (chunk.idleMs >= 1000L) " · 已 ${chunk.idleMs / 1000}s 无数据" else ""
+    val idleNote = if (chunk.idleMs >= 1000L) stringResource(R.string.dl_debug_idle, chunk.idleMs / 1000) else ""
     // 「疑似卡死」：跑得够久、这一轮采样**一个字节都没收到**（bps==0，直接证据是连接被挂住）、且还没下完。
     // ★ 不能用「速度低于某阈值」来判：512 路 + 慢链路下每路都可能长时间跑在 12KB/s 以下却仍在推进，
     //   那种判法会把几乎所有正常分片都标成卡死（2026-10-23 用户实测：全部被标卡死）。真正该报警的是「零字节」。
@@ -407,20 +434,31 @@ private fun ChunkRow(chunk: ChunkDebug, onForceReconnect: () -> Unit) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${chunk.key}　worker #${chunk.worker}",
+                    text = stringResource(R.string.dl_debug_chunk_worker, chunk.key, chunk.worker),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "区间 ${chunk.start}-${chunk.start + chunk.size - 1} · " +
-                        "已收 ${formatSize(chunk.received)}/${formatSize(chunk.size)}（$percent%）",
+                    text = stringResource(
+                        R.string.dl_debug_chunk_range,
+                        chunk.start,
+                        chunk.start + chunk.size - 1,
+                        formatSize(chunk.received),
+                        formatSize(chunk.size),
+                        percent
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "瞬时 ${formatSpeed(chunk.bps)} · 已跑 ${chunk.elapsedMs / 1000}s$idleNote$preemptNote" +
-                        if (stuck) " · 疑似卡死" else "",
+                    text = stringResource(
+                        R.string.dl_debug_chunk_stats,
+                        formatSpeed(chunk.bps),
+                        chunk.elapsedMs / 1000,
+                        idleNote,
+                        preemptNote
+                    ) + if (stuck) stringResource(R.string.dl_debug_chunk_stuck) else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (stuck) {
                         MaterialTheme.colorScheme.error
@@ -432,7 +470,7 @@ private fun ChunkRow(chunk: ChunkDebug, onForceReconnect: () -> Unit) {
             TextButton(onClick = onForceReconnect) {
                 Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("重连")
+                Text(stringResource(R.string.dl_debug_reconnect))
             }
         }
     }
@@ -448,12 +486,12 @@ private fun DebugActions(onCopySnapshot: () -> Unit, onExportLog: () -> Unit) {
         TextButton(onClick = onCopySnapshot) {
             Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("复制快照")
+            Text(stringResource(R.string.dl_debug_copy_snapshot))
         }
         TextButton(onClick = onExportLog) {
             Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("导出完整日志")
+            Text(stringResource(R.string.dl_debug_export_log))
         }
     }
 }

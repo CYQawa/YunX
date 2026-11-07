@@ -18,11 +18,13 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.LanzouApi
 import com.yunx.app.data.network.LanzouSharePage
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 
 /**
  * 蓝奏云分享解析仓库（文档 §3）：**匿名**，无需登录。
@@ -39,7 +41,7 @@ class LanzouResolveRepository(
         runCatching {
             val page = api.resolveShare(link, pwd)
             if (page.needsPwd && pwd.isNullOrBlank()) {
-                throw IllegalStateException("此蓝奏分享需要提取码，请填写后重新解析")
+                throw IllegalStateException(AppStrings.get(R.string.er_lanzou_pwd_required))
             }
             pageCache[page.shareUrl] = page
             ShareSession(shareId = page.shareUrl, stoken = pwd.orEmpty(), title = page.title)
@@ -48,7 +50,7 @@ class LanzouResolveRepository(
     override suspend fun listFiles(session: ShareSession, dirFid: String, cookie: String): Result<List<ShareFile>> =
         runCatching {
             val page = pageCache[session.shareId]
-                ?: throw IllegalStateException("蓝奏分享会话已失效，请重新解析")
+                ?: throw IllegalStateException(AppStrings.get(R.string.er_lanzou_session_expired))
             val pwd = session.stoken.takeIf { it.isNotBlank() }
             if (page.isFolder) {
                 api.listShareFolder(page, pwd, dirFid)
@@ -58,7 +60,7 @@ class LanzouResolveRepository(
         }
 
     override suspend fun ensureTempDir(cookie: String): Result<String> =
-        Result.failure(UnsupportedOperationException("蓝奏分享暂不支持直接转存，请下载后上传"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_lanzou_transfer_unsupported)))
 
     override suspend fun transferFile(
         session: ShareSession,
@@ -66,11 +68,11 @@ class LanzouResolveRepository(
         toDirFid: String,
         cookie: String
     ): Result<String> = Result.failure(
-        UnsupportedOperationException("蓝奏分享暂不支持直接转存，请下载后上传")
+        UnsupportedOperationException(AppStrings.get(R.string.er_lanzou_transfer_unsupported))
     )
 
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> =
-        Result.failure(UnsupportedOperationException("蓝奏分享请使用 getShareDownloadLink"))
+        Result.failure(UnsupportedOperationException(AppStrings.get(R.string.er_lanzou_use_share_download_link)))
 
     override suspend fun getShareDownloadLink(
         session: ShareSession,
@@ -78,7 +80,7 @@ class LanzouResolveRepository(
         cookie: String
     ): Result<DownloadLink> = runCatching {
         val page = pageCache[session.shareId]
-            ?: throw IllegalStateException("蓝奏分享会话已失效，请重新解析")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_lanzou_session_expired))
         api.getShareDownloadLink(page, file, session.stoken.takeIf { it.isNotBlank() })
     }
 
@@ -87,7 +89,7 @@ class LanzouResolveRepository(
         file: ShareFile
     ): Result<DownloadLink> = runCatching {
         val page = pageCache[session.shareId]
-            ?: throw IllegalStateException("蓝奏分享会话已失效，请重新解析")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_lanzou_session_expired))
         api.getShareDownloadLink(page, file, session.stoken.takeIf { it.isNotBlank() })
     }
 }

@@ -18,6 +18,9 @@
 
 package com.yunx.app.data.prefs
 
+import androidx.annotation.StringRes
+import com.yunx.app.R
+
 /**
  * 深链接（网盘分享链接一键唤起）的注册项。
  *
@@ -31,23 +34,25 @@ enum class LinkOpenTarget(
     /** activity-alias 的完整类名（清单里的注册项） */
     val alias: String,
     /** 设置页显示的名字 */
-    val label: String,
+    @StringRes val labelRes: Int,
     /** 设置页显示的链接样例 */
-    val sample: String
+    val sample: String,
+    /** 需要本地化的样例说明（优先于 [sample]）；0 表示无 */
+    @StringRes val sampleRes: Int = 0
 ) {
-    QUARK("com.yunx.app.link.QuarkLink", "夸克网盘", "pan.quark.cn/s/…"),
-    UC("com.yunx.app.link.UcLink", "UC 网盘", "drive.uc.cn/s/…"),
-    XUNLEI("com.yunx.app.link.XunleiLink", "迅雷网盘", "pan.xunlei.com/s/…"),
-    BAIDU("com.yunx.app.link.BaiduLink", "百度网盘", "pan.baidu.com/s/…"),
-    C139("com.yunx.app.link.C139Link", "139（和彩云）", "yun.139.com/shareweb/…"),
-    PAN123("com.yunx.app.link.Pan123Link", "123 云盘", "www.123pan.com/s/…"),
-    PAN115("com.yunx.app.link.Pan115Link", "115 网盘", "115.com/s/…"),
-    GUANGYA("com.yunx.app.link.GuangyaLink", "光鸭云盘", "www.guangyapan.com/s/…"),
-    LANZOU("com.yunx.app.link.LanzouLink", "蓝奏云 / 优享版", "lanzou*.com/…"),
-    MAGNET("com.yunx.app.link.MagnetLink", "磁力链接", "magnet:?xt=…"),
-    YUNX("com.yunx.app.link.YunxLink", "yunx:// 自有协议", "yunx://resolve?url=…"),
-    SHARE("com.yunx.app.link.ShareLink", "分享菜单", "其它 App「分享 → 云析」"),
-    PROCESS_TEXT("com.yunx.app.link.ProcessTextLink", "选中文本解析", "长按选中文字 →「用云析解析」");
+    QUARK("com.yunx.app.link.QuarkLink", R.string.vm_link_target_quark, "pan.quark.cn/s/…"),
+    UC("com.yunx.app.link.UcLink", R.string.vm_link_target_uc, "drive.uc.cn/s/…"),
+    XUNLEI("com.yunx.app.link.XunleiLink", R.string.vm_link_target_xunlei, "pan.xunlei.com/s/…"),
+    BAIDU("com.yunx.app.link.BaiduLink", R.string.vm_link_target_baidu, "pan.baidu.com/s/…"),
+    C139("com.yunx.app.link.C139Link", R.string.vm_link_target_c139, "yun.139.com/shareweb/…"),
+    PAN123("com.yunx.app.link.Pan123Link", R.string.vm_link_target_pan123, "www.123pan.com/s/…"),
+    PAN115("com.yunx.app.link.Pan115Link", R.string.vm_link_target_pan115, "115.com/s/…"),
+    GUANGYA("com.yunx.app.link.GuangyaLink", R.string.vm_link_target_guangya, "www.guangyapan.com/s/…"),
+    LANZOU("com.yunx.app.link.LanzouLink", R.string.vm_link_target_lanzou, "lanzou*.com/…"),
+    MAGNET("com.yunx.app.link.MagnetLink", R.string.vm_link_target_magnet, "magnet:?xt=…"),
+    YUNX("com.yunx.app.link.YunxLink", R.string.vm_link_target_yunx, "yunx://resolve?url=…"),
+    SHARE("com.yunx.app.link.ShareLink", R.string.vm_link_target_share, "", R.string.vm_link_target_share_sample),
+    PROCESS_TEXT("com.yunx.app.link.ProcessTextLink", R.string.vm_link_target_process_text, "", R.string.vm_link_target_process_text_sample);
 
     /** SharedPreferences 键（默认开） */
     val prefKey: String

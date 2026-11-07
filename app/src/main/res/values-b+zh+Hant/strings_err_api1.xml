@@ -1,0 +1,97 @@
+<!--
+    繁體中文。對應 values/strings_err_api1.xml。
+    由 i18n 批次 E1 生成（前綴 e1_）。
+-->
+<resources>
+    <!-- 通用錯誤拼接 -->
+    <string name="e1_errno_suffix">（errno=%1$d）</string>
+    <string name="e1_with_errno">%1$s（errno=%2$d）</string>
+    <string name="e1_with_code">%1$s（code=%2$d）</string>
+    <string name="e1_request_failed_http">請求失敗（HTTP %1$d）</string>
+    <string name="e1_response_empty">請求失敗：回應為空</string>
+    <string name="e1_response_empty_http">請求失敗：回應為空（%1$d）</string>
+    <string name="e1_response_parse_failed_http">回應解析失敗（HTTP %1$d）</string>
+    <string name="e1_upload_failed_http">檔案上傳失敗（HTTP %1$d）</string>
+    <string name="e1_get_user_info_failed">取得使用者資訊失敗</string>
+    <string name="e1_get_space_info_failed">取得空間資訊失敗</string>
+    <string name="e1_get_space_detail_failed">取得空間詳情失敗</string>
+    <string name="e1_get_file_list_failed">取得檔案列表失敗</string>
+    <string name="e1_get_share_list_failed">取得分享列表失敗</string>
+    <string name="e1_get_download_link_failed">取得下載連結失敗</string>
+    <string name="e1_merge_upload_failed">合併上傳分段失敗</string>
+    <string name="e1_upload_task_create_failed">建立上傳任務失敗</string>
+    <string name="e1_get_upload_url_failed">取得上傳位址失敗</string>
+    <string name="e1_create_folder_failed">建立資料夾失敗</string>
+    <string name="e1_rename_failed">重新命名失敗</string>
+    <string name="e1_move_failed">移動失敗</string>
+    <string name="e1_delete_failed">刪除失敗</string>
+    <string name="e1_copy_save_failed">轉存失敗</string>
+    <string name="e1_create_share_failed">建立分享失敗</string>
+    <string name="e1_no_download_link">未傳回下載連結</string>
+
+    <!-- 百度網盤 -->
+    <string name="e1_baidu_verify_pwd_failed">驗證提取碼失敗</string>
+    <string name="e1_baidu_no_share_key">未傳回分享密鑰</string>
+    <string name="e1_baidu_no_share_link">未傳回分享連結</string>
+    <string name="e1_baidu_need_pwd_or_login_errno">此分享需要提取碼，或需要登入百度網盤（errno=%1$d）</string>
+    <string name="e1_baidu_need_pwd_errno">此分享需要提取碼（errno=%1$d）</string>
+    <string name="e1_baidu_get_share_list_failed">取得分享檔案列表失敗</string>
+    <string name="e1_baidu_empty_file_unsupported">百度網盤不支援上傳空檔案</string>
+    <string name="e1_baidu_session_token_failed">取得百度工作階段權杖失敗，請重新登入</string>
+    <string name="e1_baidu_bdstoken_failed">取得 bdstoken 失敗，請重新登入</string>
+    <string name="e1_baidu_no_upload_task">百度未建立上傳任務</string>
+    <string name="e1_baidu_no_upload_blocks">百度未傳回待上傳分段</string>
+    <string name="e1_baidu_no_upload_node">百度未傳回可用上傳節點，請稍後重試</string>
+    <string name="e1_baidu_invalid_block_index">百度傳回的上傳分段序號無效</string>
+    <string name="e1_baidu_block_response_error">百度上傳分段回應異常，請重試</string>
+    <string name="e1_baidu_block_verify_failed">百度上傳分段校驗失敗，請重試</string>
+    <string name="e1_baidu_transfer_no_file">轉存失敗：未傳回新檔案</string>
+    <string name="e1_baidu_get_fast_link_failed">取得高速下載連結失敗</string>
+    <string name="e1_baidu_list_failed">百度檔案列表載入失敗</string>
+    <string name="e1_baidu_list_failed_errno">百度檔案列表載入失敗（errno=%1$d）</string>
+    <string name="e1_baidu_list_failed_errno_msg">百度檔案列表載入失敗（errno=%1$d）：%2$s</string>
+    <string name="e1_baidu_list_incomplete">百度檔案列表回應不完整，請重新整理後重試</string>
+    <string name="e1_baidu_login_expired_suffix">，登入已失效，請重新登入百度網盤</string>
+
+    <!-- 123 雲盤 -->
+    <string name="e1_123_enter_account_pwd">請輸入帳號和密碼</string>
+    <string name="e1_123_account_pwd_too_long">帳號或密碼過長</string>
+    <string name="e1_123_login_network_error">網路異常，無法連線 123 登入服務，請稍後重試</string>
+    <string name="e1_123_share_expired">分享已失效</string>
+    <string name="e1_123_share_id_missing">無法識別分享 ID（缺少 S3KeyFlag）</string>
+    <string name="e1_123_copy_save_failed_msg">轉存失敗：%1$s</string>
+    <string name="e1_123_no_folder_id">123 未傳回資料夾編號</string>
+    <string name="e1_123_no_upload_task">123 未傳回上傳任務</string>
+    <string name="e1_123_no_upload_file_id">123 未傳回上傳檔案識別碼</string>
+    <string name="e1_123_upload_task_not_created">123 未建立上傳任務</string>
+    <string name="e1_123_no_upload_credential">123 未傳回上傳憑證</string>
+    <string name="e1_123_no_upload_url">123 未傳回上傳位址</string>
+    <string name="e1_123_create_share_no_data">建立分享失敗：未傳回資料</string>
+    <string name="e1_123_create_share_no_key">建立分享失敗：未傳回 ShareKey</string>
+
+    <!-- 115 網盤 -->
+    <string name="e1_115_missing_pickcode">缺少 pickcode，無法取得下載連結</string>
+    <string name="e1_115_upload_too_large">115 網頁端單檔最大 5 GB，更大的檔案請用官方客戶端上傳</string>
+    <string name="e1_115_invalid_upload_server">115 傳回的上傳伺服器無效</string>
+    <string name="e1_115_incomplete_upload_credential">115 上傳憑證不完整</string>
+    <string name="e1_115_upload_failed">115 上傳失敗</string>
+    <string name="e1_115_select_files_to_move">請選擇要移動的檔案</string>
+    <string name="e1_115_select_files_to_delete">請選擇要刪除的檔案</string>
+    <string name="e1_115_missing_sharer_id">缺少分享者識別碼，請重新解析分享連結</string>
+    <string name="e1_115_missing_user_id">登入態缺少使用者識別碼，請重新登入115網盤</string>
+    <string name="e1_115_select_files_to_share">請選擇要分享的檔案</string>
+    <string name="e1_115_create_share_no_code">建立分享失敗：回應缺少分享編號</string>
+    <string name="e1_115_unknown_reason">未知原因</string>
+    <string name="e1_115_share_expiry_warning">分享已建立，但有效期設定未生效（當時按伺服器預設檔位）：%1$s</string>
+    <string name="e1_115_login_expired">登入已過期，請重新登入115網盤</string>
+    <string name="e1_115_need_access_code">此分享需要存取碼，請填寫存取碼後重試</string>
+    <string name="e1_115_wrong_access_code">存取碼錯誤，請檢查後重試</string>
+    <string name="e1_115_share_gone">分享連結不存在或已被刪除</string>
+    <string name="e1_115_empty_folder_share">不允許分享空資料夾</string>
+    <string name="e1_115_busy">上一次操作還沒完成，請稍後重試</string>
+    <string name="e1_115_web_size_limit">115 拒絕向網頁端下發該檔案的直鏈（檔案過大），請改用115電腦端/手機客戶端下載</string>
+    <string name="e1_115_client_too_old">115 判定目前識別碼版本過低、拒絕下發直鏈，請改用115電腦端/手機客戶端下載</string>
+    <string name="e1_115_download_protocol_key_16">115 下載協定要求 16 位元組 key</string>
+    <string name="e1_115_download_response_length">115 下載回應長度異常</string>
+    <string name="e1_115_download_missing_rsa_sep">115 下載回應缺少 RSA 分隔符</string>
+</resources>

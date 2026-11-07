@@ -19,7 +19,9 @@
 package com.yunx.app.data.network.video
 
 import android.util.Log
+import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -137,7 +139,11 @@ object XhsParser : VideoParser {
         }
         throw discoveryError as? VideoParseException
             ?: exploreError as? VideoParseException
-            ?: VideoParseException(VideoParseErrorKind.UNKNOWN, "小红书解析失败", discoveryError ?: exploreError)
+            ?: VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_xhs_parse_failed),
+                discoveryError ?: exploreError
+            )
     }
 
     /** explore 形态：重建 `/explore/<id>?<原查询串>`（参考实现 parse_explore，用桌面 UA） */
@@ -148,7 +154,10 @@ object XhsParser : VideoParser {
             ?.optJSONObject("noteDetailMap")
             ?.optJSONObject(link.id)
             ?.optJSONObject("note")
-            ?: throw VideoParseException(VideoParseErrorKind.NOT_FOUND, "小红书页面里没有该笔记数据")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_xhs_no_note)
+            )
         return buildFromExplore(note, link, cookie)
     }
 
@@ -167,12 +176,12 @@ object XhsParser : VideoParser {
      */
     private suspend fun fetchPage(url: String, headers: Map<String, String>): String {
         val response = VideoHttp.request(url, headers = headers)
-        VideoHttp.requireSuccess(response, "小红书笔记")
+        VideoHttp.requireSuccess(response, AppStrings.get(R.string.em_what_xhs_note))
         val finalUrl = response.finalUrl
         if (LOGIN_WALL_MARKERS.any { finalUrl.contains(it) }) {
             throw VideoParseException(
                 VideoParseErrorKind.UNSUPPORTED,
-                "小红书要求登录后才能查看笔记内容，请先到「账号」页登录小红书"
+                AppStrings.get(R.string.em_xhs_login_required)
             )
         }
         return response.body
@@ -188,10 +197,14 @@ object XhsParser : VideoParser {
         val raw = VideoHttp.extractInlineJson(html, "window.__INITIAL_STATE__")
             ?: throw VideoParseException(
                 VideoParseErrorKind.UNKNOWN,
-                "小红书页面里没有笔记数据（可能被风控拦截或页面改版）"
+                AppStrings.get(R.string.em_xhs_no_note_data)
             )
         return runCatching { JSONObject(raw.replace("undefined", "null")) }.getOrElse {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "小红书页面数据解析失败", it)
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_xhs_state_parse_failed),
+                it
+            )
         }
     }
 
@@ -260,7 +273,7 @@ object XhsParser : VideoParser {
             //   比报错更误导（用户会以为这条笔记本来就只解析出图）。
             throw VideoParseException(
                 VideoParseErrorKind.UNKNOWN,
-                "小红书视频笔记没有取到视频直链（笔记里有 video 字段，但 media.stream 里没有可用地址）"
+                AppStrings.get(R.string.em_xhs_video_no_stream)
             )
         } else {
             val images = resolveImages(rawImages, mediaHeaders)
@@ -270,7 +283,7 @@ object XhsParser : VideoParser {
                     kind = VideoMediaKind.IMAGE,
                     fileName = "${base}_${index + 1}.jpg",
                     headers = mediaHeaders,
-                    quality = "原图"
+                    quality = AppStrings.get(R.string.em_quality_original)
                 )
             }
             notice = images.notice
@@ -297,10 +310,16 @@ object XhsParser : VideoParser {
         cookie: String
     ): VideoParseResult {
         val noteRoot = state.optJSONObject("noteData")
-            ?: throw VideoParseException(VideoParseErrorKind.NOT_FOUND, "小红书分享链接失效或内容已删除")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_xhs_link_invalid)
+            )
         // discovery 的数据比 explore 多嵌一层：noteData.data.noteData
         val note = noteRoot.optJSONObject("data")?.optJSONObject("noteData")
-            ?: throw VideoParseException(VideoParseErrorKind.NOT_FOUND, "小红书页面里没有笔记数据（内容可能已删除）")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_xhs_note_deleted)
+            )
 
         val mediaHeaders = mediaHeaders(cookie)
         val title = note.str("title")
@@ -335,7 +354,7 @@ object XhsParser : VideoParser {
                     kind = VideoMediaKind.IMAGE,
                     fileName = "${base}_${index + 1}.jpg",
                     headers = mediaHeaders,
-                    quality = "原图"
+                    quality = AppStrings.get(R.string.em_quality_original)
                 )
             }
             notice = images.notice
@@ -402,7 +421,7 @@ object XhsParser : VideoParser {
         /** 回退过就给一句面向用户的提示；一张都没回退则空串（界面据此决定弹不弹） */
         val notice: String
             get() = if (fallbackCount <= 0) "" else
-                "$fallbackCount 张图片没有可用的去水印原图，已改用平台地址（可能带水印）"
+                AppStrings.get(R.string.em_xhs_watermark_fallback, fallbackCount)
     }
 
     /**

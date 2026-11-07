@@ -344,6 +344,8 @@ fun ComposeEmptyActivityTheme(
     val context = LocalContext.current
     // 主题设置由 ThemeController 内存状态驱动（首次从 SharedPreferences 加载）
     ThemeController.init(context)
+    // 应用语言状态（首次从 SharedPreferences 加载；真正的资源切换在 Activity.attachBaseContext）
+    LocaleController.init(context)
     // 深色模式：0=跟随系统，1=浅色，2=深色
     val isDark = when (ThemeController.darkMode) {
         1 -> false

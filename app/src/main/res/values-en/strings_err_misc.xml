@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    E5 group: user-facing messages from parsers / upload / update / Gopeed engine / backup & crypto / log export.
+-->
+<resources>
+    <!-- Common network request errors -->
+    <string name="em_http_blocked">%1$s was blocked by risk control (HTTP %2$d)</string>
+    <string name="em_http_not_found">%1$s not found (HTTP %2$d)</string>
+    <string name="em_http_failed">%1$s request failed (HTTP %2$d)</string>
+    <string name="em_http_not_json">%1$s did not return valid JSON</string>
+    <string name="em_http_request_failed">Request failed: %1$s</string>
+    <string name="em_what_parse">Parse</string>
+
+    <!-- Parse result error messages -->
+    <string name="em_parse_blocked">The platform\'s risk control blocked this request. Please try again later.</string>
+    <string name="em_parse_not_found">The content does not exist, has been deleted, or is not visible</string>
+    <string name="em_parse_network">Network request failed. Please check your connection and try again.</string>
+    <string name="em_parse_unsupported">This link is not supported yet</string>
+    <string name="em_parse_failed">Parsing failed. Please try again later.</string>
+
+    <!-- Request subject names -->
+    <string name="em_what_acfun_video">AcFun video</string>
+    <string name="em_what_bili_cookie">Bilibili login check</string>
+    <string name="em_what_bili_video">Bilibili video info</string>
+    <string name="em_what_bili_playurl">Bilibili direct URL</string>
+    <string name="em_what_bili_dash">Bilibili DASH direct URL</string>
+    <string name="em_what_douyin_page">Douyin share page</string>
+    <string name="em_what_kuaishou_page">Kuaishou post page</string>
+    <string name="em_what_xhs_note">Xiaohongshu note</string>
+    <string name="em_what_weibo_video">Weibo video</string>
+    <string name="em_what_pixiv_artwork">Pixiv artwork info</string>
+    <string name="em_what_pixiv_pages">Pixiv original image list</string>
+
+    <!-- Media quality labels -->
+    <string name="em_quality_original">Original</string>
+    <string name="em_quality_motion">Motion image</string>
+    <string name="em_quality_dash">%1$s (separate tracks, merged after download)</string>
+    <string name="em_quality_number">Quality %1$d</string>
+
+    <!-- AcFun -->
+    <string name="em_acfun_no_video_info">Failed to parse AcFun video info (no videoInfo on the page; the video may have been deleted)</string>
+    <string name="em_acfun_parse_failed">Failed to parse AcFun video info</string>
+    <string name="em_acfun_no_stream">AcFun did not return a video stream URL</string>
+
+    <!-- Kuaishou -->
+    <string name="em_kuaishou_no_init_state">No window.INIT_STATE on the Kuaishou page (the post may have been deleted or the page layout changed)</string>
+    <string name="em_kuaishou_invalid_json">window.INIT_STATE is not valid JSON</string>
+    <string name="em_kuaishou_no_photo">No post data in window.INIT_STATE</string>
+
+    <!-- Bilibili -->
+    <string name="em_bili_api_error">Bilibili video info API returned code=%1$d msg=%2$s</string>
+    <string name="em_bili_missing_data">Bilibili video info is missing the data field</string>
+    <string name="em_bili_missing_ids">Bilibili video info is missing bvid/cid</string>
+    <string name="em_bili_no_stream">Bilibili returned neither a single-file direct URL nor mergeable separate streams (code=%1$d msg=%2$s): this video may be a bangumi/paid title</string>
+    <string name="em_bili_durl_empty">Bilibili durl is empty</string>
+    <string name="em_bili_url_empty">Bilibili direct URL is empty (login may be required or risk control may have blocked it)</string>
+
+    <!-- Douyin -->
+    <string name="em_douyin_no_router_data">No window._ROUTER_DATA on the Douyin share page (the post may have been deleted or the page layout changed)</string>
+    <string name="em_douyin_parse_failed">Failed to parse Douyin</string>
+    <string name="em_douyin_router_invalid_json">window._ROUTER_DATA is not valid JSON</string>
+    <string name="em_douyin_no_loader_data">No loaderData in window._ROUTER_DATA</string>
+    <string name="em_douyin_no_page">window._ROUTER_DATA contains neither video_(id)/page nor note_(id)/page</string>
+    <string name="em_douyin_no_data">Douyin did not return data for this post (it may have been deleted or is not visible, or risk control may have blocked it) [%1$s]</string>
+    <string name="em_douyin_ttwid_request_failed">ttwid registration request failed</string>
+    <string name="em_douyin_ttwid_failed">ttwid registration failed (HTTP %1$d)</string>
+    <string name="em_douyin_ttwid_no_cookie">ttwid registration did not return a usable cookie</string>
+    <string name="em_flag_present">present</string>
+    <string name="em_flag_missing">missing</string>
+    <string name="em_detail_length">length %1$d</string>
+    <string name="em_detail_request_id">, requestId=</string>
+
+    <!-- Xiaohongshu -->
+    <string name="em_xhs_parse_failed">Failed to parse Xiaohongshu</string>
+    <string name="em_xhs_no_note">No note data on the Xiaohongshu page</string>
+    <string name="em_xhs_login_required">Xiaohongshu requires login to view note content. Please log in to Xiaohongshu on the \"Accounts\" page first.</string>
+    <string name="em_xhs_no_note_data">No note data on the Xiaohongshu page (risk control may have blocked it or the page layout changed)</string>
+    <string name="em_xhs_state_parse_failed">Failed to parse Xiaohongshu page data</string>
+    <string name="em_xhs_video_no_stream">Xiaohongshu video note has no direct video URL (the note has a video field, but media.stream has no usable address)</string>
+    <string name="em_xhs_link_invalid">Xiaohongshu share link is invalid or the content has been deleted</string>
+    <string name="em_xhs_note_deleted">No note data on the Xiaohongshu page (the content may have been deleted)</string>
+    <string name="em_xhs_watermark_fallback">%1$d image(s) have no usable watermark-free original; platform URLs were used instead (may contain watermarks)</string>
+
+    <!-- Weibo -->
+    <string name="em_weibo_unsupported_kind">Unsupported Weibo link form: %1$s</string>
+    <string name="em_weibo_blocked">Weibo was blocked by risk control (HTTP %1$d). Try changing the UA/Referer or retry later.</string>
+    <string name="em_weibo_not_found_code">Weibo content does not exist or has been deleted (HTTP %1$d)</string>
+    <string name="em_weibo_fetch_failed">Failed to fetch Weibo data (HTTP %1$d)</string>
+    <string name="em_weibo_not_json">Weibo API did not return JSON (content-type: %1$s); it was most likely blocked by risk control</string>
+    <string name="em_weibo_parse_failed">Failed to parse Weibo response data</string>
+    <string name="em_weibo_not_found">Weibo content does not exist or has been deleted</string>
+    <string name="em_weibo_video_parse_failed">Failed to parse Weibo video API response data</string>
+    <string name="em_weibo_video_empty">Weibo video data is empty (the post may have been deleted)</string>
+
+    <!-- Pixiv -->
+    <string name="em_pixiv_login_expired">Pixiv login has expired. Please paste the cookie again on the \"Accounts\" page.</string>
+    <string name="em_pixiv_login_required">This artwork requires login to parse (usually R18 or restricted works). Please paste the browser cookie on the \"Accounts\" page.</string>
+    <string name="em_pixiv_error_message">Pixiv artwork info returned an error: %1$s</string>
+    <string name="em_pixiv_missing_body">Pixiv artwork info is missing body</string>
+    <string name="em_pixiv_ugoira_unsupported">Pixiv ugoira requires GIF composition, which the current version does not support yet</string>
+    <string name="em_pixiv_no_images">Pixiv did not return any downloadable original images</string>
+
+    <!-- Upload -->
+    <string name="em_upload_invalid_range">Invalid upload read range</string>
+    <string name="em_upload_open_failed">Unable to open the selected file</string>
+    <string name="em_upload_read_incomplete">Reading the local file was incomplete. Please select it again.</string>
+    <string name="em_upload_unnamed_file">Unnamed file</string>
+    <string name="em_upload_size_unreadable">Unable to read the size of the selected file. Please choose another file and try again.</string>
+    <string name="em_upload_file_failed">\"%1$s\" upload failed: %2$s</string>
+    <string name="em_upload_network_error">Network error. Please try again.</string>
+    <string name="em_upload_interrupted">Upload interrupted. Please try again.</string>
+    <string name="em_upload_cancelled">Upload cancelled</string>
+    <string name="em_upload_bad_credentials">The cloud drive did not return complete upload credentials</string>
+    <string name="em_upload_service_error">Cloud drive upload service returned an error (HTTP %1$d)</string>
+    <string name="em_upload_create_multipart_failed">The cloud drive could not create a multipart upload (HTTP %1$d)</string>
+    <string name="em_upload_no_multipart_task">The cloud drive did not create a multipart upload task</string>
+    <string name="em_upload_part_failed">File upload failed (HTTP %1$d)</string>
+    <string name="em_upload_part_unconfirmed">The cloud drive did not confirm the upload part</string>
+    <string name="em_upload_merge_failed">The cloud drive did not complete part merging</string>
+
+    <!-- Gopeed engine -->
+    <string name="em_engine_path_absolute">Please enter an absolute path (starting with /)</string>
+    <string name="em_engine_dir_create_failed">Could not create this directory: %1$s (check that the path is correct and the parent directory exists)</string>
+    <string name="em_engine_need_all_files">Grant \"All files access\" first</string>
+    <string name="em_engine_dir_not_writable">This directory is not writable: %1$s%2$s</string>
+    <string name="em_engine_stop_before_install">Please stop the engine before importing new engine files</string>
+    <string name="em_engine_dir_unavailable">Engine directory unavailable</string>
+    <string name="em_engine_cannot_create_dir">Unable to create directory: %1$s</string>
+    <string name="em_engine_cannot_read_file">Unable to read the selected file</string>
+    <string name="em_engine_aar_missing_so">This AAR does not contain jni/%1$s/%2$s (device preferred ABI: %3$s)</string>
+    <string name="em_engine_empty_so">The extracted engine file is empty</string>
+    <string name="em_engine_overwrite_failed">Unable to overwrite the old engine file: %1$s</string>
+    <string name="em_engine_write_failed">Unable to write the engine file: %1$s</string>
+    <string name="em_engine_restart_required">The engine has already been loaded in this process; the new file will take effect only after restarting the app</string>
+    <string name="em_engine_stop_first">Please stop the engine first</string>
+    <string name="em_engine_delete_failed">Delete failed: %1$s</string>
+    <string name="em_engine_not_installed">The Gopeed engine has not been imported yet (missing %1$s)</string>
+    <string name="em_engine_not_started">Engine not started</string>
+    <string name="em_engine_invoke_timeout">Engine call timed out (60 seconds): %1$s %2$s</string>
+    <string name="em_engine_invoke_failed">Engine call failed: %1$s %2$s</string>
+    <string name="em_engine_response_unparsable">Unable to parse the engine response: %1$s</string>
+    <string name="em_engine_error_code">Engine returned error code %1$d</string>
+    <string name="em_engine_no_config">Engine did not return a configuration</string>
+    <string name="em_engine_no_task_status">Engine did not return the task status</string>
+    <string name="em_engine_no_task_detail">Engine did not return task details</string>
+    <string name="em_engine_load_failed">Failed to load the engine native library (both methods failed)\n① System.load(%1$s): %2$s\n② System.loadLibrary(\"gojni\"): %3$s</string>
+
+    <!-- Gopeed kernel download -->
+    <string name="em_kernel_notify_downloading">Downloading Gopeed kernel</string>
+    <string name="em_kernel_fetch_version_failed">Failed to fetch kernel version: %1$s</string>
+    <string name="em_kernel_fetch_version_failed_short">Failed to fetch kernel version</string>
+    <string name="em_kernel_asset_missing">This release (%1$s) has no %2$s (device ABI: %3$s); available assets: %4$s</string>
+    <string name="em_kernel_none">None</string>
+    <string name="em_kernel_no_pan_link">The release notes have no cloud drive link. Please use GitHub instead.</string>
+    <string name="em_kernel_source_github">GitHub direct</string>
+    <string name="em_kernel_source_mirror">GitHub mirror</string>
+    <string name="em_kernel_notify_importing">Importing Gopeed kernel</string>
+    <string name="em_kernel_unknown_link">Unrecognized cloud drive link: %1$s</string>
+    <string name="em_kernel_only_quark">Only Quark cloud drive automatic downloads are supported for now (this link is %1$s). Please use GitHub instead.</string>
+    <string name="em_kernel_open_share_failed">Failed to open share: %1$s</string>
+    <string name="em_kernel_unknown_error">Unknown error</string>
+    <string name="em_kernel_guest_link_failed">Guest link retrieval failed: %1$s</string>
+    <string name="em_kernel_link_failed">Link retrieval failed: %1$s</string>
+    <string name="em_kernel_quark_guest">Quark cloud drive (guest)</string>
+    <string name="em_kernel_quark_logged_in">Quark cloud drive (signed in)</string>
+    <string name="em_kernel_list_failed">Failed to list the share directory: %1$s</string>
+    <string name="em_kernel_asset_not_in_root">%1$s is not in the share (root: %2$s)</string>
+    <string name="em_kernel_asset_not_in_sub">%1$s is not in the share (under %2$s/: %3$s)</string>
+    <string name="em_kernel_list_empty">Empty</string>
+    <string name="em_kernel_download_failed">Download failed</string>
+    <string name="em_kernel_download_failed_single">Download failed (single stream)</string>
+    <string name="em_kernel_downloaded_empty">The downloaded file is empty</string>
+    <string name="em_kernel_chunk_failed">Chunk download failed (%1$s)</string>
+    <string name="em_kernel_notify_merging">Merging Gopeed kernel chunks</string>
+    <string name="em_kernel_size_mismatch">File size verification failed: expected %1$d bytes, actual %2$d bytes (corrupted package rejected)</string>
+    <string name="em_kernel_sha_mismatch">Kernel package verification failed (sha256 mismatch), discarded: %1$s</string>
+
+    <!-- Update check -->
+    <string name="em_update_unknown_error">Unknown error</string>
+    <string name="em_update_bad_format">Unexpected response format</string>
+    <string name="em_update_no_release">The repository has no releases yet</string>
+    <string name="em_update_rate_limited">GitHub API rate limit reached (HTTP %1$d). Please try again later.</string>
+    <string name="em_update_empty_response">Response is empty</string>
+    <string name="em_update_missing_tag">Release data is missing the version tag</string>
+
+    <!-- Backup and encryption -->
+    <string name="em_backup_password_too_short">Backup passphrase must be at least 8 characters</string>
+    <string name="em_backup_not_encrypted">Not a valid encrypted backup file</string>
+    <string name="em_backup_corrupted">The encrypted backup file is corrupted</string>
+    <string name="em_backup_not_valid">Not a valid YunX auth backup file</string>
+    <string name="em_credential_legacy_key_missing">The legacy encryption key no longer exists; historical credentials cannot be decrypted</string>
+
+    <!-- Log export -->
+    <string name="em_log_export_title">YunX log export\n</string>
+    <string name="em_log_export_time">Exported at: %1$s\n</string>
+    <string name="em_log_app_version">App version: %1$s (%2$d)\n</string>
+    <string name="em_log_device">Device: %1$s %2$s\n</string>
+    <string name="em_log_system">System: Android %1$s (SDK %2$d)\n</string>
+    <string name="em_log_diagnostic_mode">Diagnostic mode: %1$s\n</string>
+    <string name="em_log_enabled">Enabled</string>
+    <string name="em_log_disabled">Off</string>
+    <string name="em_log_uid_pid">App uid=%1$d, this pid=%2$d\n</string>
+    <string name="em_log_runtime_section">========== Runtime log (logcat -d -v time) ==========\n</string>
+    <string name="em_log_logcat_unavailable">(Failed to read logs: logcat unavailable on this device)\n</string>
+    <string name="em_log_no_output">(no output)\n</string>
+    <string name="em_log_share_title">Share logs</string>
+</resources>

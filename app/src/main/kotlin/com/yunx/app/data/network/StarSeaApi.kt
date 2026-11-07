@@ -19,6 +19,8 @@
 package com.yunx.app.data.network
 
 import android.util.Log
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -117,9 +119,9 @@ object StarSeaApi {
                     throw IllegalStateException(describeFailure(resp.code, serverMsg))
                 }
                 val data = json.optJSONObject("data")
-                    ?: throw IllegalStateException("口令解析失败：响应缺少 data")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.e2_starsea_missing_data))
                 val pwdId = data.optString("pwdId")
-                if (pwdId.isBlank()) throw IllegalStateException("口令解析失败：未取到分享 ID")
+                if (pwdId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_starsea_missing_pwd_id))
                 CommandResolve(platform = data.optString("platform"), pwdId = pwdId)
             }
         }.onFailure {
@@ -132,12 +134,12 @@ object StarSeaApi {
     private fun describeFailure(code: Int, serverMsg: String): String {
         if (serverMsg.isNotBlank()) return serverMsg
         return when (code) {
-            400 -> "口令为空或格式不对"
-            401 -> "口令解析服务鉴权失败（Key 无效或已轮换）"
-            413 -> "口令过长"
-            429 -> "口令解析服务限流，请稍后再试"
-            404 -> "口令解析服务地址不可用"
-            else -> "口令解析失败（HTTP $code）"
+            400 -> AppStrings.get(R.string.e2_starsea_empty)
+            401 -> AppStrings.get(R.string.e2_starsea_auth_failed)
+            413 -> AppStrings.get(R.string.e2_starsea_too_long)
+            429 -> AppStrings.get(R.string.e2_starsea_rate_limited)
+            404 -> AppStrings.get(R.string.e2_starsea_unavailable)
+            else -> AppStrings.get(R.string.e2_starsea_http_failed, code)
         }
     }
 }

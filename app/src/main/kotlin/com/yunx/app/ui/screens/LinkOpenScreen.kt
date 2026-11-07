@@ -61,15 +61,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.data.prefs.LinkOpenTarget
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.ListGroupPos
 import com.yunx.app.ui.theme.listGroupShape
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.LinkOpener
 
 /**
@@ -98,10 +101,10 @@ fun LinkOpenScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("链接唤起", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.vm_link_open_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.vm_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -125,31 +128,25 @@ fun LinkOpenScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "在浏览器或其它 App 里点网盘分享链接，系统会问用哪个应用打开 —— " +
-                            "选「云析」并勾选「始终」，之后点链接就直接进来解析。",
+                        text = stringResource(R.string.vm_link_open_intro),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     // 说清楚「已验证的链接为什么永远是 0」：验证要在对方服务器放校验文件，第三方 App 做不到
                     Text(
-                        text = "系统设置里那个「已验证的链接」会一直是 0：验证要求每个网盘域名的服务器上" +
-                            "放置本应用的校验文件（assetlinks.json），而这些域名都不属于本项目，" +
-                            "第三方 App 无法做到（开了自动验证反而可能让云析从选择器里彻底消失）。",
+                        text = stringResource(R.string.vm_link_open_verified_zero),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "官方对「无法验证域名的第三方 App」给出的做法是手动关联域名：在系统的" +
-                            "「默认打开 → 打开支持的链接」里把网盘域名勾给云析，效果与验证相同" +
-                            "（不再弹选择器），只是记在「要在此应用中打开的链接」里。",
+                        text = stringResource(R.string.vm_link_open_manual_associate),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "关掉某一项 = 不再接管那种链接（系统会重新交给浏览器或网盘官方 App）；" +
-                            "改动立即生效，无需重启。",
+                        text = stringResource(R.string.vm_link_open_disable_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -180,10 +177,10 @@ fun LinkOpenScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "去系统设置关联域名", style = MaterialTheme.typography.titleMedium)
+                        Text(text = stringResource(R.string.vm_link_open_open_settings), style = MaterialTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "打开「默认打开 → 打开支持的链接」，把要接管的网盘域名勾给云析",
+                            text = stringResource(R.string.vm_link_open_settings_desc),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -200,7 +197,11 @@ fun LinkOpenScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "已启用 $enabledCount / ${LinkOpenTarget.entries.size}",
+                text = stringResource(
+                    R.string.vm_link_open_enabled_count,
+                    enabledCount,
+                    LinkOpenTarget.entries.size
+                ),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
@@ -223,7 +224,17 @@ fun LinkOpenScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         settingsRepo.setLinkOpen(target, on)
                         LinkOpener.apply(context, target, on)
                         SnackbarController.show(
-                            if (on) "已接管「${target.label}」的链接" else "已交出「${target.label}」的链接"
+                            if (on) {
+                                AppStrings.get(
+                                    R.string.vm_link_open_enabled_toast,
+                                    AppStrings.get(target.labelRes)
+                                )
+                            } else {
+                                AppStrings.get(
+                                    R.string.vm_link_open_disabled_toast,
+                                    AppStrings.get(target.labelRes)
+                                )
+                            }
                         )
                     }
                 )
@@ -268,13 +279,13 @@ private fun LinkOpenRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = target.label,
+                    text = stringResource(target.labelRes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = target.sample,
+                    text = if (target.sampleRes != 0) stringResource(target.sampleRes) else target.sample,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -301,6 +312,6 @@ private fun openLinkHandlingSettings(context: android.content.Context) {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkgUri)
     }
     runCatching { context.startActivity(intent) }.onFailure {
-        SnackbarController.show("无法打开系统设置，请手动到「应用信息 → 默认打开」里关联域名")
+        SnackbarController.show(AppStrings.get(R.string.vm_link_open_settings_failed))
     }
 }

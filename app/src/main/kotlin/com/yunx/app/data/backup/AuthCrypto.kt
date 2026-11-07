@@ -19,6 +19,8 @@
 package com.yunx.app.data.backup
 
 import android.util.Base64
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
@@ -47,7 +49,7 @@ object AuthCrypto {
 
     /** 加密明文 JSON，返回 Base64 密文（含魔数头部） */
     fun encrypt(plain: String, password: String): String {
-        require(password.length >= 8) { "备份口令至少 8 位" }
+        require(password.length >= 8) { AppStrings.get(R.string.em_backup_password_too_short) }
         val salt = ByteArray(SALT_SIZE).also { SecureRandom().nextBytes(it) }
         val iv = ByteArray(IV_SIZE).also { SecureRandom().nextBytes(it) }
         val key = deriveKey(password, salt, ITERATIONS_V2)
@@ -73,9 +75,11 @@ object AuthCrypto {
                 magicV2 to ITERATIONS_V2
             payload.copyOfRange(0, minOf(payload.size, magicV1.size)).contentEquals(magicV1) ->
                 magicV1 to ITERATIONS_V1
-            else -> throw IllegalArgumentException("不是有效的加密备份文件")
+            else -> throw IllegalArgumentException(AppStrings.get(R.string.em_backup_not_encrypted))
         }
-        require(payload.size >= magic.size + SALT_SIZE + IV_SIZE) { "加密备份文件已损坏" }
+        require(payload.size >= magic.size + SALT_SIZE + IV_SIZE) {
+            AppStrings.get(R.string.em_backup_corrupted)
+        }
         val salt = payload.copyOfRange(magic.size, magic.size + SALT_SIZE)
         val iv = payload.copyOfRange(magic.size + SALT_SIZE, magic.size + SALT_SIZE + IV_SIZE)
         val ciphertext = payload.copyOfRange(magic.size + SALT_SIZE + IV_SIZE, payload.size)

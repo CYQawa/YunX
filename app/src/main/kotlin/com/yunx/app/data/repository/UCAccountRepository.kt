@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.UCAccountDao
 import com.yunx.app.data.db.UCAccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.UCConstants
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -125,7 +127,7 @@ class UCAccountRepository(
      */
     suspend fun saveUCAccount(cookie: String, newAccount: Boolean = false): Boolean {
         if (!UCConstants.isValidCookie(cookie)) return false
-        val nickname = api.fetchNickname(cookie) ?: "UC用户"
+        val nickname = api.fetchNickname(cookie) ?: AppStrings.get(R.string.er_uc_default_nickname)
         val slot = resolveAccountSlot(DownloadPlatform.UC, dao.getAccount(), newAccount)
         dao.upsert(
             UCAccountEntity(

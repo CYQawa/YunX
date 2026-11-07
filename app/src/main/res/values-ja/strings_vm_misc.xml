@@ -1,0 +1,235 @@
+<!--
+    YunX - 日本語 (ja)
+    アプリ名は YunX のまま表記します。i18n バッチ G8（接頭辞 vm_）。
+-->
+<resources>
+    <!-- 共通 -->
+    <string name="vm_back">戻る</string>
+    <string name="vm_retry">再試行</string>
+    <string name="vm_refresh">更新</string>
+    <string name="vm_load_more">さらに読み込む</string>
+    <string name="vm_save">保存</string>
+    <string name="vm_cancel">キャンセル</string>
+    <string name="vm_clear">クリア</string>
+    <string name="vm_got_it">わかりました</string>
+    <string name="vm_password_hide">非表示</string>
+    <string name="vm_password_show">表示</string>
+    <string name="vm_login_success">ログイン成功</string>
+    <string name="vm_login_failed_retry">ログインに失敗しました。しばらくしてから再試行してください。</string>
+    <string name="vm_login_failed_network">ログインに失敗しました。ネットワークを確認して再試行してください。</string>
+
+    <!-- クラッシュ画面 -->
+    <string name="vm_crash_unknown_error">不明なエラー</string>
+    <string name="vm_crash_copy_info">クラッシュ情報をコピー</string>
+    <string name="vm_crash_info_copied">クラッシュ情報をコピーしました</string>
+    <string name="vm_crash_restart_app">アプリを再起動</string>
+    <string name="vm_crash_exit_app">アプリを終了</string>
+    <string name="vm_crash_title">アプリがクラッシュしました</string>
+    <string name="vm_crash_desc">申し訳ありません。アプリで予期しないエラーが発生しました。クラッシュ情報をコピーして開発者に報告するか、アプリを再起動して続行できます。</string>
+
+    <!-- リンク起動：対象名 -->
+    <string name="vm_link_target_quark">Quark ドライブ</string>
+    <string name="vm_link_target_uc">UC ドライブ</string>
+    <string name="vm_link_target_xunlei">迅雷ドライブ</string>
+    <string name="vm_link_target_baidu">Baidu ドライブ</string>
+    <string name="vm_link_target_c139">139（和彩雲）</string>
+    <string name="vm_link_target_pan123">123 ドライブ</string>
+    <string name="vm_link_target_pan115">115 ドライブ</string>
+    <string name="vm_link_target_guangya">光鴨ドライブ</string>
+    <string name="vm_link_target_lanzou">藍奏雲 / プレミアム</string>
+    <string name="vm_link_target_magnet">マグネットリンク</string>
+    <string name="vm_link_target_yunx">yunx:// 独自スキーム</string>
+    <string name="vm_link_target_share">共有メニュー</string>
+    <string name="vm_link_target_process_text">選択テキストの解析</string>
+    <string name="vm_link_target_share_sample">他のアプリ「共有 → YunX」</string>
+    <string name="vm_link_target_process_text_sample">テキストを長押し →「YunX で解析」</string>
+
+    <!-- リンク起動 -->
+    <string name="vm_link_open_title">リンク起動</string>
+    <string name="vm_link_open_intro">ブラウザや他のアプリでドライブの共有リンクをタップすると、使用するアプリを尋ねられます。「YunX」を選んで「常に」にチェックすると、以降はリンクをタップするだけで解析画面が開きます。</string>
+    <string name="vm_link_open_verified_zero">システム設定の「確認済みのリンク」は常に 0 のままです。確認には各ドライブのドメインのサーバーに本アプリの確認ファイル（assetlinks.json）を置く必要がありますが、これらのドメインは本プロジェクトのものではないため、サードパーティ製アプリでは実現できません（自動確認を有効にすると、かえって YunX が選択画面から完全に消えることがあります）。</string>
+    <string name="vm_link_open_manual_associate">ドメインを確認できないサードパーティ製アプリについて公式が示す方法は、ドメインを手動で関連付けることです。システムの「デフォルトで開く → サポートされているリンクを開く」でドライブのドメインに YunX をチェックしてください。確認と同等に動作し（選択画面は表示されません）、「このアプリで開くリンク」に記録されるだけです。</string>
+    <string name="vm_link_open_disable_hint">項目をオフにすると、その種類のリンクを処理しなくなります（システムがブラウザやドライブ公式アプリに戻します）。変更はすぐに反映され、再起動は不要です。</string>
+    <string name="vm_link_open_open_settings">システム設定でドメインを関連付ける</string>
+    <string name="vm_link_open_settings_desc">「デフォルトで開く → サポートされているリンクを開く」を開き、YunX に処理させたいドライブのドメインをチェックしてください</string>
+    <string name="vm_link_open_enabled_count">有効 %1$d / %2$d</string>
+    <string name="vm_link_open_enabled_toast">「%1$s」のリンクを引き受けました</string>
+    <string name="vm_link_open_disabled_toast">「%1$s」のリンクを手放しました</string>
+    <string name="vm_link_open_settings_failed">システム設定を開けません。「アプリ情報 → デフォルトで開く」で手動でドメインを関連付けてください</string>
+
+    <!-- お知らせ -->
+    <string name="vm_announcements_title">お知らせ</string>
+    <string name="vm_announcement_detail_title">お知らせの詳細</string>
+    <string name="vm_announcement_refresh">お知らせを更新</string>
+    <string name="vm_announcement_pinned">固定のお知らせ</string>
+    <string name="vm_announcement_pinned_short">固定</string>
+    <string name="vm_announcement_latest">最新のお知らせ</string>
+    <string name="vm_announcement_publisher_fallback">お知らせ</string>
+    <string name="vm_announcement_avatar_fallback">お</string>
+    <string name="vm_announcement_no_content">（このお知らせには本文がありません）</string>
+    <string name="vm_announcement_images">画像</string>
+    <string name="vm_announcement_image_count">%1$d 枚</string>
+    <string name="vm_announcement_last_updated">最終更新 %1$s</string>
+    <string name="vm_announcement_last_updated_author">最終更新 %1$s · 作成者 %2$s</string>
+    <string name="vm_announcement_cover_image">カバー画像</string>
+    <string name="vm_announcement_image">お知らせ画像</string>
+    <string name="vm_announcement_cover">カバー</string>
+    <string name="vm_announcement_close">閉じる</string>
+    <string name="vm_announcement_view_detail">詳細を見る</string>
+    <string name="vm_announcement_mark_all_read">すべて既読にする</string>
+    <string name="vm_announcement_empty_title">お知らせはありません</string>
+    <string name="vm_announcement_empty_desc">新しいお知らせがあるとここに表示されます</string>
+    <string name="vm_announcement_load_failed">お知らせの読み込みに失敗しました</string>
+    <string name="vm_announcement_refresh_failed">お知らせの更新に失敗しました：%1$s</string>
+    <string name="vm_announcement_load_failed_detail">お知らせの読み込みに失敗しました：%1$s</string>
+    <string name="vm_announcement_load_more_failed">追加の読み込みに失敗しました：%1$s</string>
+    <string name="vm_announcement_marked_read_count">%1$d 件のお知らせを既読にしました</string>
+    <string name="vm_announcement_no_unread">未読のお知らせはありません</string>
+
+    <!-- 更新 -->
+    <string name="vm_update_new_version">新しいバージョンがあります</string>
+    <string name="vm_update_prerelease">プレリリース</string>
+    <string name="vm_update_current_version">現在 %1$s</string>
+    <string name="vm_update_changelog">更新内容</string>
+    <string name="vm_update_no_changelog">更新内容はありません</string>
+    <string name="vm_update_netdisk">ドライブ更新</string>
+    <string name="vm_update_download_from_github">GitHub からダウンロード</string>
+    <string name="vm_update_github_download">GitHub ダウンロード</string>
+    <string name="vm_update_mirror_download">ミラーサイトからダウンロード</string>
+    <string name="vm_update_ignore">今回は無視</string>
+    <string name="vm_update_later">あとで</string>
+    <string name="vm_update_github_direct">GitHub 直結ダウンロード</string>
+    <string name="vm_update_mirror_accelerated">ミラーサイト高速ダウンロード</string>
+    <string name="vm_update_open_github_page">GitHub ページを開く</string>
+
+    <!-- アプリについて -->
+    <string name="vm_about_title">YunX について</string>
+    <string name="vm_about_intro_title">アプリの概要</string>
+    <string name="vm_about_intro_desc">YunX はドライブ / 動画の共有リンクを解析して高速ダウンロードするツールです。リンクを貼り付けるだけで、ドライブ共有は内容を閲覧して高速ダウンロードでき、動画リンクは直リンクと元画像を解析できます。画像 / 動画 / 音声はすべてオンラインプレビュー・再生に対応しています。</string>
+    <string name="vm_about_license">本プロジェクトは GNU AGPL-3.0 ライセンスで公開されています</string>
+    <string name="vm_about_version_footer">YunX v%1$s · Made with ❤ and deepseek</string>
+    <string name="vm_about_icon">YunX アイコン</string>
+    <string name="vm_about_app_name">YunX</string>
+    <string name="vm_about_version_name">YunX · v%1$s (%2$d)</string>
+    <string name="vm_about_tagline">ドライブ / 動画リンクの解析と高速ダウンロード</string>
+    <string name="vm_about_supported_platforms">対応プラットフォーム</string>
+    <string name="vm_about_drives">ドライブ</string>
+    <string name="vm_about_video_parsing">動画解析</string>
+    <string name="vm_about_feature_netdisk_title">ドライブ共有の解析</string>
+    <string name="vm_about_feature_netdisk_desc">Quark / UC / 迅雷 / Baidu / 139 / 123 / 115 / 光鴨 / 藍奏雲 / 藍奏雲プレミアム の直リンク検出</string>
+    <string name="vm_about_feature_video_title">動画リンクの解析</string>
+    <string name="vm_about_feature_video_desc">抖音 / 小红书 / 快手 / 微博 / AcFun はログイン不要。哔哩哔哩はログイン後に高画質、Pixiv は未ログインだと一部の公開作品のみ解析でき、ブラウザの Cookie を貼り付けるとすべての作品を解析できます</string>
+    <string name="vm_about_feature_preview_title">オンラインプレビューと再生</string>
+    <string name="vm_about_feature_preview_desc">画像 / 動画 / 音声をオンラインで表示（リクエストヘッダーを自動付与）。ドライブ内のテキストファイルも開けます</string>
+    <string name="vm_about_feature_mux_title">音声・動画の結合</string>
+    <string name="vm_about_feature_mux_desc">哔哩哔哩の高画質は音声と動画が別トラックです。アプリ内で結合するため、ffmpeg を別途インストールする必要はありません</string>
+    <string name="vm_about_feature_download_title">高速分割ダウンロード</string>
+    <string name="vm_about_feature_download_desc">マルチスレッド同時接続 + レジュームで帯域を最大限に活用します</string>
+    <string name="vm_about_feature_cleanup_title">リンク取得後に削除</string>
+    <string name="vm_about_feature_cleanup_desc">保存後すぐにクリーンアップし、痕跡を残しません</string>
+    <string name="vm_about_feature_credentials_title">認証情報のローカル保存</string>
+    <string name="vm_about_feature_credentials_desc">Cookie は暗号化して保存され、この端末にのみ保持されます</string>
+    <string name="vm_about_features">機能</string>
+    <string name="vm_about_tech_stack">技術スタック</string>
+    <string name="vm_about_disclaimer_title">免責事項</string>
+    <string name="vm_about_disclaimer_body">本アプリは個人の学習および技術交流のみを目的としています。商業目的での使用は禁止です。ダウンロードしたコンテンツの著作権は原著作者に帰属します。ダウンロード後 24 時間以内に削除してください。本アプリの使用によって生じた結果はすべて利用者の責任となります。</string>
+    <string name="vm_about_preview_onboarding_title">ウェルカム画面を再表示</string>
+    <string name="vm_about_preview_onboarding_desc">初回起動時のガイドを再度表示します</string>
+    <string name="vm_about_open_source_repo">ソースリポジトリ</string>
+
+    <!-- 開発支援 -->
+    <string name="vm_support_title">開発を支援</string>
+    <string name="vm_support_tagline">あなたの支援が継続的なメンテナンスと更新の力になります</string>
+    <string name="vm_support_free_notice">YunX は完全に無料でオープンソースです。すべての機能を寄付なしで利用できます。役に立ったと感じ、よろしければ QR コードを読み取って気持ちを表してください。あなたの支援が継続的なメンテナンスと更新の力になります〜</string>
+    <string name="vm_support_thanks">すべての支援者に感謝します ❤</string>
+    <string name="vm_support_no_storage_permission">ストレージ権限がありません。ギャラリーに保存できません</string>
+    <string name="vm_support_saved_to_gallery">ギャラリーに保存しました（Pictures/YunX）</string>
+    <string name="vm_support_save_failed">保存に失敗しました</string>
+    <string name="vm_support_saved">ギャラリーに保存しました</string>
+    <string name="vm_support_save_qr_of">%1$s の QR コードを保存</string>
+    <string name="vm_support_saved_hint">✓ QR コードをギャラリー/Pictures/YunX に保存しました</string>
+    <string name="vm_support_role_author">作者 CYQawa</string>
+    <string name="vm_support_role_collaborator">コラボレーター tidain</string>
+    <string name="vm_support_qr_hint">QR コードをギャラリーに保存してから、WeChat の「スキャン」で寄付できます</string>
+    <string name="vm_support_next_card">（次へ）</string>
+    <string name="vm_support_swipe_hint">左右にスワイプして切り替え</string>
+    <string name="vm_support_wechat_donate">WeChat で QR コードを読み取って寄付</string>
+    <string name="vm_support_qr_content_desc">%1$s の WeChat 寄付用 QR コード%2$s</string>
+
+    <!-- メイン画面 -->
+    <string name="vm_main_checking_update">更新を確認しています…</string>
+    <string name="vm_main_update_check_failed">更新の確認に失敗しました：%1$s</string>
+    <string name="vm_main_up_to_date">すでに最新バージョンです</string>
+    <string name="vm_main_release_unavailable">Release データを取得できませんでした。先にインターネットに接続して更新を確認してください</string>
+    <string name="vm_main_github_token_invalid_cleared">GitHub Token が無効または期限切れです。自動的にクリアして匿名の上限に戻しました。再設定してください</string>
+    <string name="vm_main_verify_done_logging_in">確認が完了しました。自動的にログインしています…</string>
+    <string name="vm_main_verify_incomplete">確認が完了していません。再試行してください</string>
+    <string name="vm_main_announcements_unread">お知らせ（未読 %1$d 件）</string>
+    <string name="vm_main_announcements">お知らせ</string>
+    <string name="vm_main_bookmark_links">ブックマークしたドライブリンク</string>
+    <string name="vm_main_sort_drives">ドライブを並べ替え</string>
+    <string name="vm_main_github_account_failed">GitHub アカウント情報を取得できません。ネットワークを確認するか、Token を再設定してください</string>
+    <string name="vm_main_added_download_install_hint">ダウンロードに追加しました。完了後に「開く」をタップしてインストールできます</string>
+    <string name="vm_main_apk_not_found">APK のダウンロードリンクが見つかりません</string>
+    <string name="vm_main_added_download_mirror_install_hint">ミラーサイト経由でダウンロードに追加しました。完了後に「開く」をタップしてインストールできます</string>
+    <string name="vm_main_preparing_update_package">更新パッケージを準備しています…</string>
+
+    <!-- GitHub Token -->
+    <string name="vm_github_token_usage">Token は API の上限を引き上げるためだけに使用されます（匿名 60 回/時、認証後 5000 回/時）。Android Keystore AES-GCM で暗号化して保存されます。</string>
+    <string name="vm_github_token_howto_title">Token の取得方法：</string>
+    <string name="vm_github_token_howto_body">1. パソコンのブラウザで GitHub を開き、右上のアバター → Settings\n2. 左側の Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. public_repo にチェックすると公開リポジトリを閲覧できます。ホーム画面に自分のプライベートリポジトリを表示したい場合は repo にもチェックしてください\n4. 有効期限は 90 日または No expiration を推奨します。生成後にコピーして上の入力欄に貼り付けてください</string>
+    <string name="vm_github_no_browser_link_copied">利用可能なブラウザが見つかりません。リンクをコピーしました</string>
+    <string name="vm_github_get_token">↗ GitHub から Token を取得</string>
+    <string name="vm_github_token_security_tip">セキュリティのヒント：最小限の権限のみを付与し、削除・管理系の権限にはチェックを入れないでください。Token は平文で保存されず、アップロードもされません。削除するには入力欄を空にして保存するだけです。</string>
+    <string name="vm_github_token_cleared">GitHub Token をクリアしました</string>
+    <string name="vm_github_token_saved">GitHub Token を保存しました（@%1$s）</string>
+    <string name="vm_github_token_save_failed">保存に失敗しました：端末の暗号化キーが一時的に利用できません。しばらくしてから再試行してください</string>
+    <string name="vm_github_token_invalid">Token が無効または期限切れです。再生成してから保存してください</string>
+    <string name="vm_github_token_check_failed">Token を検証できません（ネットワークエラー）。インターネットに接続して再試行してください</string>
+    <string name="vm_github_clear_token_title">GitHub Token をクリアしますか？</string>
+    <string name="vm_github_clear_token_message">クリアすると GitHub API は匿名の上限（60 回/時/IP）に戻ります。</string>
+
+    <!-- ブックマーク -->
+    <string name="vm_bookmark_enter_link">ドライブのリンクを入力してください</string>
+    <string name="vm_bookmark_added">ブックマークしました</string>
+    <string name="vm_bookmark_moved">「%1$s」に移動しました</string>
+    <string name="vm_bookmark_deleted">削除しました</string>
+    <string name="vm_bookmark_pinned">ホームに追加しました</string>
+    <string name="vm_bookmark_unpinned">ホームから削除しました</string>
+    <string name="vm_bookmark_label_auto">自動ラベルに戻しました</string>
+    <string name="vm_bookmark_label_updated">ショートカットのラベルを更新しました</string>
+
+    <!-- アカウント ViewModel -->
+    <string name="vm_ilanzou_enter_account_password">藍奏プレミアムのアカウントとパスワードを入力してください</string>
+    <string name="vm_ilanzou_login_failed">藍奏プレミアムのログインに失敗しました。アカウントとパスワードを確認してください</string>
+    <string name="vm_guangya_enter_account_password">光鴨のアカウントとパスワードを入力してください</string>
+    <string name="vm_guangya_login_failed">光鴨のログインに失敗しました。アカウントとパスワードを確認するか、Web ログインに切り替えてください</string>
+    <string name="vm_guangya_enter_phone">電話番号を入力してください</string>
+    <string name="vm_guangya_send_sms_failed">確認コードの送信に失敗しました</string>
+    <string name="vm_guangya_get_code_first">先に確認コードを取得してください</string>
+    <string name="vm_guangya_enter_code">確認コードを入力してください</string>
+    <string name="vm_guangya_sms_invalid">SMS 確認コードが正しくないか期限切れです。再取得してください</string>
+    <string name="vm_video_account_set_primary">メインアカウントに設定しました</string>
+    <string name="vm_video_account_remark_updated">メモを更新しました</string>
+    <string name="vm_video_account_logged_out">このアカウントからログアウトしました</string>
+    <string name="vm_video_account_logged_out_all">%1$s のすべてのアカウントからログアウトしました</string>
+    <string name="vm_xunlei_sms_send_failed_retry">SMS の送信に失敗しました。再試行するかネットワークを確認してください</string>
+    <string name="vm_xunlei_sms_send_failed">SMS の送信に失敗しました</string>
+    <string name="vm_xunlei_login_failed_credentials">ログインに失敗しました。認証情報を取得できません</string>
+    <string name="vm_xunlei_login_failed_account">ログインに失敗しました。アカウントとパスワードを確認してください</string>
+    <string name="vm_xunlei_network_error">ネットワークエラー</string>
+    <string name="vm_xunlei_sms_login_failed">SMS の送信に失敗しました。ネットワークを確認して再試行してください</string>
+    <string name="vm_xunlei_code_verify_failed">確認コードの検証に失敗しました</string>
+
+    <!-- 動画プラットフォーム -->
+    <string name="vm_video_platform_douyin">抖音</string>
+    <string name="vm_video_platform_xhs">小红书</string>
+    <string name="vm_video_platform_kuaishou">快手</string>
+    <string name="vm_video_platform_weibo">微博</string>
+    <string name="vm_video_platform_acfun">AcFun</string>
+    <string name="vm_video_platform_bilibili">哔哩哔哩</string>
+    <string name="vm_video_platform_pixiv">Pixiv</string>
+    <string name="vm_video_benefit_xhs">小红书の Web 版はログインしないとノートを閲覧できないため、未ログインでは解析に失敗します</string>
+    <string name="vm_video_benefit_bilibili">ログインするとより高画質で解析できます。未ログインでは低画質の単一ファイルのみ取得できます</string>
+    <string name="vm_video_benefit_pixiv">未ログインでは一部の公開作品のみ取得できます。ブラウザの Cookie を貼り付けるとすべての作品（R18 および制限作品を含む）を解析できます</string>
+</resources>

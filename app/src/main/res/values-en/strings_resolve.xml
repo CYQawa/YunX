@@ -1,0 +1,250 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    G6 group: resolve / share detail / media and text preview / bookmarks / onboarding & permissions.
+-->
+<resources>
+    <!-- Platform display names -->
+    <string name="rs_platform_quark">Quark Drive</string>
+    <string name="rs_platform_uc">UC Drive</string>
+    <string name="rs_platform_xunlei">Xunlei Drive</string>
+    <string name="rs_platform_baidu">Baidu Drive</string>
+    <string name="rs_platform_139">139 Drive</string>
+    <string name="rs_platform_123">123 Drive</string>
+    <string name="rs_platform_115">115 Drive</string>
+    <string name="rs_platform_guangya">Guangya Drive</string>
+    <string name="rs_platform_ilanzou">Lanczou Youxiang</string>
+    <string name="rs_platform_lanzou">Lanczou Drive</string>
+    <string name="rs_platform_generic">Drive</string>
+
+    <!-- Platform short labels (home shortcut tiles) -->
+    <string name="rs_short_quark">Quark</string>
+    <string name="rs_short_xunlei">Xunlei</string>
+    <string name="rs_short_baidu">Baidu</string>
+    <string name="rs_short_guangya">Guangya</string>
+    <string name="rs_short_ilanzou">Youxiang</string>
+    <string name="rs_short_lanzou">Lanczou</string>
+
+    <!-- Resolve / transfer / download status -->
+    <string name="rs_login_required_save">Sign in to %1$s to save files (guests can only browse the file list)</string>
+    <string name="rs_login_required_download">Sign in to %1$s to download (guests can only browse the file list)</string>
+    <string name="rs_login_first">Please sign in to %1$s first</string>
+    <string name="rs_saved_to">Saved to %1$s</string>
+    <string name="rs_transfer_failed">Save failed</string>
+    <string name="rs_transfer_interrupted">Batch save interrupted</string>
+    <string name="rs_transferred_count">Saved %1$d item(s) to %2$s</string>
+    <string name="rs_collecting_files">Collecting files…</string>
+    <string name="rs_folder_empty">The selected folder is empty</string>
+    <string name="rs_download_interrupted">Batch download interrupted</string>
+    <string name="rs_no_direct_link">No direct download link obtained</string>
+    <string name="rs_added_downloads">Added %1$d download task(s)</string>
+    <string name="rs_download_link_failed">Failed to get download link</string>
+    <string name="rs_added_and_failed">Added %1$d, %2$d failed</string>
+    <string name="rs_failure_reason"> (reason: %1$s)</string>
+    <string name="rs_no_downloadable">No downloadable files in the selection</string>
+    <string name="rs_download_failed">Download failed</string>
+    <string name="rs_parse_failed_retry">Parsing failed, please try again later</string>
+    <string name="rs_add_download_failed">Failed to add download task, please try again later</string>
+    <string name="rs_no_audio_stream">This platform has no separate audio stream; the full video will be downloaded first and the audio track extracted</string>
+    <string name="rs_unrecognized_link">Unrecognized share link</string>
+    <string name="rs_parse_failed">Parsing failed</string>
+    <string name="rs_guest_retry_hint">%1$s (not signed in; go to the Drive page to sign in to %2$s and retry)</string>
+    <string name="rs_update_quark_guest_limit">This update package exceeds the Quark guest download limit (about 50 MB). Sign in to Quark Drive to download it directly.</string>
+    <string name="rs_repo_info_failed">Failed to get repository info: %1$s/%2$s</string>
+    <string name="rs_parent_repo_failed">Failed to open upstream repository: %1$s</string>
+    <string name="rs_github_code">Code</string>
+    <string name="rs_github_load_dir_failed">Failed to load directory</string>
+    <string name="rs_github_download_zip">Download full source ZIP</string>
+    <string name="rs_github_load_releases_failed">Failed to load Releases</string>
+    <string name="rs_badge_draft">Draft</string>
+    <string name="rs_badge_prerelease">Pre-release</string>
+    <string name="rs_badge_latest">Latest</string>
+    <string name="rs_load_more">Load more</string>
+    <string name="rs_release_not_found">Release not found: %1$s</string>
+    <string name="rs_owner_repos_failed">Failed to get repositories of %1$s</string>
+    <string name="rs_open_repo_failed">Failed to open repository: %1$s</string>
+    <string name="rs_unknown_dir">Unknown directory: %1$s</string>
+    <string name="rs_missing_link">Share link missing</string>
+    <string name="rs_bookmarked_to">Bookmarked to \"%1$s\"</string>
+    <string name="rs_cannot_get_link">Unable to get download link</string>
+    <string name="rs_resolve_first">Please resolve a share first</string>
+    <string name="rs_online_preview">Online preview</string>
+    <string name="rs_file_list_failed">Failed to get file list</string>
+
+    <!-- Share detail -->
+    <string name="rs_cancel_selection">Cancel selection</string>
+    <string name="rs_selected_count">%1$d selected</string>
+    <string name="rs_all_selected">All selected</string>
+    <string name="rs_tap_select_more">Tap to select more files</string>
+    <string name="rs_deselect_all">Deselect all</string>
+    <string name="rs_select_all">Select all</string>
+    <string name="rs_back">Back</string>
+    <string name="rs_share_content">Shared content</string>
+    <string name="rs_total_items">%1$d item(s) total</string>
+    <string name="rs_match_items">%1$d / %2$d matched</string>
+    <string name="rs_add_to_bookmark">Add to bookmarks</string>
+    <string name="rs_close_search">Close search</string>
+    <string name="rs_search_files">Search files</string>
+    <string name="rs_search_current_dir">Search files in this folder</string>
+    <string name="rs_clear_search">Clear search</string>
+    <string name="rs_dir_empty">This folder is empty</string>
+    <string name="rs_no_match_files">No files matching \"%1$s\"</string>
+    <string name="rs_transfer">Transfer</string>
+    <string name="rs_download">Download</string>
+    <string name="rs_large_file_title">Large file notice</string>
+    <string name="rs_baidu_limit_message">Baidu Drive throttles non-members above 300 MB, so downloads may be slow. Continue downloading?</string>
+    <string name="rs_dont_show_again">Don\'t show again</string>
+    <string name="rs_continue_download">Continue download</string>
+    <string name="rs_cancel">Cancel</string>
+    <string name="rs_interrupt">Interrupt</string>
+    <string name="rs_batch_processing">Processing batch</string>
+    <string name="rs_fetching_link_progress">Getting download link %1$s</string>
+    <string name="rs_batch_processing_wait">Processing batch, please wait…</string>
+    <string name="rs_guest_notice_quark">Browsing as guest: small files up to about 50 MB can be downloaded directly; larger files and transfers require signing in on the Drive page</string>
+    <string name="rs_guest_notice_uc">Browsing as guest: downloads are allowed without size limit; transfers require signing in on the Drive page</string>
+    <string name="rs_guest_notice_default">Browsing as guest: you can view the file list; downloading and transfers require signing in on the Drive page</string>
+    <string name="rs_go_up">Go up one level</string>
+    <string name="rs_root_dir">Root</string>
+    <string name="rs_folder">Folder</string>
+    <string name="rs_more">More</string>
+
+    <!-- Resolve screen -->
+    <string name="rs_fetch_link_title">Get download link</string>
+    <string name="rs_fetching_link_wait">Getting download link, please wait…</string>
+    <string name="rs_input_hint">Paste a share link or code to parse the shared content in one tap</string>
+    <string name="rs_input_placeholder">e.g. https://pan.quark.cn/s/xxxx, a Xunlei code, or a 139 Drive code</string>
+    <string name="rs_clear_link">Clear link</string>
+    <string name="rs_extract_code_optional">Extraction code (optional)</string>
+    <string name="rs_auto_or_manual">Auto-detect or enter manually</string>
+    <string name="rs_clear_code">Clear extraction code</string>
+    <string name="rs_parsing">Parsing…</string>
+    <string name="rs_start_resolve">Start parsing</string>
+    <string name="rs_shortcuts">Shortcuts</string>
+    <string name="rs_manage">Manage</string>
+    <string name="rs_no_shortcuts">No home shortcuts yet</string>
+    <string name="rs_shortcuts_hint">On the \"Bookmarked links\" page, long-press a bookmark → Add to home</string>
+    <string name="rs_remove_from_home">Remove from home</string>
+    <string name="rs_remove_shortcut_msg">\"%1$s\" will no longer appear in home shortcuts</string>
+    <string name="rs_remove">Remove</string>
+    <string name="rs_loading">Loading…</string>
+    <string name="rs_detected_share">Detected a %1$s share link</string>
+    <string name="rs_paste_and_resolve_q">Paste it into the input box and start parsing?</string>
+    <string name="rs_ignore">Ignore</string>
+    <string name="rs_paste_and_resolve">Paste and parse</string>
+
+    <!-- Preview -->
+    <string name="rs_preview">Preview</string>
+    <string name="rs_preview_image">Preview image</string>
+    <string name="rs_open_with_text_preview">Open this file with \"Text preview\"</string>
+    <string name="rs_image_load_failed">Failed to load image: the direct link may have expired or require authentication; download the file and view it locally</string>
+    <string name="rs_online_play_failed">Online playback failed (%1$s): download the file and open it in a local player</string>
+    <string name="rs_content_empty">The file is empty or cannot be decoded</string>
+    <string name="rs_read_file_failed">Failed to read file: %1$s</string>
+    <string name="rs_unknown_error">Unknown error</string>
+    <string name="rs_reading_prefix">Reading the first 512 KB…</string>
+    <string name="rs_text_file">Text file</string>
+    <string name="rs_truncated_notice">Truncated; download the file to view the full content (only the first 512 KB is read)</string>
+    <string name="rs_no_preview_content">Nothing to preview</string>
+    <string name="rs_preview_response_empty">The response is empty</string>
+
+    <!-- Bookmarks -->
+    <string name="rs_bookmarks_title">Bookmarked links</string>
+    <string name="rs_add_bookmark">Add bookmark</string>
+    <string name="rs_link_copied">Link copied</string>
+    <string name="rs_all">All</string>
+    <string name="rs_home">Home</string>
+    <string name="rs_no_bookmarks">No bookmarked links yet</string>
+    <string name="rs_no_bookmarks_hint">Tap \"Add to bookmarks\" on the parse page, or tap + in the top right to add one manually</string>
+    <string name="rs_share_link_label">Share link</string>
+    <string name="rs_paste_share_link">Paste share link</string>
+    <string name="rs_title_optional">Title (optional)</string>
+    <string name="rs_category">Category</string>
+    <string name="rs_custom">Custom</string>
+    <string name="rs_custom_category">Custom category</string>
+    <string name="rs_bookmark">Bookmark</string>
+    <string name="rs_edit_category">Edit category</string>
+    <string name="rs_confirm">OK</string>
+    <string name="rs_resolve">Parse</string>
+    <string name="rs_copy_link">Copy link</string>
+    <string name="rs_add_to_home">Add to home</string>
+    <string name="rs_custom_icon_text">Custom icon text</string>
+    <string name="rs_delete">Delete</string>
+    <string name="rs_custom_icon_hint">Text shown in the home shortcut tile, up to %1$d characters.</string>
+    <string name="rs_color_block_text">Tile text</string>
+    <string name="rs_color_block_auto">Leave blank to use the first %1$d characters of the title</string>
+    <string name="rs_save">Save</string>
+
+    <!-- Onboarding -->
+    <string name="rs_app_name">YunX</string>
+    <string name="rs_app_icon_desc">YunX icon</string>
+    <string name="rs_onboarding_tagline">Drive &amp; video link parsing · Online preview · High-speed downloads</string>
+    <string name="rs_fact_drives">10+ drives</string>
+    <string name="rs_fact_video_platforms">7 video platforms</string>
+    <string name="rs_fact_chunked_download">Chunked downloads</string>
+    <string name="rs_fact_free">Completely free</string>
+    <string name="rs_open_source_repo">Open-source repository</string>
+    <string name="rs_qq_not_installed">QQ is not installed; group number copied: %1$s</string>
+    <string name="rs_qq_group">QQ group %1$s</string>
+    <string name="rs_open_qq">Open QQ</string>
+    <string name="rs_read_before_use">Please read before use</string>
+    <string name="rs_terms_intro">YunX is an open-source tool. The terms and disclaimer are below.</string>
+    <string name="rs_terms_title">User agreement</string>
+    <string name="rs_terms_1">This app is an open-source drive share-link parsing and download tool for personal study and technical exchange only. Do not use it for any commercial purpose.</string>
+    <string name="rs_terms_2">Please comply with the terms of service of the drives you use and with local laws. Do not use this app to download or distribute infringing or illegal content.</string>
+    <string name="rs_terms_3">Drive account credentials (Cookie / Token) are stored only on this device and are never uploaded to any server.</string>
+    <string name="rs_terms_4">The app is provided \"as is\". No guarantee is made regarding parsing success rate or download speed, and no promise is made about your results.</string>
+    <string name="rs_disclaimer_title">Disclaimer</string>
+    <string name="rs_disclaimer_1">Copyright of downloaded content belongs to its original authors. Please delete it within 24 hours after downloading.</string>
+    <string name="rs_disclaimer_2">You are solely responsible for any consequences of using this app; the developer accepts no liability arising from such use.</string>
+    <string name="rs_license_title">Open-source license</string>
+    <string name="rs_license_body">This project is open source under GNU AGPL-3.0; the source code is available at %1$s.</string>
+    <string name="rs_terms_agree">By tapping \"Get started\" below, you confirm that you have read and agree to the terms above</string>
+    <string name="rs_previous">Previous</string>
+    <string name="rs_next">Next</string>
+    <string name="rs_get_started">Get started</string>
+
+    <!-- Permission preparation -->
+    <string name="rs_permissions_title">Permission setup</string>
+    <string name="rs_permissions_intro_required">YunX only needs the system permissions below. Storage permission is required to save files on Android 9 and below; the other two can be skipped and changed later in Settings.</string>
+    <string name="rs_permissions_intro_optional">YunX only needs the system permissions below. All of them can be skipped and changed later in Settings.</string>
+    <string name="rs_perm_notification_title">Notification permission</string>
+    <string name="rs_perm_notification_desc">Download progress and completion reminders appear in the notification bar, and the foreground service runs more reliably. If disabled, downloads still work but progress is not visible.</string>
+    <string name="rs_perm_granted">Enabled</string>
+    <string name="rs_perm_grant">Grant</string>
+    <string name="rs_perm_go_settings">Open settings</string>
+    <string name="rs_perm_background_title">Background running</string>
+    <string name="rs_perm_background_desc">Add YunX to the battery optimization ignore list so downloads are not frozen when the screen is locked or the app is in the background (recommended).</string>
+    <string name="rs_perm_whitelisted">Whitelisted</string>
+    <string name="rs_perm_storage_title">Storage permission</string>
+    <string name="rs_perm_storage_desc_required">Saving files to the system Downloads folder requires storage permission; on Android 9 and below it is mandatory.</string>
+    <string name="rs_perm_storage_desc_optional">On Android 10 and above, files are saved through the system media library and storage permission is not needed.</string>
+    <string name="rs_perm_authorized">Granted</string>
+    <string name="rs_perm_no_need">Not needed</string>
+    <string name="rs_perm_go_settings_grant">Grant in settings</string>
+    <string name="rs_perm_skip_impact_required">If skipped: without notification permission → download progress is not shown in the notification bar; without the background whitelist → downloads may pause when the screen turns off. Storage permission is mandatory, so it must be granted before you can start.</string>
+    <string name="rs_perm_skip_impact_optional">If skipped: without notification permission → download progress is not shown in the notification bar; without the background whitelist → downloads may pause when the screen turns off. On Android 10 and above, storage permission is not needed to save files.</string>
+    <string name="rs_category_uncategorized">Uncategorized</string>
+    <string name="rs_category_video">Video</string>
+    <string name="rs_category_document">Documents</string>
+    <string name="rs_category_software">Software</string>
+    <string name="rs_category_music">Music</string>
+    <string name="rs_category_image">Images</string>
+    <string name="rs_category_archive">Archives</string>
+    <string name="rs_category_other">Other</string>
+</resources>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 共通 -->
+    <string name="lg_back">戻る</string>
+    <string name="lg_cancel">キャンセル</string>
+    <string name="lg_save">保存</string>
+    <string name="lg_continue">続ける</string>
+    <string name="lg_got_it">わかりました</string>
+    <string name="lg_login_success">ログインしました</string>
+    <string name="lg_no_login_state">ログイン状態が検出されません。先にログインを完了してください</string>
+    <string name="lg_manual_cookie">Cookie を手動入力</string>
+    <string name="lg_paste_cookie_hint">Cookie を貼り付け…</string>
+    <string name="lg_login_tutorial">ログイン手順</string>
+
+    <!-- Baidu -->
+    <string name="lg_baidu_title">Baidu ネットディスク ログイン</string>
+    <string name="lg_baidu_risk_title">ご利用前にお読みください</string>
+    <string name="lg_baidu_risk_1">Baidu ネットディスクはリスク管理が厳しく、アカウントが制限される場合があります。</string>
+    <string name="lg_baidu_risk_2">以下の現象は通常リスク管理によるもので、ソフトウェアの不具合ではありません：\n· bdstoken の取得に失敗\n· 個人ディスクのファイル一覧が読み込めない</string>
+    <string name="lg_baidu_risk_3">高頻度の操作（頻繁な解析／転送／ダウンロード／アップロード）は避けてください。異常が発生した場合は利用頻度を下げるか、しばらくしてから再試行してください。</string>
+    <string name="lg_baidu_risk_ack">上記のリスクを理解しました</string>
+    <string name="lg_baidu_tutorial_1">1. 下のウェブページで Baidu アカウントにログインします</string>
+    <string name="lg_baidu_tutorial_2">2. ログインは自動で検出されます。自動で検出されない場合は右上の「保存」をタップします</string>
+    <string name="lg_baidu_tutorial_3">3. または「貼り付け」アイコンをタップして Cookie を手動入力します（BDUSS= を含む必要があります）</string>
+    <string name="lg_baidu_tutorial_4">4. Cookie は長期間有効です。失効したら再ログインしてください</string>
+    <string name="lg_baidu_cookie_hint">ログイン状態のウェブページから完全な Cookie をコピーしてください（BDUSS= を含む必要があります）</string>
+    <string name="lg_baidu_cookie_invalid">Cookie が無効です。BDUSS= が含まれているか確認してください</string>
+
+    <!-- Xunlei アカウント / SMS -->
+    <string name="lg_xunlei_title">Xunlei ネットディスク ログイン</string>
+    <string name="lg_mode_password">アカウントパスワード</string>
+    <string name="lg_mode_sms">SMS ログイン</string>
+    <string name="lg_security_verify">セキュリティ認証</string>
+    <string name="lg_xunlei_login_prompt">Xunlei アカウントでログイン</string>
+    <string name="lg_xunlei_sms_sent_to">パスワードログインによりセキュリティ認証が発生しました。認証コードを %1$s に送信しました</string>
+    <string name="lg_xunlei_sms_prompt">パスワードログインによりセキュリティ認証が発生しました。下の「認証コードを送信」をタップしてください</string>
+    <string name="lg_xunlei_password_hint">電話番号 / メールアドレスとパスワードを入力すると、共有ファイルの解析とダウンロードができます</string>
+    <string name="lg_sms_login_title">SMS 認証コードでログイン</string>
+    <string name="lg_sms_login_hint">パスワード不要：電話番号を入力して認証コードを受け取るだけでログインできます（パスワード未設定・忘れた場合もこちら）</string>
+    <string name="lg_sms_code">SMS 認証コード</string>
+    <string name="lg_verify_and_login">認証してログイン</string>
+    <string name="lg_sms_not_received_hint">SMS が届かない場合は、電話番号が正しいか確認するか、しばらくしてから再試行 / ネットワークを切り替えてください</string>
+    <string name="lg_verify_in_app">SMS が届かない場合はアプリ内で認証</string>
+    <string name="lg_verify_in_app_hint">アプリ内で認証を完了すると、自動的に再ログインします</string>
+    <string name="lg_phone">電話番号</string>
+    <string name="lg_sms_note">SMS はご自身で送信し、認証コードを入力する必要があります。未登録の電話番号は Xunlei 公式の手順で処理されます</string>
+    <string name="lg_phone_or_email">電話番号 / メールアドレス</string>
+    <string name="lg_password">パスワード</string>
+    <string name="lg_hide_password">パスワードを隠す</string>
+    <string name="lg_show_password">パスワードを表示</string>
+    <string name="lg_login">ログイン</string>
+    <string name="lg_web_login">ウェブでログイン（QR / 認証コード）</string>
+    <string name="lg_xunlei_web_login_hint">アプリ内で Xunlei ウェブ版のログインを開きます。ログイン状態は自動保存されます。SMS が届かない、またはパスワードログインがブロックされる場合はこれが最も確実です</string>
+    <string name="lg_set_password">パスワード未設定です。タップして設定へ</string>
+    <string name="lg_resend_in_seconds">%1$d 秒後に再送信</string>
+    <string name="lg_resend_code">認証コードを再送信</string>
+    <string name="lg_send_code">認証コードを送信</string>
+
+    <!-- Lanzou -->
+    <string name="lg_lanzou_title">Lanzou ログイン</string>
+    <string name="lg_lanzou_hint">Lanzou アカウントでログイン（公式 API、人機認証は自動で通過します）</string>
+    <string name="lg_lanzou_username_label">ユーザー名 / アカウント / 電話番号</string>
+    <string name="lg_lanzou_tutorial_1">1. Lanzou アカウント（ユーザー名または電話番号）とパスワードを入力し、「ログイン」をタップします。</string>
+    <string name="lg_lanzou_tutorial_2">2. ログイン後、Cookie は暗号化されて端末に保存され、個人ドライブと共有転送に使用されます。</string>
+    <string name="lg_lanzou_tutorial_3">3. パスワードエラーと表示された場合は確認して再試行してください（連続失敗時はしばらく待ってください）。</string>
+    <string name="lg_login_failed_check">ログインに失敗しました。アカウントとパスワードを確認してください</string>
+
+    <!-- Lanzou 優享版 -->
+    <string name="lg_ilanzou_title">Lanzou 優享版ログイン</string>
+    <string name="lg_ilanzou_hint">Lanzou 優享版アカウントでログイン（パスワードは保存され、認証情報の失効後に自動再ログインします）</string>
+    <string name="lg_ilanzou_tutorial_1">1. Lanzou 優享版のユーザー名とパスワードを入力し、「ログイン」をタップします。</string>
+    <string name="lg_ilanzou_tutorial_2">2. ログイン後、appToken とデバイス識別子は暗号化されて端末に保存されます。</string>
+    <string name="lg_ilanzou_tutorial_3">3. アクセス認証に失敗した場合は、しばらくしてから再試行するかウェブログインを使用してください。</string>
+
+    <!-- 共通（追加） -->
+    <string name="lg_username">ユーザー名</string>
+    <string name="lg_logging_in">ログイン中…</string>
+    <string name="lg_login_instructions">ログインの説明</string>
+
+    <!-- GuangYa -->
+    <string name="lg_guangya_title">GuangYa クラウド ログイン</string>
+    <string name="lg_guangya_sms_hint">電話番号で SMS 認証コードを受け取ってログイン / 登録（新規ユーザーは自動登録）</string>
+    <string name="lg_guangya_password_hint">GuangYa クラウドアカウントでログイン（パスワード未設定の場合は公式サイトで設定してください）</string>
+    <string name="lg_guangya_tutorial_1">1. GuangYa クラウドのアカウントとパスワードを入力し、「ログイン」をタップします。</string>
+    <string name="lg_guangya_tutorial_2">2. 「認証コードログイン」をタップし、電話番号で SMS 認証コードを受け取ってログインすることもできます（新規ユーザーは自動登録）。</string>
+    <string name="lg_guangya_tutorial_3">3. ログイン後、access / refresh トークンとデバイス識別子は暗号化されて端末に保存されます。</string>
+    <string name="lg_guangya_tutorial_4">4. セキュリティ認証が必要と表示された場合は、再試行するか別のログイン方法を使用してください。</string>
+    <string name="lg_sms_sent">認証コードを送信しました</string>
+    <string name="lg_account">アカウント</string>
+    <string name="lg_account_placeholder">電話番号 / メールアドレス / ユーザー名</string>
+    <string name="lg_sms_login_entry">認証コードログイン</string>
+    <string name="lg_resend_after_seconds">%1$d 秒後に再送信</string>
+    <string name="lg_get_sms_code">認証コードを取得</string>
+    <string name="lg_login_or_register">ログイン / 登録</string>
+    <string name="lg_back_to_password">パスワードログインに戻る</string>
+
+    <!-- 動画プラットフォーム ウェブログイン -->
+    <string name="lg_error_host_lookup">ホスト名の解決に失敗しました。通常はネットワーク不通です</string>
+    <string name="lg_error_connect">接続がタイムアウトしました。通常はネットワーク不通です</string>
+    <string name="lg_error_unknown">不明なエラー</string>
+    <string name="lg_platform_login_title">%1$s ログイン</string>
+    <string name="lg_refresh_page">ページを更新</string>
+    <string name="lg_web_load_failed">ページの読み込みに失敗しました</string>
+    <string name="lg_web_load_failed_hint">このプラットフォームにローカルからアクセスできない場合（ブロックされた海外サイトなど）は、プロキシに接続してから再試行してください</string>
+    <string name="lg_retry">再試行</string>
+    <string name="lg_video_tutorial_1">1. 下のウェブページで%1$sアカウントにログインします</string>
+    <string name="lg_video_tutorial_2">2. ログインは自動で検出・保存されます。手動操作は不要です</string>
+    <string name="lg_video_tutorial_3">3. 自動保存されない場合は右上の「保存」をタップします。「貼り付け」アイコンから Cookie を手動入力することもできます</string>
+    <string name="lg_video_tutorial_4">4. Cookie は暗号化されて端末に保存されます。失効したら再ログインしてください</string>
+    <string name="lg_video_cookie_hint">ブラウザまたはキャプチャツールから完全な Cookie をコピーしてここに貼り付けてください</string>
+    <string name="lg_cookie_invalid_expired">Cookie が無効または失効しています。もう一度コピーしてください</string>
+    <string name="lg_why_no_web_login">ウェブログインがない理由</string>
+    <string name="lg_manual_only_reason">%1$s のログインページにはリスク管理認証（reCAPTCHA）があり、アプリ内ウェブページではログインを完了できません。そのためウェブログインは提供せず、Cookie を直接貼り付ける方式にしています。</string>
+    <string name="lg_cookie">Cookie</string>
+    <string name="lg_cookie_howto">取得方法：パソコンのブラウザで %1$s にログインし、開発者ツール（F12）→ Application / ストレージ → Cookies を開き、そのサイトの Cookie 全体をコピーします。</string>
+
+    <!-- Xunlei ウェブログイン -->
+    <string name="lg_xunlei_web_title">Xunlei ウェブログイン</string>
+    <string name="lg_manual_paste_credential">ログイン認証情報を手動で貼り付け</string>
+    <string name="lg_no_login_state_web">ログイン状態が検出されません。先にウェブページでログインしてください</string>
+    <string name="lg_web_login_instructions">ウェブログインの説明</string>
+    <string name="lg_xunlei_web_tutorial_1">1. 下のウェブページで Xunlei アカウントにログインします（SMS 認証コード / QR / パスワードのいずれも可）</string>
+    <string name="lg_xunlei_web_tutorial_2">2. ログイン後は自動で認識されログインします。通常は手動操作不要です</string>
+    <string name="lg_xunlei_web_tutorial_3">3. 自動ログインしない場合は右上の「保存」をタップして手動で抽出してください</string>
+    <string name="lg_xunlei_web_tutorial_4">4. それでもだめなら「貼り付け」アイコンをタップし、ウェブログイン後の認証情報 JSON を貼り付けてください</string>
+    <string name="lg_xunlei_web_tutorial_5">5. ウェブログインのトークンは自動更新されます。失効したら再ログインしてください</string>
+
+    <!-- 139 ネットディスク -->
+    <string name="lg_c139_title">139ネットディスク ログイン</string>
+    <string name="lg_c139_tutorial_1">1. 下のウェブページで 139 ネットディスクのアカウント（電話番号）にログインします</string>
+    <string name="lg_c139_tutorial_2">2. ログインは自動で検出されます。自動で検出されない場合は右上の「保存」をタップします</string>
+    <string name="lg_c139_tutorial_3">3. または「貼り付け」アイコンをタップして Cookie を手動入力します（Os_SSo_Sid= と RMKEY= を含む必要があります）</string>
+    <string name="lg_c139_tutorial_4">4. ページが真っ白な場合：システムブラウザで yun.139.com にログインして Cookie をコピー＆貼り付けしても同じ結果になります</string>
+    <string name="lg_c139_tutorial_5">5. Cookie の有効期限は限られています。失効したら再ログインしてください</string>
+    <string name="lg_c139_cookie_hint">ログイン状態のウェブページから完全な Cookie をコピーしてください（Os_SSo_Sid= と RMKEY= を含む必要があります）</string>
+    <string name="lg_c139_cookie_invalid">Cookie が無効です。Os_SSo_Sid= と RMKEY= が含まれているか確認してください</string>
+    <string name="lg_page_load_error_retry">ページの読み込みに異常が発生しました。再試行中…</string>
+
+    <!-- 115 ネットディスク -->
+    <string name="lg_pan115_title">115ネットディスク ログイン</string>
+    <string name="lg_pan115_tutorial_1">1. 下のウェブページで 115 アカウントにログインします（QR / SMS / パスワード対応）</string>
+    <string name="lg_pan115_tutorial_2">2. ログインは自動で検出・完了します。手動操作は不要です</string>
+    <string name="lg_pan115_tutorial_3">3. 自動ログインが発生しない場合は右上の「保存」をタップして手動抽出します（ウェブ Cookie を読み取ります）</string>
+    <string name="lg_pan115_tutorial_4">4. または「貼り付け」アイコンをタップして Cookie 全体を手動で貼り付けます</string>
+    <string name="lg_pan115_tutorial_5">5. 115 の Cookie は定期的に更新されます。失効したら再ログインしてください</string>
+    <string name="lg_pan115_cookie_hint">115 ウェブ版にログイン後、ブラウザの Cookie をコピーしてここに貼り付けてください（UID と SEID を含む必要があります）</string>
+    <string name="lg_pan115_cookie_invalid">Cookie が無効または失効しています。UID と SEID が含まれているか確認してください</string>
+
+    <!-- 123 クラウド -->
+    <string name="lg_pan123_title">123クラウド ログイン</string>
+    <string name="lg_manual_token">Token を手動入力</string>
+    <string name="lg_mode_web">ウェブログイン</string>
+    <string name="lg_pan123_password_title">アカウントパスワードログイン</string>
+    <string name="lg_pan123_password_hint">ウェブページを開かずに 123 クラウドのアカウントで直接ログインします。セキュリティ認証が必要と表示された場合は「ウェブログイン」に切り替えてください</string>
+    <string name="lg_pan123_tutorial_1">1. 下のウェブページで 123 クラウドのアカウントにログインします（パスワード / SMS 認証コード対応）</string>
+    <string name="lg_pan123_tutorial_2">2. ログインは自動で検出・完了します。手動操作は不要です</string>
+    <string name="lg_pan123_tutorial_3">3. 自動ログインが発生しない場合は右上の「保存」をタップして手動抽出します（ウェブ localStorage の authorToken を読み取ります）</string>
+    <string name="lg_pan123_tutorial_4">4. または「貼り付け」アイコンをタップして Token を手動で貼り付けます</string>
+    <string name="lg_pan123_tutorial_5">5. Token は長期間有効です。失効したら再ログインしてください</string>
+    <string name="lg_pan123_token_hint">123 クラウドのウェブにログイン後、localStorage の authorToken の値をコピーしてここに貼り付けてください（ブラウザの開発者ツールで確認できます）</string>
+    <string name="lg_paste_token_hint">authorToken を貼り付け…</string>
+    <string name="lg_pan123_token_invalid">Token が無効です。完全な authorToken か確認してください</string>
+
+    <!-- Quark -->
+    <string name="lg_quark_title">Quark ネットディスク ログイン</string>
+    <string name="lg_quark_tutorial_1">1. 下のウェブページで Quark アカウントにログインします</string>
+    <string name="lg_quark_tutorial_2">2. ログインは自動で検出されます。自動で検出されない場合は右上の「保存」をタップします</string>
+    <string name="lg_quark_tutorial_3">3. または「貼り付け」アイコンをタップして Cookie を手動入力します（__pus= と __puus= を含む必要があります）</string>
+    <string name="lg_quark_tutorial_4">4. Cookie は約 30 日間有効です。失効したら再ログインしてください</string>
+    <string name="lg_quark_cookie_hint">ログイン状態のウェブページから完全な Cookie をコピーしてください（__pus= と __puus= を含む必要があります）</string>
+    <string name="lg_quark_cookie_invalid">Cookie が無効です。__pus= と __puus= が含まれているか確認してください</string>
+
+    <!-- UC ネットディスク -->
+    <string name="lg_uc_title">UCネットディスク ログイン</string>
+    <string name="lg_uc_tutorial_1">1. 下のウェブページで UC アカウントにログインします</string>
+    <string name="lg_uc_tutorial_2">2. ログインは自動で検出されます。自動で検出されない場合は右上の「保存」をタップします</string>
+    <string name="lg_uc_tutorial_3">3. または「貼り付け」アイコンをタップして Cookie を手動入力します（__pus= と __puus= を含む必要があります）</string>
+    <string name="lg_uc_tutorial_4">4. Cookie の有効期限は限られています。失効したら再ログインしてください</string>
+    <string name="lg_uc_cookie_hint">ログイン状態のウェブページから完全な Cookie をコピーしてください（__pus= と __puus= を含む必要があります）</string>
+    <string name="lg_uc_cookie_invalid">Cookie が無効です。__pus= と __puus= が含まれているか確認してください</string>
+
+    <!-- Xunlei 認証 / 認証情報の貼り付け -->
+    <string name="lg_xunlei_verify_title">Xunlei セキュリティ認証</string>
+    <string name="lg_xunlei_paste_hint">パソコンのブラウザで pan.xunlei.com にログイン後、開発者ツールで localStorage の %1$s の値をコピーしてください（JSON 全体で構いません）</string>
+    <string name="lg_paste_credential_hint">認証情報 JSON を貼り付け…</string>
+    <string name="lg_credential_invalid">認証情報が無効または失効しています。完全な内容をコピーしたか確認してください</string>
+</resources>
