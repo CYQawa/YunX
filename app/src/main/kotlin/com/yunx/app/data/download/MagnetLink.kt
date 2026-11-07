@@ -62,10 +62,19 @@ object MagnetLink {
     fun displayName(url: String): String {
         val dn = param(url, "dn").replace(BLANK_CHARS, " ").trim()
         if (dn.isNotEmpty()) return dn.take(MAX_NAME_CHARS)
-        val hash = infoHash(url)
-        return if (hash.length >= 8) AppStrings.get(R.string.ed_magnet_name_short, hash.take(8))
+        val prefix = placeholderHash(url)
+        return if (prefix.isNotEmpty()) AppStrings.get(R.string.ed_magnet_name_short, prefix)
         else AppStrings.get(R.string.ed_magnet_task_name)
     }
+
+    /**
+     * 没有 `dn` 时的占位依据：info hash 前 8 位，取不到返回空串。
+     *
+     * 单独抽出来是为了让「有 hash ⇒ 按 hash 占位 / 没 hash ⇒ 通用兜底」这段判断
+     * 能脱离资源表做单测：JVM 单测里 [AppStrings] 未装配，取到的文案是空串。
+     */
+    internal fun placeholderHash(url: String): String =
+        infoHash(url).takeIf { it.length >= 8 }?.take(8).orEmpty()
 
     /** info hash（统一大写，取不到返回空串）；仅用于显示与日志，不参与去重 */
     fun infoHash(url: String): String =

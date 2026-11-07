@@ -58,10 +58,10 @@ class MagnetLinkTest {
 
     @Test
     fun fallsBackToInfoHashWhenNoDisplayName() {
-        // 没有 dn：用 info hash 前 8 位占位（元数据到手后会被真正的种子名覆盖）
-        assertEquals("磁力_01234567", MagnetLink.displayName("magnet:?xt=urn:btih:$hash"))
+        // 没有 dn：占位依据是 info hash 前 8 位（具体文案随语言变化，这里只锁判断逻辑）
+        assertEquals("01234567", MagnetLink.placeholderHash("magnet:?xt=urn:btih:$hash"))
         // 连 info hash 都没有：给一个不会变成时间戳的兜底名
-        assertEquals("磁力任务", MagnetLink.displayName("magnet:?dn="))
+        assertEquals("", MagnetLink.placeholderHash("magnet:?dn="))
     }
 
     @Test

@@ -26,6 +26,16 @@ import com.yunx.app.util.AppStrings
  */
 internal object Pan123LoginSupport {
 
+    /** 登录失败的类型：只做分类，具体文案由 [describeFailure] 按当前语言渲染 */
+    enum class Failure {
+        API_CHANGED,
+        TOO_FREQUENT,
+        SERVICE_UNAVAILABLE,
+        VERIFY_REQUIRED,
+        ACCOUNT_LOCKED,
+        UNKNOWN
+    }
+
     /** 请求过于频繁（HTTP 429 / 业务 429 / 文案里出现频率相关字样）时的统一提示 */
     val MESSAGE_TOO_FREQUENT: String get() = AppStrings.get(R.string.e2_pan123_too_frequent)
 
@@ -36,25 +46,38 @@ internal object Pan123LoginSupport {
     val MESSAGE_VERIFY_REQUIRED: String get() = AppStrings.get(R.string.e2_pan123_verify_required)
 
     /**
-     * 把登录失败的响应翻译成一句能给用户看的中文（对齐上游项目的映射口径）。
+     * 把登录失败的响应归类（对齐上游项目的映射口径）。
      *
      * 注意顺序：HTTP 层先判（3xx 说明接口形态变了、429/5xx 是服务端问题），再看业务码，
      * 最后才看服务端文案里的关键词——服务端文案只用于**分类**，一个字都不会回显给用户。
+     *
+     * 分类与文案分开是为了可测：JVM 单测没有资源表（[AppStrings] 未装配时取到空串），
+     * 断言分类即可覆盖全部分支。
      */
-    fun describeFailure(httpStatus: Int, code: Int, serverMessage: String): String {
+    fun classifyFailure(httpStatus: Int, code: Int, serverMessage: String): Failure {
         val message = serverMessage.lowercase()
         return when {
-            httpStatus in 300..399 -> AppStrings.get(R.string.e2_pan123_api_changed)
-            httpStatus == 429 -> MESSAGE_TOO_FREQUENT
-            httpStatus >= 500 -> AppStrings.get(R.string.e2_pan123_service_unavailable)
-            code == 429 -> MESSAGE_TOO_FREQUENT
-            FIFTY_PLUS_KEYWORDS.any { message.contains(it) } -> MESSAGE_TOO_FREQUENT
-            VERIFY_KEYWORDS.any { message.contains(it) } -> MESSAGE_VERIFY_REQUIRED
-            FROZEN_KEYWORDS.any { message.contains(it) } ->
-                AppStrings.get(R.string.e2_pan123_account_locked)
-            else -> MESSAGE_FALLBACK
+            httpStatus in 300..399 -> Failure.API_CHANGED
+            httpStatus == 429 -> Failure.TOO_FREQUENT
+            httpStatus >= 500 -> Failure.SERVICE_UNAVAILABLE
+            code == 429 -> Failure.TOO_FREQUENT
+            FIFTY_PLUS_KEYWORDS.any { message.contains(it) } -> Failure.TOO_FREQUENT
+            VERIFY_KEYWORDS.any { message.contains(it) } -> Failure.VERIFY_REQUIRED
+            FROZEN_KEYWORDS.any { message.contains(it) } -> Failure.ACCOUNT_LOCKED
+            else -> Failure.UNKNOWN
         }
     }
+
+    /** 把登录失败渲染成一句能给用户看的提示（随应用内语言变化） */
+    fun describeFailure(httpStatus: Int, code: Int, serverMessage: String): String =
+        when (classifyFailure(httpStatus, code, serverMessage)) {
+            Failure.API_CHANGED -> AppStrings.get(R.string.e2_pan123_api_changed)
+            Failure.TOO_FREQUENT -> MESSAGE_TOO_FREQUENT
+            Failure.SERVICE_UNAVAILABLE -> AppStrings.get(R.string.e2_pan123_service_unavailable)
+            Failure.VERIFY_REQUIRED -> MESSAGE_VERIFY_REQUIRED
+            Failure.ACCOUNT_LOCKED -> AppStrings.get(R.string.e2_pan123_account_locked)
+            Failure.UNKNOWN -> MESSAGE_FALLBACK
+        }
 
     /**
      * 登录返回的令牌是否可用：非空、长度合理、不含控制字符（换行/空字节混进去会污染请求头）。
