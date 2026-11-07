@@ -21,6 +21,7 @@ package com.yunx.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.DownloadTaskEntity
 import com.yunx.app.data.download.ChunkDebug
 import com.yunx.app.data.download.DownloadDebugLog
@@ -28,6 +29,7 @@ import com.yunx.app.data.download.DownloadManager
 import com.yunx.app.data.download.DownloadResourceDebug
 import com.yunx.app.data.download.DownloadStats
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -68,7 +70,10 @@ class DownloadViewModel(private val manager: DownloadManager) : ViewModel() {
     fun redownload(task: DownloadTaskEntity) {
         viewModelScope.launch {
             val ok = manager.redownload(task.id)
-            SnackbarController.show(if (ok) "已重新加入下载" else "直链已过期，请重新获取下载链接")
+            SnackbarController.show(
+                if (ok) AppStrings.get(R.string.dl_snack_redownload_added)
+                else AppStrings.get(R.string.dl_snack_url_expired)
+            )
         }
     }
 

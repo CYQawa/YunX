@@ -26,7 +26,9 @@ import android.provider.DocumentsContract
 import android.util.Log
 import com.gopeed.libgopeed.InvokeResultListener
 import com.gopeed.libgopeed.Libgopeed
+import com.yunx.app.R
 import com.yunx.app.data.prefs.SettingsRepository
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.LogRedactor
 import com.yunx.app.util.PermissionState
 import com.yunx.app.util.StorageDirs
@@ -193,16 +195,24 @@ object GopeedEngine {
      */
     fun prepareDownloadDir(path: String): File {
         val trimmed = path.trim()
-        require(trimmed.startsWith("/")) { "请输入绝对路径（以 / 开头）" }
+        require(trimmed.startsWith("/")) { AppStrings.get(R.string.em_engine_path_absolute) }
         val dir = File(trimmed)
         if (!dir.isDirectory && !dir.mkdirs()) {
-            throw IllegalArgumentException("建不出这个目录：${dir.absolutePath}（检查路径是否正确、上级目录在不在）")
+            throw IllegalArgumentException(
+                AppStrings.get(R.string.em_engine_dir_create_failed, dir.absolutePath)
+            )
         }
         if (!canWrite(dir)) {
             val needAllFiles =
                 PermissionState.allFilesAccessRequired() && !PermissionState.allFilesAccessGranted()
-            val hint = if (needAllFiles) "（先去授予「所有文件访问」）" else ""
-            throw IllegalArgumentException("这个目录不可写：${dir.absolutePath}$hint")
+            val hint = if (needAllFiles) {
+                AppStrings.get(R.string.em_engine_need_all_files)
+            } else {
+                ""
+            }
+            throw IllegalArgumentException(
+                AppStrings.get(R.string.em_engine_dir_not_writable, dir.absolutePath, hint)
+            )
         }
         Log.d(TAG, "自定义下载目录可用：${dir.absolutePath} ${describeDir(dir)}")
         return dir
@@ -254,14 +264,19 @@ object GopeedEngine {
      * @return 解出的字节数
      */
     fun installFromAar(context: Context, uri: Uri): Long {
-        if (_state.value == State.RUNNING) throw IllegalStateException("请先停止引擎，再导入新的引擎文件")
+        if (_state.value == State.RUNNING) {
+            throw IllegalStateException(AppStrings.get(R.string.em_engine_stop_before_install))
+        }
         val abi = preferredAbi()
         val so = soFile(context)
-        val dir = so.parentFile ?: throw IllegalStateException("引擎目录不可用")
+        val dir = so.parentFile
+            ?: throw IllegalStateException(AppStrings.get(R.string.em_engine_dir_unavailable))
         Log.d(TAG, "导入开始：uri=${LogRedactor.url(uri)} abi=$abi supportedAbis=${Build.SUPPORTED_ABIS.joinToString()} 目标=${so.absolutePath}")
         if (!dir.isDirectory && !dir.mkdirs()) {
             Log.e(TAG, "导入失败：无法创建目录 ${dir.absolutePath}（可写=${dir.canWrite()}）")
-            throw IllegalStateException("无法创建目录：${dir.absolutePath}")
+            throw IllegalStateException(
+                AppStrings.get(R.string.em_engine_cannot_create_dir, dir.absolutePath)
+            )
         }
 
         val tmp = File(dir, "$SO_NAME.tmp")
@@ -269,7 +284,7 @@ object GopeedEngine {
         val input = context.contentResolver.openInputStream(uri)
         if (input == null) {
             Log.e(TAG, "导入失败：contentResolver 打不开所选文件 uri=$uri")
-            throw IllegalStateException("无法读取所选文件")
+            throw IllegalStateException(AppStrings.get(R.string.em_engine_cannot_read_file))
         }
         input.use { raw ->
             ZipInputStream(BufferedInputStream(raw)).use { zip ->
@@ -288,22 +303,28 @@ object GopeedEngine {
                 }
                 if (!found) {
                     Log.e(TAG, "导入失败：AAR 里没有 jni/$abi/$SO_NAME，实际条目=$entries")
-                    throw IllegalStateException("这个 AAR 里没有 jni/$abi/$SO_NAME（本机首选 ABI：$abi）")
+                    throw IllegalStateException(
+                        AppStrings.get(R.string.em_engine_aar_missing_so, abi, SO_NAME, abi)
+                    )
                 }
             }
         }
         if (written <= 0L) {
             Log.e(TAG, "导入失败：解出的引擎文件是空的（tmp=${tmp.absolutePath}）")
-            throw IllegalStateException("解出的引擎文件是空的")
+            throw IllegalStateException(AppStrings.get(R.string.em_engine_empty_so))
         }
 
         if (so.exists() && !so.delete()) {
             Log.e(TAG, "导入失败：无法删除旧引擎文件 ${describe(so)}")
-            throw IllegalStateException("无法覆盖旧的引擎文件：${so.absolutePath}")
+            throw IllegalStateException(
+                AppStrings.get(R.string.em_engine_overwrite_failed, so.absolutePath)
+            )
         }
         if (!tmp.renameTo(so)) {
             Log.e(TAG, "导入失败：改名失败 tmp=${tmp.absolutePath} → ${so.absolutePath}")
-            throw IllegalStateException("无法写入引擎文件：${so.absolutePath}")
+            throw IllegalStateException(
+                AppStrings.get(R.string.em_engine_write_failed, so.absolutePath)
+            )
         }
         // 尽量以只读文件加载：Android 10+ 对「由可写 fd 映射出的可执行代码」有额外限制
         so.setReadable(true, true)
@@ -311,7 +332,7 @@ object GopeedEngine {
 
         if (loaded) {
             // dlopen 进来的库没法卸载，只能提示重启
-            lastError = "引擎已在本进程中加载过，新文件需重启应用后才会生效"
+            lastError = AppStrings.get(R.string.em_engine_restart_required)
             pendingRestartForNewKernel = true
         } else {
             lastError = null
@@ -324,9 +345,11 @@ object GopeedEngine {
 
     /** 删除导入的引擎文件（本进程已加载的库仍然有效，直至进程结束） */
     fun uninstall(context: Context) {
-        if (_state.value == State.RUNNING) throw IllegalStateException("请先停止引擎")
+        if (_state.value == State.RUNNING) throw IllegalStateException(AppStrings.get(R.string.em_engine_stop_first))
         val so = soFile(context)
-        if (so.exists() && !so.delete()) throw IllegalStateException("删除失败：${so.absolutePath}")
+        if (so.exists() && !so.delete()) {
+            throw IllegalStateException(AppStrings.get(R.string.em_engine_delete_failed, so.absolutePath))
+        }
         if (!loaded) _state.value = State.NOT_INSTALLED
     }
 
@@ -342,7 +365,9 @@ object GopeedEngine {
         Log.d(TAG, "启动引擎：${describe(so)} loaded=$loaded 下载目录=${downloadDir.absolutePath}")
         if (!so.isFile) {
             Log.e(TAG, "启动失败：还没有导入引擎文件（缺少 ${so.absolutePath}）")
-            throw IllegalStateException("还没有导入 Gopeed 引擎（缺少 ${so.absolutePath}）")
+            throw IllegalStateException(
+                AppStrings.get(R.string.em_engine_not_installed, so.absolutePath)
+            )
         }
         lastError = null
         try {
@@ -387,7 +412,7 @@ object GopeedEngine {
      * @return 响应信封 JSON（{code,msg,data}）；code != 0 时抛异常并带上服务端的 msg。
      */
     fun invoke(method: String, path: String, query: String? = null, body: String? = null): JSONObject {
-        if (_state.value != State.RUNNING) throw IllegalStateException("引擎未启动")
+        if (_state.value != State.RUNNING) throw IllegalStateException(AppStrings.get(R.string.em_engine_not_started))
         val id = requestId.incrementAndGet()
         val latch = CountDownLatch(1)
         var ok = false
@@ -405,22 +430,29 @@ object GopeedEngine {
         Libgopeed.invokeAsync(method, path, query ?: "", body ?: "", id, listener)
         if (!latch.await(60, TimeUnit.SECONDS)) {
             Log.e(TAG, "引擎调用超时（60 秒）：$method $path id=$id")
-            throw IllegalStateException("引擎调用超时（60 秒）：$method $path")
+            throw IllegalStateException(AppStrings.get(R.string.em_engine_invoke_timeout, method, path))
         }
         if (!ok) {
             Log.e(TAG, "引擎调用失败：$method $path id=$id 返回=${LogRedactor.line(payload ?: "").take(300)}")
-            throw IllegalStateException(payload?.takeIf { it.isNotBlank() } ?: "引擎调用失败：$method $path")
+            throw IllegalStateException(
+                payload?.takeIf { it.isNotBlank() }
+                    ?: AppStrings.get(R.string.em_engine_invoke_failed, method, path)
+            )
         }
         val text = payload ?: ""
         val json = try {
             JSONObject(text)
         } catch (e: Exception) {
             Log.e(TAG, "引擎返回内容无法解析：$method $path 原文=${LogRedactor.line(text).take(300)}", e)
-            throw IllegalStateException("引擎返回内容无法解析：${text.take(200)}")
+            throw IllegalStateException(
+                AppStrings.get(R.string.em_engine_response_unparsable, text.take(200))
+            )
         }
         val code = json.optInt("code", 0)
         if (code != 0) {
-            val msg = json.optString("msg").ifBlank { "引擎返回错误码 $code" }
+            val msg = json.optString("msg").ifBlank {
+                AppStrings.get(R.string.em_engine_error_code, code)
+            }
             Log.e(TAG, "引擎返回错误：$method $path code=$code msg=$msg")
             throw IllegalStateException(msg)
         }
@@ -449,7 +481,7 @@ object GopeedEngine {
      */
     fun applyRuntimeConfig(context: Context) {
         val cfg = invoke("GET", "/api/v1/config").optJSONObject("data")
-            ?: throw IllegalStateException("引擎没有返回配置")
+            ?: throw IllegalStateException(AppStrings.get(R.string.em_engine_no_config))
         val maxRunning = maxRunningOf(context)
         cfg.put("maxRunning", maxRunning)
         val protocols = cfg.optJSONObject("protocolConfig") ?: JSONObject()
@@ -479,7 +511,7 @@ object GopeedEngine {
         if (_state.value != State.RUNNING) return null
         val value = maxRunningOf(context)
         val cfg = invoke("GET", "/api/v1/config").optJSONObject("data")
-            ?: throw IllegalStateException("引擎没有返回配置")
+            ?: throw IllegalStateException(AppStrings.get(R.string.em_engine_no_config))
         cfg.put("maxRunning", value)
         invoke("PUT", "/api/v1/config", null, cfg.toString())
 
@@ -524,7 +556,7 @@ object GopeedEngine {
     /** 取单个任务的运行态（GET /api/v1/tasks/{id}/status） */
     fun taskStatus(id: String): TaskView {
         val data = invoke("GET", "/api/v1/tasks/$id/status").optJSONObject("data")
-            ?: throw IllegalStateException("引擎没有返回任务状态")
+            ?: throw IllegalStateException(AppStrings.get(R.string.em_engine_no_task_status))
         return TaskView(
             id = id,
             name = "",
@@ -552,7 +584,7 @@ object GopeedEngine {
 
     fun taskDetail(id: String): TaskDetail {
         val data = invoke("GET", "/api/v1/tasks/$id").optJSONObject("data")
-            ?: throw IllegalStateException("引擎没有返回任务详情")
+            ?: throw IllegalStateException(AppStrings.get(R.string.em_engine_no_task_detail))
         val res = data.optJSONObject("meta")?.optJSONObject("res")
         val files = res?.optJSONArray("files")
         val count = files?.length() ?: 0
@@ -678,9 +710,7 @@ object GopeedEngine {
         } catch (e: UnsatisfiedLinkError) {
             Log.e(TAG, "System.loadLibrary(\"gojni\") 失败：${e.message}", e)
             throw IllegalStateException(
-                "引擎动态库加载失败（两种方式都失败）\n" +
-                    "① System.load(${so.absolutePath})：$directError\n" +
-                    "② System.loadLibrary(\"gojni\")：${e.message}"
+                AppStrings.get(R.string.em_engine_load_failed, so.absolutePath, directError, e.message ?: "-")
             )
         }
     }

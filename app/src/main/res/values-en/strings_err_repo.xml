@@ -1,0 +1,97 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    E3 group: data-layer repository exception / error messages (surfaced via e.message).
+-->
+<resources>
+    <string name="er_share_link_unrecognized">Unrecognized share link</string>
+    <string name="er_login_account_missing">Login session is missing account information. Please sign in again</string>
+    <string name="er_get_download_url_failed">Failed to get download link</string>
+    <string name="er_create_transfer_task_failed">Failed to create save task</string>
+    <string name="er_save_timeout_or_failed">Save timed out or failed</string>
+    <string name="er_c139_kouling_invalid">Failed to parse the 139 Drive share code: the returned share link is invalid</string>
+    <string name="er_c139_transfer_not_needed">139 Drive shares do not need saving</string>
+    <string name="er_c139_use_share_download_link">For 139 Drive shares, use getShareDownloadLink</string>
+    <string name="er_guangya_share_title">GuangYa share</string>
+    <string name="er_guangya_temp_dir_not_needed">GuangYa shares do not need a pre-created temp directory</string>
+    <string name="er_guangya_login_required">Please sign in to GuangYa Drive first</string>
+    <string name="er_guangya_use_share_download_link">For GuangYa shares, use getShareDownloadLink</string>
+    <string name="er_guangya_no_download_url">GuangYa did not return a valid download address. Please check download permissions</string>
+    <string name="er_guangya_duplicate_file">Duplicate file names found in the GuangYa temp directory; unable to determine the download target</string>
+    <string name="er_guangya_size_mismatch">The size of the file saved on GuangYa does not match</string>
+    <string name="er_guangya_target_not_visible">GuangYa save submitted, but the target file is not visible yet. Please try again later</string>
+    <string name="er_guangya_share_login_required">This GuangYa share requires signing in and saving before download. Please sign in to GuangYa Drive first</string>
+    <string name="er_pan115_login_required">Please sign in to 115 Drive first</string>
+    <string name="er_pan115_create_temp_dir_failed">Failed to create the 115 temp directory</string>
+    <string name="er_pan115_create_temp_subdir_failed">Failed to create the 115 save temp directory</string>
+    <string name="er_pan115_file_not_found_after_save">Save completed, but the file was not found in the target directory. Please check 115 Drive</string>
+    <string name="er_pan115_use_share_download_link">For 115 Drive shares, use getShareDownloadLink</string>
+    <string name="er_pan115_pc_required">This shared file can only be downloaded via the 115 PC client. Please sign in to 115 Drive on the Drive page first</string>
+    <string name="er_pan115_pc_url_unavailable">Unable to get the PC download link for this shared file right now. Please try again later</string>
+    <string name="er_share_file_no_url_after_save">No download link was obtained after saving the shared file. Please try again later</string>
+    <string name="er_space_insufficient">Not enough drive space: this share requires %1$s, but only %2$s is available. Please free up space or download another way</string>
+    <string name="er_pan123_transfer_not_needed">123 Drive shares do not need saving</string>
+    <string name="er_pan123_login_required">Please sign in to 123 Drive first</string>
+    <string name="er_pan123_use_share_download_link">For 123 Drive shares, use getShareDownloadLink</string>
+    <string name="er_share_token_missing">Failed to get share credentials</string>
+    <string name="er_get_file_list_failed">Failed to get the file list</string>
+    <string name="er_get_dir_failed">Failed to get the drive directory</string>
+    <string name="er_create_temp_dir_failed">Failed to create the temp directory</string>
+    <string name="er_create_temp_subdir_failed">Failed to create the save temp directory</string>
+    <string name="er_save_failed">Save failed</string>
+    <string name="er_save_timeout">Save timed out. Please try again later</string>
+    <string name="er_xunlei_login_required">Please sign in to Xunlei Drive first</string>
+    <string name="er_xunlei_login_expired">Xunlei login has expired. Please sign in again</string>
+    <string name="er_device_id_missing">Missing device identifier</string>
+    <string name="er_share_info_missing">Failed to get share information</string>
+    <string name="er_guest_download_unsupported">This platform cannot download without signing in. Please sign in and try again</string>
+    <string name="er_lanzou_pwd_required">This Lanzou share requires an access code. Please enter it and resolve again</string>
+    <string name="er_lanzou_session_expired">The Lanzou share session has expired. Please resolve again</string>
+    <string name="er_lanzou_transfer_unsupported">Direct saving is not supported for Lanzou shares. Please download and upload instead</string>
+    <string name="er_lanzou_use_share_download_link">For Lanzou shares, use getShareDownloadLink</string>
+    <string name="er_folder_download_unsupported">Folders cannot be downloaded directly</string>
+    <string name="er_ilanzou_share_title">Lanzou Cloud Premium share</string>
+    <string name="er_ilanzou_login_required">Please sign in to Lanzou Cloud Premium first</string>
+    <string name="er_ilanzou_save_processing">Lanzou Premium is still processing the save. Please refresh the list later</string>
+    <string name="er_ilanzou_use_share_download_link">For Lanzou Premium shares, use getShareDownloadLink</string>
+    <string name="er_ilanzou_temp_dir_not_needed">Lanzou Premium shares do not need a temp directory</string>
+    <string name="er_video_platform_unsupported">Parsing is not supported for %1$s yet</string>
+    <string name="er_lanzou_credential_check_failed">Failed to verify the Lanzou Cloud login credentials. Please try again</string>
+    <string name="er_lanzou_credential_invalid">The Lanzou Cloud login credentials are invalid. Please try again</string>
+    <string name="er_xunlei_captcha_method_mismatch">The verification code does not match the current login method. Please sign in to the Xunlei web version again</string>
+    <string name="er_xunlei_web_login_expired">Xunlei web login has expired. Please sign in again on the Xunlei login page</string>
+    <string name="er_announcement_empty_response">Empty response (HTTP %1$d)</string>
+    <string name="er_announcement_network_error">Network error</string>
+    <string name="er_announcement_bad_response">Unexpected response format</string>
+    <string name="er_announcement_request_failed">Request failed</string>
+    <string name="er_announcement_empty_data">Response data is empty</string>
+    <string name="er_announcement_parse_failed">Failed to parse data</string>
+    <string name="er_time_just_now">Just now</string>
+    <string name="er_time_minutes_ago">%1$d min ago</string>
+    <string name="er_time_hours_ago">%1$d hr ago</string>
+    <string name="er_time_days_ago">%1$d days ago</string>
+    <string name="er_baidu_default_nickname">Baidu user</string>
+    <string name="er_c139_default_nickname">139 user</string>
+    <string name="er_guangya_default_nickname">GuangYa user</string>
+    <string name="er_lanzou_default_nickname">Lanzou Cloud user</string>
+    <string name="er_pan115_default_nickname">115 user</string>
+    <string name="er_quark_default_nickname">Quark user</string>
+    <string name="er_uc_default_nickname">UC user</string>
+    <string name="er_xunlei_default_nickname">Xunlei user</string>
+</resources>

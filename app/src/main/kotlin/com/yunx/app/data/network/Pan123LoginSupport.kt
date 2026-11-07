@@ -18,19 +18,22 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 /**
  * 123 云盘登录的纯逻辑（错误映射 + 令牌校验），单独放一处是为了能脱离网络做单测。
  */
 internal object Pan123LoginSupport {
 
     /** 请求过于频繁（HTTP 429 / 业务 429 / 文案里出现频率相关字样）时的统一提示 */
-    const val MESSAGE_TOO_FREQUENT = "123 登录请求过于频繁，请稍后重试"
+    val MESSAGE_TOO_FREQUENT: String get() = AppStrings.get(R.string.e2_pan123_too_frequent)
 
     /** 兜底文案：**绝不透传服务端原文**（它可能把账号甚至密码回显出来） */
-    const val MESSAGE_FALLBACK = "123 登录失败，请检查账号和密码后重试"
+    val MESSAGE_FALLBACK: String get() = AppStrings.get(R.string.e2_pan123_login_failed)
 
     /** 触发风控、需要人工过验证时的提示：直接引导到网页登录（那条路不受这套风控限制） */
-    const val MESSAGE_VERIFY_REQUIRED = "123 要求额外安全验证，请改用网页登录完成验证"
+    val MESSAGE_VERIFY_REQUIRED: String get() = AppStrings.get(R.string.e2_pan123_verify_required)
 
     /**
      * 把登录失败的响应翻译成一句能给用户看的中文（对齐上游项目的映射口径）。
@@ -41,14 +44,14 @@ internal object Pan123LoginSupport {
     fun describeFailure(httpStatus: Int, code: Int, serverMessage: String): String {
         val message = serverMessage.lowercase()
         return when {
-            httpStatus in 300..399 -> "123 登录接口发生变化，请稍后重试"
+            httpStatus in 300..399 -> AppStrings.get(R.string.e2_pan123_api_changed)
             httpStatus == 429 -> MESSAGE_TOO_FREQUENT
-            httpStatus >= 500 -> "123 登录服务暂时不可用，请稍后重试"
+            httpStatus >= 500 -> AppStrings.get(R.string.e2_pan123_service_unavailable)
             code == 429 -> MESSAGE_TOO_FREQUENT
             FIFTY_PLUS_KEYWORDS.any { message.contains(it) } -> MESSAGE_TOO_FREQUENT
             VERIFY_KEYWORDS.any { message.contains(it) } -> MESSAGE_VERIFY_REQUIRED
             FROZEN_KEYWORDS.any { message.contains(it) } ->
-                "123 账号暂时不可登录，请先在官方客户端检查账号状态"
+                AppStrings.get(R.string.e2_pan123_account_locked)
             else -> MESSAGE_FALLBACK
         }
     }

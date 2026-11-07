@@ -24,10 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.XunleiAccountEntity
 import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.XunleiLoginStep
 import com.yunx.app.data.repository.XunleiAccountRepository
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -121,7 +123,7 @@ class XunleiAccountViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                loginError = "登录失败，请检查网络后重试"
+                loginError = AppStrings.get(R.string.vm_login_failed_network)
                 return@launch
             }
             try {
@@ -143,8 +145,10 @@ class XunleiAccountViewModel(
                             loginStep = smsStep
                         } else {
                             // 不再丢外部链接：给明确失败提示 + 让用户重试
-                            loginError = smsStep.message.ifBlank { "短信发送失败，请重试或检查网络" }
-                            loginStep = step.copy(message = "短信发送失败")
+                            loginError = smsStep.message.ifBlank {
+                                AppStrings.get(R.string.vm_xunlei_sms_send_failed_retry)
+                            }
+                            loginStep = step.copy(message = AppStrings.get(R.string.vm_xunlei_sms_send_failed))
                         }
                     }
                 } else if (step.sessionKey.isNotBlank() && step.sessionId.isNotBlank()) {
@@ -153,16 +157,18 @@ class XunleiAccountViewModel(
                         addNewAccount = false
                         loginSucceeded = true
                     } else {
-                        loginError = "登录失败，无法换取凭证"
+                        loginError = AppStrings.get(R.string.vm_xunlei_login_failed_credentials)
                     }
                 } else {
-                    loginError = step.message.ifBlank { "登录失败，请检查账号密码" }
+                    loginError = step.message.ifBlank {
+                        AppStrings.get(R.string.vm_xunlei_login_failed_account)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                loginError = "登录失败，请检查网络后重试"
-                loginStep = step.copy(message = "网络异常")
+                loginError = AppStrings.get(R.string.vm_login_failed_network)
+                loginStep = step.copy(message = AppStrings.get(R.string.vm_xunlei_network_error))
             }
         }
     }
@@ -192,7 +198,7 @@ class XunleiAccountViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                loginError = "短信发送失败，请检查网络后重试"
+                loginError = AppStrings.get(R.string.vm_xunlei_sms_login_failed)
             } finally {
                 // 必须放 finally：中途抛异常时按钮上的转圈要能停，否则按钮永远点不动
                 sendingSms = false
@@ -211,14 +217,14 @@ class XunleiAccountViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                loginError = "登录失败，请检查网络后重试"
+                loginError = AppStrings.get(R.string.vm_login_failed_network)
                 return@launch
             }
             if (ok) {
                 addNewAccount = false
                 loginSucceeded = true
             } else {
-                loginError = "验证码校验失败"
+                loginError = AppStrings.get(R.string.vm_xunlei_code_verify_failed)
             }
         }
     }

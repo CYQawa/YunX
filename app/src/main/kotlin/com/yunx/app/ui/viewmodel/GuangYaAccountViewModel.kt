@@ -21,8 +21,10 @@ package com.yunx.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.GuangYaAccountEntity
 import com.yunx.app.data.repository.GuangYaAccountRepository
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -58,7 +60,7 @@ class GuangYaAccountViewModel(
     /** 账号密码登录；返回 (是否成功, 提示文案)。 */
     suspend fun login(account: String, password: String): Pair<Boolean, String> = try {
         if (account.isBlank() || password.isBlank()) {
-            false to "请输入光鸭账号和密码"
+            false to AppStrings.get(R.string.vm_guangya_enter_account_password)
         } else {
             // ★ 必须按 Result 分流：登录失败时仓库返回的是 failure，不是抛异常。
             //   旧实现只看了 isSuccess 去清标记，然后无条件回「登录成功」——
@@ -66,15 +68,15 @@ class GuangYaAccountViewModel(
             repository.login(account, password, newAccount = addNewAccount).fold(
                 onSuccess = {
                     addNewAccount = false
-                    true to "登录成功"
+                    true to AppStrings.get(R.string.vm_login_success)
                 },
                 onFailure = { e ->
-                    false to (e.message ?: "光鸭登录失败，请检查账号密码，或切换网页登录")
+                    false to (e.message ?: AppStrings.get(R.string.vm_guangya_login_failed))
                 }
             )
         }
     } catch (e: Exception) {
-        false to (e.message ?: "光鸭登录失败，请检查账号密码，或切换网页登录")
+        false to (e.message ?: AppStrings.get(R.string.vm_guangya_login_failed))
     }
 
     /** 发送短信验证码的结果：成功返回 verification_id 与是否老用户，供登录页倒计时/端点选择。 */
@@ -86,13 +88,13 @@ class GuangYaAccountViewModel(
     /** 发送短信验证码（文档 §2.6）。 */
     suspend fun sendSms(phoneNumber: String): GuangYaSmsResult = try {
         if (phoneNumber.isBlank()) {
-            GuangYaSmsResult.Failure("请输入手机号")
+            GuangYaSmsResult.Failure(AppStrings.get(R.string.vm_guangya_enter_phone))
         } else {
             val challenge = repository.sendSms(phoneNumber).getOrThrow()
             GuangYaSmsResult.Success(challenge.verificationId, challenge.isUser, challenge.expiresIn)
         }
     } catch (e: Exception) {
-        GuangYaSmsResult.Failure(e.message ?: "发送验证码失败")
+        GuangYaSmsResult.Failure(e.message ?: AppStrings.get(R.string.vm_guangya_send_sms_failed))
     }
 
     /** 短信验证码登录 / 注册（文档 §2.7/§2.8）：返回 (是否成功, 提示文案)。 */
@@ -103,11 +105,11 @@ class GuangYaAccountViewModel(
         isUser: Boolean
     ): Pair<Boolean, String> = try {
         if (phoneNumber.isBlank()) {
-            false to "请输入手机号"
+            false to AppStrings.get(R.string.vm_guangya_enter_phone)
         } else if (verificationId.isBlank()) {
-            false to "请先获取验证码"
+            false to AppStrings.get(R.string.vm_guangya_get_code_first)
         } else if (code.isBlank()) {
-            false to "请输入验证码"
+            false to AppStrings.get(R.string.vm_guangya_enter_code)
         } else {
             // 同上：短信登录失败也是 Result.failure，不能无条件回「登录成功」
             repository.smsLogin(
@@ -119,15 +121,15 @@ class GuangYaAccountViewModel(
             ).fold(
                 onSuccess = {
                     addNewAccount = false
-                    true to "登录成功"
+                    true to AppStrings.get(R.string.vm_login_success)
                 },
                 onFailure = { e ->
-                    false to (e.message ?: "短信验证码错误或已过期，请重新获取")
+                    false to (e.message ?: AppStrings.get(R.string.vm_guangya_sms_invalid))
                 }
             )
         }
     } catch (e: Exception) {
-        false to (e.message ?: "短信验证码错误或已过期，请重新获取")
+        false to (e.message ?: AppStrings.get(R.string.vm_guangya_sms_invalid))
     }
 
     class Factory(

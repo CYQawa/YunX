@@ -71,15 +71,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.yunx.app.R
 import com.yunx.app.data.network.video.VideoPlatform
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.components.YunXWavyLoading
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.VideoAccountViewModel
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -235,10 +238,10 @@ fun VideoLoginScreen(
                     )
                     isLoading = false
                     loadError = when (error?.errorCode) {
-                        WebViewClient.ERROR_HOST_LOOKUP -> "域名解析失败，通常是网络不通"
+                        WebViewClient.ERROR_HOST_LOOKUP -> AppStrings.get(R.string.lg_error_host_lookup)
                         WebViewClient.ERROR_CONNECT,
-                        WebViewClient.ERROR_TIMEOUT -> "连接超时，通常是网络不通"
-                        else -> error?.description?.toString().orEmpty().ifBlank { "未知错误" }
+                        WebViewClient.ERROR_TIMEOUT -> AppStrings.get(R.string.lg_error_connect)
+                        else -> error?.description?.toString().orEmpty().ifBlank { AppStrings.get(R.string.lg_error_unknown) }
                     }
                 }
             }
@@ -277,11 +280,11 @@ fun VideoLoginScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("${platform.displayName} 登录", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.lg_platform_login_title, platform.displayName), style = MaterialTheme.typography.titleLarge)
                 },
                 navigationIcon = {
                     IconButton(onClick = { if (!isSaving && !isSavingManual) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 actions = {
@@ -299,7 +302,7 @@ fun VideoLoginScreen(
                     ) {
                         Icon(
                             Icons.Outlined.Refresh,
-                            contentDescription = "刷新网页",
+                            contentDescription = stringResource(R.string.lg_refresh_page),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -310,7 +313,7 @@ fun VideoLoginScreen(
                     ) {
                         Icon(
                             Icons.Outlined.ContentPaste,
-                            contentDescription = "手动输入 Cookie",
+                            contentDescription = stringResource(R.string.lg_manual_cookie),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -322,10 +325,10 @@ fun VideoLoginScreen(
                                 val saved = viewModel.save(platform, cookie, newAccount) != null
                                 isSaving = false
                                 if (saved) {
-                                    SnackbarController.show("登录成功")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                     onSaved()
                                 } else {
-                                    SnackbarController.show("未检测到登录态，请先完成登录")
+                                    SnackbarController.show(AppStrings.get(R.string.lg_no_login_state))
                                 }
                             }
                         },
@@ -337,7 +340,7 @@ fun VideoLoginScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("保存")
+                            Text(stringResource(R.string.lg_save))
                         }
                     }
                 },
@@ -375,7 +378,7 @@ fun VideoLoginScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "网页加载失败",
+                            text = stringResource(R.string.lg_web_load_failed),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -388,7 +391,7 @@ fun VideoLoginScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "若这个平台在本地访问不了（例如被墙的境外站点），请先连上代理再重试",
+                            text = stringResource(R.string.lg_web_load_failed_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -400,7 +403,7 @@ fun VideoLoginScreen(
                                 isLoading = true
                                 webView.loadUrl(platform.loginUrl)
                             }
-                        ) { Text("重试") }
+                        ) { Text(stringResource(R.string.lg_retry)) }
                     }
                 }
             }
@@ -412,30 +415,30 @@ fun VideoLoginScreen(
         AlertDialog(
             onDismissRequest = { showTutorial = false },
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-            title = { Text("登录教程") },
+            title = { Text(stringResource(R.string.lg_login_tutorial)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "1. 在下方网页中登录${platform.displayName}账号",
+                        text = stringResource(R.string.lg_video_tutorial_1, platform.displayName),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "2. 登录成功后会自动检测并保存，无需手动操作",
+                        text = stringResource(R.string.lg_video_tutorial_2),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "3. 若没有自动保存，点右上角「保存」；也可点「粘贴」图标手动输入 Cookie",
+                        text = stringResource(R.string.lg_video_tutorial_3),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "4. Cookie 会加密保存在本机，失效后需重新登录",
+                        text = stringResource(R.string.lg_video_tutorial_4),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showTutorial = false }) { Text("知道了") }
+                TextButton(onClick = { showTutorial = false }) { Text(stringResource(R.string.lg_got_it)) }
             }
         )
     }
@@ -444,11 +447,11 @@ fun VideoLoginScreen(
     if (showCookieDialog) {
         AlertDialog(
             onDismissRequest = { if (!isSavingManual) showCookieDialog = false },
-            title = { Text("手动输入 Cookie") },
+            title = { Text(stringResource(R.string.lg_manual_cookie)) },
             text = {
                 Column {
                     Text(
-                        text = "从浏览器或抓包工具复制完整的 Cookie 后粘贴到这里",
+                        text = stringResource(R.string.lg_video_cookie_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -457,7 +460,7 @@ fun VideoLoginScreen(
                         value = cookieInput,
                         onValueChange = { cookieInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("粘贴 Cookie…") },
+                        placeholder = { Text(stringResource(R.string.lg_paste_cookie_hint)) },
                         minLines = 4,
                         maxLines = 8
                     )
@@ -471,11 +474,11 @@ fun VideoLoginScreen(
                             val saved = viewModel.save(platform, normalizePastedCookie(cookieInput), newAccount) != null
                             isSavingManual = false
                             if (saved) {
-                                SnackbarController.show("登录成功")
+                                SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                 showCookieDialog = false
                                 onSaved()
                             } else {
-                                SnackbarController.show("Cookie 无效或已过期，请重新复制")
+                                SnackbarController.show(AppStrings.get(R.string.lg_cookie_invalid_expired))
                             }
                         }
                     },
@@ -487,7 +490,7 @@ fun VideoLoginScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("保存")
+                        Text(stringResource(R.string.lg_save))
                     }
                 }
             },
@@ -495,7 +498,7 @@ fun VideoLoginScreen(
                 TextButton(
                     onClick = { if (!isSavingManual) showCookieDialog = false },
                     enabled = !isSavingManual
-                ) { Text("取消") }
+                ) { Text(stringResource(R.string.lg_cancel)) }
             }
         )
     }
@@ -561,11 +564,11 @@ private fun ManualCookieLoginScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("${platform.displayName} 登录", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.lg_platform_login_title, platform.displayName), style = MaterialTheme.typography.titleLarge)
                 },
                 navigationIcon = {
                     IconButton(onClick = { if (!isSaving) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -599,15 +602,14 @@ private fun ManualCookieLoginScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "为什么没有网页登录",
+                            text = stringResource(R.string.lg_why_no_web_login),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Medium
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "${platform.displayName} 的登录页带有风控验证（reCAPTCHA），在 App 内置网页里" +
-                            "无法完成登录，因此这里不再提供网页登录，改为直接粘贴 Cookie。",
+                        text = stringResource(R.string.lg_manual_only_reason, platform.displayName),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -617,7 +619,7 @@ private fun ManualCookieLoginScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Cookie",
+                text = stringResource(R.string.lg_cookie),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -626,14 +628,13 @@ private fun ManualCookieLoginScreen(
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("粘贴 Cookie…") },
+                placeholder = { Text(stringResource(R.string.lg_paste_cookie_hint)) },
                 minLines = 4,
                 maxLines = 12
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "获取方法：在电脑浏览器登录 ${platform.displayName} 后打开开发者工具（F12）→ " +
-                    "Application / 存储 → Cookies，复制该站点下的整条 Cookie。",
+                text = stringResource(R.string.lg_cookie_howto, platform.displayName),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -647,10 +648,10 @@ private fun ManualCookieLoginScreen(
                         val saved = viewModel.save(platform, normalizePastedCookie(input), newAccount) != null
                         isSaving = false
                         if (saved) {
-                            SnackbarController.show("登录成功")
+                            SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                             onSaved()
                         } else {
-                            SnackbarController.show("Cookie 无效或已过期，请重新复制")
+                            SnackbarController.show(AppStrings.get(R.string.lg_cookie_invalid_expired))
                         }
                     }
                 },
@@ -660,7 +661,7 @@ private fun ManualCookieLoginScreen(
                 if (isSaving) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("保存")
+                    Text(stringResource(R.string.lg_save))
                 }
             }
         }

@@ -59,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -66,9 +67,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.viewmodel.ILanzouAccountViewModel
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.launch
 
 /**
@@ -97,17 +100,17 @@ fun ILanzouLoginScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("蓝奏云优享版登录", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.lg_ilanzou_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = { if (!isSaving) onBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showTutorial = true }, enabled = !isSaving) {
                         Icon(
                             Icons.Outlined.Info,
-                            contentDescription = "登录教程",
+                            contentDescription = stringResource(R.string.lg_login_tutorial),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -125,7 +128,7 @@ fun ILanzouLoginScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "使用蓝奏云优享版账号密码登录（登录后会保存密码，用于凭据过期后自动重新登录）",
+                text = stringResource(R.string.lg_ilanzou_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -137,7 +140,7 @@ fun ILanzouLoginScreen(
                     error = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("用户名") },
+                label = { Text(stringResource(R.string.lg_username)) },
                 singleLine = true,
                 enabled = !isSaving,
                 shape = MaterialTheme.shapes.large
@@ -150,7 +153,7 @@ fun ILanzouLoginScreen(
                     error = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("密码") },
+                label = { Text(stringResource(R.string.lg_password)) },
                 singleLine = true,
                 enabled = !isSaving,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -160,7 +163,7 @@ fun ILanzouLoginScreen(
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
                             if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                            contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                            contentDescription = if (passwordVisible) stringResource(R.string.lg_hide_password) else stringResource(R.string.lg_show_password)
                         )
                     }
                 },
@@ -184,7 +187,7 @@ fun ILanzouLoginScreen(
                         val (ok, msg) = viewModel.login(account.trim(), password)
                         isSaving = false
                         if (ok) {
-                            SnackbarController.show("登录成功")
+                            SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                             onSaved()
                         } else {
                             error = msg
@@ -197,9 +200,9 @@ fun ILanzouLoginScreen(
                 if (isSaving) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("登录中…")
+                    Text(stringResource(R.string.lg_logging_in))
                 } else {
-                    Text("登录")
+                    Text(stringResource(R.string.lg_login))
                 }
             }
         }
@@ -209,22 +212,22 @@ fun ILanzouLoginScreen(
         AlertDialog(
             onDismissRequest = { showTutorial = false },
             icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-            title = { Text("登录说明") },
+            title = { Text(stringResource(R.string.lg_login_instructions)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("1. 输入蓝奏云优享版的用户名与密码后点击「登录」。", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.lg_ilanzou_tutorial_1), style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "2. 登录成功后 appToken 与设备标识会加密保存在本机。",
+                        stringResource(R.string.lg_ilanzou_tutorial_2),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "3. 若提示访问验证未通过，请稍后重试或使用网页登录。",
+                        stringResource(R.string.lg_ilanzou_tutorial_3),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { showTutorial = false }) { Text("知道了") } }
+            confirmButton = { TextButton(onClick = { showTutorial = false }) { Text(stringResource(R.string.lg_got_it)) } }
         )
     }
 }

@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -127,9 +129,9 @@ class BaiduApi(
                 .post(body.toRequestBody(formMediaType))
                 .build()
             val json = executeJson(request)
-            checkErrno(json, "验证提取码失败")
+            checkErrno(json, AppStrings.get(R.string.e1_baidu_verify_pwd_failed))
             json.optString("randsk").takeIf { it.isNotBlank() }
-                ?: throw BaiduApiException("未返回分享密钥")
+                ?: throw BaiduApiException(AppStrings.get(R.string.e1_baidu_no_share_key))
         }
 
     /**
@@ -168,11 +170,11 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             // 但 errno=-6 是「未登录/身份验证失败」（游客模式下常见），此时光提示提取码会让人白找密码，单独区分。
             if (sekey.isBlank()) {
                 throw BaiduApiException(
-                    if (errno == -6) "该分享需要提取码，或需要登录百度网盘（errno=$errno）"
-                    else "该分享需要提取码（errno=$errno）"
+                    if (errno == -6) AppStrings.get(R.string.e1_baidu_need_pwd_or_login_errno, errno)
+                    else AppStrings.get(R.string.e1_baidu_need_pwd_errno, errno)
                 )
             }
-            checkErrno(json, "获取分享文件列表失败")
+            checkErrno(json, AppStrings.get(R.string.e1_baidu_get_share_list_failed))
         }
         val array = json.optJSONArray("list") ?: org.json.JSONArray()
         val files = buildList {
@@ -244,9 +246,9 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         parentPath: String,
         cookie: String
     ): String? = withContext(Dispatchers.IO) {
-        if (file.size <= 0L) throw IllegalStateException("百度网盘不支持上传空文件")
+        if (file.size <= 0L) throw IllegalStateException(AppStrings.get(R.string.e1_baidu_empty_file_unsupported))
         val bdstoken = getBdstoken(cookie)
-            ?: throw IllegalStateException("获取百度会话令牌失败，请重新登录")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e1_baidu_session_token_failed))
         io.progress(UploadPhase.PREPARING)
         val path = parentPath.trimEnd('/') + "/" + file.name
         val chunkSize = 4L * 1024 * 1024
@@ -278,23 +280,25 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
                 .post(preBody.toRequestBody(formMediaType))
                 .build()
         )
-        checkErrno(pre, "创建上传任务失败")
+        checkErrno(pre, AppStrings.get(R.string.e1_upload_task_create_failed))
         if (pre.optInt("return_type") == 2) {
             // 秒传：服务端已有同内容文件
             io.progress(UploadPhase.FINISHING, file.size)
             return@withContext pre.optJSONObject("info")?.optString("fs_id")?.takeIf { it.isNotBlank() }
         }
         val uploadId = pre.optString("uploadid")
-        if (uploadId.isBlank()) throw IllegalStateException("百度未创建上传任务")
+        if (uploadId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e1_baidu_no_upload_task))
         val needed = pre.optJSONArray("block_list")
-            ?: throw IllegalStateException("百度未返回待上传分段")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e1_baidu_no_upload_blocks))
         val servers = if (needed.length() == 0) emptyList() else uploadServers(cookie, bdstoken, pre.optString("uploadsign"))
-        if (needed.length() > 0 && servers.isEmpty()) throw IllegalStateException("百度未返回可用上传节点，请稍后重试")
+        if (needed.length() > 0 && servers.isEmpty()) throw IllegalStateException(
+            AppStrings.get(R.string.e1_baidu_no_upload_node)
+        )
         val uploaded = mutableSetOf<Int>()
         for (position in 0 until needed.length()) {
             val index = needed.optInt(position, -1)
-            if (index < 0 || index >= count) throw IllegalStateException("百度返回的上传分段序号无效")
-            if (!uploaded.add(index)) throw IllegalStateException("百度返回的上传分段序号无效")
+            if (index < 0 || index >= count) throw IllegalStateException(AppStrings.get(R.string.e1_baidu_invalid_block_index))
+            if (!uploaded.add(index)) throw IllegalStateException(AppStrings.get(R.string.e1_baidu_invalid_block_index))
             val response = io.send(
                 url = "${servers.first()}/rest/2.0/pcs/superfile2?$params" +
                     "&method=upload&type=tmpfile&path=${urlEncode(path)}" +
@@ -308,12 +312,14 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
                 ),
                 retries = 1
             )
-            if (!response.isSuccessful) throw IllegalStateException("文件上传失败（HTTP ${response.code}）")
+            if (!response.isSuccessful) throw IllegalStateException(
+                AppStrings.get(R.string.e1_upload_failed_http, response.code)
+            )
             val part = runCatching { response.json() }.getOrNull()
-                ?: throw IllegalStateException("百度上传分段响应异常，请重试")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e1_baidu_block_response_error))
             val remoteMd5 = part.optString("md5")
             if (!remoteMd5.equals(blocks[index], ignoreCase = true)) {
-                throw IllegalStateException("百度上传分段校验失败，请重试")
+                throw IllegalStateException(AppStrings.get(R.string.e1_baidu_block_verify_failed))
             }
         }
         io.progress(UploadPhase.FINISHING, file.size)
@@ -335,7 +341,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
                 .post(commitBody.toRequestBody(formMediaType))
                 .build()
         )
-        checkErrno(committed, "合并上传分段失败")
+        checkErrno(committed, AppStrings.get(R.string.e1_merge_upload_failed))
         committed.optString("fs_id").takeIf { it.isNotBlank() }
     }
 
@@ -398,7 +404,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         cookie: String
     ): BaiduTransferResult = withContext(Dispatchers.IO) {
         val bdstoken = getBdstoken(cookie)
-            ?: throw BaiduApiException("获取 bdstoken 失败，请重新登录")
+            ?: throw BaiduApiException(AppStrings.get(R.string.e1_baidu_bdstoken_failed))
         val url = "https://pan.baidu.com/share/transfer?shareid=$shareId&from=$uk" +
             "&channel=chunlei&sekey=$sekey&ondup=newcopy&web=1&app_id=${BaiduConstants.APP_ID}" +
             "&bdstoken=$bdstoken&clienttype=0"
@@ -416,12 +422,12 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             .post(body.toRequestBody(formMediaType))
             .build()
         val json = executeJson(request)
-        checkErrno(json, "转存失败")
+        checkErrno(json, AppStrings.get(R.string.e1_copy_save_failed))
         val extra = json.optJSONObject("extra")
         val list = extra?.optJSONArray("list")
         val first = list?.optJSONObject(0)
         val fsIdNew = first?.optString("to_fs_id")?.takeIf { it.isNotBlank() }
-            ?: throw BaiduApiException("转存失败：未返回新文件")
+            ?: throw BaiduApiException(AppStrings.get(R.string.e1_baidu_transfer_no_file))
         val pathNew = first?.optString("to")?.takeIf { it.isNotBlank() }
             ?: "$toDir/"
         BaiduTransferResult(fsId = fsIdNew, path = pathNew)
@@ -464,7 +470,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             .post("0".toRequestBody(formMediaType))
             .build()
         val json = executeJson(request)
-        checkErrno(json, "获取高速下载链接失败")
+        checkErrno(json, AppStrings.get(R.string.e1_baidu_get_fast_link_failed))
         // 直链候选选择：优先 encrypt=0（明文，无需解密）的 https 直链（appall01/02）；
         // rank1 的 d2-ant 为 encrypt=1 加密通道（需 AES-CTR 解密且部分网络 TLS 握手失败），直接排除；
         // 全部为加密通道时退回第一个 https 候选（仍有尝试价值），最后兜底第一个候选。
@@ -478,7 +484,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             .firstOrNull()?.optString("url")
             ?: candidates.firstOrNull { it.optString("url").startsWith("https") }?.optString("url")
             ?: candidates.firstOrNull()?.optString("url")
-            ?: throw BaiduApiException("未返回下载链接")
+            ?: throw BaiduApiException(AppStrings.get(R.string.e1_no_download_link))
         directUrl
     }
 
@@ -489,7 +495,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
      */
     suspend fun fileMetasDlink(fsId: String, cookie: String): String = withContext(Dispatchers.IO) {
         val bdstoken = getBdstoken(cookie)
-            ?: throw BaiduApiException("获取 bdstoken 失败，请重新登录")
+            ?: throw BaiduApiException(AppStrings.get(R.string.e1_baidu_bdstoken_failed))
         val fsids = URLEncoder.encode("""["$fsId"]""", "UTF-8")
         val url = "https://pan.baidu.com/api/filemetas?dlink=1&fsids=$fsids&bdstoken=$bdstoken" +
             "&clienttype=0&app_id=${BaiduConstants.APP_ID}&web=1"
@@ -500,10 +506,10 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             .get()
             .build()
         val json = executeJson(request)
-        checkErrno(json, "获取下载链接失败")
+        checkErrno(json, AppStrings.get(R.string.e1_get_download_link_failed))
         val info = json.optJSONArray("info")
         val dlink = info?.optJSONObject(0)?.optString("dlink")?.takeIf { it.isNotBlank() }
-            ?: throw BaiduApiException("未返回下载链接")
+            ?: throw BaiduApiException(AppStrings.get(R.string.e1_no_download_link))
         dlink
     }
 
@@ -563,7 +569,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             "baidu_list_failed",
             "app=$appError web=$webError"
         )
-        throw BaiduApiException(webError ?: appError ?: "百度文件列表加载失败")
+        throw BaiduApiException(webError ?: appError ?: AppStrings.get(R.string.e1_baidu_list_failed))
     }
 
     /**
@@ -592,7 +598,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             val json = executeJson(request)
             if (json.optInt("errno") != 0) throw BaiduApiException(listErrorMessage(json))
             val array = json.optJSONArray("list")
-                ?: throw BaiduApiException("百度文件列表响应不完整，请刷新重试")
+                ?: throw BaiduApiException(AppStrings.get(R.string.e1_baidu_list_incomplete))
             var fresh = 0
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
@@ -647,10 +653,12 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             }
             .orEmpty()
         return buildString {
-            append("百度文件列表加载失败（errno=").append(errno)
-            if (message.isNotBlank()) append("：").append(message)
-            append('）')
-            if (errno == -6) append("，登录已失效，请重新登录百度网盘")
+            if (message.isNotBlank()) {
+                append(AppStrings.get(R.string.e1_baidu_list_failed_errno_msg, errno, message))
+            } else {
+                append(AppStrings.get(R.string.e1_baidu_list_failed_errno, errno))
+            }
+            if (errno == -6) append(AppStrings.get(R.string.e1_baidu_login_expired_suffix))
         }
     }
 
@@ -800,7 +808,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         cookie: String
     ): BaiduShareResult = withContext(Dispatchers.IO) {
         val bdstoken = getBdstoken(cookie)
-            ?: throw BaiduApiException("获取 bdstoken 失败，请重新登录")
+            ?: throw BaiduApiException(AppStrings.get(R.string.e1_baidu_bdstoken_failed))
         val fidList = fsIds.joinToString(",", "[", "]")
         val body = "fid_list=${URLEncoder.encode(fidList, "UTF-8")}" +
             "&schannel=4&channel_list=%5B%5D&period=$period&pwd=${urlEncode(pwd)}"
@@ -814,9 +822,9 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
             .post(body.toRequestBody(formMediaType))
             .build()
         val json = executeJson(request)
-        checkErrno(json, "创建分享失败")
+        checkErrno(json, AppStrings.get(R.string.e1_create_share_failed))
         val link = json.optString("shorturl").ifBlank { json.optString("link") }
-            .takeIf { it.isNotBlank() } ?: throw BaiduApiException("未返回分享链接")
+            .takeIf { it.isNotBlank() } ?: throw BaiduApiException(AppStrings.get(R.string.e1_baidu_no_share_link))
         BaiduShareResult(
             link = link,
             pwd = pwd,
@@ -858,10 +866,12 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
     private fun executeJson(request: Request): JSONObject {
         val response = client.newCall(request).execute()
         val status = response.code
-        val body = response.use { it.body?.string() ?: throw BaiduApiException("请求失败：响应为空") }
+        val body = response.use {
+            it.body?.string() ?: throw BaiduApiException(AppStrings.get(R.string.e1_response_empty))
+        }
         // 带上 HTTP 状态码：百度鉴权失败时可能直接回 HTML 登录页，只报「解析失败」会查不出是哪一类
         return runCatching { JSONObject(body) }.getOrElse {
-            throw BaiduApiException("响应解析失败（HTTP $status）")
+            throw BaiduApiException(AppStrings.get(R.string.e1_response_parse_failed_http, status))
         }
     }
 
@@ -870,7 +880,7 @@ suspend fun listShare(surl: String, sekey: String, dir: String, cookie: String, 
         if (errno != 0) {
             // 常见：errno=-12 提取码错误 / 403 分享已失效 / 31066 文件不存在
             val msg = json.optString("err_msg").ifBlank { json.optString("show_msg") }.ifBlank { fallback }
-            throw BaiduApiException("$msg（errno=$errno）")
+            throw BaiduApiException(AppStrings.get(R.string.e1_with_errno, msg, errno))
         }
     }
 

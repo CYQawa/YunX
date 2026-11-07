@@ -18,9 +18,11 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 
 /**
  * 分享解析仓库公共接口：夸克 / UC 共用同一套流程（token → 列表 → 转存 → 直链）。
@@ -71,7 +73,7 @@ interface ShareResolveRepository {
         session: ShareSession,
         file: ShareFile
     ): Result<DownloadLink> = Result.failure(
-        IllegalStateException("该平台未登录时无法下载，请先登录后再试")
+        IllegalStateException(AppStrings.get(R.string.er_guest_download_unsupported))
     )
 
     /**

@@ -58,8 +58,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.data.update.UpdateChecker
 
 /** Release 说明里没给 html_url 时的兜底跳转地址 */
@@ -127,7 +129,7 @@ fun UpdateSheet(
                 Spacer(modifier = Modifier.width(14.dp))
                 Column {
                     Text(
-                        text = "发现新版本",
+                        text = stringResource(R.string.vm_update_new_version),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -147,7 +149,7 @@ fun UpdateSheet(
                                 color = MaterialTheme.colorScheme.tertiaryContainer
                             ) {
                                 Text(
-                                    text = "预发布",
+                                    text = stringResource(R.string.vm_update_prerelease),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                     fontWeight = FontWeight.Medium,
@@ -157,7 +159,7 @@ fun UpdateSheet(
                         }
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "当前 $currentVersion",
+                            text = stringResource(R.string.vm_update_current_version, currentVersion),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -168,7 +170,7 @@ fun UpdateSheet(
             Spacer(modifier = Modifier.height(18.dp))
 
             Text(
-                text = "更新内容",
+                text = stringResource(R.string.vm_update_changelog),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -179,7 +181,7 @@ fun UpdateSheet(
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Text(
-                    text = release.body.ifBlank { "暂无更新说明" },
+                    text = release.body.ifBlank { stringResource(R.string.vm_update_no_changelog) },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
@@ -206,7 +208,7 @@ fun UpdateSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("网盘更新")
+                    Text(stringResource(R.string.vm_update_netdisk))
                 }
             } else {
                 Button(
@@ -221,7 +223,7 @@ fun UpdateSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("从 GitHub 下载")
+                    Text(stringResource(R.string.vm_update_download_from_github))
                 }
             }
 
@@ -241,7 +243,7 @@ fun UpdateSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("GitHub 下载")
+                    Text(stringResource(R.string.vm_update_github_download))
                 }
             } else {
                 OutlinedButton(
@@ -256,7 +258,7 @@ fun UpdateSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("使用镜像站下载")
+                    Text(stringResource(R.string.vm_update_mirror_download))
                 }
             }
 
@@ -269,11 +271,11 @@ fun UpdateSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onIgnore) {
-                    Text("忽略本次", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.vm_update_ignore), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 TextButton(onClick = onLater) {
-                    Text("稍后", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.vm_update_later), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -283,7 +285,7 @@ fun UpdateSheet(
     if (showGithubOptions) {
         AlertDialog(
             onDismissRequest = { showGithubOptions = false },
-            title = { Text("GitHub 下载") },
+            title = { Text(stringResource(R.string.vm_update_github_download)) },
             text = {
                 Column {
                     Button(
@@ -299,7 +301,7 @@ fun UpdateSheet(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("GitHub 直连下载")
+                        Text(stringResource(R.string.vm_update_github_direct))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
@@ -315,7 +317,7 @@ fun UpdateSheet(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("镜像站加速下载")
+                        Text(stringResource(R.string.vm_update_mirror_accelerated))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
@@ -335,13 +337,13 @@ fun UpdateSheet(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("打开 GitHub 页面")
+                        Text(stringResource(R.string.vm_update_open_github_page))
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showGithubOptions = false }) {
-                    Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.vm_cancel), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )

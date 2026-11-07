@@ -21,6 +21,8 @@ package com.yunx.app.data.db
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.ColumnInfo
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 
 /**
  * 下载任务（Room 持久化，断点续传依赖 part 文件 + 已下载大小）。
@@ -103,12 +105,12 @@ data class DownloadTaskEntity(
         const val STATUS_FAILED = 4
 
         fun statusText(status: Int): String = when (status) {
-            STATUS_PENDING -> "等待中"
-            STATUS_DOWNLOADING -> "下载中"
-            STATUS_PAUSED -> "已暂停"
-            STATUS_COMPLETED -> "已完成"
-            STATUS_FAILED -> "失败"
-            else -> "未知"
+            STATUS_PENDING -> AppStrings.get(R.string.ed_status_pending)
+            STATUS_DOWNLOADING -> AppStrings.get(R.string.ed_status_downloading)
+            STATUS_PAUSED -> AppStrings.get(R.string.ed_status_paused)
+            STATUS_COMPLETED -> AppStrings.get(R.string.ed_status_completed)
+            STATUS_FAILED -> AppStrings.get(R.string.ed_status_failed)
+            else -> AppStrings.get(R.string.ed_status_unknown)
         }
     }
 }

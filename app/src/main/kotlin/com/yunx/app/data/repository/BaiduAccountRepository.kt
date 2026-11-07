@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.BaiduAccountDao
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.BaiduConstants
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -51,7 +53,7 @@ class BaiduAccountRepository(
      */
     suspend fun saveBaiduAccount(cookie: String, newAccount: Boolean = false): Boolean {
         if (!BaiduConstants.isValidCookie(cookie)) return false
-        val nickname = api.fetchNickname(cookie) ?: "百度用户"
+        val nickname = api.fetchNickname(cookie) ?: AppStrings.get(R.string.er_baidu_default_nickname)
         val slot = resolveAccountSlot(DownloadPlatform.BAIDU, dao.getAccount(), newAccount)
         dao.upsert(
             BaiduAccountEntity(

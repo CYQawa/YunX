@@ -253,6 +253,17 @@ class SettingsRepository(context: Context) {
             prefs.edit().putInt("dark_mode", value.coerceIn(0, 2)).apply()
         }
 
+    /**
+     * 应用语言：空串=跟随系统；否则为 BCP47 标签（zh-Hans / zh-Hant / en / ja / fr）。
+     * ★ 真正生效靠 [com.yunx.app.ui.theme.LocaleController.wrap] 在 Activity.attachBaseContext 里包 Context，
+     *   单改这里不会立刻切换语言，改完需要重建 Activity（见 ThemeScreen 的语言分区）。
+     */
+    var appLanguage: String
+        get() = prefs.getString("app_language", "") ?: ""
+        set(value) {
+            prefs.edit().putString("app_language", value).apply()
+        }
+
     /** 主题色模式：0=动态色彩（Android12+ 壁纸取色，低版本回退默认蓝），1=默认蓝色，2=自定义种子色 */
     var themeColorMode: Int
         get() = prefs.getInt("theme_color_mode", 0)

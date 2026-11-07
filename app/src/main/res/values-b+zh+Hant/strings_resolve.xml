@@ -1,0 +1,250 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    G6 分组：解析 / 分享詳情 / 媒體與文字預覽 / 收藏 / 引導與權限。
+-->
+<resources>
+    <!-- 平台顯示名 -->
+    <string name="rs_platform_quark">夸克網盤</string>
+    <string name="rs_platform_uc">UC 網盤</string>
+    <string name="rs_platform_xunlei">迅雷網盤</string>
+    <string name="rs_platform_baidu">百度網盤</string>
+    <string name="rs_platform_139">139 網盤</string>
+    <string name="rs_platform_123">123雲盤</string>
+    <string name="rs_platform_115">115網盤</string>
+    <string name="rs_platform_guangya">光鴨雲盤</string>
+    <string name="rs_platform_ilanzou">藍奏雲優享版</string>
+    <string name="rs_platform_lanzou">藍奏雲</string>
+    <string name="rs_platform_generic">網盤</string>
+
+    <!-- 平台短名（主頁捷徑色塊） -->
+    <string name="rs_short_quark">夸克</string>
+    <string name="rs_short_xunlei">迅雷</string>
+    <string name="rs_short_baidu">百度</string>
+    <string name="rs_short_guangya">光鴨</string>
+    <string name="rs_short_ilanzou">優享</string>
+    <string name="rs_short_lanzou">藍奏</string>
+
+    <!-- 解析/轉存/下載狀態 -->
+    <string name="rs_login_required_save">轉存需要先登入%1$s（未登入僅能瀏覽檔案清單）</string>
+    <string name="rs_login_required_download">下載需要先登入%1$s（未登入僅能瀏覽檔案清單）</string>
+    <string name="rs_login_first">請先登入%1$s</string>
+    <string name="rs_saved_to">已儲存到%1$s</string>
+    <string name="rs_transfer_failed">轉存失敗</string>
+    <string name="rs_transfer_interrupted">已中斷批次轉存</string>
+    <string name="rs_transferred_count">已轉存 %1$d 項到%2$s</string>
+    <string name="rs_collecting_files">正在收集檔案…</string>
+    <string name="rs_folder_empty">所選資料夾為空</string>
+    <string name="rs_download_interrupted">已中斷批次下載</string>
+    <string name="rs_no_direct_link">未取得下載直連</string>
+    <string name="rs_added_downloads">已加入 %1$d 個下載任務</string>
+    <string name="rs_download_link_failed">取得下載連結失敗</string>
+    <string name="rs_added_and_failed">已加入 %1$d 個，%2$d 個失敗</string>
+    <string name="rs_failure_reason">（原因：%1$s）</string>
+    <string name="rs_no_downloadable">所選內容無可下載檔案</string>
+    <string name="rs_download_failed">下載失敗</string>
+    <string name="rs_parse_failed_retry">解析失敗，請稍後再試</string>
+    <string name="rs_add_download_failed">加入下載任務失敗，請稍後再試</string>
+    <string name="rs_no_audio_stream">此平台沒有獨立音訊串流，會先下載完整段影片再擷取音軌</string>
+    <string name="rs_unrecognized_link">無法辨識分享連結</string>
+    <string name="rs_parse_failed">解析失敗</string>
+    <string name="rs_guest_retry_hint">%1$s（目前未登入，可到「網盤」頁登入%2$s後重試）</string>
+    <string name="rs_update_quark_guest_limit">此更新包超出夸克訪客下載上限（約 50MB），登入夸克網盤後可直接下載</string>
+    <string name="rs_repo_info_failed">無法取得儲存庫資訊：%1$s/%2$s</string>
+    <string name="rs_parent_repo_failed">無法開啟上游儲存庫：%1$s</string>
+    <string name="rs_github_code">程式碼</string>
+    <string name="rs_github_load_dir_failed">載入目錄失敗</string>
+    <string name="rs_github_download_zip">下載完整原始碼 ZIP</string>
+    <string name="rs_github_load_releases_failed">載入 Releases 失敗</string>
+    <string name="rs_badge_draft">草稿</string>
+    <string name="rs_badge_prerelease">預發布</string>
+    <string name="rs_badge_latest">最新</string>
+    <string name="rs_load_more">載入更多</string>
+    <string name="rs_release_not_found">找不到 Release：%1$s</string>
+    <string name="rs_owner_repos_failed">無法取得 %1$s 的儲存庫清單</string>
+    <string name="rs_open_repo_failed">無法開啟儲存庫：%1$s</string>
+    <string name="rs_unknown_dir">未知目錄：%1$s</string>
+    <string name="rs_missing_link">缺少分享連結</string>
+    <string name="rs_bookmarked_to">已收藏到「%1$s」</string>
+    <string name="rs_cannot_get_link">無法取得下載連結</string>
+    <string name="rs_resolve_first">請先解析分享</string>
+    <string name="rs_online_preview">線上預覽</string>
+    <string name="rs_file_list_failed">取得檔案清單失敗</string>
+
+    <!-- 分享詳情 -->
+    <string name="rs_cancel_selection">取消選取</string>
+    <string name="rs_selected_count">已選 %1$d 項</string>
+    <string name="rs_all_selected">已全選</string>
+    <string name="rs_tap_select_more">點擊選擇更多檔案</string>
+    <string name="rs_deselect_all">取消全選</string>
+    <string name="rs_select_all">全選</string>
+    <string name="rs_back">返回</string>
+    <string name="rs_share_content">分享內容</string>
+    <string name="rs_total_items">共 %1$d 項</string>
+    <string name="rs_match_items">符合 %1$d / %2$d 項</string>
+    <string name="rs_add_to_bookmark">加入收藏</string>
+    <string name="rs_close_search">關閉搜尋</string>
+    <string name="rs_search_files">搜尋檔案</string>
+    <string name="rs_search_current_dir">搜尋目前目錄檔案</string>
+    <string name="rs_clear_search">清除搜尋</string>
+    <string name="rs_dir_empty">此目錄為空</string>
+    <string name="rs_no_match_files">找不到符合「%1$s」的檔案</string>
+    <string name="rs_transfer">轉存</string>
+    <string name="rs_download">下載</string>
+    <string name="rs_large_file_title">下載大檔案提示</string>
+    <string name="rs_baidu_limit_message">百度網盤非會員超過300MB會被限速，下載速度可能較慢。是否繼續下載？</string>
+    <string name="rs_dont_show_again">不再顯示此提示</string>
+    <string name="rs_continue_download">繼續下載</string>
+    <string name="rs_cancel">取消</string>
+    <string name="rs_interrupt">中斷</string>
+    <string name="rs_batch_processing">批次處理中</string>
+    <string name="rs_fetching_link_progress">正在取得下載連結 %1$s</string>
+    <string name="rs_batch_processing_wait">正在批次處理，請稍候…</string>
+    <string name="rs_guest_notice_quark">未登入瀏覽：可直接下載約 50MB 以內的小檔案；更大的檔案和轉存需先到「網盤」頁登入</string>
+    <string name="rs_guest_notice_uc">未登入瀏覽：可直接下載（不限大小）；轉存需先到「網盤」頁登入</string>
+    <string name="rs_guest_notice_default">未登入瀏覽：可查看檔案清單，下載/轉存需先到「網盤」頁登入</string>
+    <string name="rs_go_up">返回上一層</string>
+    <string name="rs_root_dir">根目錄</string>
+    <string name="rs_folder">資料夾</string>
+    <string name="rs_more">更多</string>
+
+    <!-- 解析頁 -->
+    <string name="rs_fetch_link_title">取得下載連結</string>
+    <string name="rs_fetching_link_wait">正在取得下載連結，請稍候…</string>
+    <string name="rs_input_hint">貼上分享連結或口令，一鍵解析分享內容</string>
+    <string name="rs_input_placeholder">例如：https://pan.quark.cn/s/xxxx、迅雷口令或 139 雲盤口令</string>
+    <string name="rs_clear_link">清除連結</string>
+    <string name="rs_extract_code_optional">提取碼（選填）</string>
+    <string name="rs_auto_or_manual">自動辨識或手動輸入</string>
+    <string name="rs_clear_code">清除提取碼</string>
+    <string name="rs_parsing">解析中…</string>
+    <string name="rs_start_resolve">開始解析</string>
+    <string name="rs_shortcuts">捷徑</string>
+    <string name="rs_manage">管理</string>
+    <string name="rs_no_shortcuts">尚無主頁捷徑</string>
+    <string name="rs_shortcuts_hint">在「收藏網盤連結」頁長按一筆收藏 → 加入主頁</string>
+    <string name="rs_remove_from_home">從主頁移除</string>
+    <string name="rs_remove_shortcut_msg">「%1$s」將不再顯示在主頁捷徑中</string>
+    <string name="rs_remove">移除</string>
+    <string name="rs_loading">載入中…</string>
+    <string name="rs_detected_share">偵測到 %1$s 分享連結</string>
+    <string name="rs_paste_and_resolve_q">是否貼到解析框並開始解析？</string>
+    <string name="rs_ignore">忽略</string>
+    <string name="rs_paste_and_resolve">貼上並解析</string>
+
+    <!-- 預覽 -->
+    <string name="rs_preview">預覽</string>
+    <string name="rs_preview_image">預覽圖片</string>
+    <string name="rs_open_with_text_preview">此檔案請用「文字預覽」開啟</string>
+    <string name="rs_image_load_failed">圖片載入失敗：直連可能已失效或需要驗證，可先下載後查看</string>
+    <string name="rs_online_play_failed">線上播放失敗（%1$s）：可先下載後用本機播放器開啟</string>
+    <string name="rs_content_empty">檔案內容為空或無法解碼</string>
+    <string name="rs_read_file_failed">讀取檔案失敗：%1$s</string>
+    <string name="rs_unknown_error">未知錯誤</string>
+    <string name="rs_reading_prefix">正在讀取前 512KB…</string>
+    <string name="rs_text_file">文字檔</string>
+    <string name="rs_truncated_notice">已截斷，完整內容請下載後查看（僅讀取前 512KB）</string>
+    <string name="rs_no_preview_content">沒有可預覽的內容</string>
+    <string name="rs_preview_response_empty">回應沒有內容</string>
+
+    <!-- 收藏 -->
+    <string name="rs_bookmarks_title">收藏網盤連結</string>
+    <string name="rs_add_bookmark">加入收藏</string>
+    <string name="rs_link_copied">連結已複製</string>
+    <string name="rs_all">全部</string>
+    <string name="rs_home">主頁</string>
+    <string name="rs_no_bookmarks">尚未收藏任何網盤連結</string>
+    <string name="rs_no_bookmarks_hint">可在解析頁點擊「加入收藏」，或點擊右上角 + 手動新增</string>
+    <string name="rs_share_link_label">網盤連結</string>
+    <string name="rs_paste_share_link">貼上分享連結</string>
+    <string name="rs_title_optional">標題（選填）</string>
+    <string name="rs_category">分類</string>
+    <string name="rs_custom">自訂</string>
+    <string name="rs_custom_category">自訂分類</string>
+    <string name="rs_bookmark">收藏</string>
+    <string name="rs_edit_category">修改分類</string>
+    <string name="rs_confirm">確定</string>
+    <string name="rs_resolve">解析</string>
+    <string name="rs_copy_link">複製連結</string>
+    <string name="rs_add_to_home">加入主頁</string>
+    <string name="rs_custom_icon_text">自訂圖示文字</string>
+    <string name="rs_delete">刪除</string>
+    <string name="rs_custom_icon_hint">顯示在主頁捷徑色塊裡的文字，最多 %1$d 個字。</string>
+    <string name="rs_color_block_text">色塊文字</string>
+    <string name="rs_color_block_auto">留空則自動取標題前 %1$d 個字</string>
+    <string name="rs_save">儲存</string>
+
+    <!-- 引導頁 -->
+    <string name="rs_app_name">雲析</string>
+    <string name="rs_app_icon_desc">雲析圖示</string>
+    <string name="rs_onboarding_tagline">網盤與影片連結解析 · 線上預覽 · 高速下載</string>
+    <string name="rs_fact_drives">10 大網盤</string>
+    <string name="rs_fact_video_platforms">7 大影片平台</string>
+    <string name="rs_fact_chunked_download">分段下載</string>
+    <string name="rs_fact_free">完全免費</string>
+    <string name="rs_open_source_repo">開源儲存庫</string>
+    <string name="rs_qq_not_installed">未安裝 QQ，群號已複製：%1$s</string>
+    <string name="rs_qq_group">QQ 群 %1$s</string>
+    <string name="rs_open_qq">開啟 QQ</string>
+    <string name="rs_read_before_use">使用前請閱讀</string>
+    <string name="rs_terms_intro">雲析是開源工具，以下是使用條款與免責說明</string>
+    <string name="rs_terms_title">使用者條款</string>
+    <string name="rs_terms_1">本應用程式是開源的網盤分享連結解析與下載工具，僅供個人學習、技術交流使用，請勿用於任何商業用途。</string>
+    <string name="rs_terms_2">請遵守你所使用網盤的服務條款及當地法律法規；不得利用本應用程式下載、傳播侵權或違法內容。</string>
+    <string name="rs_terms_3">網盤帳號憑證（Cookie / Token）僅保存在本機，不會上傳到任何伺服器。</string>
+    <string name="rs_terms_4">應用程式按「現狀」提供，不保證解析成功率與下載速度，也不對你的使用結果作出任何承諾。</string>
+    <string name="rs_disclaimer_title">免責聲明</string>
+    <string name="rs_disclaimer_1">下載內容的著作權歸原作者所有，請於下載後 24 小時內刪除。</string>
+    <string name="rs_disclaimer_2">使用本應用程式產生的任何後果由使用者自行承擔，開發者不承擔由此引起的任何責任。</string>
+    <string name="rs_license_title">開源授權</string>
+    <string name="rs_license_body">本專案基於 GNU AGPL-3.0 授權開源，原始碼公開於 %1$s。</string>
+    <string name="rs_terms_agree">點擊下方「開始使用」即表示你已閱讀並同意以上條款</string>
+    <string name="rs_previous">上一步</string>
+    <string name="rs_next">下一步</string>
+    <string name="rs_get_started">開始使用</string>
+
+    <!-- 權限準備 -->
+    <string name="rs_permissions_title">權限準備</string>
+    <string name="rs_permissions_intro_required">雲析只用下面這幾項系統授權。儲存權限是 Android 9 及以下儲存檔案的必要權限，必須授權；其餘兩項可以跳過，之後也能在「設定」裡隨時更改</string>
+    <string name="rs_permissions_intro_optional">雲析只用下面這幾項系統授權，都可以跳過，之後也能在「設定」裡隨時更改</string>
+    <string name="rs_perm_notification_title">通知權限</string>
+    <string name="rs_perm_notification_desc">下載進度、完成提醒顯示在通知列，也能讓前景服務更穩定地運作；關閉後下載照常進行，只是看不到進度。</string>
+    <string name="rs_perm_granted">已開啟</string>
+    <string name="rs_perm_grant">授權</string>
+    <string name="rs_perm_go_settings">前往設定</string>
+    <string name="rs_perm_background_title">背景執行</string>
+    <string name="rs_perm_background_desc">把雲析加入「忽略電池最佳化」白名單，鎖屏或切到背景後下載不會被系統凍結（建議開啟）。</string>
+    <string name="rs_perm_whitelisted">已加入白名單</string>
+    <string name="rs_perm_storage_title">儲存權限</string>
+    <string name="rs_perm_storage_desc_required">儲存檔案到系統「下載」目錄需要儲存權限；Android 9 及以下這是必要權限，必須授權才能儲存檔案。</string>
+    <string name="rs_perm_storage_desc_optional">Android 10 及以上儲存檔案走系統媒體庫，不需要儲存權限。</string>
+    <string name="rs_perm_authorized">已授權</string>
+    <string name="rs_perm_no_need">無需授權</string>
+    <string name="rs_perm_go_settings_grant">前往設定授權</string>
+    <string name="rs_perm_skip_impact_required">跳過的影響：沒有通知權限 → 通知列看不到下載進度；沒有背景執行白名單 → 息屏後下載可能被暫停。儲存權限是必要權限，未授權無法儲存檔案，所以必須授權後才能開始使用。</string>
+    <string name="rs_perm_skip_impact_optional">跳過的影響：沒有通知權限 → 通知列看不到下載進度；沒有背景執行白名單 → 息屏後下載可能被暫停。Android 10 及以上儲存檔案不需要儲存權限。</string>
+    <string name="rs_category_uncategorized">未分類</string>
+    <string name="rs_category_video">影片</string>
+    <string name="rs_category_document">文件</string>
+    <string name="rs_category_software">軟體</string>
+    <string name="rs_category_music">音樂</string>
+    <string name="rs_category_image">圖片</string>
+    <string name="rs_category_archive">壓縮檔</string>
+    <string name="rs_category_other">其他</string>
+</resources>

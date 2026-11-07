@@ -25,7 +25,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.yunx.app.R
 import com.yunx.app.ui.SnackbarController
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -110,7 +112,7 @@ fun rememberWebLoginAutoDetect(
             // 结束校验：恢复「保存」按钮可用（页面随后关闭，或回到轮询）
             onInFlightChange(false)
             if (saved) {
-                SnackbarController.show("登录成功")
+                SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                 onAutoSaved()
             } else {
                 // 中间态/凭证无效：记下原文继续轮询，凭证变化或超时后才会重试

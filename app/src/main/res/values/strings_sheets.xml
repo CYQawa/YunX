@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    G4 分组：账号弹窗 / 视频账号 / 转存 / 解析页文件操作 / 下载直链等（key 前缀 sh_）。
+    默认语言 = 简体中文。其余语言见 values-b+zh+Hant / values-en / values-ja / values-fr。
+    ★ 五个文件的 key 集合必须完全一致。
+-->
+<resources>
+    <!-- AccountListSection / VideoAccountSheet 共用 -->
+    <string name="sh_accounts_count">账号（%1$d）</string>
+    <string name="sh_add_account">添加账号</string>
+    <string name="sh_account_list_hint">主账号用于列目录、转存、上传等需要单一身份的操作；开启「多账号下载」后，下载会自动用上同一网盘的其他账号。</string>
+    <string name="sh_primary_account">主账号</string>
+    <string name="sh_tap_to_set_primary">点一下设为主账号</string>
+    <string name="sh_account_actions">账号操作</string>
+    <string name="sh_rename_remark">重命名备注</string>
+    <string name="sh_logout_account">退出该账号</string>
+    <string name="sh_remark">备注</string>
+    <string name="sh_remark_placeholder">留空则显示昵称</string>
+    <string name="sh_remark_hint">同一网盘登录多个账号时，备注能帮你区分（清空备注则显示昵称）。</string>
+    <string name="sh_video_remark_hint">同一平台登录多个账号时，备注能帮你区分（清空备注则显示昵称）。</string>
+    <string name="sh_save">保存</string>
+    <string name="sh_cancel">取消</string>
+    <string name="sh_logout_confirm">确定要退出「%1$s」吗？只清除这一个账号在本机的登录凭证，其他账号不受影响。</string>
+    <string name="sh_logout">退出</string>
+    <string name="sh_unnamed_account">未命名账号</string>
+
+    <!-- 各网盘账号弹窗 -->
+    <string name="sh_baidu_logged_in">百度网盘 · 已登录</string>
+    <string name="sh_c139_logged_in">139网盘 · 已登录</string>
+    <string name="sh_guangya_logged_in">光鸭云盘 · 已登录</string>
+    <string name="sh_ilanzou_logged_in">蓝奏云优享版 · 已登录</string>
+    <string name="sh_lanzou_logged_in">蓝奏云 · 已登录</string>
+    <string name="sh_pan115_logged_in">115网盘 · 已登录</string>
+    <string name="sh_pan123_logged_in">123云盘 · 已登录</string>
+    <string name="sh_quark_logged_in">夸克网盘 · 已登录</string>
+    <string name="sh_uc_logged_in">UC网盘 · 已登录</string>
+    <string name="sh_xunlei_logged_in">迅雷网盘 · 已登录</string>
+    <string name="sh_login_info">登录信息</string>
+    <string name="sh_login_time">登录时间</string>
+    <string name="sh_login_account">登录账号</string>
+    <string name="sh_pan115_login_cookie">登录 Cookie</string>
+    <string name="sh_collapse">收起</string>
+    <string name="sh_expand_all">展开全部</string>
+    <string name="sh_copy">复制</string>
+    <string name="sh_cookie_copied">Cookie 已复制</string>
+    <string name="sh_token_copied">Token 已复制</string>
+    <string name="sh_apptoken_copied">appToken 已复制</string>
+    <string name="sh_device_id">设备号</string>
+    <string name="sh_guangya_user">光鸭用户</string>
+    <string name="sh_guangya_avatar">光</string>
+    <string name="sh_ilanzou_user">蓝奏优享用户</string>
+    <string name="sh_lanzou_user">蓝奏云用户</string>
+    <string name="sh_lanzou_avatar">蓝</string>
+
+    <!-- 视频账号弹窗 / 视频账号区块 -->
+    <string name="sh_logged_in_accounts">已登录 · 共 %1$d 个账号</string>
+    <string name="sh_logged_in">已登录</string>
+    <string name="sh_logout_all_accounts">退出全部账号</string>
+    <string name="sh_logout_all_confirm">确定要退出「%1$s」的全部 %2$d 个账号吗？只清除本机保存的登录凭证。</string>
+    <string name="sh_logout_all">全部退出</string>
+    <string name="sh_manage">管理</string>
+    <string name="sh_login">登录</string>
+    <string name="sh_no_login_needed">无需登录，直接解析</string>
+    <string name="sh_not_logged_in">未登录</string>
+    <string name="sh_name_accounts">%1$s · 共 %2$d 个账号</string>
+
+    <!-- 视频解析结果区块 -->
+    <string name="sh_download_selected">下载所选</string>
+    <string name="sh_back">返回</string>
+    <string name="sh_video_content">视频内容</string>
+    <string name="sh_exit_multi_select">退出多选</string>
+    <string name="sh_selected_count_images">已选 %1$d 张</string>
+    <string name="sh_all_selected">已全选</string>
+    <string name="sh_tap_image_to_select">点击图片继续选择</string>
+    <string name="sh_deselect_all">取消全选</string>
+    <string name="sh_select_all">全选</string>
+    <string name="sh_page_info">共 %1$d 张 · 第 %2$d/%3$d 页</string>
+    <string name="sh_prev_page">上一页</string>
+    <string name="sh_next_page">下一页</string>
+    <string name="sh_image_index">第 %1$d 张图片</string>
+    <string name="sh_download_this_image">下载这一张</string>
+    <string name="sh_download_all_count">全部下载（%1$d 项）</string>
+    <string name="sh_total_items">共 %1$d 项</string>
+    <string name="sh_expand">展开</string>
+    <string name="sh_copy_caption">复制文案</string>
+    <string name="sh_caption_copied">文案已复制</string>
+    <string name="sh_media_row_title">%1$d. %2$s</string>
+    <string name="sh_media_video">视频</string>
+    <string name="sh_media_image">图片</string>
+    <string name="sh_media_audio">音频</string>
+    <string name="sh_preview">预览</string>
+    <string name="sh_download_audio_only">仅下载音频</string>
+    <string name="sh_download">下载</string>
+
+    <!-- 转存到网盘 -->
+    <string name="sh_save_to_quark">转存到夸克网盘</string>
+    <string name="sh_root_dir">根目录</string>
+    <string name="sh_retry">重试</string>
+    <string name="sh_empty_dir_hint">当前目录没有子文件夹，可直接转存到此目录</string>
+    <string name="sh_save_here">转存到此目录（%1$s）</string>
+
+    <!-- 解析页文件操作弹窗 -->
+    <string name="sh_download_folder">下载文件夹</string>
+    <string name="sh_download_folder_desc">递归下载整个文件夹，保持目录结构</string>
+    <string name="sh_download_desc">获取下载链接并保存到本机</string>
+    <string name="sh_preview_online">在线预览</string>
+    <string name="sh_preview_online_desc">不下载，直接在应用内查看</string>
+    <string name="sh_save_to_cloud">转存</string>
+    <string name="sh_save_folder_desc">把整个文件夹存到我的网盘</string>
+    <string name="sh_save_file_desc">把文件存到我的网盘</string>
+
+    <!-- 下载直链弹窗 -->
+    <string name="sh_direct_link_generated">下载直链已生成（有效期约 15-30 分钟）</string>
+    <string name="sh_copy_download_link">复制下载链接</string>
+    <string name="sh_download_link_copied">下载链接已复制</string>
+    <string name="sh_download_start_hint">开始下载后，可在「下载」页查看保存进度</string>
+    <string name="sh_start_download">开始下载</string>
+    <string name="sh_close">关闭</string>
+</resources>

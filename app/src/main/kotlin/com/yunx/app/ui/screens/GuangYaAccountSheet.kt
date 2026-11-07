@@ -18,6 +18,10 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -138,7 +142,7 @@ fun GuangYaAccountSheet(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = account.nickname.take(1).ifBlank { "光" },
+                            text = account.nickname.take(1).ifBlank { stringResource(R.string.sh_guangya_avatar) },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -148,7 +152,7 @@ fun GuangYaAccountSheet(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(
-                        text = account.nickname.ifBlank { "光鸭用户" },
+                        text = account.nickname.ifBlank { stringResource(R.string.sh_guangya_user) },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium
                     )
@@ -161,7 +165,7 @@ fun GuangYaAccountSheet(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "光鸭云盘 · 已登录",
+                            text = stringResource(R.string.sh_guangya_logged_in),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -172,7 +176,7 @@ fun GuangYaAccountSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "登录信息",
+                text = stringResource(R.string.sh_login_info),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -183,9 +187,9 @@ fun GuangYaAccountSheet(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    InfoRow(label = "登录账号", value = account.account.ifBlank { account.nickname.ifBlank { "光鸭用户" } })
+                    InfoRow(label = stringResource(R.string.sh_login_account), value = account.account.ifBlank { account.nickname.ifBlank { stringResource(R.string.sh_guangya_user) } })
                     Spacer(modifier = Modifier.height(12.dp))
-                    InfoRow(label = "登录时间", value = loginTime)
+                    InfoRow(label = stringResource(R.string.sh_login_time), value = loginTime)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "Token（access）",
@@ -205,14 +209,14 @@ fun GuangYaAccountSheet(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         if (tokenTruncated) {
                             TextButton(onClick = { showFullToken = !showFullToken }) {
-                                Text(if (showFullToken) "收起" else "展开全部")
+                                Text(if (showFullToken) stringResource(R.string.sh_collapse) else stringResource(R.string.sh_expand_all))
                             }
                         }
                         TextButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("guangya_token", account.accessToken))
-                                SnackbarController.show("Token 已复制")
+                                SnackbarController.show(AppStrings.get(R.string.sh_token_copied))
                             }
                         ) {
                             Icon(
@@ -221,7 +225,7 @@ fun GuangYaAccountSheet(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("复制")
+                            Text(stringResource(R.string.sh_copy))
                         }
                     }
                 }

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Commun -->
+    <string name="lg_back">Retour</string>
+    <string name="lg_cancel">Annuler</string>
+    <string name="lg_save">Enregistrer</string>
+    <string name="lg_continue">Continuer</string>
+    <string name="lg_got_it">Compris</string>
+    <string name="lg_login_success">Connexion réussie</string>
+    <string name="lg_no_login_state">Aucune connexion détectée. Veuillez d\'abord vous connecter.</string>
+    <string name="lg_manual_cookie">Saisir le Cookie manuellement</string>
+    <string name="lg_paste_cookie_hint">Coller le Cookie…</string>
+    <string name="lg_login_tutorial">Guide de connexion</string>
+
+    <!-- Baidu -->
+    <string name="lg_baidu_title">Connexion Baidu Netdisk</string>
+    <string name="lg_baidu_risk_title">À lire avant utilisation</string>
+    <string name="lg_baidu_risk_1">Baidu Netdisk applique un contrôle des risques strict, qui peut restreindre votre compte.</string>
+    <string name="lg_baidu_risk_2">Les problèmes suivants sont généralement dus au contrôle des risques, pas à un bug logiciel :\n· Échec de l\'obtention du bdstoken\n· La liste des fichiers du disque personnel ne se charge pas</string>
+    <string name="lg_baidu_risk_3">Évitez les opérations à haute fréquence (analyses/transferts/téléchargements/envois fréquents). En cas d\'anomalie, réduisez la fréquence ou réessayez plus tard.</string>
+    <string name="lg_baidu_risk_ack">J\'ai lu et compris les risques ci-dessus</string>
+    <string name="lg_baidu_tutorial_1">1. Connectez-vous à votre compte Baidu dans la page web ci-dessous</string>
+    <string name="lg_baidu_tutorial_2">2. La connexion est détectée automatiquement. Sinon, appuyez sur « Enregistrer » en haut à droite</string>
+    <string name="lg_baidu_tutorial_3">3. Ou appuyez sur l\'icône « Coller » pour saisir le Cookie manuellement (doit contenir BDUSS=)</string>
+    <string name="lg_baidu_tutorial_4">4. Le Cookie est durable ; reconnectez-vous lorsqu\'il expire</string>
+    <string name="lg_baidu_cookie_hint">Copiez le Cookie complet depuis la session web connectée (doit contenir BDUSS=)</string>
+    <string name="lg_baidu_cookie_invalid">Cookie invalide. Vérifiez qu\'il contient BDUSS=</string>
+
+    <!-- Xunlei compte / SMS -->
+    <string name="lg_xunlei_title">Connexion Xunlei Netdisk</string>
+    <string name="lg_mode_password">Compte et mot de passe</string>
+    <string name="lg_mode_sms">Connexion par SMS</string>
+    <string name="lg_security_verify">Vérification de sécurité</string>
+    <string name="lg_xunlei_login_prompt">Connectez-vous avec votre compte Xunlei</string>
+    <string name="lg_xunlei_sms_sent_to">La connexion par mot de passe a déclenché une vérification de sécurité. Le code a été envoyé à %1$s</string>
+    <string name="lg_xunlei_sms_prompt">La connexion par mot de passe a déclenché une vérification de sécurité. Appuyez sur « Envoyer le code » ci-dessous</string>
+    <string name="lg_xunlei_password_hint">Saisissez votre numéro de téléphone / e-mail et votre mot de passe pour analyser et télécharger des fichiers partagés</string>
+    <string name="lg_sms_login_title">Connexion par code SMS</string>
+    <string name="lg_sms_login_hint">Sans mot de passe : saisissez votre numéro et recevez un code pour vous connecter (utile si aucun mot de passe n\'est défini ou s\'il est oublié)</string>
+    <string name="lg_sms_code">Code SMS</string>
+    <string name="lg_verify_and_login">Vérifier et se connecter</string>
+    <string name="lg_sms_not_received_hint">Si vous ne recevez jamais le SMS, vérifiez que le numéro est correct, ou réessayez plus tard / changez de réseau</string>
+    <string name="lg_verify_in_app">Pas de SMS ? Vérification dans l\'application</string>
+    <string name="lg_verify_in_app_hint">Après la vérification dans l\'application, la connexion reprendra automatiquement</string>
+    <string name="lg_phone">Numéro de téléphone</string>
+    <string name="lg_sms_note">Vous devez envoyer le SMS vous-même et saisir le code ; les numéros non enregistrés suivent le processus officiel Xunlei</string>
+    <string name="lg_phone_or_email">Téléphone / E-mail</string>
+    <string name="lg_password">Mot de passe</string>
+    <string name="lg_hide_password">Masquer le mot de passe</string>
+    <string name="lg_show_password">Afficher le mot de passe</string>
+    <string name="lg_login">Se connecter</string>
+    <string name="lg_web_login">Connexion web (QR / code)</string>
+    <string name="lg_xunlei_web_login_hint">Ouvrez la connexion web Xunlei dans l\'application ; la session est enregistrée automatiquement. À utiliser si le SMS échoue ou si la connexion par mot de passe est bloquée</string>
+    <string name="lg_set_password">Aucun mot de passe défini. Appuyez pour en définir un</string>
+    <string name="lg_resend_in_seconds">Renvoyer dans %1$d s</string>
+    <string name="lg_resend_code">Renvoyer le code</string>
+    <string name="lg_send_code">Envoyer le code</string>
+
+    <!-- Lanzou -->
+    <string name="lg_lanzou_title">Connexion Lanzou</string>
+    <string name="lg_lanzou_hint">Connectez-vous avec votre compte Lanzou (API officielle, captcha validé automatiquement)</string>
+    <string name="lg_lanzou_username_label">Nom d\'utilisateur / Compte / Téléphone</string>
+    <string name="lg_lanzou_tutorial_1">1. Saisissez votre compte Lanzou (nom d\'utilisateur ou téléphone) et votre mot de passe, puis appuyez sur « Se connecter ».</string>
+    <string name="lg_lanzou_tutorial_2">2. Après la connexion, le Cookie est chiffré et stocké localement pour le disque personnel et les transferts de partages.</string>
+    <string name="lg_lanzou_tutorial_3">3. Si le mot de passe est signalé comme incorrect, vérifiez-le et réessayez (attendez un peu après plusieurs échecs).</string>
+    <string name="lg_login_failed_check">Échec de la connexion. Vérifiez le compte et le mot de passe</string>
+
+    <!-- Lanzou Pro -->
+    <string name="lg_ilanzou_title">Connexion Lanzou Pro</string>
+    <string name="lg_ilanzou_hint">Connectez-vous avec votre compte Lanzou Pro (le mot de passe est enregistré pour une reconnexion automatique après expiration)</string>
+    <string name="lg_ilanzou_tutorial_1">1. Saisissez votre nom d\'utilisateur et votre mot de passe Lanzou Pro, puis appuyez sur « Se connecter ».</string>
+    <string name="lg_ilanzou_tutorial_2">2. Après la connexion, l\'appToken et l\'identifiant de l\'appareil sont chiffrés et stockés localement.</string>
+    <string name="lg_ilanzou_tutorial_3">3. Si la vérification d\'accès échoue, réessayez plus tard ou utilisez la connexion web.</string>
+
+    <!-- Commun (complément) -->
+    <string name="lg_username">Nom d\'utilisateur</string>
+    <string name="lg_logging_in">Connexion en cours…</string>
+    <string name="lg_login_instructions">Instructions de connexion</string>
+
+    <!-- GuangYa -->
+    <string name="lg_guangya_title">Connexion GuangYa Cloud</string>
+    <string name="lg_guangya_sms_hint">Connectez-vous / inscrivez-vous avec un code SMS envoyé sur votre téléphone (les nouveaux utilisateurs sont inscrits automatiquement)</string>
+    <string name="lg_guangya_password_hint">Connectez-vous avec votre compte GuangYa Cloud (si aucun mot de passe n\'est défini, définissez-en un sur le site officiel)</string>
+    <string name="lg_guangya_tutorial_1">1. Saisissez votre compte et votre mot de passe GuangYa Cloud, puis appuyez sur « Se connecter ».</string>
+    <string name="lg_guangya_tutorial_2">2. Vous pouvez aussi appuyer sur « Connexion par code » et utiliser un code SMS envoyé sur votre téléphone (les nouveaux utilisateurs sont inscrits automatiquement).</string>
+    <string name="lg_guangya_tutorial_3">3. Après la connexion, les jetons access / refresh et l\'identifiant de l\'appareil sont chiffrés et stockés localement.</string>
+    <string name="lg_guangya_tutorial_4">4. Si une vérification de sécurité est requise, réessayez ou utilisez une autre méthode de connexion.</string>
+    <string name="lg_sms_sent">Code envoyé</string>
+    <string name="lg_account">Compte</string>
+    <string name="lg_account_placeholder">Téléphone / E-mail / Nom d\'utilisateur</string>
+    <string name="lg_sms_login_entry">Connexion par code</string>
+    <string name="lg_resend_after_seconds">Renvoyer dans %1$d s</string>
+    <string name="lg_get_sms_code">Obtenir le code</string>
+    <string name="lg_login_or_register">Connexion / Inscription</string>
+    <string name="lg_back_to_password">Retour à la connexion par mot de passe</string>
+
+    <!-- Connexion web des plateformes vidéo -->
+    <string name="lg_error_host_lookup">Échec de la résolution du nom d\'hôte, généralement dû à l\'absence de réseau</string>
+    <string name="lg_error_connect">Délai de connexion dépassé, généralement dû à l\'absence de réseau</string>
+    <string name="lg_error_unknown">Erreur inconnue</string>
+    <string name="lg_platform_login_title">Connexion %1$s</string>
+    <string name="lg_refresh_page">Actualiser la page</string>
+    <string name="lg_web_load_failed">Échec du chargement de la page</string>
+    <string name="lg_web_load_failed_hint">Si cette plateforme est inaccessible localement (par exemple un site étranger bloqué), connectez-vous à un proxy puis réessayez</string>
+    <string name="lg_retry">Réessayer</string>
+    <string name="lg_video_tutorial_1">1. Connectez-vous à votre compte %1$s dans la page web ci-dessous</string>
+    <string name="lg_video_tutorial_2">2. La connexion est détectée et enregistrée automatiquement ; aucune action manuelle n\'est nécessaire</string>
+    <string name="lg_video_tutorial_3">3. Si elle n\'est pas enregistrée automatiquement, appuyez sur « Enregistrer » en haut à droite ; vous pouvez aussi appuyer sur l\'icône « Coller » pour saisir le Cookie manuellement</string>
+    <string name="lg_video_tutorial_4">4. Le Cookie est chiffré et stocké localement ; reconnectez-vous lorsqu\'il expire</string>
+    <string name="lg_video_cookie_hint">Copiez le Cookie complet depuis un navigateur ou un outil de capture, puis collez-le ici</string>
+    <string name="lg_cookie_invalid_expired">Cookie invalide ou expiré. Veuillez le copier à nouveau</string>
+    <string name="lg_why_no_web_login">Pourquoi pas de connexion web ?</string>
+    <string name="lg_manual_only_reason">La page de connexion %1$s utilise une vérification anti-risque (reCAPTCHA), impossible à terminer dans la page intégrée à l\'application. La connexion web n\'est donc pas proposée ici ; collez directement le Cookie.</string>
+    <string name="lg_cookie">Cookie</string>
+    <string name="lg_cookie_howto">Comment l\'obtenir : connectez-vous à %1$s dans un navigateur de bureau, ouvrez les outils de développement (F12) → Application / Stockage → Cookies, puis copiez le Cookie entier du site.</string>
+
+    <!-- Connexion web Xunlei -->
+    <string name="lg_xunlei_web_title">Connexion web Xunlei</string>
+    <string name="lg_manual_paste_credential">Coller l\'identifiant de connexion manuellement</string>
+    <string name="lg_no_login_state_web">Aucune connexion détectée. Connectez-vous d\'abord dans la page web.</string>
+    <string name="lg_web_login_instructions">Instructions de connexion web</string>
+    <string name="lg_xunlei_web_tutorial_1">1. Connectez-vous à votre compte Xunlei dans la page web ci-dessous (code SMS / QR / mot de passe, au choix)</string>
+    <string name="lg_xunlei_web_tutorial_2">2. La connexion est reconnue et effectuée automatiquement ; aucune action manuelle n\'est généralement nécessaire</string>
+    <string name="lg_xunlei_web_tutorial_3">3. Si la connexion n\'est pas automatique, appuyez sur « Enregistrer » en haut à droite pour l\'extraire une fois</string>
+    <string name="lg_xunlei_web_tutorial_4">4. Si cela échoue encore, appuyez sur l\'icône « Coller » et collez le JSON de l\'identifiant de connexion web</string>
+    <string name="lg_xunlei_web_tutorial_5">5. Les jetons de connexion web se renouvellent automatiquement ; reconnectez-vous à leur expiration</string>
+
+    <!-- 139 Netdisk -->
+    <string name="lg_c139_title">Connexion 139 Netdisk</string>
+    <string name="lg_c139_tutorial_1">1. Connectez-vous à votre compte 139 Netdisk dans la page web ci-dessous (numéro de téléphone)</string>
+    <string name="lg_c139_tutorial_2">2. La connexion est détectée automatiquement. Sinon, appuyez sur « Enregistrer » en haut à droite</string>
+    <string name="lg_c139_tutorial_3">3. Ou appuyez sur l\'icône « Coller » pour saisir le Cookie manuellement (doit contenir Os_SSo_Sid= et RMKEY=)</string>
+    <string name="lg_c139_tutorial_4">4. Si la page est blanche : connectez-vous à yun.139.com dans un navigateur système, puis copiez et collez le Cookie ; le résultat est identique</string>
+    <string name="lg_c139_tutorial_5">5. Le Cookie a une durée de vie limitée ; reconnectez-vous lorsqu\'il expire</string>
+    <string name="lg_c139_cookie_hint">Copiez le Cookie complet depuis la session web connectée (doit contenir Os_SSo_Sid= et RMKEY=)</string>
+    <string name="lg_c139_cookie_invalid">Cookie invalide. Vérifiez qu\'il contient Os_SSo_Sid= et RMKEY=</string>
+    <string name="lg_page_load_error_retry">Erreur de chargement de la page, nouvelle tentative…</string>
+
+    <!-- 115 Netdisk -->
+    <string name="lg_pan115_title">Connexion 115 Netdisk</string>
+    <string name="lg_pan115_tutorial_1">1. Connectez-vous à votre compte 115 dans la page web ci-dessous (QR / SMS / mot de passe pris en charge)</string>
+    <string name="lg_pan115_tutorial_2">2. La connexion est détectée et effectuée automatiquement ; aucune action manuelle n\'est nécessaire</string>
+    <string name="lg_pan115_tutorial_3">3. Si la connexion automatique ne se déclenche pas, appuyez sur « Enregistrer » en haut à droite pour extraire manuellement (lit le Cookie web)</string>
+    <string name="lg_pan115_tutorial_4">4. Ou appuyez sur l\'icône « Coller » pour coller le Cookie entier manuellement</string>
+    <string name="lg_pan115_tutorial_5">5. Les Cookies 115 changent régulièrement ; reconnectez-vous à leur expiration</string>
+    <string name="lg_pan115_cookie_hint">Après vous être connecté au web 115, copiez le Cookie du navigateur et collez-le ici (doit contenir UID et SEID)</string>
+    <string name="lg_pan115_cookie_invalid">Cookie invalide ou expiré. Vérifiez qu\'il contient UID et SEID</string>
+
+    <!-- 123 Cloud -->
+    <string name="lg_pan123_title">Connexion 123 Cloud</string>
+    <string name="lg_manual_token">Saisir le Token manuellement</string>
+    <string name="lg_mode_web">Connexion web</string>
+    <string name="lg_pan123_password_title">Connexion compte et mot de passe</string>
+    <string name="lg_pan123_password_hint">Connectez-vous directement avec votre compte 123 Cloud sans ouvrir de page web ; si une vérification de sécurité est requise, utilisez « Connexion web »</string>
+    <string name="lg_pan123_tutorial_1">1. Connectez-vous à votre compte 123 Cloud dans la page web ci-dessous (mot de passe / code SMS pris en charge)</string>
+    <string name="lg_pan123_tutorial_2">2. La connexion est détectée et effectuée automatiquement ; aucune action manuelle n\'est nécessaire</string>
+    <string name="lg_pan123_tutorial_3">3. Si la connexion automatique ne se déclenche pas, appuyez sur « Enregistrer » en haut à droite pour extraire manuellement (lit l\'authorToken du localStorage web)</string>
+    <string name="lg_pan123_tutorial_4">4. Ou appuyez sur l\'icône « Coller » pour coller le Token manuellement</string>
+    <string name="lg_pan123_tutorial_5">5. Le Token est durable ; reconnectez-vous lorsqu\'il expire</string>
+    <string name="lg_pan123_token_hint">Après vous être connecté au web 123 Cloud, copiez la valeur authorToken du localStorage et collez-la ici (visible dans les outils de développement du navigateur)</string>
+    <string name="lg_paste_token_hint">Coller l\'authorToken…</string>
+    <string name="lg_pan123_token_invalid">Token invalide. Vérifiez qu\'il s\'agit de l\'authorToken complet</string>
+
+    <!-- Quark -->
+    <string name="lg_quark_title">Connexion Quark Netdisk</string>
+    <string name="lg_quark_tutorial_1">1. Connectez-vous à votre compte Quark dans la page web ci-dessous</string>
+    <string name="lg_quark_tutorial_2">2. La connexion est détectée automatiquement. Sinon, appuyez sur « Enregistrer » en haut à droite</string>
+    <string name="lg_quark_tutorial_3">3. Ou appuyez sur l\'icône « Coller » pour saisir le Cookie manuellement (doit contenir __pus= et __puus=)</string>
+    <string name="lg_quark_tutorial_4">4. Le Cookie est valable environ 30 jours ; reconnectez-vous lorsqu\'il expire</string>
+    <string name="lg_quark_cookie_hint">Copiez le Cookie complet depuis la session web connectée (doit contenir __pus= et __puus=)</string>
+    <string name="lg_quark_cookie_invalid">Cookie invalide. Vérifiez qu\'il contient __pus= et __puus=</string>
+
+    <!-- UC Netdisk -->
+    <string name="lg_uc_title">Connexion UC Netdisk</string>
+    <string name="lg_uc_tutorial_1">1. Connectez-vous à votre compte UC dans la page web ci-dessous</string>
+    <string name="lg_uc_tutorial_2">2. La connexion est détectée automatiquement. Sinon, appuyez sur « Enregistrer » en haut à droite</string>
+    <string name="lg_uc_tutorial_3">3. Ou appuyez sur l\'icône « Coller » pour saisir le Cookie manuellement (doit contenir __pus= et __puus=)</string>
+    <string name="lg_uc_tutorial_4">4. Le Cookie a une durée de vie limitée ; reconnectez-vous lorsqu\'il expire</string>
+    <string name="lg_uc_cookie_hint">Copiez le Cookie complet depuis la session web connectée (doit contenir __pus= et __puus=)</string>
+    <string name="lg_uc_cookie_invalid">Cookie invalide. Vérifiez qu\'il contient __pus= et __puus=</string>
+
+    <!-- Vérification Xunlei / collage d\'identifiant -->
+    <string name="lg_xunlei_verify_title">Vérification de sécurité Xunlei</string>
+    <string name="lg_xunlei_paste_hint">Après vous être connecté à pan.xunlei.com dans un navigateur de bureau, copiez la valeur de %1$s depuis le localStorage dans les outils de développement (le JSON entier convient)</string>
+    <string name="lg_paste_credential_hint">Coller le JSON de l\'identifiant…</string>
+    <string name="lg_credential_invalid">Identifiant invalide ou expiré. Vérifiez que vous avez copié le contenu complet</string>
+</resources>

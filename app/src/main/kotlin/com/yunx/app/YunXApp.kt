@@ -82,6 +82,8 @@ class YunXApp : Application() {
             }
         }
         scheduleDeepScan(this)
+        // 多语言文案取值入口：必须先于任何 ViewModel / 数据层用到 AppStrings.get 的地方装配
+        com.yunx.app.util.AppStrings.install(this)
         com.yunx.app.data.network.XunleiDeviceFingerprint.init(this)
         // 123 云盘的设备标识（loginuuid）：账号密码登录与所有业务请求都要带，必须跨启动保持稳定，
         // 否则服务端会把每次启动都当成新设备（登录更容易被要求过验证）

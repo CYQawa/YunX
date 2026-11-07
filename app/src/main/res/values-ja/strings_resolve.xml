@@ -1,0 +1,250 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    G6 グループ：解析 / 共有詳細 / メディア・テキストプレビュー / ブックマーク / オンボーディングと権限。
+-->
+<resources>
+    <!-- プラットフォーム表示名 -->
+    <string name="rs_platform_quark">クォークドライブ</string>
+    <string name="rs_platform_uc">UCドライブ</string>
+    <string name="rs_platform_xunlei">迅雷ドライブ</string>
+    <string name="rs_platform_baidu">百度ドライブ</string>
+    <string name="rs_platform_139">139ドライブ</string>
+    <string name="rs_platform_123">123ドライブ</string>
+    <string name="rs_platform_115">115ドライブ</string>
+    <string name="rs_platform_guangya">光鴨ドライブ</string>
+    <string name="rs_platform_ilanzou">藍奏雲優享版</string>
+    <string name="rs_platform_lanzou">藍奏雲ドライブ</string>
+    <string name="rs_platform_generic">ドライブ</string>
+
+    <!-- プラットフォーム短縮名（ホームショートカットのタイル） -->
+    <string name="rs_short_quark">クォーク</string>
+    <string name="rs_short_xunlei">迅雷</string>
+    <string name="rs_short_baidu">百度</string>
+    <string name="rs_short_guangya">光鴨</string>
+    <string name="rs_short_ilanzou">優享</string>
+    <string name="rs_short_lanzou">藍奏</string>
+
+    <!-- 解析/転送/ダウンロード状態 -->
+    <string name="rs_login_required_save">%1$sにログインすると転送できます（未ログインではファイル一覧の閲覧のみ可能）</string>
+    <string name="rs_login_required_download">%1$sにログインするとダウンロードできます（未ログインではファイル一覧の閲覧のみ可能）</string>
+    <string name="rs_login_first">先に%1$sにログインしてください</string>
+    <string name="rs_saved_to">%1$sに保存しました</string>
+    <string name="rs_transfer_failed">転送に失敗しました</string>
+    <string name="rs_transfer_interrupted">一括転送を中断しました</string>
+    <string name="rs_transferred_count">%1$d 件を%2$sに転送しました</string>
+    <string name="rs_collecting_files">ファイルを収集中…</string>
+    <string name="rs_folder_empty">選択したフォルダは空です</string>
+    <string name="rs_download_interrupted">一括ダウンロードを中断しました</string>
+    <string name="rs_no_direct_link">ダウンロード直リンクを取得できませんでした</string>
+    <string name="rs_added_downloads">%1$d 件のダウンロードタスクを追加しました</string>
+    <string name="rs_download_link_failed">ダウンロードリンクの取得に失敗しました</string>
+    <string name="rs_added_and_failed">%1$d 件を追加、%2$d 件失敗</string>
+    <string name="rs_failure_reason">（理由：%1$s）</string>
+    <string name="rs_no_downloadable">選択した内容にダウンロード可能なファイルがありません</string>
+    <string name="rs_download_failed">ダウンロードに失敗しました</string>
+    <string name="rs_parse_failed_retry">解析に失敗しました。しばらくしてから再試行してください</string>
+    <string name="rs_add_download_failed">ダウンロードタスクの追加に失敗しました。しばらくしてから再試行してください</string>
+    <string name="rs_no_audio_stream">このプラットフォームには独立した音声ストリームがないため、先に動画全体をダウンロードして音声トラックを抽出します</string>
+    <string name="rs_unrecognized_link">共有リンクを認識できません</string>
+    <string name="rs_parse_failed">解析に失敗しました</string>
+    <string name="rs_guest_retry_hint">%1$s（現在未ログインです。「ドライブ」ページで%2$sにログインして再試行してください）</string>
+    <string name="rs_update_quark_guest_limit">この更新パッケージは Quark のゲストダウンロード上限（約 50MB）を超えています。Quark ドライブにログインすると直接ダウンロードできます</string>
+    <string name="rs_repo_info_failed">リポジトリ情報を取得できません：%1$s/%2$s</string>
+    <string name="rs_parent_repo_failed">上流リポジトリを開けません：%1$s</string>
+    <string name="rs_github_code">コード</string>
+    <string name="rs_github_load_dir_failed">ディレクトリの読み込みに失敗しました</string>
+    <string name="rs_github_download_zip">完全なソース ZIP をダウンロード</string>
+    <string name="rs_github_load_releases_failed">Releases の読み込みに失敗しました</string>
+    <string name="rs_badge_draft">下書き</string>
+    <string name="rs_badge_prerelease">プレリリース</string>
+    <string name="rs_badge_latest">最新</string>
+    <string name="rs_load_more">さらに読み込む</string>
+    <string name="rs_release_not_found">Release が見つかりません：%1$s</string>
+    <string name="rs_owner_repos_failed">%1$s のリポジトリ一覧を取得できません</string>
+    <string name="rs_open_repo_failed">リポジトリを開けません：%1$s</string>
+    <string name="rs_unknown_dir">不明なディレクトリ：%1$s</string>
+    <string name="rs_missing_link">共有リンクがありません</string>
+    <string name="rs_bookmarked_to">「%1$s」にブックマークしました</string>
+    <string name="rs_cannot_get_link">ダウンロードリンクを取得できません</string>
+    <string name="rs_resolve_first">先に共有を解析してください</string>
+    <string name="rs_online_preview">オンラインプレビュー</string>
+    <string name="rs_file_list_failed">ファイル一覧の取得に失敗しました</string>
+
+    <!-- 共有詳細 -->
+    <string name="rs_cancel_selection">選択を解除</string>
+    <string name="rs_selected_count">%1$d 件選択中</string>
+    <string name="rs_all_selected">すべて選択済み</string>
+    <string name="rs_tap_select_more">タップしてさらにファイルを選択</string>
+    <string name="rs_deselect_all">すべて選択解除</string>
+    <string name="rs_select_all">すべて選択</string>
+    <string name="rs_back">戻る</string>
+    <string name="rs_share_content">共有内容</string>
+    <string name="rs_total_items">全 %1$d 件</string>
+    <string name="rs_match_items">%1$d / %2$d 件一致</string>
+    <string name="rs_add_to_bookmark">ブックマークに追加</string>
+    <string name="rs_close_search">検索を閉じる</string>
+    <string name="rs_search_files">ファイルを検索</string>
+    <string name="rs_search_current_dir">現在のフォルダ内を検索</string>
+    <string name="rs_clear_search">検索をクリア</string>
+    <string name="rs_dir_empty">このフォルダは空です</string>
+    <string name="rs_no_match_files">「%1$s」に一致するファイルが見つかりません</string>
+    <string name="rs_transfer">転送</string>
+    <string name="rs_download">ダウンロード</string>
+    <string name="rs_large_file_title">大きなファイルのダウンロード</string>
+    <string name="rs_baidu_limit_message">Baidu ドライブは非会員が 300MB を超えると速度制限され、ダウンロードが遅くなる場合があります。続行しますか？</string>
+    <string name="rs_dont_show_again">今後このメッセージを表示しない</string>
+    <string name="rs_continue_download">ダウンロードを続行</string>
+    <string name="rs_cancel">キャンセル</string>
+    <string name="rs_interrupt">中断</string>
+    <string name="rs_batch_processing">一括処理中</string>
+    <string name="rs_fetching_link_progress">ダウンロードリンクを取得中 %1$s</string>
+    <string name="rs_batch_processing_wait">一括処理中です。お待ちください…</string>
+    <string name="rs_guest_notice_quark">未ログイン閲覧：約 50MB 以内の小さいファイルは直接ダウンロードできます。より大きいファイルと転送は「ドライブ」ページでログインが必要です</string>
+    <string name="rs_guest_notice_uc">未ログイン閲覧：サイズ制限なく直接ダウンロードできます。転送は「ドライブ」ページでログインが必要です</string>
+    <string name="rs_guest_notice_default">未ログイン閲覧：ファイル一覧を表示できます。ダウンロード/転送は「ドライブ」ページでログインが必要です</string>
+    <string name="rs_go_up">上の階層へ</string>
+    <string name="rs_root_dir">ルート</string>
+    <string name="rs_folder">フォルダ</string>
+    <string name="rs_more">その他</string>
+
+    <!-- 解析ページ -->
+    <string name="rs_fetch_link_title">ダウンロードリンクを取得</string>
+    <string name="rs_fetching_link_wait">ダウンロードリンクを取得中です。お待ちください…</string>
+    <string name="rs_input_hint">共有リンクまたはコードを貼り付けて、ワンタップで共有内容を解析</string>
+    <string name="rs_input_placeholder">例：https://pan.quark.cn/s/xxxx、迅雷コード、139 ドライブコード</string>
+    <string name="rs_clear_link">リンクをクリア</string>
+    <string name="rs_extract_code_optional">抽出コード（任意）</string>
+    <string name="rs_auto_or_manual">自動認識または手動入力</string>
+    <string name="rs_clear_code">抽出コードをクリア</string>
+    <string name="rs_parsing">解析中…</string>
+    <string name="rs_start_resolve">解析を開始</string>
+    <string name="rs_shortcuts">ショートカット</string>
+    <string name="rs_manage">管理</string>
+    <string name="rs_no_shortcuts">ホームショートカットはまだありません</string>
+    <string name="rs_shortcuts_hint">「ブックマーク」ページでブックマークを長押し → ホームに追加</string>
+    <string name="rs_remove_from_home">ホームから削除</string>
+    <string name="rs_remove_shortcut_msg">「%1$s」はホームショートカットに表示されなくなります</string>
+    <string name="rs_remove">削除</string>
+    <string name="rs_loading">読み込み中…</string>
+    <string name="rs_detected_share">%1$s の共有リンクを検出しました</string>
+    <string name="rs_paste_and_resolve_q">入力欄に貼り付けて解析を開始しますか？</string>
+    <string name="rs_ignore">無視</string>
+    <string name="rs_paste_and_resolve">貼り付けて解析</string>
+
+    <!-- プレビュー -->
+    <string name="rs_preview">プレビュー</string>
+    <string name="rs_preview_image">画像をプレビュー</string>
+    <string name="rs_open_with_text_preview">このファイルは「テキストプレビュー」で開いてください</string>
+    <string name="rs_image_load_failed">画像の読み込みに失敗しました：直リンクが無効か認証が必要な可能性があります。先にダウンロードしてから表示してください</string>
+    <string name="rs_online_play_failed">オンライン再生に失敗しました（%1$s）：先にダウンロードしてローカルプレーヤーで開いてください</string>
+    <string name="rs_content_empty">ファイルが空か、デコードできません</string>
+    <string name="rs_read_file_failed">ファイルの読み込みに失敗しました：%1$s</string>
+    <string name="rs_unknown_error">不明なエラー</string>
+    <string name="rs_reading_prefix">先頭 512KB を読み込み中…</string>
+    <string name="rs_text_file">テキストファイル</string>
+    <string name="rs_truncated_notice">切り詰めました。完全な内容はダウンロードして確認してください（先頭 512KB のみ読み込み）</string>
+    <string name="rs_no_preview_content">プレビューできる内容がありません</string>
+    <string name="rs_preview_response_empty">応答に内容がありません</string>
+
+    <!-- ブックマーク -->
+    <string name="rs_bookmarks_title">ブックマークしたリンク</string>
+    <string name="rs_add_bookmark">ブックマークを追加</string>
+    <string name="rs_link_copied">リンクをコピーしました</string>
+    <string name="rs_all">すべて</string>
+    <string name="rs_home">ホーム</string>
+    <string name="rs_no_bookmarks">ブックマークはまだありません</string>
+    <string name="rs_no_bookmarks_hint">解析ページで「ブックマークに追加」をタップするか、右上の + から手動で追加できます</string>
+    <string name="rs_share_link_label">共有リンク</string>
+    <string name="rs_paste_share_link">共有リンクを貼り付け</string>
+    <string name="rs_title_optional">タイトル（任意）</string>
+    <string name="rs_category">カテゴリ</string>
+    <string name="rs_custom">カスタム</string>
+    <string name="rs_custom_category">カスタムカテゴリ</string>
+    <string name="rs_bookmark">ブックマーク</string>
+    <string name="rs_edit_category">カテゴリを変更</string>
+    <string name="rs_confirm">OK</string>
+    <string name="rs_resolve">解析</string>
+    <string name="rs_copy_link">リンクをコピー</string>
+    <string name="rs_add_to_home">ホームに追加</string>
+    <string name="rs_custom_icon_text">アイコン文字をカスタマイズ</string>
+    <string name="rs_delete">削除</string>
+    <string name="rs_custom_icon_hint">ホームショートカットのタイルに表示する文字です。最大 %1$d 文字。</string>
+    <string name="rs_color_block_text">タイル文字</string>
+    <string name="rs_color_block_auto">空欄の場合はタイトルの先頭 %1$d 文字を使用</string>
+    <string name="rs_save">保存</string>
+
+    <!-- オンボーディング -->
+    <string name="rs_app_name">YunX</string>
+    <string name="rs_app_icon_desc">YunX アイコン</string>
+    <string name="rs_onboarding_tagline">ドライブ＆動画リンク解析 · オンラインプレビュー · 高速ダウンロード</string>
+    <string name="rs_fact_drives">10 大ドライブ</string>
+    <string name="rs_fact_video_platforms">7 大動画プラットフォーム</string>
+    <string name="rs_fact_chunked_download">分割ダウンロード</string>
+    <string name="rs_fact_free">完全無料</string>
+    <string name="rs_open_source_repo">オープンソースリポジトリ</string>
+    <string name="rs_qq_not_installed">QQ がインストールされていません。グループ番号をコピーしました：%1$s</string>
+    <string name="rs_qq_group">QQ グループ %1$s</string>
+    <string name="rs_open_qq">QQ を開く</string>
+    <string name="rs_read_before_use">ご利用前にお読みください</string>
+    <string name="rs_terms_intro">YunX はオープンソースツールです。以下は利用規約と免責事項です</string>
+    <string name="rs_terms_title">利用規約</string>
+    <string name="rs_terms_1">本アプリはオープンソースのドライブ共有リンク解析・ダウンロードツールで、個人の学習・技術交流のみを目的としています。商業目的では使用しないでください。</string>
+    <string name="rs_terms_2">利用するドライブの利用規約および現地の法令を遵守してください。本アプリを使用して権利侵害や違法なコンテンツをダウンロード・配布してはなりません。</string>
+    <string name="rs_terms_3">ドライブアカウントの認証情報（Cookie / Token）は本端末にのみ保存され、いかなるサーバーにも送信されません。</string>
+    <string name="rs_terms_4">本アプリは「現状のまま」提供されます。解析成功率やダウンロード速度は保証されず、利用結果についても一切約束しません。</string>
+    <string name="rs_disclaimer_title">免責事項</string>
+    <string name="rs_disclaimer_1">ダウンロードしたコンテンツの著作権は原作者に帰属します。ダウンロード後 24 時間以内に削除してください。</string>
+    <string name="rs_disclaimer_2">本アプリの利用によって生じたいかなる結果も利用者の責任であり、開発者は一切の責任を負いません。</string>
+    <string name="rs_license_title">オープンソースライセンス</string>
+    <string name="rs_license_body">本プロジェクトは GNU AGPL-3.0 ライセンスで公開されており、ソースコードは %1$s で公開されています。</string>
+    <string name="rs_terms_agree">下の「はじめる」をタップすると、上記の規約を読み同意したものとみなされます</string>
+    <string name="rs_previous">前へ</string>
+    <string name="rs_next">次へ</string>
+    <string name="rs_get_started">はじめる</string>
+
+    <!-- 権限の準備 -->
+    <string name="rs_permissions_title">権限の準備</string>
+    <string name="rs_permissions_intro_required">YunX は以下のシステム権限のみを使用します。ストレージ権限は Android 9 以下でファイルを保存するために必須です。残りの 2 つはスキップでき、後で「設定」から変更できます</string>
+    <string name="rs_permissions_intro_optional">YunX は以下のシステム権限のみを使用します。すべてスキップでき、後で「設定」から変更できます</string>
+    <string name="rs_perm_notification_title">通知権限</string>
+    <string name="rs_perm_notification_desc">ダウンロードの進捗や完了通知が通知バーに表示され、フォアグラウンドサービスも安定して動作します。オフにしてもダウンロードは続行されますが、進捗は表示されません。</string>
+    <string name="rs_perm_granted">有効</string>
+    <string name="rs_perm_grant">許可</string>
+    <string name="rs_perm_go_settings">設定を開く</string>
+    <string name="rs_perm_background_title">バックグラウンド実行</string>
+    <string name="rs_perm_background_desc">YunX を「バッテリー最適化の対象外」に追加すると、画面ロックやバックグラウンド移行後もダウンロードが停止されません（推奨）。</string>
+    <string name="rs_perm_whitelisted">許可済み</string>
+    <string name="rs_perm_storage_title">ストレージ権限</string>
+    <string name="rs_perm_storage_desc_required">システムの「ダウンロード」フォルダにファイルを保存するにはストレージ権限が必要です。Android 9 以下では必須です。</string>
+    <string name="rs_perm_storage_desc_optional">Android 10 以上ではシステムのメディアライブラリ経由で保存するため、ストレージ権限は不要です。</string>
+    <string name="rs_perm_authorized">許可済み</string>
+    <string name="rs_perm_no_need">不要</string>
+    <string name="rs_perm_go_settings_grant">設定で許可</string>
+    <string name="rs_perm_skip_impact_required">スキップした場合：通知権限がない → 通知バーにダウンロード進捗が表示されません。バックグラウンド許可がない → 画面オフ後にダウンロードが一時停止する可能性があります。ストレージ権限は必須のため、許可しないと開始できません。</string>
+    <string name="rs_perm_skip_impact_optional">スキップした場合：通知権限がない → 通知バーにダウンロード進捗が表示されません。バックグラウンド許可がない → 画面オフ後にダウンロードが一時停止する可能性があります。Android 10 以上ではファイル保存にストレージ権限は不要です。</string>
+    <string name="rs_category_uncategorized">未分類</string>
+    <string name="rs_category_video">動画</string>
+    <string name="rs_category_document">ドキュメント</string>
+    <string name="rs_category_software">ソフトウェア</string>
+    <string name="rs_category_music">音楽</string>
+    <string name="rs_category_image">画像</string>
+    <string name="rs_category_archive">圧縮ファイル</string>
+    <string name="rs_category_other">その他</string>
+</resources>

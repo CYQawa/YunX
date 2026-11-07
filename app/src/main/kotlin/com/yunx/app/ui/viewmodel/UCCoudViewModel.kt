@@ -20,6 +20,7 @@ package com.yunx.app.ui.viewmodel
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.upload.UploadProgress
 import com.yunx.app.data.upload.UploadRunner
@@ -40,6 +41,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.network.model.ShareToken
 import com.yunx.app.ui.preview.CloudPreview
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -249,14 +251,14 @@ class UCCoudViewModel(
         viewModelScope.launch {
             val cookie = cookieProvider()
             if (cookie.isNullOrBlank()) {
-                _moveUiState.value = UCCloudUiState.Error("请先登录 UC 网盘")
+                _moveUiState.value = UCCloudUiState.Error(AppStrings.get(R.string.vc_login_required_uc))
                 return@launch
             }
             try {
                 val files = api.listCloudFiles(dirFid, cookie) ?: emptyList()
                 _moveUiState.value = UCCloudUiState.Loaded(files, pathNames, dirFid)
             } catch (e: Exception) {
-                _moveUiState.value = UCCloudUiState.Error(e.message ?: "加载失败")
+                _moveUiState.value = UCCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -362,18 +364,18 @@ class UCCoudViewModel(
         if (!folder.isdir) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 val tasks = mutableListOf<Pair<ShareFile, String>>()
                 collectFolderFiles(folder.fid, folder.fname, cookie, tasks, 0)
                 if (tasks.isEmpty()) {
-                    cloudMessage = "文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_folder_empty)
                     actionFile = null
                     return@launch
                 }
@@ -381,7 +383,7 @@ class UCCoudViewModel(
                 tasks.forEachIndexed { index, (file, relPath) ->
                     // 用户点击「中断」：跳过剩余项（已入队任务保留下载）
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = ucDownloadLink(file.fid, cookie, file) ?: return@runCatching
                         downloadManager.enqueue(
@@ -395,14 +397,14 @@ class UCCoudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断下载"
+                    cloudMessage = AppStrings.get(R.string.vc_download_interrupted)
                     actionFile = null
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 actionFile = null
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_folder_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -427,11 +429,11 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 val link = ucDownloadLink(file.fid, cookie, file)
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 pendingDownload = PendingDownload(
                     url = link.downloadUrl,
                     fileName = link.filename.ifBlank { file.fname },
@@ -446,7 +448,7 @@ class UCCoudViewModel(
                 )
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -467,16 +469,16 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 val link = ucDownloadLink(file.fid, cookie, file)
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
                 CloudPreview.open(file, link.downloadUrl, downloadHeaders(cookie), isHls = link.isHls)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "预览失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_preview_failed)
             } finally {
                 isOperating = false
             }
@@ -498,11 +500,11 @@ class UCCoudViewModel(
                     platform = DownloadPlatform.UC,
                     headers = pd.headers
                 )
-                cloudMessage = "已加入下载：${pd.fileName}"
+                cloudMessage = AppStrings.get(R.string.vc_download_added_named, pd.fileName)
                 actionFile = null
                 downloadTriggered++
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -523,18 +525,18 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 if (api.renameFile(file.fid, newName, cookie)) {
-                    cloudMessage = "已重命名"
+                    cloudMessage = AppStrings.get(R.string.vc_renamed)
                     actionFile = null
                     reloadCurrent()
                 } else {
-                    cloudMessage = "重命名失败"
+                    cloudMessage = AppStrings.get(R.string.vc_rename_failed)
                 }
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "重命名失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_rename_failed)
             } finally {
                 isOperating = false
             }
@@ -551,14 +553,14 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 api.createFolder(newName, parentFid, cookie)
-                cloudMessage = "已创建文件夹「$newName」"
+                cloudMessage = AppStrings.get(R.string.vc_folder_created, newName)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "新建文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_create_folder_failed)
             } finally {
                 isOperating = false
             }
@@ -573,17 +575,17 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 api.moveFile(file.fid, toDirFid, cookie)
-                    ?: throw IllegalStateException("移动失败")
-                cloudMessage = "已移动到目标目录"
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_move_failed))
+                cloudMessage = AppStrings.get(R.string.vc_moved)
                 actionFile = null
                 kotlinx.coroutines.delay(1500)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -598,7 +600,7 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 val shareId = api.createShare(
@@ -608,13 +610,13 @@ class UCCoudViewModel(
                     passcode = passcode,
                     expiredType = expiredType,
                     cookie = cookie
-                ) ?: throw IllegalStateException("创建分享失败")
+                ) ?: throw IllegalStateException(AppStrings.get(R.string.vc_create_share_failed))
                 val info = api.getShareInfo(shareId, cookie)
-                    ?: throw IllegalStateException("获取分享链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_share_link_failed))
                 shareResult = info
                 // 保留 actionFile：FileActionSheet 存活才能弹出 ShareResultDialog
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -629,12 +631,12 @@ class UCCoudViewModel(
         if (files.isEmpty()) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 // 展开选中项：文件直接加入，文件夹递归收集（相对路径 = 文件夹名/子目录/...）
@@ -647,7 +649,7 @@ class UCCoudViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    cloudMessage = "所选文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_selected_folder_empty)
                     exitMultiSelect()
                     return@launch
                 }
@@ -656,7 +658,7 @@ class UCCoudViewModel(
                 tasks.forEachIndexed { index, (file, relPath) ->
                     // 用户点击「中断」：跳过剩余项（已入队任务保留下载）
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = ucDownloadLink(file.fid, cookie, file) ?: return@runCatching
                         downloadManager.enqueue(
@@ -671,18 +673,18 @@ class UCCoudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断批量下载"
+                    cloudMessage = AppStrings.get(R.string.vc_batch_download_interrupted)
                     exitMultiSelect()
                     return@launch
                 }
                 cloudMessage = if (failCount > 0) {
-                    "已加入 $okCount 个下载任务（$failCount 个失败）"
+                    AppStrings.get(R.string.vc_download_added_with_failures, okCount, failCount)
                 } else {
-                    "已加入 $okCount 个下载任务"
+                    AppStrings.get(R.string.vc_download_added, okCount)
                 }
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "批量下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_batch_download_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -700,23 +702,23 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 val shareId = api.createShare(
                     fidList = files.map { it.fid },
-                    title = if (files.size == 1) files[0].fname else "分享 ${files.size} 个文件",
+                    title = if (files.size == 1) files[0].fname else AppStrings.get(R.string.vc_share_n_files, files.size),
                     urlType = urlType,
                     passcode = passcode,
                     expiredType = expiredType,
                     cookie = cookie
-                ) ?: throw IllegalStateException("创建分享失败")
+                ) ?: throw IllegalStateException(AppStrings.get(R.string.vc_create_share_failed))
                 val info = api.getShareInfo(shareId, cookie)
-                    ?: throw IllegalStateException("获取分享链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_share_link_failed))
                 shareResult = info
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -732,18 +734,18 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 files.forEach { file ->
                     api.moveFile(file.fid, toDirFid, cookie)
                 }
-                cloudMessage = "已移动 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_moved_items, files.size)
                 exitMultiSelect()
                 kotlinx.coroutines.delay(1500)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -758,17 +760,17 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 api.deleteFile(file.fid, cookie)
-                    ?: throw IllegalStateException("删除失败")
-                cloudMessage = "已删除「${file.fname}」"
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_delete_failed))
+                cloudMessage = AppStrings.get(R.string.vc_deleted_named, file.fname)
                 actionFile = null
                 kotlinx.coroutines.delay(1200)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -784,18 +786,18 @@ class UCCoudViewModel(
             try {
                 val cookie = cookieProvider()
                 if (cookie.isNullOrBlank()) {
-                    cloudMessage = "请先登录 UC 网盘"
+                    cloudMessage = AppStrings.get(R.string.vc_login_required_uc)
                     return@launch
                 }
                 files.forEach { file ->
                     api.deleteFile(file.fid, cookie)
                 }
-                cloudMessage = "已删除 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_items, files.size)
                 exitMultiSelect()
                 kotlinx.coroutines.delay(1200)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -822,7 +824,7 @@ class UCCoudViewModel(
                 val files = api.listCloudFiles(current.dirFid, cookie) ?: emptyList()
                 _uiState.value = UCCloudUiState.Loaded(files, current.pathNames, current.dirFid)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "刷新失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_refresh_failed)
             } finally {
                 refreshing = false
             }
@@ -843,14 +845,14 @@ class UCCoudViewModel(
         viewModelScope.launch {
             val cookie = cookieProvider()
             if (cookie.isNullOrBlank()) {
-                _uiState.value = UCCloudUiState.Error("请先登录 UC 网盘")
+                _uiState.value = UCCloudUiState.Error(AppStrings.get(R.string.vc_login_required_uc))
                 return@launch
             }
             try {
                 val files = api.listCloudFiles(dirFid, cookie) ?: emptyList()
                 _uiState.value = UCCloudUiState.Loaded(files, pathNames, dirFid)
             } catch (e: Exception) {
-                _uiState.value = UCCloudUiState.Error(e.message ?: "加载失败")
+                _uiState.value = UCCloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -865,8 +867,8 @@ class UCCoudViewModel(
         if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
         cloudMessage = when {
             outcome.error != null -> outcome.error
-            outcome.cancelled -> "已取消上传"
-            else -> "已上传 ${outcome.uploaded} 个文件"
+            outcome.cancelled -> AppStrings.get(R.string.vc_upload_cancelled)
+            else -> AppStrings.get(R.string.vc_upload_done, outcome.uploaded)
         }
     }
 
@@ -879,7 +881,7 @@ class UCCoudViewModel(
     fun uploadFiles(resolver: ContentResolver, uris: List<Uri>) {
         val dir = (uiState.value as? UCCloudUiState.Loaded)?.dirFid ?: "0"
         uploadRunner.start(resolver, uris) { io, source ->
-            val cookie = cookieProvider() ?: throw IllegalStateException("请先登录 UC 网盘")
+            val cookie = cookieProvider() ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_uc))
             api.upload(io, source, dir, cookie)
         }
     }

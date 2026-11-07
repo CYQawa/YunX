@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通用 -->
+    <string name="lg_back">返回</string>
+    <string name="lg_cancel">取消</string>
+    <string name="lg_save">儲存</string>
+    <string name="lg_continue">繼續</string>
+    <string name="lg_got_it">知道了</string>
+    <string name="lg_login_success">登入成功</string>
+    <string name="lg_no_login_state">未偵測到登入狀態，請先完成登入</string>
+    <string name="lg_manual_cookie">手動輸入 Cookie</string>
+    <string name="lg_paste_cookie_hint">貼上 Cookie…</string>
+    <string name="lg_login_tutorial">登入教學</string>
+
+    <!-- 百度 -->
+    <string name="lg_baidu_title">百度網盤登入</string>
+    <string name="lg_baidu_risk_title">使用前請閱讀</string>
+    <string name="lg_baidu_risk_1">百度網盤風控嚴格，可能導致你的帳號被風控。</string>
+    <string name="lg_baidu_risk_2">以下情況通常是風控造成，並非軟體故障：\n· 取得 bdstoken 失敗\n· 個人網盤檔案清單無法載入</string>
+    <string name="lg_baidu_risk_3">請勿高頻操作（頻繁解析/轉存/下載/上傳），如遇異常建議降低使用頻率或稍後再試。</string>
+    <string name="lg_baidu_risk_ack">我已閱讀並了解上述風險</string>
+    <string name="lg_baidu_tutorial_1">1. 在下方網頁中登入百度帳號</string>
+    <string name="lg_baidu_tutorial_2">2. 登入完成後會自動偵測登入；若未自動登入，請點右上角「儲存」</string>
+    <string name="lg_baidu_tutorial_3">3. 或點擊「貼上」圖示，手動輸入 Cookie（需含 BDUSS=）</string>
+    <string name="lg_baidu_tutorial_4">4. Cookie 長期有效，失效後需重新登入</string>
+    <string name="lg_baidu_cookie_hint">從網頁登入狀態複製完整的 Cookie（需包含 BDUSS=）</string>
+    <string name="lg_baidu_cookie_invalid">Cookie 無效，請檢查是否包含 BDUSS=</string>
+
+    <!-- 迅雷帳號密碼 / 簡訊 -->
+    <string name="lg_xunlei_title">迅雷網盤登入</string>
+    <string name="lg_mode_password">帳號密碼</string>
+    <string name="lg_mode_sms">簡訊登入</string>
+    <string name="lg_security_verify">安全驗證</string>
+    <string name="lg_xunlei_login_prompt">使用迅雷帳號登入</string>
+    <string name="lg_xunlei_sms_sent_to">帳號密碼登入觸發安全驗證，驗證碼已傳送至 %1$s</string>
+    <string name="lg_xunlei_sms_prompt">帳號密碼登入觸發安全驗證，請點擊下方「傳送驗證碼」</string>
+    <string name="lg_xunlei_password_hint">輸入手機號碼 / 電子郵件與密碼，支援解析與下載分享檔案</string>
+    <string name="lg_sms_login_title">簡訊驗證碼登入</string>
+    <string name="lg_sms_login_hint">免密碼：輸入手機號碼取得驗證碼即可登入（沒設過密碼、忘記密碼都走這裡）</string>
+    <string name="lg_sms_code">簡訊驗證碼</string>
+    <string name="lg_verify_and_login">驗證並登入</string>
+    <string name="lg_sms_not_received_hint">若一直收不到簡訊，請確認手機號碼正確，或稍後重試 / 切換網路</string>
+    <string name="lg_verify_in_app">收不到簡訊？應用程式內驗證</string>
+    <string name="lg_verify_in_app_hint">在應用程式內完成驗證後，會自動重新登入</string>
+    <string name="lg_phone">手機號碼</string>
+    <string name="lg_sms_note">簡訊需由你主動傳送並填寫驗證碼；未註冊的手機號碼會依迅雷官方流程處理</string>
+    <string name="lg_phone_or_email">手機號碼 / 電子郵件</string>
+    <string name="lg_password">密碼</string>
+    <string name="lg_hide_password">隱藏密碼</string>
+    <string name="lg_show_password">顯示密碼</string>
+    <string name="lg_login">登入</string>
+    <string name="lg_web_login">網頁登入（掃碼 / 驗證碼）</string>
+    <string name="lg_xunlei_web_login_hint">在應用程式內開啟迅雷網頁版登入，登入狀態自動儲存；收不到簡訊或密碼登入被攔截時用這個最穩</string>
+    <string name="lg_set_password">未設定密碼，點我前往設定</string>
+    <string name="lg_resend_in_seconds">%1$d 秒後重新傳送</string>
+    <string name="lg_resend_code">重新傳送驗證碼</string>
+    <string name="lg_send_code">傳送驗證碼</string>
+
+    <!-- 藍奏雲 -->
+    <string name="lg_lanzou_title">藍奏雲登入</string>
+    <string name="lg_lanzou_hint">使用藍奏雲帳號密碼登入（官方介面，自動通過人機驗證）</string>
+    <string name="lg_lanzou_username_label">使用者名稱 / 帳號 / 手機號碼</string>
+    <string name="lg_lanzou_tutorial_1">1. 輸入藍奏雲帳號（使用者名稱或手機號碼）與密碼後點擊「登入」。</string>
+    <string name="lg_lanzou_tutorial_2">2. 登入成功後 Cookie 會加密儲存在本機，用於個人盤與分享轉存。</string>
+    <string name="lg_lanzou_tutorial_3">3. 若提示密碼錯誤，請核對後重試（連續失敗請稍後再試）。</string>
+    <string name="lg_login_failed_check">登入失敗，請檢查帳號密碼</string>
+
+    <!-- 藍奏雲優享版 -->
+    <string name="lg_ilanzou_title">藍奏雲優享版登入</string>
+    <string name="lg_ilanzou_hint">使用藍奏雲優享版帳號密碼登入（登入後會儲存密碼，用於憑證過期後自動重新登入）</string>
+    <string name="lg_ilanzou_tutorial_1">1. 輸入藍奏雲優享版的使用者名稱與密碼後點擊「登入」。</string>
+    <string name="lg_ilanzou_tutorial_2">2. 登入成功後 appToken 與裝置識別會加密儲存在本機。</string>
+    <string name="lg_ilanzou_tutorial_3">3. 若提示存取驗證未通過，請稍後重試或使用網頁登入。</string>
+
+    <!-- 通用（補充） -->
+    <string name="lg_username">使用者名稱</string>
+    <string name="lg_logging_in">登入中…</string>
+    <string name="lg_login_instructions">登入說明</string>
+
+    <!-- 光鴨雲盤 -->
+    <string name="lg_guangya_title">光鴨雲盤登入</string>
+    <string name="lg_guangya_sms_hint">使用手機號碼接收簡訊驗證碼登入 / 註冊（新使用者自動註冊）</string>
+    <string name="lg_guangya_password_hint">使用光鴨雲盤帳號密碼登入（如帳號未設定密碼，請至官網完成設定）</string>
+    <string name="lg_guangya_tutorial_1">1. 輸入光鴨雲盤帳號與密碼後點擊「登入」。</string>
+    <string name="lg_guangya_tutorial_2">2. 也可點「驗證碼登入」，用手機號碼接收簡訊驗證碼登入（新使用者自動註冊）。</string>
+    <string name="lg_guangya_tutorial_3">3. 登入成功後 access / refresh 權杖與裝置識別會加密儲存在本機。</string>
+    <string name="lg_guangya_tutorial_4">4. 若提示需要安全驗證，請重試或改用其他登入方式。</string>
+    <string name="lg_sms_sent">驗證碼已傳送</string>
+    <string name="lg_account">帳號</string>
+    <string name="lg_account_placeholder">手機號碼 / 電子郵件 / 使用者名稱</string>
+    <string name="lg_sms_login_entry">驗證碼登入</string>
+    <string name="lg_resend_after_seconds">%1$d 秒後重傳</string>
+    <string name="lg_get_sms_code">取得驗證碼</string>
+    <string name="lg_login_or_register">登入 / 註冊</string>
+    <string name="lg_back_to_password">返回密碼登入</string>
+
+    <!-- 影音平台網頁登入 -->
+    <string name="lg_error_host_lookup">網域名稱解析失敗，通常是網路不通</string>
+    <string name="lg_error_connect">連線逾時，通常是網路不通</string>
+    <string name="lg_error_unknown">未知錯誤</string>
+    <string name="lg_platform_login_title">%1$s 登入</string>
+    <string name="lg_refresh_page">重新整理網頁</string>
+    <string name="lg_web_load_failed">網頁載入失敗</string>
+    <string name="lg_web_load_failed_hint">若這個平台在本地無法存取（例如被封鎖的境外網站），請先連上代理再重試</string>
+    <string name="lg_retry">重試</string>
+    <string name="lg_video_tutorial_1">1. 在下方網頁中登入%1$s帳號</string>
+    <string name="lg_video_tutorial_2">2. 登入成功後會自動偵測並儲存，無需手動操作</string>
+    <string name="lg_video_tutorial_3">3. 若沒有自動儲存，請點右上角「儲存」；也可點「貼上」圖示手動輸入 Cookie</string>
+    <string name="lg_video_tutorial_4">4. Cookie 會加密儲存在本機，失效後需重新登入</string>
+    <string name="lg_video_cookie_hint">從瀏覽器或抓包工具複製完整的 Cookie 後貼上到這裡</string>
+    <string name="lg_cookie_invalid_expired">Cookie 無效或已過期，請重新複製</string>
+    <string name="lg_why_no_web_login">為什麼沒有網頁登入</string>
+    <string name="lg_manual_only_reason">%1$s 的登入頁帶有風控驗證（reCAPTCHA），在 App 內建網頁中無法完成登入，因此這裡不再提供網頁登入，改為直接貼上 Cookie。</string>
+    <string name="lg_cookie">Cookie</string>
+    <string name="lg_cookie_howto">取得方法：在電腦瀏覽器登入 %1$s 後開啟開發人員工具（F12）→ Application / 儲存空間 → Cookies，複製該網站下的整條 Cookie。</string>
+
+    <!-- 迅雷網頁登入 -->
+    <string name="lg_xunlei_web_title">迅雷網頁登入</string>
+    <string name="lg_manual_paste_credential">手動貼上登入憑證</string>
+    <string name="lg_no_login_state_web">未偵測到登入狀態，請先在網頁中完成登入</string>
+    <string name="lg_web_login_instructions">網頁登入說明</string>
+    <string name="lg_xunlei_web_tutorial_1">1. 在下方網頁中登入迅雷帳號（手機號碼驗證碼 / 掃碼 / 密碼皆可）</string>
+    <string name="lg_xunlei_web_tutorial_2">2. 登入完成後會自動辨識並登入，通常無需手動操作</string>
+    <string name="lg_xunlei_web_tutorial_3">3. 若未自動登入，可點右上角「儲存」手動擷取一次</string>
+    <string name="lg_xunlei_web_tutorial_4">4. 仍不行就點「貼上」圖示，把網頁登入後的憑證 JSON 貼進來</string>
+    <string name="lg_xunlei_web_tutorial_5">5. 網頁登入的權杖可自動續期；失效後需重新登入</string>
+
+    <!-- 139 網盤 -->
+    <string name="lg_c139_title">139網盤登入</string>
+    <string name="lg_c139_tutorial_1">1. 在下方網頁中登入 139 網盤帳號（手機號碼）</string>
+    <string name="lg_c139_tutorial_2">2. 登入完成後會自動偵測登入；若未自動登入，請點右上角「儲存」</string>
+    <string name="lg_c139_tutorial_3">3. 或點擊「貼上」圖示，手動輸入 Cookie（需含 Os_SSo_Sid= 與 RMKEY=）</string>
+    <string name="lg_c139_tutorial_4">4. 若網頁空白：用系統瀏覽器開啟 yun.139.com 登入後複製 Cookie 貼上，效果相同</string>
+    <string name="lg_c139_tutorial_5">5. Cookie 有效期有限，失效後需重新登入</string>
+    <string name="lg_c139_cookie_hint">從網頁登入狀態複製完整的 Cookie（需包含 Os_SSo_Sid= 與 RMKEY=）</string>
+    <string name="lg_c139_cookie_invalid">Cookie 無效，請檢查是否包含 Os_SSo_Sid= 與 RMKEY=</string>
+    <string name="lg_page_load_error_retry">頁面載入異常，正在重試…</string>
+
+    <!-- 115 網盤 -->
+    <string name="lg_pan115_title">115網盤登入</string>
+    <string name="lg_pan115_tutorial_1">1. 在下方網頁中登入 115 帳號（支援掃碼 / 簡訊 / 帳號密碼）</string>
+    <string name="lg_pan115_tutorial_2">2. 登入完成後會自動偵測並登入，無需手動操作</string>
+    <string name="lg_pan115_tutorial_3">3. 若自動登入未觸發，可點右上角「儲存」手動擷取（讀取網頁 Cookie）</string>
+    <string name="lg_pan115_tutorial_4">4. 或點擊「貼上」圖示，手動貼上整串 Cookie</string>
+    <string name="lg_pan115_tutorial_5">5. 115 的 Cookie 會定期輪換，失效後重新登入即可</string>
+    <string name="lg_pan115_cookie_hint">登入 115 網頁版後，複製瀏覽器中的 Cookie 貼上到這裡（需包含 UID 與 SEID）</string>
+    <string name="lg_pan115_cookie_invalid">Cookie 無效或已過期，請檢查是否包含 UID 與 SEID</string>
+
+    <!-- 123 雲盤 -->
+    <string name="lg_pan123_title">123雲盤登入</string>
+    <string name="lg_manual_token">手動輸入 Token</string>
+    <string name="lg_mode_web">網頁登入</string>
+    <string name="lg_pan123_password_title">帳號密碼登入</string>
+    <string name="lg_pan123_password_hint">直接使用 123 雲盤帳號登入，不需要開啟網頁；若提示需要安全驗證，請改用「網頁登入」</string>
+    <string name="lg_pan123_tutorial_1">1. 在下方網頁中登入 123 雲盤帳號（支援帳號密碼 / 簡訊驗證碼）</string>
+    <string name="lg_pan123_tutorial_2">2. 登入完成後會自動偵測並登入，無需手動操作</string>
+    <string name="lg_pan123_tutorial_3">3. 若自動登入未觸發，可點右上角「儲存」手動擷取（讀取網頁 localStorage 的 authorToken）</string>
+    <string name="lg_pan123_tutorial_4">4. 或點擊「貼上」圖示，手動貼上 Token</string>
+    <string name="lg_pan123_tutorial_5">5. Token 長期有效，失效後需重新登入</string>
+    <string name="lg_pan123_token_hint">登入 123 雲盤網頁後，複製其 localStorage 中的 authorToken 值貼上到這裡（可用瀏覽器開發人員工具查看）</string>
+    <string name="lg_paste_token_hint">貼上 authorToken…</string>
+    <string name="lg_pan123_token_invalid">Token 無效，請檢查是否為完整的 authorToken</string>
+
+    <!-- 夸克網盤 -->
+    <string name="lg_quark_title">夸克網盤登入</string>
+    <string name="lg_quark_tutorial_1">1. 在下方網頁中登入夸克帳號</string>
+    <string name="lg_quark_tutorial_2">2. 登入完成後會自動偵測登入；若未自動登入，請點右上角「儲存」</string>
+    <string name="lg_quark_tutorial_3">3. 或點擊「貼上」圖示，手動輸入 Cookie（需含 __pus= 與 __puus=）</string>
+    <string name="lg_quark_tutorial_4">4. Cookie 約 30 天有效，失效後需重新登入</string>
+    <string name="lg_quark_cookie_hint">從網頁登入狀態複製完整的 Cookie（需包含 __pus= 與 __puus=）</string>
+    <string name="lg_quark_cookie_invalid">Cookie 無效，請檢查是否包含 __pus= 與 __puus=</string>
+
+    <!-- UC 網盤 -->
+    <string name="lg_uc_title">UC網盤登入</string>
+    <string name="lg_uc_tutorial_1">1. 在下方網頁中登入 UC 帳號</string>
+    <string name="lg_uc_tutorial_2">2. 登入完成後會自動偵測登入；若未自動登入，請點右上角「儲存」</string>
+    <string name="lg_uc_tutorial_3">3. 或點擊「貼上」圖示，手動輸入 Cookie（需含 __pus= 與 __puus=）</string>
+    <string name="lg_uc_tutorial_4">4. Cookie 有效期有限，失效後需重新登入</string>
+    <string name="lg_uc_cookie_hint">從網頁登入狀態複製完整的 Cookie（需包含 __pus= 與 __puus=）</string>
+    <string name="lg_uc_cookie_invalid">Cookie 無效，請檢查是否包含 __pus= 與 __puus=</string>
+
+    <!-- 迅雷驗證 / 憑證貼上 -->
+    <string name="lg_xunlei_verify_title">迅雷安全驗證</string>
+    <string name="lg_xunlei_paste_hint">在電腦瀏覽器登入 pan.xunlei.com 後，從開發人員工具複製 localStorage 中 %1$s 的值（整段 JSON 即可）</string>
+    <string name="lg_paste_credential_hint">貼上憑證 JSON…</string>
+    <string name="lg_credential_invalid">憑證無效或已過期，請確認複製的是完整內容</string>
+</resources>

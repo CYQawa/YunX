@@ -21,8 +21,10 @@ package com.yunx.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yunx.app.R
 import com.yunx.app.data.db.ILanzouAccountEntity
 import com.yunx.app.data.repository.ILanzouAccountRepository
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -58,14 +60,14 @@ class ILanzouAccountViewModel(
     /** 账号密码登录；返回 (是否成功, 提示文案)。 */
     suspend fun login(account: String, password: String): Pair<Boolean, String> {
         if (account.isBlank() || password.isBlank()) {
-            return false to "请输入蓝奏优享账号和密码"
+            return false to AppStrings.get(R.string.vm_ilanzou_enter_account_password)
         }
         // repository.login 内部用 runCatching，返回 Result（不会抛异常），必须按 Result 判定成败
         val result = repository.login(account, password, newAccount = addNewAccount)
         if (result.isSuccess) addNewAccount = false
         return result.fold(
-            onSuccess = { true to "登录成功" },
-            onFailure = { false to (it.message ?: "蓝奏优享登录失败，请检查账号密码") }
+            onSuccess = { true to AppStrings.get(R.string.vm_login_success) },
+            onFailure = { false to (it.message ?: AppStrings.get(R.string.vm_ilanzou_login_failed)) }
         )
     }
 

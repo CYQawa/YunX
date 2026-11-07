@@ -1,0 +1,64 @@
+<!--
+    Français. Correspond à values/strings_vm_cloud.xml.
+    Généré par le lot i18n G7 (préfixe vc_).
+-->
+<resources>
+    <!-- Messages d'opération courants -->
+    <string name="vc_load_failed">Échec du chargement</string>
+    <string name="vc_refresh_failed">Échec de l\'actualisation</string>
+    <string name="vc_collecting_files">Collecte des fichiers…</string>
+    <string name="vc_folder_empty">Le dossier est vide</string>
+    <string name="vc_selected_folder_empty">Le dossier sélectionné est vide</string>
+    <string name="vc_adding_download_progress">Ajout aux téléchargements %1$d/%2$d</string>
+    <string name="vc_download_interrupted">Téléchargement interrompu</string>
+    <string name="vc_batch_download_interrupted">Téléchargement groupé interrompu</string>
+    <string name="vc_download_added">%1$d tâche(s) de téléchargement ajoutée(s)</string>
+    <string name="vc_download_added_with_failures">%1$d tâche(s) de téléchargement ajoutée(s) (%2$d en échec)</string>
+    <string name="vc_download_added_named">Ajouté aux téléchargements : %1$s</string>
+    <string name="vc_download_folder_failed">Échec du téléchargement du dossier</string>
+    <string name="vc_batch_download_failed">Échec du téléchargement groupé</string>
+    <string name="vc_download_failed">Échec du téléchargement</string>
+    <string name="vc_get_download_link_failed">Impossible d\'obtenir le lien de téléchargement</string>
+    <string name="vc_preview_failed">Échec de l\'aperçu</string>
+    <string name="vc_renamed">Renommé</string>
+    <string name="vc_rename_failed">Échec du renommage</string>
+    <string name="vc_folder_created">Dossier « %1$s » créé</string>
+    <string name="vc_create_folder_failed">Échec de la création du dossier</string>
+    <string name="vc_moved">Déplacé vers le dossier de destination</string>
+    <string name="vc_move_failed">Échec du déplacement</string>
+    <string name="vc_moved_items">%1$d élément(s) déplacé(s)</string>
+    <string name="vc_deleted_named">%1$s supprimé</string>
+    <string name="vc_delete_failed">Échec de la suppression</string>
+    <string name="vc_deleted_items">%1$d élément(s) supprimé(s)</string>
+    <string name="vc_share_failed">Échec du partage</string>
+    <string name="vc_create_share_failed">Échec de la création du partage</string>
+    <string name="vc_get_share_link_failed">Impossible d\'obtenir le lien de partage</string>
+    <string name="vc_share_n_files">Partager %1$d fichiers</string>
+    <string name="vc_upload_cancelled">Téléversement annulé</string>
+    <string name="vc_upload_done">%1$d fichier(s) téléversé(s)</string>
+
+    <!-- Connexion requise -->
+    <string name="vc_login_required_uc">Veuillez d\'abord vous connecter à UC Drive</string>
+    <string name="vc_login_required_quark">Veuillez d\'abord vous connecter à Quark Drive</string>
+    <string name="vc_login_required_xunlei">Veuillez d\'abord vous connecter à Xunlei Drive</string>
+    <string name="vc_login_required_xunlei_cloud">Veuillez d\'abord vous connecter à Xunlei Cloud</string>
+    <string name="vc_login_required_139">Veuillez d\'abord vous connecter à 139 Drive</string>
+    <string name="vc_login_required_cmcc">Veuillez d\'abord vous connecter à China Mobile Cloud</string>
+    <string name="vc_login_required_baidu">Veuillez d\'abord vous connecter à Baidu Netdisk</string>
+    <string name="vc_login_required_pan123">Veuillez d\'abord vous connecter à 123 Cloud</string>
+    <string name="vc_login_required_pan123_spaced">Veuillez d\'abord vous connecter à 123 Cloud</string>
+    <string name="vc_login_required_guangya">Veuillez d\'abord vous connecter à GuangYa Drive</string>
+    <string name="vc_login_required_lanzou">Veuillez d\'abord vous connecter à Lanzou Cloud</string>
+    <string name="vc_login_required_ilanzou">Veuillez d\'abord vous connecter à Lanzou Cloud Premium</string>
+    <string name="vc_login_required_pan115">Veuillez d\'abord vous connecter à 115 Drive</string>
+
+    <!-- Messages spécifiques à la plateforme -->
+    <string name="vc_xunlei_device_id_missing">Identifiant de l\'appareil manquant, veuillez vous reconnecter à Xunlei Cloud</string>
+    <string name="vc_task_failed">Échec de la tâche (%1$s)</string>
+    <string name="vc_task_timeout">Délai de la tâche dépassé</string>
+    <string name="vc_lanzou_session_expired">Votre session Lanzou a expiré, veuillez vous reconnecter</string>
+    <string name="vc_lanzou_move_folder_unsupported">Lanzou Cloud ne prend pas encore en charge le déplacement de dossiers</string>
+    <string name="vc_lanzou_share_single_only">Lanzou ne peut partager qu\'un seul fichier ou dossier à la fois ; le premier élément a été partagé</string>
+    <string name="vc_ilanzou_share_unsupported">Lanzou Cloud Premium ne prend pas encore en charge la création de partages</string>
+    <string name="vc_ilanzou_session_expired">Votre session Lanzou Premium a expiré, veuillez vous reconnecter</string>
+</resources>

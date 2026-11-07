@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    G4 group: account sheets / video accounts / save-to-cloud / resolve file actions / download link dialog (key prefix sh_).
+    English. Key set must match values/strings_sheets.xml exactly.
+-->
+<resources>
+    <!-- Shared by AccountListSection / VideoAccountSheet -->
+    <string name="sh_accounts_count">Accounts (%1$d)</string>
+    <string name="sh_add_account">Add account</string>
+    <string name="sh_account_list_hint">The primary account is used for single-identity actions such as listing, saving, and uploading; once \"multi-account download\" is enabled, downloads automatically use the other accounts of the same drive.</string>
+    <string name="sh_primary_account">Primary account</string>
+    <string name="sh_tap_to_set_primary">Tap to set as primary</string>
+    <string name="sh_account_actions">Account actions</string>
+    <string name="sh_rename_remark">Rename remark</string>
+    <string name="sh_logout_account">Remove this account</string>
+    <string name="sh_remark">Remark</string>
+    <string name="sh_remark_placeholder">Leave blank to show nickname</string>
+    <string name="sh_remark_hint">When several accounts of the same drive are signed in, a remark helps you tell them apart (clearing it shows the nickname).</string>
+    <string name="sh_video_remark_hint">When several accounts of the same platform are signed in, a remark helps you tell them apart (clearing it shows the nickname).</string>
+    <string name="sh_save">Save</string>
+    <string name="sh_cancel">Cancel</string>
+    <string name="sh_logout_confirm">Are you sure you want to remove \"%1$s\"? Only this account\'s credentials on this device will be cleared; other accounts are unaffected.</string>
+    <string name="sh_logout">Remove</string>
+    <string name="sh_unnamed_account">Unnamed account</string>
+
+    <!-- Per-drive account sheets -->
+    <string name="sh_baidu_logged_in">Baidu Netdisk · Signed in</string>
+    <string name="sh_c139_logged_in">139 Drive · Signed in</string>
+    <string name="sh_guangya_logged_in">GuangYa Drive · Signed in</string>
+    <string name="sh_ilanzou_logged_in">Lanzou Premium · Signed in</string>
+    <string name="sh_lanzou_logged_in">Lanzou · Signed in</string>
+    <string name="sh_pan115_logged_in">115 Drive · Signed in</string>
+    <string name="sh_pan123_logged_in">123 Drive · Signed in</string>
+    <string name="sh_quark_logged_in">Quark Drive · Signed in</string>
+    <string name="sh_uc_logged_in">UC Drive · Signed in</string>
+    <string name="sh_xunlei_logged_in">Xunlei Drive · Signed in</string>
+    <string name="sh_login_info">Login info</string>
+    <string name="sh_login_time">Login time</string>
+    <string name="sh_login_account">Login account</string>
+    <string name="sh_pan115_login_cookie">Login Cookie</string>
+    <string name="sh_collapse">Collapse</string>
+    <string name="sh_expand_all">Show all</string>
+    <string name="sh_copy">Copy</string>
+    <string name="sh_cookie_copied">Cookie copied</string>
+    <string name="sh_token_copied">Token copied</string>
+    <string name="sh_apptoken_copied">appToken copied</string>
+    <string name="sh_device_id">Device ID</string>
+    <string name="sh_guangya_user">GuangYa user</string>
+    <string name="sh_guangya_avatar">G</string>
+    <string name="sh_ilanzou_user">Lanzou Premium user</string>
+    <string name="sh_lanzou_user">Lanzou user</string>
+    <string name="sh_lanzou_avatar">L</string>
+
+    <!-- Video account sheet / video account section -->
+    <string name="sh_logged_in_accounts">Signed in · %1$d accounts</string>
+    <string name="sh_logged_in">Signed in</string>
+    <string name="sh_logout_all_accounts">Remove all accounts</string>
+    <string name="sh_logout_all_confirm">Are you sure you want to remove all %2$d accounts of \"%1$s\"? Only the credentials saved on this device will be cleared.</string>
+    <string name="sh_logout_all">Remove all</string>
+    <string name="sh_manage">Manage</string>
+    <string name="sh_login">Sign in</string>
+    <string name="sh_no_login_needed">No login required, parse directly</string>
+    <string name="sh_not_logged_in">Not signed in</string>
+    <string name="sh_name_accounts">%1$s · %2$d accounts</string>
+
+    <!-- Video result section -->
+    <string name="sh_download_selected">Download selected</string>
+    <string name="sh_back">Back</string>
+    <string name="sh_video_content">Video content</string>
+    <string name="sh_exit_multi_select">Exit selection</string>
+    <string name="sh_selected_count_images">%1$d selected</string>
+    <string name="sh_all_selected">All selected</string>
+    <string name="sh_tap_image_to_select">Tap images to keep selecting</string>
+    <string name="sh_deselect_all">Deselect all</string>
+    <string name="sh_select_all">Select all</string>
+    <string name="sh_page_info">%1$d images · Page %2$d/%3$d</string>
+    <string name="sh_prev_page">Previous</string>
+    <string name="sh_next_page">Next</string>
+    <string name="sh_image_index">Image %1$d</string>
+    <string name="sh_download_this_image">Download this image</string>
+    <string name="sh_download_all_count">Download all (%1$d items)</string>
+    <string name="sh_total_items">%1$d items</string>
+    <string name="sh_expand">Show more</string>
+    <string name="sh_copy_caption">Copy caption</string>
+    <string name="sh_caption_copied">Caption copied</string>
+    <string name="sh_media_row_title">%1$d. %2$s</string>
+    <string name="sh_media_video">Video</string>
+    <string name="sh_media_image">Image</string>
+    <string name="sh_media_audio">Audio</string>
+    <string name="sh_preview">Preview</string>
+    <string name="sh_download_audio_only">Download audio only</string>
+    <string name="sh_download">Download</string>
+
+    <!-- Save to cloud -->
+    <string name="sh_save_to_quark">Save to Quark Drive</string>
+    <string name="sh_root_dir">Root</string>
+    <string name="sh_retry">Retry</string>
+    <string name="sh_empty_dir_hint">No subfolders in this folder; you can save to it directly</string>
+    <string name="sh_save_here">Save to this folder (%1$s)</string>
+
+    <!-- Resolve page file action sheet -->
+    <string name="sh_download_folder">Download folder</string>
+    <string name="sh_download_folder_desc">Recursively download the entire folder, keeping the directory structure</string>
+    <string name="sh_download_desc">Get the download link and save it to this device</string>
+    <string name="sh_preview_online">Preview online</string>
+    <string name="sh_preview_online_desc">View inside the app without downloading</string>
+    <string name="sh_save_to_cloud">Save</string>
+    <string name="sh_save_folder_desc">Save the entire folder to my drive</string>
+    <string name="sh_save_file_desc">Save the file to my drive</string>
+
+    <!-- Download link dialog -->
+    <string name="sh_direct_link_generated">Download link generated (valid for about 15-30 minutes)</string>
+    <string name="sh_copy_download_link">Copy download link</string>
+    <string name="sh_download_link_copied">Download link copied</string>
+    <string name="sh_download_start_hint">After starting, you can check the progress on the \"Downloads\" page</string>
+    <string name="sh_start_download">Start download</string>
+    <string name="sh_close">Close</string>
+</resources>

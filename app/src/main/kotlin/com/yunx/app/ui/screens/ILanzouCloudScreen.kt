@@ -79,10 +79,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
 import com.yunx.app.ui.components.ScrollToTopButton
@@ -202,8 +204,8 @@ fun ILanzouCloudScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = onExit) { Text("返回") }
-                            TextButton(onClick = { viewModel.loadRoot() }) { Text("重试") }
+                            OutlinedButton(onClick = onExit) { Text(stringResource(R.string.csa_back)) }
+                            TextButton(onClick = { viewModel.loadRoot() }) { Text(stringResource(R.string.csa_retry)) }
                         }
                     }
                 }
@@ -237,38 +239,38 @@ fun ILanzouCloudScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         if (viewModel.multiSelectMode) {
                                             IconButton(onClick = { viewModel.exitMultiSelect() }) {
-                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "取消选择")
+                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.csa_cd_cancel_selection))
                                             }
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "已选 ${viewModel.selected.size} 项",
+                                                    text = stringResource(R.string.csa_selected_count, viewModel.selected.size),
                                                     style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                                 Text(
-                                                    text = if (viewModel.selected.size == displayFiles.size) "已全选" else "点击选择更多文件",
+                                                    text = if (viewModel.selected.size == displayFiles.size) stringResource(R.string.csa_all_selected) else stringResource(R.string.csa_click_select_more),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
                                             TextButton(onClick = { viewModel.toggleSelectAll(displayFiles) }) {
-                                                Text(if (viewModel.selected.size == displayFiles.size) "取消全选" else "全选")
+                                                Text(if (viewModel.selected.size == displayFiles.size) stringResource(R.string.csa_deselect_all) else stringResource(R.string.csa_select_all))
                                             }
                                         } else {
                                             IconButton(onClick = onExit) {
-                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.csa_back))
                                             }
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "蓝奏云优享版",
+                                                    text = stringResource(R.string.csa_platform_ilanzou),
                                                     style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Medium,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    text = if (searchQuery.isBlank()) "共 ${s.files.size} 项"
-                                                    else "匹配 ${displayFiles.size} / ${s.files.size} 项",
+                                                    text = if (searchQuery.isBlank()) stringResource(R.string.csa_total_count, s.files.size)
+                                                    else stringResource(R.string.csa_match_count, displayFiles.size, s.files.size),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -276,7 +278,7 @@ fun ILanzouCloudScreen(
                                             IconButton(onClick = { showSearch = !showSearch }) {
                                                 Icon(
                                                     imageVector = Icons.Outlined.Search,
-                                                    contentDescription = if (showSearch) "关闭搜索" else "搜索文件",
+                                                    contentDescription = if (showSearch) stringResource(R.string.csa_cd_close_search) else stringResource(R.string.csa_cd_search_files),
                                                     tint = if (showSearch) MaterialTheme.colorScheme.primary
                                                     else MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -289,7 +291,7 @@ fun ILanzouCloudScreen(
                                     }
                                     if (!viewModel.multiSelectMode) {
                                         CrumbBar(
-                                            rootTitle = "蓝奏云优享版",
+                                            rootTitle = stringResource(R.string.csa_platform_ilanzou),
                                             pathNames = s.pathNames,
                                             onNavigate = { level ->
                                                 scrollPositions[currentDirKey] = listState.firstVisibleItemIndex
@@ -308,12 +310,12 @@ fun ILanzouCloudScreen(
                                                 value = searchQuery,
                                                 onValueChange = { searchQuery = it },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                placeholder = { Text("搜索当前目录文件") },
+                                                placeholder = { Text(stringResource(R.string.csa_search_current_dir)) },
                                                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                                                 trailingIcon = {
                                                     if (searchQuery.isNotEmpty()) {
                                                         IconButton(onClick = { searchQuery = "" }) {
-                                                            Icon(Icons.Filled.Close, contentDescription = "清空搜索")
+                                                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.csa_cd_clear_search))
                                                         }
                                                     }
                                                 },
@@ -339,7 +341,7 @@ fun ILanzouCloudScreen(
                             if (displayFiles.isEmpty()) {
                                 item {
                                     Text(
-                                        text = if (s.files.isEmpty()) "此目录为空" else "未找到匹配「${searchQuery.trim()}」的文件",
+                                        text = if (s.files.isEmpty()) stringResource(R.string.csa_dir_empty) else stringResource(R.string.csa_no_match_files, searchQuery.trim()),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
@@ -396,14 +398,14 @@ fun ILanzouCloudScreen(
                             busy = viewModel.isOperating,
                             count = viewModel.selected.size,
                             actions = listOf(
-                                MultiSelectAction("下载", Icons.Outlined.Download, MaterialTheme.colorScheme.primary) {
+                                MultiSelectAction(stringResource(R.string.csa_download), Icons.Outlined.Download, MaterialTheme.colorScheme.primary) {
                                     viewModel.downloadSelected()
                                 },
-                                MultiSelectAction("移动", Icons.Outlined.DriveFileMove, MaterialTheme.colorScheme.primary) {
+                                MultiSelectAction(stringResource(R.string.csa_move), Icons.Outlined.DriveFileMove, MaterialTheme.colorScheme.primary) {
                                     batchInitial = BatchStep.MOVE
                                     showBatchActions = true
                                 },
-                                MultiSelectAction("删除", Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
+                                MultiSelectAction(stringResource(R.string.csa_delete), Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
                                     showDeleteConfirm = true
                                 }
                             )
@@ -416,8 +418,8 @@ fun ILanzouCloudScreen(
 
     val pendingDeleteTarget = when {
         !showDeleteConfirm -> null
-        viewModel.multiSelectMode -> "选中的 ${viewModel.selected.size} 项"
-        else -> viewModel.actionFile?.let { "「${it.fname}」" }
+        viewModel.multiSelectMode -> stringResource(R.string.csa_delete_target_selected, viewModel.selected.size)
+        else -> viewModel.actionFile?.let { stringResource(R.string.csa_quoted_name, it.fname) }
     }
     if (pendingDeleteTarget != null) {
         ConfirmDeleteSheet(
@@ -469,7 +471,7 @@ fun ILanzouCloudScreen(
             initialStep = batchInitial,
             moveStep = { onBack, onDone ->
                 ILanzouMoveStep(
-                    subtitle = "已选 ${viewModel.selected.size} 项",
+                    subtitle = stringResource(R.string.csa_selected_count, viewModel.selected.size),
                     viewModel = viewModel,
                     onBack = onBack,
                     onDone = onDone
@@ -494,16 +496,16 @@ fun ILanzouCloudScreen(
             confirmButton = { },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelDownload() }) {
-                    Text("中断", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.csa_interrupt), color = MaterialTheme.colorScheme.error)
                 }
             },
-            title = { Text("处理中") },
+            title = { Text(stringResource(R.string.csa_processing)) },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     YunXLoading(modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = viewModel.folderProgress ?: "正在处理，请稍候…",
+                        text = viewModel.folderProgress ?: stringResource(R.string.csa_processing_please_wait),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -528,10 +530,10 @@ private fun ILanzouMoveStep(
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        StepHeader(title = "移动到", subtitle = subtitle, onBack = onBack)
+        StepHeader(title = stringResource(R.string.csa_move_to), subtitle = subtitle, onBack = onBack)
         Spacer(modifier = Modifier.height(8.dp))
         CrumbBar(
-            rootTitle = "根目录",
+            rootTitle = stringResource(R.string.csa_root_dir),
             pathNames = (moveState as? ILanzouCloudUiState.Loaded)?.pathNames ?: emptyList(),
             onNavigate = { viewModel.moveNavigateToLevel(it) }
         )
@@ -564,7 +566,7 @@ private fun ILanzouMoveStep(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "当前目录没有子文件夹，可直接移动到此处",
+                                stringResource(R.string.csa_no_subfolders_move_here),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -588,7 +590,7 @@ private fun ILanzouMoveStep(
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        val dirName = (moveState as? ILanzouCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+        val dirName = (moveState as? ILanzouCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: stringResource(R.string.csa_root_dir)
         Button(
             onClick = {
                 val to = (moveState as? ILanzouCloudUiState.Loaded)?.dirId ?: "0"
@@ -599,7 +601,7 @@ private fun ILanzouMoveStep(
         ) {
             Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("移动到此处（$dirName）")
+            Text(stringResource(R.string.csa_move_here, dirName))
         }
     }
 }

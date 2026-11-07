@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通用 -->
+    <string name="lg_back">返回</string>
+    <string name="lg_cancel">取消</string>
+    <string name="lg_save">保存</string>
+    <string name="lg_continue">继续</string>
+    <string name="lg_got_it">知道了</string>
+    <string name="lg_login_success">登录成功</string>
+    <string name="lg_no_login_state">未检测到登录态，请先完成登录</string>
+    <string name="lg_manual_cookie">手动输入 Cookie</string>
+    <string name="lg_paste_cookie_hint">粘贴 Cookie…</string>
+    <string name="lg_login_tutorial">登录教程</string>
+
+    <!-- 百度 -->
+    <string name="lg_baidu_title">百度网盘登录</string>
+    <string name="lg_baidu_risk_title">使用前请阅读</string>
+    <string name="lg_baidu_risk_1">百度网盘风控严重，可能导致你的账号被风控。</string>
+    <string name="lg_baidu_risk_2">以下情况通常都是风控导致，不是软件故障：\n· 获取 bdstoken 失败\n· 个人网盘文件列表加载不出来</string>
+    <string name="lg_baidu_risk_3">请勿高频操作（频繁解析/转存/下载/上传），如遇异常建议降低使用频率或稍后再试。</string>
+    <string name="lg_baidu_risk_ack">我已阅读并了解上述风险</string>
+    <string name="lg_baidu_tutorial_1">1. 在下方网页中登录百度账号</string>
+    <string name="lg_baidu_tutorial_2">2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」</string>
+    <string name="lg_baidu_tutorial_3">3. 或点击「粘贴」图标，手动输入 Cookie（需含 BDUSS=）</string>
+    <string name="lg_baidu_tutorial_4">4. Cookie 长期有效，失效后需重新登录</string>
+    <string name="lg_baidu_cookie_hint">从网页登录态复制完整的 Cookie（需包含 BDUSS=）</string>
+    <string name="lg_baidu_cookie_invalid">Cookie 无效，请检查是否包含 BDUSS=</string>
+
+    <!-- 迅雷账号密码 / 短信 -->
+    <string name="lg_xunlei_title">迅雷网盘登录</string>
+    <string name="lg_mode_password">账号密码</string>
+    <string name="lg_mode_sms">短信登录</string>
+    <string name="lg_security_verify">安全验证</string>
+    <string name="lg_xunlei_login_prompt">使用迅雷账号登录</string>
+    <string name="lg_xunlei_sms_sent_to">账号密码登录触发安全验证，验证码已发送至 %1$s</string>
+    <string name="lg_xunlei_sms_prompt">账号密码登录触发安全验证，请点击下方「发送验证码」</string>
+    <string name="lg_xunlei_password_hint">输入手机号 / 邮箱与密码，支持解析与下载分享文件</string>
+    <string name="lg_sms_login_title">短信验证码登录</string>
+    <string name="lg_sms_login_hint">无需密码：输入手机号获取验证码即可登录（没设过密码、忘记密码都走这里）</string>
+    <string name="lg_sms_code">短信验证码</string>
+    <string name="lg_verify_and_login">验证并登录</string>
+    <string name="lg_sms_not_received_hint">若始终收不到短信，请确认手机号正确，或稍后重试 / 切换网络</string>
+    <string name="lg_verify_in_app">短信收不到？应用内验证</string>
+    <string name="lg_verify_in_app_hint">应用内完成验证后，将自动重新登录</string>
+    <string name="lg_phone">手机号</string>
+    <string name="lg_sms_note">短信需由你主动发送并填写验证码；未注册的手机号会按迅雷官方流程处理</string>
+    <string name="lg_phone_or_email">手机号 / 邮箱</string>
+    <string name="lg_password">密码</string>
+    <string name="lg_hide_password">隐藏密码</string>
+    <string name="lg_show_password">显示密码</string>
+    <string name="lg_login">登录</string>
+    <string name="lg_web_login">网页登录（扫码 / 验证码）</string>
+    <string name="lg_xunlei_web_login_hint">在应用内打开迅雷网页版登录，登录态自动保存；收不到短信或密码登录被拦截时用这个最稳</string>
+    <string name="lg_set_password">未设置密码，点我前往设置</string>
+    <string name="lg_resend_in_seconds">%1$d 秒后重新发送</string>
+    <string name="lg_resend_code">重新发送验证码</string>
+    <string name="lg_send_code">发送验证码</string>
+
+    <!-- 蓝奏云 -->
+    <string name="lg_lanzou_title">蓝奏云登录</string>
+    <string name="lg_lanzou_hint">使用蓝奏云账号密码登录（官方接口，自动通过人机校验）</string>
+    <string name="lg_lanzou_username_label">用户名 / 账号 / 手机号</string>
+    <string name="lg_lanzou_tutorial_1">1. 输入蓝奏云账号（用户名或手机号）与密码后点击「登录」。</string>
+    <string name="lg_lanzou_tutorial_2">2. 登录成功后 Cookie 会加密保存在本机，用于个人盘与分享转存。</string>
+    <string name="lg_lanzou_tutorial_3">3. 若提示密码错误，请核对后重试（连续失败请稍后再试）。</string>
+    <string name="lg_login_failed_check">登录失败，请检查账号密码</string>
+
+    <!-- 蓝奏云优享版 -->
+    <string name="lg_ilanzou_title">蓝奏云优享版登录</string>
+    <string name="lg_ilanzou_hint">使用蓝奏云优享版账号密码登录（登录后会保存密码，用于凭据过期后自动重新登录）</string>
+    <string name="lg_ilanzou_tutorial_1">1. 输入蓝奏云优享版的用户名与密码后点击「登录」。</string>
+    <string name="lg_ilanzou_tutorial_2">2. 登录成功后 appToken 与设备标识会加密保存在本机。</string>
+    <string name="lg_ilanzou_tutorial_3">3. 若提示访问验证未通过，请稍后重试或使用网页登录。</string>
+
+    <!-- 通用（补充） -->
+    <string name="lg_username">用户名</string>
+    <string name="lg_logging_in">登录中…</string>
+    <string name="lg_login_instructions">登录说明</string>
+
+    <!-- 光鸭云盘 -->
+    <string name="lg_guangya_title">光鸭云盘登录</string>
+    <string name="lg_guangya_sms_hint">使用手机号接收短信验证码登录 / 注册（新用户自动注册）</string>
+    <string name="lg_guangya_password_hint">使用光鸭云盘账号密码登录（如账号未设置密码，请到官网完成设置）</string>
+    <string name="lg_guangya_tutorial_1">1. 输入光鸭云盘账号与密码后点击「登录」。</string>
+    <string name="lg_guangya_tutorial_2">2. 也可点「验证码登录」，用手机号接收短信验证码登录（新用户自动注册）。</string>
+    <string name="lg_guangya_tutorial_3">3. 登录成功后 access / refresh 令牌与设备标识会加密保存在本机。</string>
+    <string name="lg_guangya_tutorial_4">4. 若提示需要安全验证，请重试或改用其它登录方式。</string>
+    <string name="lg_sms_sent">验证码已发送</string>
+    <string name="lg_account">账号</string>
+    <string name="lg_account_placeholder">手机号 / 邮箱 / 用户名</string>
+    <string name="lg_sms_login_entry">验证码登录</string>
+    <string name="lg_resend_after_seconds">%1$d s 后重发</string>
+    <string name="lg_get_sms_code">获取验证码</string>
+    <string name="lg_login_or_register">登录 / 注册</string>
+    <string name="lg_back_to_password">返回密码登录</string>
+
+    <!-- 视频平台网页登录 -->
+    <string name="lg_error_host_lookup">域名解析失败，通常是网络不通</string>
+    <string name="lg_error_connect">连接超时，通常是网络不通</string>
+    <string name="lg_error_unknown">未知错误</string>
+    <string name="lg_platform_login_title">%1$s 登录</string>
+    <string name="lg_refresh_page">刷新网页</string>
+    <string name="lg_web_load_failed">网页加载失败</string>
+    <string name="lg_web_load_failed_hint">若这个平台在本地访问不了（例如被墙的境外站点），请先连上代理再重试</string>
+    <string name="lg_retry">重试</string>
+    <string name="lg_video_tutorial_1">1. 在下方网页中登录%1$s账号</string>
+    <string name="lg_video_tutorial_2">2. 登录成功后会自动检测并保存，无需手动操作</string>
+    <string name="lg_video_tutorial_3">3. 若没有自动保存，点右上角「保存」；也可点「粘贴」图标手动输入 Cookie</string>
+    <string name="lg_video_tutorial_4">4. Cookie 会加密保存在本机，失效后需重新登录</string>
+    <string name="lg_video_cookie_hint">从浏览器或抓包工具复制完整的 Cookie 后粘贴到这里</string>
+    <string name="lg_cookie_invalid_expired">Cookie 无效或已过期，请重新复制</string>
+    <string name="lg_why_no_web_login">为什么没有网页登录</string>
+    <string name="lg_manual_only_reason">%1$s 的登录页带有风控验证（reCAPTCHA），在 App 内置网页里无法完成登录，因此这里不再提供网页登录，改为直接粘贴 Cookie。</string>
+    <string name="lg_cookie">Cookie</string>
+    <string name="lg_cookie_howto">获取方法：在电脑浏览器登录 %1$s 后打开开发者工具（F12）→ Application / 存储 → Cookies，复制该站点下的整条 Cookie。</string>
+
+    <!-- 迅雷网页登录 -->
+    <string name="lg_xunlei_web_title">迅雷网页登录</string>
+    <string name="lg_manual_paste_credential">手动粘贴登录凭据</string>
+    <string name="lg_no_login_state_web">未检测到登录态，请先在网页中完成登录</string>
+    <string name="lg_web_login_instructions">网页登录说明</string>
+    <string name="lg_xunlei_web_tutorial_1">1. 在下方网页中登录迅雷账号（手机号验证码 / 扫码 / 密码都行）</string>
+    <string name="lg_xunlei_web_tutorial_2">2. 登录完成后会自动识别并登录，通常无需手动操作</string>
+    <string name="lg_xunlei_web_tutorial_3">3. 若没自动登录，可点右上角「保存」手动提取一次</string>
+    <string name="lg_xunlei_web_tutorial_4">4. 仍不行就点「粘贴」图标，把网页登录后的凭据 JSON 贴进来</string>
+    <string name="lg_xunlei_web_tutorial_5">5. 网页登录的令牌可自动续期；失效后需重新登录</string>
+
+    <!-- 139 网盘 -->
+    <string name="lg_c139_title">139网盘登录</string>
+    <string name="lg_c139_tutorial_1">1. 在下方网页中登录 139 网盘账号（手机号）</string>
+    <string name="lg_c139_tutorial_2">2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」</string>
+    <string name="lg_c139_tutorial_3">3. 或点击「粘贴」图标，手动输入 Cookie（需含 Os_SSo_Sid= 与 RMKEY=）</string>
+    <string name="lg_c139_tutorial_4">4. 若网页空白：用系统浏览器打开 yun.139.com 登录后复制 Cookie 粘贴，效果相同</string>
+    <string name="lg_c139_tutorial_5">5. Cookie 有效期有限，失效后需重新登录</string>
+    <string name="lg_c139_cookie_hint">从网页登录态复制完整的 Cookie（需包含 Os_SSo_Sid= 与 RMKEY=）</string>
+    <string name="lg_c139_cookie_invalid">Cookie 无效，请检查是否包含 Os_SSo_Sid= 与 RMKEY=</string>
+    <string name="lg_page_load_error_retry">页面加载异常，正在重试…</string>
+
+    <!-- 115 网盘 -->
+    <string name="lg_pan115_title">115网盘登录</string>
+    <string name="lg_pan115_tutorial_1">1. 在下方网页中登录 115 账号（支持扫码 / 短信 / 账号密码）</string>
+    <string name="lg_pan115_tutorial_2">2. 登录完成后将自动检测并登录，无需手动操作</string>
+    <string name="lg_pan115_tutorial_3">3. 若自动登录未触发，可点右上角「保存」手动提取（读取网页 Cookie）</string>
+    <string name="lg_pan115_tutorial_4">4. 或点击「粘贴」图标，手动粘贴整串 Cookie</string>
+    <string name="lg_pan115_tutorial_5">5. 115 的 Cookie 会定期轮换，失效后重新登录即可</string>
+    <string name="lg_pan115_cookie_hint">登录 115 网页版后，复制浏览器中的 Cookie 粘贴到这里（需包含 UID 与 SEID）</string>
+    <string name="lg_pan115_cookie_invalid">Cookie 无效或已过期，请检查是否包含 UID 与 SEID</string>
+
+    <!-- 123 云盘 -->
+    <string name="lg_pan123_title">123云盘登录</string>
+    <string name="lg_manual_token">手动输入 Token</string>
+    <string name="lg_mode_web">网页登录</string>
+    <string name="lg_pan123_password_title">账号密码登录</string>
+    <string name="lg_pan123_password_hint">直接使用 123 云盘账号登录，不需要打开网页；若提示需要安全验证，请改用「网页登录」</string>
+    <string name="lg_pan123_tutorial_1">1. 在下方网页中登录 123 云盘账号（支持账号密码 / 短信验证码）</string>
+    <string name="lg_pan123_tutorial_2">2. 登录完成后将自动检测并登录，无需手动操作</string>
+    <string name="lg_pan123_tutorial_3">3. 若自动登录未触发，可点右上角「保存」手动提取（读取网页 localStorage 的 authorToken）</string>
+    <string name="lg_pan123_tutorial_4">4. 或点击「粘贴」图标，手动粘贴 Token</string>
+    <string name="lg_pan123_tutorial_5">5. Token 长期有效，失效后需重新登录</string>
+    <string name="lg_pan123_token_hint">登录 123 云盘网页后，复制其 localStorage 中的 authorToken 值粘贴到这里（可用浏览器开发者工具查看）</string>
+    <string name="lg_paste_token_hint">粘贴 authorToken…</string>
+    <string name="lg_pan123_token_invalid">Token 无效，请检查是否为完整的 authorToken</string>
+
+    <!-- 夸克网盘 -->
+    <string name="lg_quark_title">夸克网盘登录</string>
+    <string name="lg_quark_tutorial_1">1. 在下方网页中登录夸克账号</string>
+    <string name="lg_quark_tutorial_2">2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」</string>
+    <string name="lg_quark_tutorial_3">3. 或点击「粘贴」图标，手动输入 Cookie（需含 __pus= 与 __puus=）</string>
+    <string name="lg_quark_tutorial_4">4. Cookie 约 30 天有效，失效后需重新登录</string>
+    <string name="lg_quark_cookie_hint">从网页登录态复制完整的 Cookie（需包含 __pus= 与 __puus=）</string>
+    <string name="lg_quark_cookie_invalid">Cookie 无效，请检查是否包含 __pus= 与 __puus=</string>
+
+    <!-- UC 网盘 -->
+    <string name="lg_uc_title">UC网盘登录</string>
+    <string name="lg_uc_tutorial_1">1. 在下方网页中登录 UC 账号</string>
+    <string name="lg_uc_tutorial_2">2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」</string>
+    <string name="lg_uc_tutorial_3">3. 或点击「粘贴」图标，手动输入 Cookie（需含 __pus= 与 __puus=）</string>
+    <string name="lg_uc_tutorial_4">4. Cookie 有效期有限，失效后需重新登录</string>
+    <string name="lg_uc_cookie_hint">从网页登录态复制完整的 Cookie（需包含 __pus= 与 __puus=）</string>
+    <string name="lg_uc_cookie_invalid">Cookie 无效，请检查是否包含 __pus= 与 __puus=</string>
+
+    <!-- 迅雷验证 / 凭据粘贴 -->
+    <string name="lg_xunlei_verify_title">迅雷安全验证</string>
+    <string name="lg_xunlei_paste_hint">在电脑浏览器登录 pan.xunlei.com 后，从开发者工具复制 localStorage 中 %1$s 的值（整段 JSON 即可）</string>
+    <string name="lg_paste_credential_hint">粘贴凭据 JSON…</string>
+    <string name="lg_credential_invalid">凭据无效或已过期，请确认复制的是完整内容</string>
+</resources>

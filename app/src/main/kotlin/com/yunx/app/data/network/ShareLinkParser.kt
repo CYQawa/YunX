@@ -18,6 +18,10 @@
 
 package com.yunx.app.data.network
 
+import androidx.annotation.StringRes
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 /**
  * 网盘平台。
  *
@@ -25,18 +29,22 @@ package com.yunx.app.data.network
  * 与 `VideoPlatform.displayName` 同一套做法，**别再在 UI 层各写一份 `when`**（旧代码里
  * `ResolveScreen.platformLabel` 就是这样，容易和这里说的不一样）。
  */
-enum class SharePlatform(val displayName: String) {
-    QUARK("夸克网盘"),
-    UC("UC 网盘"),
-    XUNLEI("迅雷网盘"),
-    BAIDU("百度网盘"),
-    C139("139 网盘"),
-    PAN123("123云盘"),
-    PAN115("115网盘"),
-    GUANGYA("光鸭云盘"),
-    ILANZOU("蓝奏云优享版"),
-    LANZOU("蓝奏云"),
-    GITHUB("GitHub")
+enum class SharePlatform(@StringRes val displayNameRes: Int) {
+    QUARK(R.string.platform_quark),
+    UC(R.string.platform_uc),
+    XUNLEI(R.string.platform_xunlei),
+    BAIDU(R.string.platform_baidu),
+    C139(R.string.platform_c139),
+    PAN123(R.string.platform_pan123),
+    PAN115(R.string.platform_pan115),
+    GUANGYA(R.string.platform_guangya),
+    ILANZOU(R.string.platform_ilanzou),
+    LANZOU(R.string.platform_lanzou),
+    GITHUB(R.string.platform_github);
+
+    /** 当前语言下的平台展示名 */
+    val displayName: String
+        get() = AppStrings.get(displayNameRes)
 }
 
 /**

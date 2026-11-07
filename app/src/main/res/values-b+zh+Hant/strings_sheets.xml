@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    G4 分组：账号弹窗 / 视频账号 / 转存 / 解析页文件操作 / 下载直链等（key 前缀 sh_）。
+    繁體中文。key 集合須與 values/strings_sheets.xml 完全一致。
+-->
+<resources>
+    <!-- AccountListSection / VideoAccountSheet 共用 -->
+    <string name="sh_accounts_count">帳號（%1$d）</string>
+    <string name="sh_add_account">新增帳號</string>
+    <string name="sh_account_list_hint">主帳號用於列目錄、轉存、上傳等需要單一身分的操作；開啟「多帳號下載」後，下載會自動用上同一網盤的其他帳號。</string>
+    <string name="sh_primary_account">主帳號</string>
+    <string name="sh_tap_to_set_primary">點一下設為主帳號</string>
+    <string name="sh_account_actions">帳號操作</string>
+    <string name="sh_rename_remark">重新命名備註</string>
+    <string name="sh_logout_account">登出該帳號</string>
+    <string name="sh_remark">備註</string>
+    <string name="sh_remark_placeholder">留空則顯示暱稱</string>
+    <string name="sh_remark_hint">同一網盤登入多個帳號時，備註能幫你區分（清空備註則顯示暱稱）。</string>
+    <string name="sh_video_remark_hint">同一平台登入多個帳號時，備註能幫你區分（清空備註則顯示暱稱）。</string>
+    <string name="sh_save">儲存</string>
+    <string name="sh_cancel">取消</string>
+    <string name="sh_logout_confirm">確定要登出「%1$s」嗎？只清除這一個帳號在本機的登入憑證，其他帳號不受影響。</string>
+    <string name="sh_logout">登出</string>
+    <string name="sh_unnamed_account">未命名帳號</string>
+
+    <!-- 各網盤帳號彈窗 -->
+    <string name="sh_baidu_logged_in">百度網盤 · 已登入</string>
+    <string name="sh_c139_logged_in">139網盤 · 已登入</string>
+    <string name="sh_guangya_logged_in">光鴨雲盤 · 已登入</string>
+    <string name="sh_ilanzou_logged_in">藍奏雲優享版 · 已登入</string>
+    <string name="sh_lanzou_logged_in">藍奏雲 · 已登入</string>
+    <string name="sh_pan115_logged_in">115網盤 · 已登入</string>
+    <string name="sh_pan123_logged_in">123雲盤 · 已登入</string>
+    <string name="sh_quark_logged_in">夸克網盤 · 已登入</string>
+    <string name="sh_uc_logged_in">UC網盤 · 已登入</string>
+    <string name="sh_xunlei_logged_in">迅雷網盤 · 已登入</string>
+    <string name="sh_login_info">登入資訊</string>
+    <string name="sh_login_time">登入時間</string>
+    <string name="sh_login_account">登入帳號</string>
+    <string name="sh_pan115_login_cookie">登入 Cookie</string>
+    <string name="sh_collapse">收起</string>
+    <string name="sh_expand_all">展開全部</string>
+    <string name="sh_copy">複製</string>
+    <string name="sh_cookie_copied">Cookie 已複製</string>
+    <string name="sh_token_copied">Token 已複製</string>
+    <string name="sh_apptoken_copied">appToken 已複製</string>
+    <string name="sh_device_id">裝置號</string>
+    <string name="sh_guangya_user">光鴨使用者</string>
+    <string name="sh_guangya_avatar">光</string>
+    <string name="sh_ilanzou_user">藍奏優享使用者</string>
+    <string name="sh_lanzou_user">藍奏雲使用者</string>
+    <string name="sh_lanzou_avatar">藍</string>
+
+    <!-- 影片帳號彈窗 / 影片帳號區塊 -->
+    <string name="sh_logged_in_accounts">已登入 · 共 %1$d 個帳號</string>
+    <string name="sh_logged_in">已登入</string>
+    <string name="sh_logout_all_accounts">登出全部帳號</string>
+    <string name="sh_logout_all_confirm">確定要登出「%1$s」的全部 %2$d 個帳號嗎？只清除本機儲存的登入憑證。</string>
+    <string name="sh_logout_all">全部登出</string>
+    <string name="sh_manage">管理</string>
+    <string name="sh_login">登入</string>
+    <string name="sh_no_login_needed">免登入，直接解析</string>
+    <string name="sh_not_logged_in">未登入</string>
+    <string name="sh_name_accounts">%1$s · 共 %2$d 個帳號</string>
+
+    <!-- 影片解析結果區塊 -->
+    <string name="sh_download_selected">下載所選</string>
+    <string name="sh_back">返回</string>
+    <string name="sh_video_content">影片內容</string>
+    <string name="sh_exit_multi_select">退出多選</string>
+    <string name="sh_selected_count_images">已選 %1$d 張</string>
+    <string name="sh_all_selected">已全選</string>
+    <string name="sh_tap_image_to_select">點擊圖片繼續選擇</string>
+    <string name="sh_deselect_all">取消全選</string>
+    <string name="sh_select_all">全選</string>
+    <string name="sh_page_info">共 %1$d 張 · 第 %2$d/%3$d 頁</string>
+    <string name="sh_prev_page">上一頁</string>
+    <string name="sh_next_page">下一頁</string>
+    <string name="sh_image_index">第 %1$d 張圖片</string>
+    <string name="sh_download_this_image">下載這一張</string>
+    <string name="sh_download_all_count">全部下載（%1$d 項）</string>
+    <string name="sh_total_items">共 %1$d 項</string>
+    <string name="sh_expand">展開</string>
+    <string name="sh_copy_caption">複製文案</string>
+    <string name="sh_caption_copied">文案已複製</string>
+    <string name="sh_media_row_title">%1$d. %2$s</string>
+    <string name="sh_media_video">影片</string>
+    <string name="sh_media_image">圖片</string>
+    <string name="sh_media_audio">音訊</string>
+    <string name="sh_preview">預覽</string>
+    <string name="sh_download_audio_only">僅下載音訊</string>
+    <string name="sh_download">下載</string>
+
+    <!-- 轉存到網盤 -->
+    <string name="sh_save_to_quark">轉存到夸克網盤</string>
+    <string name="sh_root_dir">根目錄</string>
+    <string name="sh_retry">重試</string>
+    <string name="sh_empty_dir_hint">當前目錄沒有子資料夾，可直接轉存到此目錄</string>
+    <string name="sh_save_here">轉存到此目錄（%1$s）</string>
+
+    <!-- 解析頁檔案操作彈窗 -->
+    <string name="sh_download_folder">下載資料夾</string>
+    <string name="sh_download_folder_desc">遞迴下載整個資料夾，保持目錄結構</string>
+    <string name="sh_download_desc">取得下載連結並儲存到本機</string>
+    <string name="sh_preview_online">線上預覽</string>
+    <string name="sh_preview_online_desc">不下載，直接在應用內檢視</string>
+    <string name="sh_save_to_cloud">轉存</string>
+    <string name="sh_save_folder_desc">把整個資料夾存到我的網盤</string>
+    <string name="sh_save_file_desc">把檔案存到我的網盤</string>
+
+    <!-- 下載直鏈彈窗 -->
+    <string name="sh_direct_link_generated">下載直鏈已產生（有效期約 15-30 分鐘）</string>
+    <string name="sh_copy_download_link">複製下載連結</string>
+    <string name="sh_download_link_copied">下載連結已複製</string>
+    <string name="sh_download_start_hint">開始下載後，可在「下載」頁檢視儲存進度</string>
+    <string name="sh_start_download">開始下載</string>
+    <string name="sh_close">關閉</string>
+</resources>

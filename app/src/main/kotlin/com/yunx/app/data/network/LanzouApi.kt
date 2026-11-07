@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareInfo
@@ -35,6 +36,7 @@ import org.json.JSONArray
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import org.json.JSONObject
 import java.net.URI
 
@@ -103,14 +105,14 @@ class LanzouApi(
             .get()
             .build()
         client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw IllegalStateException("蓝奏登录态无效，请重新登录")
+            if (!resp.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_invalid))
             val html = resp.body?.string().orEmpty()
             // 文件页里形如：url:'/doupload.php?uid=4133097', data:{ 'vei':'B1UHVFBWVQgFB1JWAFo=' }
             // uid 出现在 URL（uid=数字）；vei 带引号包裹、值为含 '=' 的 base64 —— 两者都要兼容。
             val uid = Regex("""uid['"]?\s*[=:]\s*['"]?(\d{1,20})""").find(html)?.groupValues?.get(1)
             val vei = Regex("""vei['"]?\s*[=:]\s*['"]?([A-Za-z0-9_\-+/=]{1,256})""").find(html)?.groupValues?.get(1)
             if (uid.isNullOrBlank() || vei.isNullOrBlank()) {
-                throw IllegalStateException("蓝奏登录态无效，请重新登录")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_invalid))
             }
             LanzouLoginParams(uid, vei)
         }
@@ -126,7 +128,7 @@ class LanzouApi(
      */
     suspend fun login(account: String, password: String): String = withContext(Dispatchers.IO) {
         val name = account.trim()
-        if (name.isEmpty() || password.isEmpty()) throw IllegalStateException("请输入蓝奏云账号和密码")
+        if (name.isEmpty() || password.isEmpty()) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_credentials_required))
         val jar = java.util.concurrent.ConcurrentHashMap<String, MutableMap<String, String>>()
         val loginClient = client.newBuilder()
             .followRedirects(true)
@@ -174,10 +176,10 @@ class LanzouApi(
         }
 
         val json = runCatching { JSONObject(body) }.getOrElse {
-            throw IllegalStateException("蓝奏云登录失败，请稍后重试")
+            throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_failed))
         }
         if (json.optString("zt") != "1") {
-            throw IllegalStateException(json.optString("msgs").ifBlank { "蓝奏云登录失败，请检查账号密码" })
+            throw IllegalStateException(json.optString("msgs").ifBlank { AppStrings.get(R.string.e2_lanzou_login_failed_credentials) })
         }
         val msgs = json.optString("msgs")
         if (msgs.isNotBlank()) {
@@ -207,7 +209,7 @@ class LanzouApi(
         val pc = jar["pc.woozooo.com"].orEmpty()
         val cookie = pc.entries.joinToString("; ") { "${it.key}=${it.value}" }
         if (!cookie.contains("ylogin") || !cookie.contains("phpdisk_info")) {
-            throw IllegalStateException("蓝奏云登录未获取到有效凭据，请重试")
+            throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_no_credential))
         }
         cookie
     }
@@ -293,7 +295,7 @@ class LanzouApi(
                     )
                     added++
                 }
-                if (added == 0) throw IllegalStateException("蓝奏文件分页重复，请刷新后重试")
+                if (added == 0) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_file_paging_duplicate))
                 pg++
             }
             result
@@ -312,7 +314,7 @@ class LanzouApi(
                 )
             )
             val text = json.optString("text")
-            if (!Regex("""^\d+$""").matches(text)) throw IllegalStateException("蓝奏未返回新文件夹信息")
+            if (!Regex("""^\d+$""").matches(text)) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_folder_info_missing))
             text
         }
 
@@ -353,32 +355,33 @@ class LanzouApi(
             retries = 0
         )
         if (response.code == 401 || response.code == 403) {
-            throw IllegalStateException("蓝奏登录已过期，请重新网页登录")
+            throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_expired))
         }
         if (!response.isSuccessful) {
-            throw IllegalStateException("文件上传失败（HTTP ${response.code}）")
+            throw IllegalStateException(AppStrings.get(R.string.e2_upload_failed_http, response.code))
         }
         io.progress(UploadPhase.FINISHING, file.size)
         val json = runCatching { JSONObject(response.body) }.getOrElse {
             if (response.body.trimStart().startsWith("<")) {
-                throw IllegalStateException("蓝奏返回了验证页面，请先在官网完成验证后再上传")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_page_before_upload))
             }
-            throw IllegalStateException("蓝奏上传响应异常，请重试")
+            throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_upload_response_invalid))
         }
         val zt = json.optInt("zt", -1)
         if (zt != 1) {
             val info = json.optString("info").replace(Regex("<[^>]*>"), "").trim()
             when (zt) {
-                4 -> throw IllegalStateException("蓝奏请求频繁，请稍后重试")
-                9 -> throw IllegalStateException("蓝奏登录已过期，请重新网页登录")
+                4 -> throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_too_frequent_short))
+                9 -> throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_expired))
                 else -> throw IllegalStateException(
-                    "蓝奏上传失败（zt=$zt）" +
-                        if (info.isNotBlank()) "：$info" else "，请在官网检查文件类型与大小"
+                    AppStrings.get(R.string.e2_lanzou_upload_failed_zt, zt) +
+                        if (info.isNotBlank()) AppStrings.get(R.string.e2_lanzou_upload_failed_detail, info)
+                        else AppStrings.get(R.string.e2_lanzou_upload_failed_hint)
                 )
             }
         }
         val id = json.optJSONArray("text")?.optJSONObject(0)?.optString("id").orEmpty()
-        if (id.isBlank()) throw IllegalStateException("蓝奏未返回上传文件信息")
+        if (id.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_upload_file_info_missing))
         LanzouConstants.FILE_PREFIX + id
     }
 
@@ -427,7 +430,7 @@ class LanzouApi(
     suspend fun createFileShare(cookie: String, uid: String, vei: String, fileId: String): ShareInfo =
         withContext(Dispatchers.IO) {
             val json = doupload(cookie, uid, vei, listOf("task" to "22", "file_id" to fileId))
-            val info = json.optJSONObject("info") ?: throw IllegalStateException("蓝奏未返回分享链接")
+            val info = json.optJSONObject("info") ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_link_missing))
             buildShareInfo(info.optString("f_id"), info.optString("is_newd"), info.optString("pwd"))
         }
 
@@ -435,7 +438,7 @@ class LanzouApi(
     suspend fun createFolderShare(cookie: String, uid: String, vei: String, folderId: String): ShareInfo =
         withContext(Dispatchers.IO) {
             val json = doupload(cookie, uid, vei, listOf("task" to "18", "file_id" to folderId))
-            val info = json.optJSONObject("info") ?: throw IllegalStateException("蓝奏未返回分享链接")
+            val info = json.optJSONObject("info") ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_link_missing))
             buildShareInfo(info.optString("new_url"), info.optString("is_newd"), info.optString("pwd"))
         }
 
@@ -498,7 +501,7 @@ class LanzouApi(
     suspend fun listShareFolder(page: LanzouSharePage, pwd: String?, dirFid: String): List<ShareFile> =
         withContext(Dispatchers.IO) {
             val params = page.folderParams
-                ?: throw IllegalStateException("蓝奏分享分页异常，请重试")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_paging_error))
             val all = mutableListOf<ShareFile>()
             val seen = mutableSetOf<String>()
             var pg = 1
@@ -525,20 +528,20 @@ class LanzouApi(
                     )
                 } catch (e: Exception) {
                     retries++
-                    if (retries > 2) throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
+                    if (retries > 2) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_too_frequent))
                 }
                 val pageBody = body ?: continue
                 val zt = pageBody.optInt("zt", 0)
                 // zt=4 是「请求太频繁」：不换页、只退避后重试同一页（最多 2 次）
                 if (zt == 4) {
                     retries++
-                    if (retries > 2) throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
+                    if (retries > 2) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_too_frequent))
                     continue
                 }
                 retries = 0
                 if (zt == 2) return@withContext all
-                if (zt == 3) throw IllegalStateException("蓝奏提取码错误，请检查后重新解析")
-                if (zt != 1) throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
+                if (zt == 3) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_passcode_wrong))
+                if (zt != 1) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_failed))
                 val arr = pageBody.optJSONArray("text")
                 if (arr == null || arr.length() == 0) break
                 var added = 0
@@ -564,7 +567,7 @@ class LanzouApi(
                     )
                     added++
                 }
-                if (added == 0) throw IllegalStateException("蓝奏分页重复，请重新打开目录")
+                if (added == 0) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_paging_duplicate))
                 pg++
             }
             all
@@ -589,19 +592,19 @@ class LanzouApi(
                     html = fetchPage(iframeSrc, referer, null)
                     referer = iframeSrc
                 } else if (iframeUri != null && iframeUri.host != null) {
-                    throw IllegalStateException("蓝奏下载页面地址异常，请检查分享链接")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_page_invalid))
                 }
             }
             val fileId = page.fileId
                 ?: Regex("""(?:ajaxm|ajaxfile)\.php\?file=(\d+)""").find(html)?.groupValues?.get(1)
                 ?: Regex("""file=(\d+)""").find(html)?.groupValues?.get(1)
-                ?: throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_failed))
             // A3：取下载参数（新版模板放在 data 对象里，旧版是 var）
             // 是否走「带密码」分支要看**页面本身**要不要提取码，不能只看用户填没填：
             // 不需要密码的分享被塞进 p/kd 分支会直接失败，需要密码的分享填了码也可能被当普通页。
             val passwordRequired = page.needsPwd || html.contains("function down_p(")
             if (passwordRequired && pwd.isNullOrBlank()) {
-                throw IllegalStateException("此蓝奏分享需要提取码，请填写后重新解析")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_passcode_required))
             }
             val withPwd = passwordRequired && !pwd.isNullOrBlank()
             // 下载接口可能在同源，也可能在 apifile.woozooo.com（新版页面用 domain1/domain2 或 url: 给出完整地址）
@@ -614,7 +617,7 @@ class LanzouApi(
                 ?: jsVar(html, "wp_sign")
                 ?: jsVar(html, "sign")
                 ?: inputValue(html, "sign")
-                ?: throw IllegalStateException("蓝奏分享页缺少下载参数，请重新解析")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_params_missing))
             val fields = mutableListOf<Pair<String, String>>()
             fields += "action" to "downprocess"
             fields += "sign" to sign
@@ -627,7 +630,7 @@ class LanzouApi(
                 val ajaxData = jsVar(html, "ajaxdata") ?: downData?.get("signs") ?: ""
                 val key = downData?.get("websignkey")?.takeIf { it.isNotBlank() }
                     ?: ajaxData.ifBlank { jsVar(html, "websignkey") ?: inputValue(html, "websignkey") ?: "" }
-                if (key.isBlank()) throw IllegalStateException("蓝奏分享页缺少下载参数，请重新解析")
+                if (key.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_params_missing))
                 if (ajaxData.isNotBlank()) fields += "signs" to ajaxData
                 fields += "websignkey" to key
                 fields += "websign" to (downData?.get("websign") ?: jsVar(html, "websign") ?: "")
@@ -639,10 +642,10 @@ class LanzouApi(
             val dom = ajaxJson.optString("dom")
             val rel = ajaxJson.optString("url")
             if (dom.isBlank() || rel.isBlank() || rel.startsWith("/") || rel.contains("://")) {
-                throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_failed))
             }
             val domOrigin = runCatching { URI(dom) }.getOrNull()
-                ?: throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_failed))
             val jump = "${domOrigin.scheme}://${domOrigin.host}/file/$rel"
             val (finalUrl, size) = probeAndVerify(jump, origin)
             DownloadLink(
@@ -684,13 +687,13 @@ class LanzouApi(
         val visited = mutableSetOf<String>()
         repeat(8) {
             val uri = runCatching { URI(url) }.getOrNull()
-                ?: throw IllegalStateException("蓝奏下载地址暂时不可用，请稍后重试")
-            val host = uri.host ?: throw IllegalStateException("蓝奏下载地址暂时不可用，请稍后重试")
-            if (!visited.add(url)) throw IllegalStateException("蓝奏下载地址循环跳转，请重新解析")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_url_unavailable))
+            val host = uri.host ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_url_unavailable))
+            if (!visited.add(url)) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_url_loop))
             val response = headRequest(url, shareOrigin)
             when {
                 response.code in 300..399 -> {
-                    val loc = response.location ?: throw IllegalStateException("蓝奏下载地址暂时不可用，请稍后重试")
+                    val loc = response.location ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_url_unavailable))
                     url = absolutize("${uri.scheme}://${uri.host}", loc)
                     response.close()
                 }
@@ -704,7 +707,7 @@ class LanzouApi(
                         // 下载节点可能先返回 acw_sc__v2 人机校验页：计算 Cookie 后重放
                         val challenge = lanzouChallengeCookie(body)
                         if (challenge != null) {
-                            if (!challenges.add(host)) throw IllegalStateException("蓝奏需要进一步验证，请在分享页完成验证后重试")
+                            if (!challenges.add(host)) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_required))
                             setCookie(host, "acw_sc__v2", challenge)
                             // 带 Cookie 重放的是**同一个 URL**：要先把它从「已访问」里摘掉，
                             // 否则下一轮 visited.add 会误判成循环跳转（旧实现就是这么必死的）
@@ -719,9 +722,9 @@ class LanzouApi(
                                     return@repeat
                                 }
                             }
-                            throw IllegalStateException("蓝奏需要进一步验证，请在分享页完成验证后重试")
+                            throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_required))
                         }
-                        throw IllegalStateException("蓝奏返回的是验证页面，未创建下载任务，请在分享页完成验证后重试")
+                        throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_page_no_task))
                     }
                     // HEAD 未给大小或缺少 content-type：回退 GET Range
                     if (size <= 0) {
@@ -732,21 +735,21 @@ class LanzouApi(
                 }
                 response.code == 403 || response.code == 404 || response.code == 410 -> {
                     response.close()
-                    throw IllegalStateException("蓝奏下载地址已失效，请稍后重新解析")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_url_expired))
                 }
                 response.code == 429 -> {
                     response.close()
-                    throw IllegalStateException("蓝奏下载请求过于频繁，请稍后再试")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_too_frequent))
                 }
                 else -> {
                     response.close()
                     val fallback = rangeProbe(url, shareOrigin)
                     if (fallback.second > 0) return url to fallback.second
-                    throw IllegalStateException("蓝奏下载地址暂时不可用，请稍后重试")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_url_unavailable))
                 }
             }
         }
-        throw IllegalStateException("蓝奏下载地址暂时不可用，请稍后重试")
+        throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_download_url_unavailable))
     }
 
     /** A6：提交「验证并下载」，返回新的直链 URL 或 null。 */
@@ -775,14 +778,14 @@ class LanzouApi(
                 "${uri.scheme}://${uri.host}",
                 null
             )
-        }.getOrNull() ?: throw IllegalStateException("蓝奏下载验证服务暂时不可用，请稍后重试")
+        }.getOrNull() ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_service_unavailable))
         val zt = json.optInt("zt", 0)
         val url = json.optString("url")
         if (zt != 1 || url.isBlank()) {
             // zt!=1 时 url 字段承载错误文案（如「验证码错误」）
-            throw IllegalStateException(url.ifBlank { "蓝奏需要进一步验证，请在分享页完成验证后重试" })
+            throw IllegalStateException(url.ifBlank { AppStrings.get(R.string.e2_lanzou_verify_required) })
         }
-        if (url == "?SignError") throw IllegalStateException("蓝奏下载验证已过期，请重新解析")
+        if (url == "?SignError") throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_expired))
         return url
     }
 
@@ -875,34 +878,34 @@ class LanzouApi(
                 val code = resp.code
                 if (code in 300..399) {
                     val loc = resp.header("Location")
-                        ?: throw IllegalStateException("蓝奏页面跳转次数过多，请重新解析")
+                        ?: throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_redirect_too_many))
                     val next = absolutize(current, loc)
                     val nextHost = runCatching { URI(next).host }.getOrNull()
                     if (nextHost == null || !LanzouConstants.isLanzouHost(nextHost)) {
-                        throw IllegalStateException("蓝奏分享链接无效")
+                        throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_link_invalid))
                     }
                     current = next
                     return@use
                 }
                 val body = resp.body?.string().orEmpty()
-                if (body.length > 2_000_000) throw IllegalStateException("蓝奏分享页面过大或异常")
+                if (body.length > 2_000_000) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_page_too_large))
                 // 分享页可能先返回 acw_sc__v2 人机校验页：计算 Cookie 后重放
                 val challenge = lanzouChallengeCookie(body)
                 if (challenge != null) {
-                    if (!challenged.add(host)) throw IllegalStateException("蓝奏需要进一步验证，请在分享页完成验证后重试")
+                    if (!challenged.add(host)) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_required))
                     setCookie(host, "acw_sc__v2", challenge)
                     return@use
                 }
                 if (body.contains("文件已取消") || body.contains("不存在")) {
-                    throw IllegalStateException("蓝奏文件已取消分享或不存在")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_cancelled))
                 }
                 if (body.contains("请求过于频繁") || body.contains("稍后再试")) {
-                    throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
+                    throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_too_frequent))
                 }
                 return body
             }
         }
-        throw IllegalStateException("蓝奏页面跳转次数过多，请重新解析")
+        throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_redirect_too_many))
     }
 
     private fun fetchPage(url: String, referer: String?, cookie: String?): String {
@@ -917,7 +920,7 @@ class LanzouApi(
             .get()
             .build()
         client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw IllegalStateException("蓝奏文件已取消分享或不存在")
+            if (!resp.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_cancelled))
             return resp.body?.string().orEmpty()
         }
     }
@@ -926,12 +929,12 @@ class LanzouApi(
         if (json.optInt("zt", 0) == 1) return
         val inf = json.optString("inf")
         when {
-            inf.contains("密码") || inf.contains("提取码") -> throw IllegalStateException("蓝奏提取码错误，请检查后重新解析")
+            inf.contains("密码") || inf.contains("提取码") -> throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_passcode_wrong))
             inf.contains("不存在") || inf.contains("取消") || inf.contains("过期") || inf.contains("删除") ->
-                throw IllegalStateException("蓝奏文件已取消分享或不存在")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_share_cancelled))
             inf.contains("频繁") || inf.contains("次数") || inf.contains("稍后") ->
-                throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
-            else -> throw IllegalStateException("蓝奏解析失败，请确认分享链接和提取码后重试")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_too_frequent))
+            else -> throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_failed))
         }
     }
 
@@ -953,18 +956,18 @@ class LanzouApi(
             .post(formBody(fields))
             .build()
         client.newCall(request).execute().use { resp ->
-            if (resp.code == 401 || resp.code == 403) throw IllegalStateException("蓝奏登录已过期，请重新网页登录")
+            if (resp.code == 401 || resp.code == 403) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_expired))
             val body = resp.body?.string().orEmpty()
             val json = runCatching { JSONObject(body) }.getOrElse {
-                throw IllegalStateException("蓝奏文件操作失败，请在官网检查权限和文件类型")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_operation_failed))
             }
             val zt = json.optInt("zt", -1)
             when {
                 zt == 1 -> return json
                 zt == 2 && allowEnd -> return json
-                zt == 4 -> throw IllegalStateException("蓝奏请求频繁，请稍后重试")
-                zt == 9 -> throw IllegalStateException("蓝奏登录已过期，请重新网页登录")
-                else -> throw IllegalStateException("蓝奏文件操作失败（$zt），请在官网检查权限和文件类型")
+                zt == 4 -> throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_too_frequent_short))
+                zt == 9 -> throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_login_expired))
+                else -> throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_operation_failed_zt, zt))
             }
         }
     }
@@ -978,9 +981,9 @@ class LanzouApi(
     ): JSONObject = formPostRaw(url, fields, referer, origin, cookie).let { body ->
         runCatching { JSONObject(body) }.getOrElse {
             if (body.trimStart().startsWith("<")) {
-                throw IllegalStateException("蓝奏返回了验证页面，请稍后重试或在分享页完成验证")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_verify_page_retry))
             }
-            throw IllegalStateException("蓝奏解析服务响应异常，请稍后重试")
+            throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_service_error))
         }
     }
 
@@ -1004,11 +1007,11 @@ class LanzouApi(
             .post(formBody(fields))
             .build()
         noRedirect.newCall(request).execute().use { resp ->
-            if (resp.code == 429) throw IllegalStateException("蓝奏请求过于频繁，请稍后再试")
+            if (resp.code == 429) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_too_frequent))
             val body = resp.body?.string().orEmpty()
-            if (body.length > 4_000_000) throw IllegalStateException("蓝奏解析服务返回内容过大，请稍后重试")
+            if (body.length > 4_000_000) throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_service_too_large))
             if (!resp.isSuccessful && body.isBlank()) {
-                throw IllegalStateException("蓝奏解析服务响应异常（HTTP ${resp.code}），请稍后重试")
+                throw IllegalStateException(AppStrings.get(R.string.e2_lanzou_parse_service_error_http, resp.code))
             }
             return body
         }

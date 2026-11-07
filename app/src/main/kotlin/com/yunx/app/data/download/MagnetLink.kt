@@ -18,6 +18,8 @@
 
 package com.yunx.app.data.download
 
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import java.net.URLDecoder
 
 /**
@@ -61,7 +63,8 @@ object MagnetLink {
         val dn = param(url, "dn").replace(BLANK_CHARS, " ").trim()
         if (dn.isNotEmpty()) return dn.take(MAX_NAME_CHARS)
         val hash = infoHash(url)
-        return if (hash.length >= 8) "磁力_${hash.take(8)}" else "磁力任务"
+        return if (hash.length >= 8) AppStrings.get(R.string.ed_magnet_name_short, hash.take(8))
+        else AppStrings.get(R.string.ed_magnet_task_name)
     }
 
     /** info hash（统一大写，取不到返回空串）；仅用于显示与日志，不参与去重 */

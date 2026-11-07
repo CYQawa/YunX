@@ -18,9 +18,11 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.security.MessageDigest
@@ -47,7 +49,7 @@ internal class QuarkUpload(
     private fun url(path: String): String = "$apiBase/1/clouddrive/$path?pr=$product&fr=pc"
 
     fun upload(io: UploadIo, file: UploadSource, parentFid: String): String? {
-        require(file.size > 0) { "网盘不支持上传空文件" }
+        require(file.size > 0) { AppStrings.get(R.string.e2_upload_empty_file) }
         io.progress(UploadPhase.PREPARING)
         val now = System.currentTimeMillis()
         val pre = post(
@@ -64,7 +66,7 @@ internal class QuarkUpload(
                 .put("same_path_reuse", false)
         )
         val taskId = pre.optString("task_id").takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("网盘未返回上传任务")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_upload_task_missing))
         val hashResult = post(
             url("file/update/hash"),
             JSONObject()
@@ -82,9 +84,9 @@ internal class QuarkUpload(
         val uploadId = pre.optString("upload_id")
         val endpoint = runCatching { java.net.URI(pre.optString("upload_url")) }.getOrNull()
         val host = endpoint?.host.orEmpty()
-        if (host.isBlank()) throw IllegalStateException("网盘未返回上传服务器")
+        if (host.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_upload_host_missing))
         if (bucket.isBlank() || objectKey.isBlank() || uploadId.isBlank()) {
-            throw IllegalStateException("网盘未返回完整上传凭据")
+            throw IllegalStateException(AppStrings.get(R.string.e2_upload_credential_missing))
         }
         val bucketHost = if (host.startsWith("$bucket.")) host else "$bucket.$host"
         // 对象键按 / 分段编码：OSS 要求每段单独转义，斜杠本身保留
@@ -102,7 +104,7 @@ internal class QuarkUpload(
                 .put("auth_meta", meta)
                 .put("task_id", taskId)
             val key = post(url("file/upload/auth"), body).optString("auth_key")
-            if (key.isBlank()) throw IllegalStateException("网盘未签发上传授权")
+            if (key.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_upload_auth_missing))
             return key
         }
 
@@ -131,10 +133,10 @@ internal class QuarkUpload(
                 retries = 1
             )
             if (!response.isSuccessful) {
-                throw IllegalStateException("文件上传失败（HTTP ${response.code}）")
+                throw IllegalStateException(AppStrings.get(R.string.e2_upload_failed_http, response.code))
             }
             val etag = response.header("ETag")
-            if (etag.isBlank()) throw IllegalStateException("网盘未确认上传分段")
+            if (etag.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_upload_part_unconfirmed))
             etags.add(etag)
         }
 
@@ -145,7 +147,7 @@ internal class QuarkUpload(
             MessageDigest.getInstance("MD5").digest(xml.toByteArray(Charsets.UTF_8))
         )
         val callback = UploadIo.base64(
-            (pre.opt("callback") ?: throw IllegalStateException("网盘未返回上传回调"))
+            (pre.opt("callback") ?: throw IllegalStateException(AppStrings.get(R.string.e2_upload_callback_missing)))
                 .toString().toByteArray(Charsets.UTF_8)
         )
         val completeMeta = "POST\n$contentMd5\napplication/xml\n$date\n" +
@@ -168,7 +170,7 @@ internal class QuarkUpload(
             retries = 0
         )
         if (!merged.isSuccessful || UploadIo.xmlError(merged.body)) {
-            throw IllegalStateException("网盘未完成上传分段合并")
+            throw IllegalStateException(AppStrings.get(R.string.e2_upload_merge_failed_generic))
         }
         post(
             url("file/upload/finish"),

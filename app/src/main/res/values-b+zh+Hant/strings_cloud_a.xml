@@ -1,0 +1,151 @@
+<!--
+    繁體中文。由 i18n 批次 G2 生成（前綴 csa_）。
+-->
+<resources>
+    <!-- 通用 -->
+    <string name="csa_back">返回</string>
+    <string name="csa_retry">重試</string>
+    <string name="csa_cancel">取消</string>
+    <string name="csa_create">建立</string>
+    <string name="csa_create_folder">建立資料夾</string>
+    <string name="csa_folder_name">資料夾名稱</string>
+    <string name="csa_create_in_current_dir">建立在目前目錄下</string>
+    <string name="csa_cd_new">新增</string>
+    <string name="csa_upload_file">上傳檔案</string>
+    <string name="csa_upload_developing">上傳檔案（開發中）</string>
+    <string name="csa_label_folder">資料夾</string>
+    <string name="csa_label_file">檔案</string>
+
+    <!-- 名稱驗證 -->
+    <string name="csa_name_error_empty">名稱不能為空</string>
+    <string name="csa_name_error_dots">名稱不能是 . 或 ..</string>
+    <string name="csa_name_error_too_long">名稱最多 255 個字元</string>
+    <string name="csa_name_error_invalid_chars">名稱不能含 / \\ 或控制字元</string>
+
+    <!-- 檔案操作選單 -->
+    <string name="csa_download">下載</string>
+    <string name="csa_action_download_desc">使用內建下載功能儲存到本機</string>
+    <string name="csa_download_folder">下載資料夾</string>
+    <string name="csa_action_download_folder_desc">遞迴下載整個資料夾，保持目錄結構</string>
+    <string name="csa_online_preview">線上預覽</string>
+    <string name="csa_action_preview_desc">不下載，直接在應用程式內檢視</string>
+    <string name="csa_share">分享</string>
+    <string name="csa_action_share_desc">產生分享連結（可設提取碼／有效期）</string>
+    <string name="csa_move_to">移動到</string>
+    <string name="csa_move">移動</string>
+    <string name="csa_action_move_desc">移動到網盤的其他目錄</string>
+    <string name="csa_rename">重新命名</string>
+    <string name="csa_action_rename_desc">修改檔案名稱</string>
+    <string name="csa_delete">刪除</string>
+    <string name="csa_action_delete_desc">刪除網盤檔案</string>
+
+    <!-- 批次操作選單 -->
+    <string name="csa_batch_actions">批次操作</string>
+    <string name="csa_action_batch_download_desc">批次下載到本機</string>
+    <string name="csa_action_batch_share_desc">將選取項目建立為一個分享連結</string>
+    <string name="csa_action_batch_move_desc">批次移動到網盤的其他目錄</string>
+    <string name="csa_action_batch_delete_desc">批次刪除網盤檔案</string>
+
+    <!-- 選取與計數 -->
+    <string name="csa_share_file_title">分享檔案</string>
+    <string name="csa_selected_count">已選 %1$d 項</string>
+    <string name="csa_delete_target_selected">選取的 %1$d 項</string>
+    <string name="csa_quoted_name">「%1$s」</string>
+
+    <!-- 移動／轉存目標 -->
+    <string name="csa_root_dir">根目錄</string>
+    <string name="csa_no_subfolders_move_here">目前目錄沒有子資料夾，可直接移動到此處</string>
+    <string name="csa_no_subfolders_save_here">目前目錄沒有子資料夾，可直接轉存到此目錄</string>
+    <string name="csa_move_here">移動到此處（%1$s）</string>
+    <string name="csa_save_here">轉存到此目錄（%1$s）</string>
+
+    <!-- 分享設定 -->
+    <string name="csa_passcode">提取碼</string>
+    <string name="csa_no_passcode">無提取碼</string>
+    <string name="csa_set_passcode">設定提取碼</string>
+    <string name="csa_passcode_4digit">4 位提取碼</string>
+    <string name="csa_share_passcode_required_auto">分享必須帶提取碼，可自訂 4 位（留空由伺服器產生）</string>
+    <string name="csa_share_passcode_required">分享必須帶 4 位提取碼</string>
+    <string name="csa_passcode_label_optional">提取碼（4 位英數字，可留空）</string>
+    <string name="csa_passcode_label_required">提取碼（4 位英數字）</string>
+    <string name="csa_passcode_server_generated">提取碼由伺服器自動產生，分享建立後可在結果裡查看</string>
+    <string name="csa_validity">有效期</string>
+    <string name="csa_validity_label">有效期：%1$s</string>
+    <string name="csa_create_share">建立分享</string>
+
+    <!-- 重新命名 -->
+    <string name="csa_new_file_name">新檔案名稱</string>
+    <string name="csa_renaming">重新命名中…</string>
+    <string name="csa_confirm_rename">確認重新命名</string>
+
+    <!-- 刪除確認 -->
+    <string name="csa_delete_file_title">刪除檔案</string>
+    <string name="csa_confirm_delete_target">確定要刪除%1$s 嗎？</string>
+
+    <!-- 分享結果 -->
+    <string name="csa_share_success">分享成功</string>
+    <string name="csa_share_text">我用%1$s分享了「%2$s」</string>
+    <string name="csa_share_text_link">連結：%1$s</string>
+    <string name="csa_share_text_passcode">提取碼：%1$s</string>
+    <string name="csa_share_text_copied">分享文案已複製</string>
+    <string name="csa_copy_all">複製全部</string>
+    <string name="csa_done">完成</string>
+
+    <!-- 平台名稱 -->
+    <string name="csa_platform_139">139網盤</string>
+    <string name="csa_platform_123">123雲盤</string>
+    <string name="csa_platform_uc">UC網盤</string>
+    <string name="csa_platform_xunlei">迅雷網盤</string>
+    <string name="csa_platform_baidu">百度網盤</string>
+    <string name="csa_platform_115">115網盤</string>
+    <string name="csa_platform_quark">夸克網盤</string>
+    <string name="csa_platform_guangya">光鴨雲盤</string>
+    <string name="csa_platform_ilanzou">藍奏雲優享版</string>
+
+    <!-- 有效期選項 -->
+    <string name="csa_expire_forever">永久有效</string>
+    <string name="csa_expire_1day">1 天</string>
+    <string name="csa_expire_3days">3 天</string>
+    <string name="csa_expire_7days">7 天</string>
+    <string name="csa_expire_15days">15 天</string>
+    <string name="csa_expire_30days">30 天</string>
+    <string name="csa_unknown">未知</string>
+
+    <!-- 選取／搜尋列無障礙與文案 -->
+    <string name="csa_cd_cancel_selection">取消選取</string>
+    <string name="csa_cd_close_search">關閉搜尋</string>
+    <string name="csa_cd_search_files">搜尋檔案</string>
+    <string name="csa_cd_clear_search">清空搜尋</string>
+    <string name="csa_all_selected">已全選</string>
+    <string name="csa_click_select_more">點選更多檔案</string>
+    <string name="csa_deselect_all">取消全選</string>
+    <string name="csa_select_all">全選</string>
+    <string name="csa_total_count">共 %1$d 項</string>
+    <string name="csa_match_count">符合 %1$d / %2$d 項</string>
+    <string name="csa_dir_empty">此目錄為空</string>
+    <string name="csa_no_match_files">找不到符合「%1$s」的檔案</string>
+    <string name="csa_search_current_dir">搜尋目前目錄檔案</string>
+
+    <!-- 處理中彈窗 -->
+    <string name="csa_interrupt">中斷</string>
+    <string name="csa_processing">處理中</string>
+    <string name="csa_processing_please_wait">正在處理，請稍候…</string>
+
+    <!-- 百度網盤限速提示 -->
+    <string name="csa_baidu_limit_title">下載大檔案提示</string>
+    <string name="csa_baidu_limit_message">百度網盤非會員超過300MB會被限速，下載速度可能較慢。是否繼續下載？</string>
+    <string name="csa_do_not_show_again">不再顯示此提示</string>
+    <string name="csa_continue_download">繼續下載</string>
+
+    <!-- 轉存頁標題 -->
+    <string name="csa_save_to_baidu">轉存到百度網盤</string>
+    <string name="csa_save_to_139">轉存到139網盤</string>
+    <string name="csa_save_to_guangya">轉存到光鴨雲盤</string>
+
+    <!-- 上傳進度 -->
+    <string name="csa_uploading">正在上傳</string>
+    <string name="csa_uploading_progress">正在上傳（%1$d/%2$d）</string>
+    <string name="csa_upload_phase_preparing">正在校驗檔案…</string>
+    <string name="csa_upload_phase_finishing">等待網盤確認…</string>
+    <string name="csa_cancelling">正在取消…</string>
+</resources>

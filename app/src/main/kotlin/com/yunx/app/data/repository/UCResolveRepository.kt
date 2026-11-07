@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.network.UCApi
 import com.yunx.app.data.network.UCConstants
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 
 /**
  * UC 分享解析仓库：token → 列表 → 转存临时目录 → 下载直链。
@@ -38,11 +40,11 @@ class UCResolveRepository(private val api: UCApi) : ShareResolveRepository {
 
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> {
         val parsed = ShareLinkParser.parse(link)
-            ?: return Result.failure(IllegalArgumentException("无法识别分享链接"))
+            ?: return Result.failure(IllegalArgumentException(AppStrings.get(R.string.er_share_link_unrecognized)))
         val effectivePwd = pwd?.takeIf { it.isNotBlank() } ?: parsed.pwd
         return runCatching {
             val token = api.getShareToken(parsed.shareId, effectivePwd, cookie)
-                ?: throw IllegalStateException("未获取到分享凭证")
+                ?: throw IllegalStateException(AppStrings.get(R.string.er_share_token_missing))
             ShareSession(parsed.shareId, token.stoken, token.title)
         }.fold(
             onSuccess = { Result.success(it) },
@@ -57,7 +59,7 @@ class UCResolveRepository(private val api: UCApi) : ShareResolveRepository {
             var page = 1
             do {
                 val batch = api.getTransferShareFiles(session.shareId, session.stoken, dirFid, cookie, page, 50)
-                    ?: throw IllegalStateException("未获取到文件列表")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.er_get_file_list_failed))
                 all += batch
                 page++
             } while (batch.size == 50 && page <= 100)
@@ -69,10 +71,10 @@ class UCResolveRepository(private val api: UCApi) : ShareResolveRepository {
 
     override suspend fun ensureTempDir(cookie: String): Result<String> = runCatching {
         val rootFiles = api.getFileList(UCConstants.DEFAULT_PDIR_FID, cookie)
-            ?: throw IllegalStateException("获取网盘目录失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_get_dir_failed))
         rootFiles.firstOrNull { it.isdir && it.fname == UCConstants.TEMP_DIR_NAME }?.fid
             ?: api.createFolder(UCConstants.TEMP_DIR_NAME, UCConstants.DEFAULT_PDIR_FID, cookie)
-            ?: throw IllegalStateException("创建临时目录失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_create_temp_dir_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -92,9 +94,9 @@ class UCResolveRepository(private val api: UCApi) : ShareResolveRepository {
             fidToken = file.fidToken,
             toPdirFid = toDirFid,
             cookie = cookie
-        ) ?: throw IllegalStateException("转存失败")
+        ) ?: throw IllegalStateException(AppStrings.get(R.string.er_save_failed))
         api.pollTask(taskId, cookie)
-            ?: throw IllegalStateException("转存超时，请稍后重试")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_save_timeout))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -102,7 +104,7 @@ class UCResolveRepository(private val api: UCApi) : ShareResolveRepository {
 
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> = runCatching {
         api.getDownloadLink(fid, cookie)
-            ?: throw IllegalStateException("获取下载链接失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -142,7 +144,7 @@ class UCResolveRepository(private val api: UCApi) : ShareResolveRepository {
             stoken = session.stoken,
             pwdId = session.shareId,
             cookie = cookie
-        ) ?: throw IllegalStateException("获取下载链接失败")
+        ) ?: throw IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -162,7 +164,7 @@ class UCResolveRepository(private val api: UCApi) : ShareResolveRepository {
             fidToken = file.fidToken,
             stoken = session.stoken,
             pwdId = session.shareId
-        ) ?: throw IllegalStateException("获取下载链接失败")
+        ) ?: throw IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }

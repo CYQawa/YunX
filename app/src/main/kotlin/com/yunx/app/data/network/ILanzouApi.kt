@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.QuotaInfo
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -41,7 +43,7 @@ import javax.crypto.spec.SecretKeySpec
 data class ILanzouAccountInfo(val userId: String, val account: String, val nickname: String)
 
 /** 登录失效标记。 */
-private class ILanzouLoginExpired : Exception("蓝奏优享登录已过期，请重新登录")
+private class ILanzouLoginExpired : Exception(AppStrings.get(R.string.e2_ilanzou_login_expired))
 
 /** 访问验证（409 + text/html）标记。 */
 private class ILanzouAccessChallenge : Exception()
@@ -66,7 +68,7 @@ class ILanzouApi(
         val json = exec(Request.Builder().url(url).headers(commonHeaders(false)).get().build())
         val uuid = json.optString("uuid")
         if (!Regex("^[A-Za-z0-9_-]{8,128}$").matches(uuid)) {
-            throw IllegalStateException("蓝奏优享未返回有效设备标识")
+            throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_no_device_id))
         }
         uuid
     }
@@ -74,9 +76,9 @@ class ILanzouApi(
     /** 账号密码登录（文档 §2.2），返回 appToken。 */
     suspend fun login(loginName: String, loginPwd: String, uuid: String): String = withContext(Dispatchers.IO) {
         val name = loginName.trim()
-        if (name.isEmpty() || loginPwd.isEmpty()) throw IllegalStateException("请输入蓝奏优享账号和密码")
-        if (name.length > 254) throw IllegalStateException("蓝奏优享用户名过长")
-        if (loginPwd.length > 256) throw IllegalStateException("蓝奏优享密码过长")
+        if (name.isEmpty() || loginPwd.isEmpty()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_credentials_required))
+        if (name.length > 254) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_username_too_long))
+        if (loginPwd.length > 256) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_password_too_long))
         val url = buildUrl(ILanzouConstants.LOGIN, uuid, appToken = null, extra = true, params = emptyList())
         val body = JSONObject().put("loginName", name).put("loginPwd", loginPwd).toString()
         val json = execLogin(
@@ -84,7 +86,7 @@ class ILanzouApi(
         )
         val token = json.optJSONObject("data")?.optString("appToken").orEmpty()
         if (token.length < 16 || !Regex("^[A-Za-z0-9._~+/=:!%&?\\-]+$").matches(token)) {
-            throw IllegalStateException("蓝奏优享未返回登录凭据，请切换网页登录")
+            throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_no_login_token))
         }
         token
     }
@@ -100,7 +102,7 @@ class ILanzouApi(
             if (userId.isBlank()) return@runCatching null
             val nickname = firstNonBlank(
                 map.optString("nickName"), map.optString("nickname"), map.optString("account")
-            ).ifBlank { "蓝奏优享用户" }
+            ).ifBlank { AppStrings.get(R.string.e2_ilanzou_default_nickname) }
             ILanzouAccountInfo(userId, map.optString("account"), nickname)
         }.getOrNull()
     }
@@ -144,7 +146,7 @@ class ILanzouApi(
                     added++
                 }
             }
-            if (added == 0) throw IllegalStateException("蓝奏优享分页重复或不完整，请重新打开目录")
+            if (added == 0) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_paging_duplicate))
             val totalPage = json.optInt("totalPage", 0)
             if (totalPage > 0 && page >= totalPage) break
             if (totalPage <= 0 && list.length() < ILanzouConstants.PAGE_SIZE) break
@@ -166,7 +168,7 @@ class ILanzouApi(
             val id = json.optJSONArray("list")?.optJSONObject(0)?.let {
                 firstNonBlank(it.optString("id"), it.optInt("id", 0).toString())
             }.orEmpty()
-            if (id.isBlank() || id == "0") throw IllegalStateException("蓝奏优享未返回新文件夹信息，请刷新确认")
+            if (id.isBlank() || id == "0") throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_folder_info_missing))
             id
         }
 
@@ -265,17 +267,17 @@ class ILanzouApi(
                 .build()
         )
         val upToken = pre.optString("upToken")
-        if (upToken.isBlank()) throw IllegalStateException("蓝奏优享未返回上传授权")
+        if (upToken.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_upload_auth_missing))
         if (upToken == "-1") {
             val id = pre.optJSONObject("map")?.optString("fileId").orEmpty()
-            if (id.isBlank()) throw IllegalStateException("蓝奏优享未确认秒传文件")
+            if (id.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_instant_upload_unconfirmed))
             io.progress(UploadPhase.FINISHING, file.size)
             return@withContext ILanzouConstants.FILE_PREFIX + id
         }
         val account = runCatching { fetchAccountInfo(appToken, uuid)?.account.orEmpty() }
             .getOrDefault("")
         if (account.isBlank()) {
-            throw IllegalStateException("蓝奏优享未返回上传账号信息，请重新登录后再试")
+            throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_upload_account_missing))
         }
         val calendar = java.util.Calendar.getInstance()
         val key = buildString {
@@ -303,7 +305,7 @@ class ILanzouApi(
                 ),
                 retries = 0
             )
-            if (!form.isSuccessful) throw IllegalStateException("文件上传失败（HTTP ${form.code}）")
+            if (!form.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_upload_failed_http, form.code))
             token = runCatching { form.json().optString("token") }.getOrDefault("")
         } else {
             val auth = headers + ("Authorization" to "UpToken $upToken")
@@ -318,9 +320,9 @@ class ILanzouApi(
                 contentType = "application/octet-stream",
                 retries = 0
             )
-            if (!init.isSuccessful) throw IllegalStateException("蓝奏优享无法创建分段上传")
+            if (!init.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_multipart_create_failed))
             val uploadId = runCatching { init.json().optString("uploadId") }.getOrDefault("")
-            if (uploadId.isBlank()) throw IllegalStateException("蓝奏优享未返回分段上传标识")
+            if (uploadId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_multipart_id_missing))
             val parts = JSONArray()
             var offset = 0L
             while (offset < file.size) {
@@ -334,9 +336,9 @@ class ILanzouApi(
                     end = stop,
                     retries = 1
                 )
-                if (!part.isSuccessful) throw IllegalStateException("文件上传失败（HTTP ${part.code}）")
+                if (!part.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_upload_failed_http, part.code))
                 val etag = runCatching { part.json().optString("etag") }.getOrDefault("")
-                if (etag.isBlank()) throw IllegalStateException("蓝奏优享未确认上传分段")
+                if (etag.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_part_unconfirmed))
                 parts.put(JSONObject().put("partNumber", number).put("etag", etag))
                 offset = stop
             }
@@ -352,10 +354,10 @@ class ILanzouApi(
                 contentType = "application/json",
                 retries = 0
             )
-            if (!commit.isSuccessful) throw IllegalStateException("蓝奏优享无法合并上传分段")
+            if (!commit.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_multipart_merge_failed))
             token = runCatching { commit.json().optString("token") }.getOrDefault("")
         }
-        if (token.isBlank()) throw IllegalStateException("蓝奏优享未返回上传结果")
+        if (token.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_upload_result_missing))
         io.progress(UploadPhase.FINISHING, file.size)
         val timeFormat = java.text.SimpleDateFormat(
             "yyyy-MM-dd'T'HH:mm:ss.SSS", java.util.Locale.US
@@ -382,12 +384,12 @@ class ILanzouApi(
             val first = result.optJSONArray("list")?.optJSONObject(0)
             if (first != null && first.optInt("status") == 1) {
                 val id = first.optString("fileId")
-                if (id.isBlank()) throw IllegalStateException("蓝奏优享未确认上传文件标识")
+                if (id.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_upload_file_id_unconfirmed))
                 return@withContext ILanzouConstants.FILE_PREFIX + id
             }
             delay(1000)
         }
-        throw IllegalStateException("蓝奏优享仍在处理上传，请稍后刷新列表")
+        throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_upload_still_processing))
     }
 
     /** 七牛对象键要 URL-safe Base64（保留填充） */
@@ -431,13 +433,13 @@ class ILanzouApi(
             }
             val body = resp.body?.string().orEmpty()
             val json = runCatching { JSONObject(body) }.getOrNull()
-                ?: throw IllegalStateException("蓝奏优享未返回下载地址")
+                ?: throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_no_download_url))
             checkCode(json)
             val link = firstNonBlank(
                 json.optString("url"),
                 json.optJSONObject("data")?.optString("url").orEmpty()
             )
-            if (link.isBlank()) throw IllegalStateException("蓝奏优享未返回下载地址，请检查文件权限")
+            if (link.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_no_download_url_permission))
             DownloadLink(
                 fid = ILanzouConstants.FILE_PREFIX + fileId,
                 filename = "",
@@ -598,13 +600,13 @@ class ILanzouApi(
                 }
                 val body = resp.body?.string().orEmpty()
                 val json = runCatching { JSONObject(body) }.getOrNull()
-                    ?: throw IllegalStateException("蓝奏优享未返回下载地址")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_no_download_url))
                 val link = firstNonBlank(
                     json.optString("url"),
                     json.optJSONObject("data")?.optString("url").orEmpty()
                 )
                 if (link.isBlank()) {
-                    throw IllegalStateException(firstNonBlank(json.optString("msg"), "蓝奏优享未返回下载地址，请检查文件权限"))
+                    throw IllegalStateException(firstNonBlank(json.optString("msg"), AppStrings.get(R.string.e2_ilanzou_no_download_url_permission)))
                 }
                 DownloadLink(fid = ILanzouConstants.FILE_PREFIX + fileId, filename = "", downloadUrl = link, size = 0L)
             }
@@ -673,11 +675,11 @@ class ILanzouApi(
         client.newCall(request).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
             val json = runCatching { JSONObject(body) }.getOrElse {
-                throw IllegalStateException("蓝奏优享分享请求失败（${resp.code}）")
+                throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_share_request_failed, resp.code))
             }
             val code = json.optInt("code", -1)
             if (code != 200) {
-                throw IllegalStateException(firstNonBlank(json.optString("msg"), "蓝奏优享分享请求失败（$code）"))
+                throw IllegalStateException(firstNonBlank(json.optString("msg"), AppStrings.get(R.string.e2_ilanzou_share_request_failed, code)))
             }
             return json
         }
@@ -692,7 +694,7 @@ class ILanzouApi(
             try {
                 doExec(request)
             } catch (retry: ILanzouAccessChallenge) {
-                throw IllegalStateException("蓝奏优享的访问验证未通过，请稍后重试或使用网页登录")
+                throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_access_challenge_failed))
             }
         }
     }
@@ -708,7 +710,7 @@ class ILanzouApi(
             try {
                 doExecLogin(request)
             } catch (retry: ILanzouAccessChallenge) {
-                throw IllegalStateException("蓝奏优享的访问验证未通过，请稍后重试")
+                throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_access_challenge_failed_short))
             }
         }
     }
@@ -719,15 +721,15 @@ class ILanzouApi(
             val body = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
                 if (resp.code == 409 && ct.contains("text/html")) throw ILanzouAccessChallenge()
-                throw IllegalStateException("蓝奏优享请求失败（${resp.code}）")
+                throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_request_failed, resp.code))
             }
             val json = runCatching { JSONObject(body) }.getOrElse {
                 if (ct.contains("text/html")) throw ILanzouAccessChallenge()
-                throw IllegalStateException("蓝奏优享请求失败（${resp.code}）")
+                throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_request_failed, resp.code))
             }
             if (json.optInt("code", -1) != 200) {
                 throw IllegalStateException(
-                    json.optString("msg").ifBlank { "蓝奏优享登录失败，请检查账号密码" }
+                    json.optString("msg").ifBlank { AppStrings.get(R.string.e2_ilanzou_login_failed) }
                 )
             }
             return json
@@ -741,11 +743,11 @@ class ILanzouApi(
             if (!resp.isSuccessful) {
                 if (resp.code == 401 || resp.code == 403) throw ILanzouLoginExpired()
                 if (resp.code == 409 && ct.contains("text/html")) throw ILanzouAccessChallenge()
-                throw IllegalStateException("蓝奏优享请求失败（${resp.code}），请检查登录信息或稍后重试")
+                throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_request_failed_hint, resp.code))
             }
             val json = runCatching { JSONObject(body) }.getOrElse {
                 if (ct.contains("text/html")) throw ILanzouAccessChallenge()
-                throw IllegalStateException("蓝奏优享请求失败（${resp.code}），请检查登录信息或稍后重试")
+                throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_request_failed_hint, resp.code))
             }
             checkCode(json)
             return json
@@ -756,7 +758,7 @@ class ILanzouApi(
         val code = json.optInt("code", -1)
         if (code == 200) return
         if (code == -1 || code == -2) throw ILanzouLoginExpired()
-        throw IllegalStateException("蓝奏优享请求失败（$code），请检查登录信息或稍后重试")
+        throw IllegalStateException(AppStrings.get(R.string.e2_ilanzou_request_failed_hint, code))
     }
 
     private fun aesHex(plain: String): String {

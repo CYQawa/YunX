@@ -1,0 +1,151 @@
+<!--
+    日本語。i18n バッチ G2 により生成（接頭辞 csa_）。
+-->
+<resources>
+    <!-- 共通 -->
+    <string name="csa_back">戻る</string>
+    <string name="csa_retry">再試行</string>
+    <string name="csa_cancel">キャンセル</string>
+    <string name="csa_create">作成</string>
+    <string name="csa_create_folder">フォルダを作成</string>
+    <string name="csa_folder_name">フォルダ名</string>
+    <string name="csa_create_in_current_dir">現在のディレクトリに作成されます</string>
+    <string name="csa_cd_new">新規</string>
+    <string name="csa_upload_file">ファイルをアップロード</string>
+    <string name="csa_upload_developing">ファイルをアップロード（開発中）</string>
+    <string name="csa_label_folder">フォルダ</string>
+    <string name="csa_label_file">ファイル</string>
+
+    <!-- 名前の検証 -->
+    <string name="csa_name_error_empty">名前を入力してください</string>
+    <string name="csa_name_error_dots">名前に . または .. は使用できません</string>
+    <string name="csa_name_error_too_long">名前は最大 255 文字です</string>
+    <string name="csa_name_error_invalid_chars">名前に / \\ や制御文字は使用できません</string>
+
+    <!-- ファイル操作メニュー -->
+    <string name="csa_download">ダウンロード</string>
+    <string name="csa_action_download_desc">内蔵のダウンロード機能で端末に保存します</string>
+    <string name="csa_download_folder">フォルダをダウンロード</string>
+    <string name="csa_action_download_folder_desc">フォルダ全体を階層構造を保ったまま再帰的にダウンロードします</string>
+    <string name="csa_online_preview">オンラインプレビュー</string>
+    <string name="csa_action_preview_desc">ダウンロードせず、アプリ内でそのまま表示します</string>
+    <string name="csa_share">共有</string>
+    <string name="csa_action_share_desc">共有リンクを生成します（パスコード・有効期限を設定可能）</string>
+    <string name="csa_move_to">移動先</string>
+    <string name="csa_move">移動</string>
+    <string name="csa_action_move_desc">クラウドドライブの別のフォルダへ移動します</string>
+    <string name="csa_rename">名前を変更</string>
+    <string name="csa_action_rename_desc">ファイル名を変更します</string>
+    <string name="csa_delete">削除</string>
+    <string name="csa_action_delete_desc">クラウドのファイルを削除します</string>
+
+    <!-- 一括操作メニュー -->
+    <string name="csa_batch_actions">一括操作</string>
+    <string name="csa_action_batch_download_desc">選択項目を端末に一括ダウンロードします</string>
+    <string name="csa_action_batch_share_desc">選択項目をまとめて 1 つの共有リンクにします</string>
+    <string name="csa_action_batch_move_desc">選択項目をクラウドの別のフォルダへ一括移動します</string>
+    <string name="csa_action_batch_delete_desc">選択したクラウドファイルを一括削除します</string>
+
+    <!-- 選択と件数 -->
+    <string name="csa_share_file_title">ファイルを共有</string>
+    <string name="csa_selected_count">%1$d 件を選択中</string>
+    <string name="csa_delete_target_selected">選択した %1$d 件</string>
+    <string name="csa_quoted_name">「%1$s」</string>
+
+    <!-- 移動／保存先 -->
+    <string name="csa_root_dir">ルート</string>
+    <string name="csa_no_subfolders_move_here">このディレクトリにはサブフォルダがありません。ここへ直接移動できます</string>
+    <string name="csa_no_subfolders_save_here">このディレクトリにはサブフォルダがありません。ここへ直接保存できます</string>
+    <string name="csa_move_here">ここへ移動（%1$s）</string>
+    <string name="csa_save_here">このディレクトリへ保存（%1$s）</string>
+
+    <!-- 共有設定 -->
+    <string name="csa_passcode">パスコード</string>
+    <string name="csa_no_passcode">パスコードなし</string>
+    <string name="csa_set_passcode">パスコードを設定</string>
+    <string name="csa_passcode_4digit">4 桁のパスコード</string>
+    <string name="csa_share_passcode_required_auto">共有にはパスコードが必要です。4 文字まで指定できます（空欄の場合はサーバーが生成します）</string>
+    <string name="csa_share_passcode_required">共有には 4 桁のパスコードが必要です</string>
+    <string name="csa_passcode_label_optional">パスコード（英数字 4 文字、空欄可）</string>
+    <string name="csa_passcode_label_required">パスコード（英数字 4 文字）</string>
+    <string name="csa_passcode_server_generated">パスコードはサーバーが自動生成します。共有後に結果で確認できます</string>
+    <string name="csa_validity">有効期限</string>
+    <string name="csa_validity_label">有効期限：%1$s</string>
+    <string name="csa_create_share">共有を作成</string>
+
+    <!-- 名前の変更 -->
+    <string name="csa_new_file_name">新しいファイル名</string>
+    <string name="csa_renaming">名前を変更中…</string>
+    <string name="csa_confirm_rename">名前の変更を確定</string>
+
+    <!-- 削除確認 -->
+    <string name="csa_delete_file_title">ファイルを削除</string>
+    <string name="csa_confirm_delete_target">%1$s を削除しますか？</string>
+
+    <!-- 共有結果 -->
+    <string name="csa_share_success">共有しました</string>
+    <string name="csa_share_text">%1$s で「%2$s」を共有しました</string>
+    <string name="csa_share_text_link">リンク：%1$s</string>
+    <string name="csa_share_text_passcode">パスコード：%1$s</string>
+    <string name="csa_share_text_copied">共有テキストをコピーしました</string>
+    <string name="csa_copy_all">すべてコピー</string>
+    <string name="csa_done">完了</string>
+
+    <!-- プラットフォーム名 -->
+    <string name="csa_platform_139">139 クラウド</string>
+    <string name="csa_platform_123">123 クラウド</string>
+    <string name="csa_platform_uc">UC クラウド</string>
+    <string name="csa_platform_xunlei">迅雷クラウド</string>
+    <string name="csa_platform_baidu">Baidu クラウド</string>
+    <string name="csa_platform_115">115 クラウド</string>
+    <string name="csa_platform_quark">Quark クラウド</string>
+    <string name="csa_platform_guangya">GuangYa クラウド</string>
+    <string name="csa_platform_ilanzou">Lanzou クラウド優享版</string>
+
+    <!-- 有効期限の選択肢 -->
+    <string name="csa_expire_forever">無期限</string>
+    <string name="csa_expire_1day">1 日</string>
+    <string name="csa_expire_3days">3 日</string>
+    <string name="csa_expire_7days">7 日</string>
+    <string name="csa_expire_15days">15 日</string>
+    <string name="csa_expire_30days">30 日</string>
+    <string name="csa_unknown">不明</string>
+
+    <!-- 選択／検索バー -->
+    <string name="csa_cd_cancel_selection">選択を解除</string>
+    <string name="csa_cd_close_search">検索を閉じる</string>
+    <string name="csa_cd_search_files">ファイルを検索</string>
+    <string name="csa_cd_clear_search">検索をクリア</string>
+    <string name="csa_all_selected">すべて選択済み</string>
+    <string name="csa_click_select_more">タップしてさらにファイルを選択</string>
+    <string name="csa_deselect_all">すべて選択解除</string>
+    <string name="csa_select_all">すべて選択</string>
+    <string name="csa_total_count">全 %1$d 件</string>
+    <string name="csa_match_count">%1$d / %2$d 件が一致</string>
+    <string name="csa_dir_empty">このディレクトリは空です</string>
+    <string name="csa_no_match_files">「%1$s」に一致するファイルが見つかりません</string>
+    <string name="csa_search_current_dir">現在のディレクトリ内を検索</string>
+
+    <!-- 処理中ダイアログ -->
+    <string name="csa_interrupt">中断</string>
+    <string name="csa_processing">処理中</string>
+    <string name="csa_processing_please_wait">処理中です。しばらくお待ちください…</string>
+
+    <!-- Baidu の速度制限通知 -->
+    <string name="csa_baidu_limit_title">大きいファイルのダウンロードについて</string>
+    <string name="csa_baidu_limit_message">Baidu クラウドは非会員だと 300MB を超えるファイルが速度制限され、ダウンロードが遅くなる場合があります。続行しますか？</string>
+    <string name="csa_do_not_show_again">このメッセージを表示しない</string>
+    <string name="csa_continue_download">ダウンロードを続行</string>
+
+    <!-- 保存ページのタイトル -->
+    <string name="csa_save_to_baidu">Baidu クラウドへ保存</string>
+    <string name="csa_save_to_139">139 クラウドへ保存</string>
+    <string name="csa_save_to_guangya">GuangYa クラウドへ保存</string>
+
+    <!-- アップロード進捗 -->
+    <string name="csa_uploading">アップロード中</string>
+    <string name="csa_uploading_progress">アップロード中（%1$d/%2$d）</string>
+    <string name="csa_upload_phase_preparing">ファイルを検証中…</string>
+    <string name="csa_upload_phase_finishing">クラウドの確認を待機中…</string>
+    <string name="csa_cancelling">キャンセル中…</string>
+</resources>

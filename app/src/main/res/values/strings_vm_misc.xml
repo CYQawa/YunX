@@ -1,0 +1,235 @@
+<!--
+    默认语言 = 简体中文。逐语言对照见 values-b+zh+Hant / values-en / values-ja / values-fr。
+    由 i18n 批次 G8 生成（前缀 vm_），覆盖主界面、关于 / 支持 / 链接唤起 / 公告 / 更新、账号 ViewModel、崩溃页与视频平台展示名。
+-->
+<resources>
+    <!-- 通用 -->
+    <string name="vm_back">返回</string>
+    <string name="vm_retry">重试</string>
+    <string name="vm_refresh">刷新</string>
+    <string name="vm_load_more">加载更多</string>
+    <string name="vm_save">保存</string>
+    <string name="vm_cancel">取消</string>
+    <string name="vm_clear">清除</string>
+    <string name="vm_got_it">知道了</string>
+    <string name="vm_password_hide">隐藏</string>
+    <string name="vm_password_show">显示</string>
+    <string name="vm_login_success">登录成功</string>
+    <string name="vm_login_failed_retry">登录失败，请稍后重试</string>
+    <string name="vm_login_failed_network">登录失败，请检查网络后重试</string>
+
+    <!-- 崩溃页 -->
+    <string name="vm_crash_unknown_error">未知错误</string>
+    <string name="vm_crash_copy_info">复制崩溃信息</string>
+    <string name="vm_crash_info_copied">崩溃信息已复制</string>
+    <string name="vm_crash_restart_app">重启应用</string>
+    <string name="vm_crash_exit_app">退出应用</string>
+    <string name="vm_crash_title">应用发生崩溃</string>
+    <string name="vm_crash_desc">很抱歉，应用遇到了未预期的错误。你可以复制崩溃信息反馈给开发者，或重启应用继续使用。</string>
+
+    <!-- 链接唤起：目标名称 -->
+    <string name="vm_link_target_quark">夸克网盘</string>
+    <string name="vm_link_target_uc">UC 网盘</string>
+    <string name="vm_link_target_xunlei">迅雷网盘</string>
+    <string name="vm_link_target_baidu">百度网盘</string>
+    <string name="vm_link_target_c139">139（和彩云）</string>
+    <string name="vm_link_target_pan123">123 云盘</string>
+    <string name="vm_link_target_pan115">115 网盘</string>
+    <string name="vm_link_target_guangya">光鸭云盘</string>
+    <string name="vm_link_target_lanzou">蓝奏云 / 优享版</string>
+    <string name="vm_link_target_magnet">磁力链接</string>
+    <string name="vm_link_target_yunx">yunx:// 自有协议</string>
+    <string name="vm_link_target_share">分享菜单</string>
+    <string name="vm_link_target_process_text">选中文本解析</string>
+    <string name="vm_link_target_share_sample">其它 App「分享 → 云析」</string>
+    <string name="vm_link_target_process_text_sample">长按选中文字 →「用云析解析」</string>
+
+    <!-- 链接唤起 -->
+    <string name="vm_link_open_title">链接唤起</string>
+    <string name="vm_link_open_intro">在浏览器或其它 App 里点网盘分享链接，系统会问用哪个应用打开 —— 选「云析」并勾选「始终」，之后点链接就直接进来解析。</string>
+    <string name="vm_link_open_verified_zero">系统设置里那个「已验证的链接」会一直是 0：验证要求每个网盘域名的服务器上放置本应用的校验文件（assetlinks.json），而这些域名都不属于本项目，第三方 App 无法做到（开了自动验证反而可能让云析从选择器里彻底消失）。</string>
+    <string name="vm_link_open_manual_associate">官方对「无法验证域名的第三方 App」给出的做法是手动关联域名：在系统的「默认打开 → 打开支持的链接」里把网盘域名勾给云析，效果与验证相同（不再弹选择器），只是记在「要在此应用中打开的链接」里。</string>
+    <string name="vm_link_open_disable_hint">关掉某一项 = 不再接管那种链接（系统会重新交给浏览器或网盘官方 App）；改动立即生效，无需重启。</string>
+    <string name="vm_link_open_open_settings">去系统设置关联域名</string>
+    <string name="vm_link_open_settings_desc">打开「默认打开 → 打开支持的链接」，把要接管的网盘域名勾给云析</string>
+    <string name="vm_link_open_enabled_count">已启用 %1$d / %2$d</string>
+    <string name="vm_link_open_enabled_toast">已接管「%1$s」的链接</string>
+    <string name="vm_link_open_disabled_toast">已交出「%1$s」的链接</string>
+    <string name="vm_link_open_settings_failed">无法打开系统设置，请手动到「应用信息 → 默认打开」里关联域名</string>
+
+    <!-- 公告 -->
+    <string name="vm_announcements_title">公告</string>
+    <string name="vm_announcement_detail_title">公告详情</string>
+    <string name="vm_announcement_refresh">刷新公告</string>
+    <string name="vm_announcement_pinned">置顶公告</string>
+    <string name="vm_announcement_pinned_short">置顶</string>
+    <string name="vm_announcement_latest">最新公告</string>
+    <string name="vm_announcement_publisher_fallback">公告</string>
+    <string name="vm_announcement_avatar_fallback">公</string>
+    <string name="vm_announcement_no_content">（本条公告没有正文）</string>
+    <string name="vm_announcement_images">图片</string>
+    <string name="vm_announcement_image_count">%1$d 张</string>
+    <string name="vm_announcement_last_updated">最后更新 %1$s</string>
+    <string name="vm_announcement_last_updated_author">最后更新 %1$s · 作者 %2$s</string>
+    <string name="vm_announcement_cover_image">封面图片</string>
+    <string name="vm_announcement_image">公告图片</string>
+    <string name="vm_announcement_cover">封面</string>
+    <string name="vm_announcement_close">关闭</string>
+    <string name="vm_announcement_view_detail">查看详情</string>
+    <string name="vm_announcement_mark_all_read">全部标为已读</string>
+    <string name="vm_announcement_empty_title">暂无公告</string>
+    <string name="vm_announcement_empty_desc">有新公告时会在这里显示</string>
+    <string name="vm_announcement_load_failed">公告加载失败</string>
+    <string name="vm_announcement_refresh_failed">公告刷新失败：%1$s</string>
+    <string name="vm_announcement_load_failed_detail">公告加载失败：%1$s</string>
+    <string name="vm_announcement_load_more_failed">加载更多失败：%1$s</string>
+    <string name="vm_announcement_marked_read_count">已将 %1$d 条公告标为已读</string>
+    <string name="vm_announcement_no_unread">没有未读公告</string>
+
+    <!-- 更新 -->
+    <string name="vm_update_new_version">发现新版本</string>
+    <string name="vm_update_prerelease">预发布</string>
+    <string name="vm_update_current_version">当前 %1$s</string>
+    <string name="vm_update_changelog">更新内容</string>
+    <string name="vm_update_no_changelog">暂无更新说明</string>
+    <string name="vm_update_netdisk">网盘更新</string>
+    <string name="vm_update_download_from_github">从 GitHub 下载</string>
+    <string name="vm_update_github_download">GitHub 下载</string>
+    <string name="vm_update_mirror_download">使用镜像站下载</string>
+    <string name="vm_update_ignore">忽略本次</string>
+    <string name="vm_update_later">稍后</string>
+    <string name="vm_update_github_direct">GitHub 直连下载</string>
+    <string name="vm_update_mirror_accelerated">镜像站加速下载</string>
+    <string name="vm_update_open_github_page">打开 GitHub 页面</string>
+
+    <!-- 关于 -->
+    <string name="vm_about_title">关于云析</string>
+    <string name="vm_about_intro_title">应用简介</string>
+    <string name="vm_about_intro_desc">云析（YunX）是一款网盘 / 视频分享链接解析与高速下载工具。粘贴链接即可：网盘分享能浏览内容并高速下载，视频链接能解析出直链与原图，图片 / 视频 / 音频都支持在线预览播放。</string>
+    <string name="vm_about_license">本项目基于 GNU AGPL-3.0 协议开源</string>
+    <string name="vm_about_version_footer">云析 v%1$s · Made with ❤ and deepseek</string>
+    <string name="vm_about_icon">云析图标</string>
+    <string name="vm_about_app_name">云析</string>
+    <string name="vm_about_version_name">YunX · v%1$s (%2$d)</string>
+    <string name="vm_about_tagline">网盘 / 视频链接解析与高速下载</string>
+    <string name="vm_about_supported_platforms">支持平台</string>
+    <string name="vm_about_drives">网盘</string>
+    <string name="vm_about_video_parsing">视频解析</string>
+    <string name="vm_about_feature_netdisk_title">网盘分享解析</string>
+    <string name="vm_about_feature_netdisk_desc">夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 / 光鸭 / 蓝奏云 / 蓝奏云优享版 直链识别</string>
+    <string name="vm_about_feature_video_title">视频链接解析</string>
+    <string name="vm_about_feature_video_desc">抖音 / 小红书 / 快手 / 微博 / AcFun 免登录；哔哩哔哩登录后画质更高，Pixiv 未登录只能解析部分公开作品、粘贴浏览器 Cookie 后可解析全部作品</string>
+    <string name="vm_about_feature_preview_title">在线预览与播放</string>
+    <string name="vm_about_feature_preview_desc">图片 / 视频 / 音频在线看（自动带请求头），网盘里的文本文件也能打开</string>
+    <string name="vm_about_feature_mux_title">音视频合轨</string>
+    <string name="vm_about_feature_mux_desc">哔哩哔哩高清是音视频分轨的，应用内部合轨，不需要额外装 ffmpeg</string>
+    <string name="vm_about_feature_download_title">高速分片下载</string>
+    <string name="vm_about_feature_download_desc">多线程并发 + 断点续传，充分利用带宽</string>
+    <string name="vm_about_feature_cleanup_title">取链即删</string>
+    <string name="vm_about_feature_cleanup_desc">转存后立即清理，不留残留</string>
+    <string name="vm_about_feature_credentials_title">凭证本地化</string>
+    <string name="vm_about_feature_credentials_desc">Cookie 加密落库，仅存本机</string>
+    <string name="vm_about_features">功能特性</string>
+    <string name="vm_about_tech_stack">技术栈</string>
+    <string name="vm_about_disclaimer_title">免责声明</string>
+    <string name="vm_about_disclaimer_body">本应用仅供个人学习与技术交流使用，请勿用于任何商业用途。下载内容版权归原作者所有，请于下载后 24 小时内删除。使用本应用产生的任何后果由使用者自行承担。</string>
+    <string name="vm_about_preview_onboarding_title">重新预览欢迎界面</string>
+    <string name="vm_about_preview_onboarding_desc">重新展示首次启动引导页</string>
+    <string name="vm_about_open_source_repo">开源仓库</string>
+
+    <!-- 支持开发 -->
+    <string name="vm_support_title">支持开发</string>
+    <string name="vm_support_tagline">你的支持，是持续维护与更新的动力</string>
+    <string name="vm_support_free_notice">云析完全免费开源，所有功能无需捐赠即可正常使用。如果你觉得它帮到了你，愿意的话可以扫码表达一下心意，你的支持会成为持续维护与更新的动力～</string>
+    <string name="vm_support_thanks">感谢每一位支持者 ❤</string>
+    <string name="vm_support_no_storage_permission">未授予存储权限，无法保存到相册</string>
+    <string name="vm_support_saved_to_gallery">已保存到相册（Pictures/YunX）</string>
+    <string name="vm_support_save_failed">保存失败</string>
+    <string name="vm_support_saved">已保存到相册</string>
+    <string name="vm_support_save_qr_of">保存 %1$s 的二维码</string>
+    <string name="vm_support_saved_hint">✓ 二维码已保存到 相册/Pictures/YunX</string>
+    <string name="vm_support_role_author">作者 CYQawa</string>
+    <string name="vm_support_role_collaborator">协作者 tidain</string>
+    <string name="vm_support_qr_hint">保存二维码到相册后，打开微信「扫一扫」即可捐赠</string>
+    <string name="vm_support_next_card">（下一张）</string>
+    <string name="vm_support_swipe_hint">左右滑动切换</string>
+    <string name="vm_support_wechat_donate">微信扫码捐赠</string>
+    <string name="vm_support_qr_content_desc">%1$s 的微信捐赠码%2$s</string>
+
+    <!-- 主界面 -->
+    <string name="vm_main_checking_update">正在检查更新…</string>
+    <string name="vm_main_update_check_failed">检查更新失败：%1$s</string>
+    <string name="vm_main_up_to_date">已是最新版本</string>
+    <string name="vm_main_release_unavailable">暂未获取到 Release 数据，请先联网检查一次更新</string>
+    <string name="vm_main_github_token_invalid_cleared">GitHub Token 无效或已过期，已自动清除并回退匿名限额，请重新配置</string>
+    <string name="vm_main_verify_done_logging_in">验证完成，正在自动登录…</string>
+    <string name="vm_main_verify_incomplete">验证未完成，请重试</string>
+    <string name="vm_main_announcements_unread">公告（%1$d 条未读）</string>
+    <string name="vm_main_announcements">公告</string>
+    <string name="vm_main_bookmark_links">收藏网盘链接</string>
+    <string name="vm_main_sort_drives">排序网盘</string>
+    <string name="vm_main_github_account_failed">无法获取 GitHub 账号信息，请检查网络或重新配置 Token</string>
+    <string name="vm_main_added_download_install_hint">已加入下载，完成后点击「打开」即可安装</string>
+    <string name="vm_main_apk_not_found">未找到 APK 下载链接</string>
+    <string name="vm_main_added_download_mirror_install_hint">已通过镜像站加入下载，完成后点击「打开」即可安装</string>
+    <string name="vm_main_preparing_update_package">正在准备更新包…</string>
+
+    <!-- GitHub Token -->
+    <string name="vm_github_token_usage">Token 仅用于提升 API 限额（匿名 60/小时，认证后 5000/小时）。经 Android Keystore AES-GCM 加密存储。</string>
+    <string name="vm_github_token_howto_title">如何获取 Token：</string>
+    <string name="vm_github_token_howto_body">1. 电脑浏览器打开 GitHub，右上角头像 → Settings\n2. 左侧 Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. 勾选 public_repo 即可浏览公开仓库；如需在主页看到自己的私有仓库，再勾选 repo\n4. 有效期建议选 90 天或 No expiration，生成后复制粘贴到上方输入框</string>
+    <string name="vm_github_no_browser_link_copied">未找到可用浏览器，链接已复制</string>
+    <string name="vm_github_get_token">↗ 从 GitHub 获取 Token</string>
+    <string name="vm_github_token_security_tip">安全提示：仅给最小权限，勿勾选删除/管理类权限；Token 不明文保存、不上传，清除只需清空后保存。</string>
+    <string name="vm_github_token_cleared">已清除 GitHub Token</string>
+    <string name="vm_github_token_saved">GitHub Token 已保存（@%1$s）</string>
+    <string name="vm_github_token_save_failed">保存失败：本机加密密钥暂时不可用，请稍后重试</string>
+    <string name="vm_github_token_invalid">Token 无效或已过期，请重新生成后再保存</string>
+    <string name="vm_github_token_check_failed">无法校验 Token（网络异常），请联网后重试</string>
+    <string name="vm_github_clear_token_title">清除 GitHub Token？</string>
+    <string name="vm_github_clear_token_message">清除后 GitHub API 回退匿名限额（60 次/小时/IP）。</string>
+
+    <!-- 收藏 -->
+    <string name="vm_bookmark_enter_link">请输入网盘链接</string>
+    <string name="vm_bookmark_added">已收藏</string>
+    <string name="vm_bookmark_moved">已移动到「%1$s」</string>
+    <string name="vm_bookmark_deleted">已删除</string>
+    <string name="vm_bookmark_pinned">已添加到主页</string>
+    <string name="vm_bookmark_unpinned">已从主页移除</string>
+    <string name="vm_bookmark_label_auto">已恢复自动文字</string>
+    <string name="vm_bookmark_label_updated">已更新快捷方式文字</string>
+
+    <!-- 账号 ViewModel -->
+    <string name="vm_ilanzou_enter_account_password">请输入蓝奏优享账号和密码</string>
+    <string name="vm_ilanzou_login_failed">蓝奏优享登录失败，请检查账号密码</string>
+    <string name="vm_guangya_enter_account_password">请输入光鸭账号和密码</string>
+    <string name="vm_guangya_login_failed">光鸭登录失败，请检查账号密码，或切换网页登录</string>
+    <string name="vm_guangya_enter_phone">请输入手机号</string>
+    <string name="vm_guangya_send_sms_failed">发送验证码失败</string>
+    <string name="vm_guangya_get_code_first">请先获取验证码</string>
+    <string name="vm_guangya_enter_code">请输入验证码</string>
+    <string name="vm_guangya_sms_invalid">短信验证码错误或已过期，请重新获取</string>
+    <string name="vm_video_account_set_primary">已设为主账号</string>
+    <string name="vm_video_account_remark_updated">备注已更新</string>
+    <string name="vm_video_account_logged_out">已退出该账号</string>
+    <string name="vm_video_account_logged_out_all">已退出%1$s全部账号</string>
+    <string name="vm_xunlei_sms_send_failed_retry">短信发送失败，请重试或检查网络</string>
+    <string name="vm_xunlei_sms_send_failed">短信发送失败</string>
+    <string name="vm_xunlei_login_failed_credentials">登录失败，无法换取凭证</string>
+    <string name="vm_xunlei_login_failed_account">登录失败，请检查账号密码</string>
+    <string name="vm_xunlei_network_error">网络异常</string>
+    <string name="vm_xunlei_sms_login_failed">短信发送失败，请检查网络后重试</string>
+    <string name="vm_xunlei_code_verify_failed">验证码校验失败</string>
+
+    <!-- 视频平台 -->
+    <string name="vm_video_platform_douyin">抖音</string>
+    <string name="vm_video_platform_xhs">小红书</string>
+    <string name="vm_video_platform_kuaishou">快手</string>
+    <string name="vm_video_platform_weibo">微博</string>
+    <string name="vm_video_platform_acfun">AcFun</string>
+    <string name="vm_video_platform_bilibili">哔哩哔哩</string>
+    <string name="vm_video_platform_pixiv">Pixiv</string>
+    <string name="vm_video_benefit_xhs">小红书网页端要求登录后才能查看笔记，未登录解析会失败</string>
+    <string name="vm_video_benefit_bilibili">登录后可解析更高清晰度；未登录只能拿到很低清的单文件</string>
+    <string name="vm_video_benefit_pixiv">未登录只能拿到一部分公开作品；粘贴浏览器里的 Cookie 后可解析全部作品（含 R18 与受限作品）</string>
+</resources>

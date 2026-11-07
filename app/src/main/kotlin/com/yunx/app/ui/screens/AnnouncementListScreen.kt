@@ -68,11 +68,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.data.announcement.AnnouncementApi
 import com.yunx.app.data.announcement.relativeTime
 import com.yunx.app.ui.components.RemoteImage
@@ -115,20 +117,20 @@ fun AnnouncementListPage(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("公告", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.vm_announcements_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.vm_back))
                     }
                 },
                 actions = {
                     if (state.items.isNotEmpty()) {
                         IconButton(onClick = onMarkAllRead) {
-                            Icon(Icons.Outlined.DoneAll, contentDescription = "全部标为已读")
+                            Icon(Icons.Outlined.DoneAll, contentDescription = stringResource(R.string.vm_announcement_mark_all_read))
                         }
                     }
                     IconButton(onClick = onRefresh) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.vm_refresh))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -224,7 +226,7 @@ private fun AnnouncementRow(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (item.isPinned) {
                             AnnouncementChip(
-                                text = "置顶",
+                                text = stringResource(R.string.vm_announcement_pinned_short),
                                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                             )
@@ -366,7 +368,7 @@ internal fun AnnouncementAvatar(
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
-                text = name.trim().take(1).ifEmpty { "公" },
+                text = name.trim().take(1).ifEmpty { stringResource(R.string.vm_announcement_avatar_fallback) },
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -390,7 +392,7 @@ private fun LoadMoreFooter(loading: Boolean, onClick: () -> Unit) {
                 strokeWidth = 2.dp
             )
         } else {
-            TextButton(onClick = onClick) { Text("加载更多") }
+            TextButton(onClick = onClick) { Text(stringResource(R.string.vm_load_more)) }
         }
     }
 }
@@ -408,10 +410,10 @@ private fun AnnouncementEmptyState(modifier: Modifier = Modifier) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(12.dp))
-        Text(text = "暂无公告", style = MaterialTheme.typography.titleSmall)
+        Text(text = stringResource(R.string.vm_announcement_empty_title), style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "有新公告时会在这里显示",
+            text = stringResource(R.string.vm_announcement_empty_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -436,7 +438,7 @@ private fun AnnouncementErrorState(
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(12.dp))
-        Text(text = "公告加载失败", style = MaterialTheme.typography.titleSmall)
+        Text(text = stringResource(R.string.vm_announcement_load_failed), style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = message,
@@ -445,6 +447,6 @@ private fun AnnouncementErrorState(
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("重试") }
+        Button(onClick = onRetry) { Text(stringResource(R.string.vm_retry)) }
     }
 }

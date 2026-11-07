@@ -1,0 +1,235 @@
+<!--
+    YunX (云析) - 繁體中文（zh-Hant）
+    ★ 僅供資源覆蓋，無需重複授權頭。i18n 批次 G8（前綴 vm_）。
+-->
+<resources>
+    <!-- 通用 -->
+    <string name="vm_back">返回</string>
+    <string name="vm_retry">重試</string>
+    <string name="vm_refresh">重新整理</string>
+    <string name="vm_load_more">載入更多</string>
+    <string name="vm_save">儲存</string>
+    <string name="vm_cancel">取消</string>
+    <string name="vm_clear">清除</string>
+    <string name="vm_got_it">知道了</string>
+    <string name="vm_password_hide">隱藏</string>
+    <string name="vm_password_show">顯示</string>
+    <string name="vm_login_success">登入成功</string>
+    <string name="vm_login_failed_retry">登入失敗，請稍後重試</string>
+    <string name="vm_login_failed_network">登入失敗，請檢查網路後重試</string>
+
+    <!-- 崩潰頁 -->
+    <string name="vm_crash_unknown_error">未知錯誤</string>
+    <string name="vm_crash_copy_info">複製崩潰資訊</string>
+    <string name="vm_crash_info_copied">崩潰資訊已複製</string>
+    <string name="vm_crash_restart_app">重新啟動應用程式</string>
+    <string name="vm_crash_exit_app">結束應用程式</string>
+    <string name="vm_crash_title">應用程式發生崩潰</string>
+    <string name="vm_crash_desc">很抱歉，應用程式遇到了未預期的錯誤。你可以複製崩潰資訊回饋給開發者，或重新啟動應用程式繼續使用。</string>
+
+    <!-- 連結喚起：目標名稱 -->
+    <string name="vm_link_target_quark">夸克網盤</string>
+    <string name="vm_link_target_uc">UC 網盤</string>
+    <string name="vm_link_target_xunlei">迅雷網盤</string>
+    <string name="vm_link_target_baidu">百度網盤</string>
+    <string name="vm_link_target_c139">139（和彩雲）</string>
+    <string name="vm_link_target_pan123">123 雲盤</string>
+    <string name="vm_link_target_pan115">115 網盤</string>
+    <string name="vm_link_target_guangya">光鴨雲盤</string>
+    <string name="vm_link_target_lanzou">藍奏雲 / 優享版</string>
+    <string name="vm_link_target_magnet">磁力連結</string>
+    <string name="vm_link_target_yunx">yunx:// 自有協議</string>
+    <string name="vm_link_target_share">分享選單</string>
+    <string name="vm_link_target_process_text">選取文字解析</string>
+    <string name="vm_link_target_share_sample">其它 App「分享 → 雲析」</string>
+    <string name="vm_link_target_process_text_sample">長按選取文字 →「用雲析解析」</string>
+
+    <!-- 連結喚起 -->
+    <string name="vm_link_open_title">連結喚起</string>
+    <string name="vm_link_open_intro">在瀏覽器或其它 App 裡點網盤分享連結，系統會問用哪個應用程式開啟 —— 選「雲析」並勾選「始終」，之後點連結就直接進來解析。</string>
+    <string name="vm_link_open_verified_zero">系統設定裡那個「已驗證的連結」會一直是 0：驗證要求每個網盤網域的伺服器上放置本應用程式的驗證檔案（assetlinks.json），而這些網域都不屬於本專案，第三方 App 無法做到（開啟自動驗證反而可能讓雲析從選擇器裡徹底消失）。</string>
+    <string name="vm_link_open_manual_associate">官方對「無法驗證網域的第三方 App」給出的做法是手動關聯網域：在系統的「預設開啟 → 開啟支援的連結」裡把網盤網域勾給雲析，效果與驗證相同（不再彈選擇器），只是記在「要在此應用程式中開啟的連結」裡。</string>
+    <string name="vm_link_open_disable_hint">關掉某一項 = 不再接管那種連結（系統會重新交給瀏覽器或網盤官方 App）；改動立即生效，無需重新啟動。</string>
+    <string name="vm_link_open_open_settings">去系統設定關聯網域</string>
+    <string name="vm_link_open_settings_desc">開啟「預設開啟 → 開啟支援的連結」，把要接管的網盤網域勾給雲析</string>
+    <string name="vm_link_open_enabled_count">已啟用 %1$d / %2$d</string>
+    <string name="vm_link_open_enabled_toast">已接管「%1$s」的連結</string>
+    <string name="vm_link_open_disabled_toast">已交出「%1$s」的連結</string>
+    <string name="vm_link_open_settings_failed">無法開啟系統設定，請手動到「應用程式資訊 → 預設開啟」裡關聯網域</string>
+
+    <!-- 公告 -->
+    <string name="vm_announcements_title">公告</string>
+    <string name="vm_announcement_detail_title">公告詳情</string>
+    <string name="vm_announcement_refresh">重新整理公告</string>
+    <string name="vm_announcement_pinned">置頂公告</string>
+    <string name="vm_announcement_pinned_short">置頂</string>
+    <string name="vm_announcement_latest">最新公告</string>
+    <string name="vm_announcement_publisher_fallback">公告</string>
+    <string name="vm_announcement_avatar_fallback">公</string>
+    <string name="vm_announcement_no_content">（本則公告沒有正文）</string>
+    <string name="vm_announcement_images">圖片</string>
+    <string name="vm_announcement_image_count">%1$d 張</string>
+    <string name="vm_announcement_last_updated">最後更新 %1$s</string>
+    <string name="vm_announcement_last_updated_author">最後更新 %1$s · 作者 %2$s</string>
+    <string name="vm_announcement_cover_image">封面圖片</string>
+    <string name="vm_announcement_image">公告圖片</string>
+    <string name="vm_announcement_cover">封面</string>
+    <string name="vm_announcement_close">關閉</string>
+    <string name="vm_announcement_view_detail">查看詳情</string>
+    <string name="vm_announcement_mark_all_read">全部標為已讀</string>
+    <string name="vm_announcement_empty_title">暫無公告</string>
+    <string name="vm_announcement_empty_desc">有新公告時會在這裡顯示</string>
+    <string name="vm_announcement_load_failed">公告載入失敗</string>
+    <string name="vm_announcement_refresh_failed">公告重新整理失敗：%1$s</string>
+    <string name="vm_announcement_load_failed_detail">公告載入失敗：%1$s</string>
+    <string name="vm_announcement_load_more_failed">載入更多失敗：%1$s</string>
+    <string name="vm_announcement_marked_read_count">已將 %1$d 則公告標為已讀</string>
+    <string name="vm_announcement_no_unread">沒有未讀公告</string>
+
+    <!-- 更新 -->
+    <string name="vm_update_new_version">發現新版本</string>
+    <string name="vm_update_prerelease">預發布</string>
+    <string name="vm_update_current_version">目前 %1$s</string>
+    <string name="vm_update_changelog">更新內容</string>
+    <string name="vm_update_no_changelog">暫無更新說明</string>
+    <string name="vm_update_netdisk">網盤更新</string>
+    <string name="vm_update_download_from_github">從 GitHub 下載</string>
+    <string name="vm_update_github_download">GitHub 下載</string>
+    <string name="vm_update_mirror_download">使用鏡像站下載</string>
+    <string name="vm_update_ignore">忽略本次</string>
+    <string name="vm_update_later">稍後</string>
+    <string name="vm_update_github_direct">GitHub 直連下載</string>
+    <string name="vm_update_mirror_accelerated">鏡像站加速下載</string>
+    <string name="vm_update_open_github_page">開啟 GitHub 頁面</string>
+
+    <!-- 關於 -->
+    <string name="vm_about_title">關於雲析</string>
+    <string name="vm_about_intro_title">應用程式簡介</string>
+    <string name="vm_about_intro_desc">雲析（YunX）是一款網盤 / 影片分享連結解析與高速下載工具。貼上連結即可：網盤分享能瀏覽內容並高速下載，影片連結能解析出直連與原圖，圖片 / 影片 / 音訊都支援線上預覽播放。</string>
+    <string name="vm_about_license">本專案基於 GNU AGPL-3.0 協議開源</string>
+    <string name="vm_about_version_footer">雲析 v%1$s · Made with ❤ and deepseek</string>
+    <string name="vm_about_icon">雲析圖示</string>
+    <string name="vm_about_app_name">雲析</string>
+    <string name="vm_about_version_name">YunX · v%1$s (%2$d)</string>
+    <string name="vm_about_tagline">網盤 / 影片連結解析與高速下載</string>
+    <string name="vm_about_supported_platforms">支援平台</string>
+    <string name="vm_about_drives">網盤</string>
+    <string name="vm_about_video_parsing">影片解析</string>
+    <string name="vm_about_feature_netdisk_title">網盤分享解析</string>
+    <string name="vm_about_feature_netdisk_desc">夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 / 光鴨 / 藍奏雲 / 藍奏雲優享版 直連識別</string>
+    <string name="vm_about_feature_video_title">影片連結解析</string>
+    <string name="vm_about_feature_video_desc">抖音 / 小紅書 / 快手 / 微博 / AcFun 免登入；嗶哩嗶哩登入後畫質更高，Pixiv 未登入只能解析部分公開作品、貼上瀏覽器 Cookie 後可解析全部作品</string>
+    <string name="vm_about_feature_preview_title">線上預覽與播放</string>
+    <string name="vm_about_feature_preview_desc">圖片 / 影片 / 音訊線上觀看（自動帶請求標頭），網盤裡的文字檔案也能開啟</string>
+    <string name="vm_about_feature_mux_title">音影片合軌</string>
+    <string name="vm_about_feature_mux_desc">嗶哩嗶哩高畫質是音影片分軌的，應用程式內部合軌，不需要額外安裝 ffmpeg</string>
+    <string name="vm_about_feature_download_title">高速分片下載</string>
+    <string name="vm_about_feature_download_desc">多執行緒並發 + 斷點續傳，充分利用頻寬</string>
+    <string name="vm_about_feature_cleanup_title">取鏈即刪</string>
+    <string name="vm_about_feature_cleanup_desc">轉存後立即清理，不留殘留</string>
+    <string name="vm_about_feature_credentials_title">憑證本地化</string>
+    <string name="vm_about_feature_credentials_desc">Cookie 加密入庫，僅存本機</string>
+    <string name="vm_about_features">功能特性</string>
+    <string name="vm_about_tech_stack">技術棧</string>
+    <string name="vm_about_disclaimer_title">免責聲明</string>
+    <string name="vm_about_disclaimer_body">本應用程式僅供個人學習與技術交流使用，請勿用於任何商業用途。下載內容版權歸原作者所有，請於下載後 24 小時內刪除。使用本應用程式產生的任何後果由使用者自行承擔。</string>
+    <string name="vm_about_preview_onboarding_title">重新預覽歡迎介面</string>
+    <string name="vm_about_preview_onboarding_desc">重新展示首次啟動引導頁</string>
+    <string name="vm_about_open_source_repo">開源倉庫</string>
+
+    <!-- 支持開發 -->
+    <string name="vm_support_title">支持開發</string>
+    <string name="vm_support_tagline">你的支持，是持續維護與更新的動力</string>
+    <string name="vm_support_free_notice">雲析完全免費開源，所有功能無需捐贈即可正常使用。如果你覺得它幫到了你，願意的話可以掃碼表達一下心意，你的支持會成為持續維護與更新的動力～</string>
+    <string name="vm_support_thanks">感謝每一位支持者 ❤</string>
+    <string name="vm_support_no_storage_permission">未授予儲存權限，無法儲存到相簿</string>
+    <string name="vm_support_saved_to_gallery">已儲存到相簿（Pictures/YunX）</string>
+    <string name="vm_support_save_failed">儲存失敗</string>
+    <string name="vm_support_saved">已儲存到相簿</string>
+    <string name="vm_support_save_qr_of">儲存 %1$s 的 QR 碼</string>
+    <string name="vm_support_saved_hint">✓ QR 碼已儲存到 相簿/Pictures/YunX</string>
+    <string name="vm_support_role_author">作者 CYQawa</string>
+    <string name="vm_support_role_collaborator">協作者 tidain</string>
+    <string name="vm_support_qr_hint">將 QR 碼儲存到相簿後，開啟微信「掃一掃」即可捐贈</string>
+    <string name="vm_support_next_card">（下一張）</string>
+    <string name="vm_support_swipe_hint">左右滑動切換</string>
+    <string name="vm_support_wechat_donate">微信掃碼捐贈</string>
+    <string name="vm_support_qr_content_desc">%1$s 的微信捐贈碼%2$s</string>
+
+    <!-- 主介面 -->
+    <string name="vm_main_checking_update">正在檢查更新…</string>
+    <string name="vm_main_update_check_failed">檢查更新失敗：%1$s</string>
+    <string name="vm_main_up_to_date">已是最新版本</string>
+    <string name="vm_main_release_unavailable">暫未取得 Release 資料，請先連網檢查一次更新</string>
+    <string name="vm_main_github_token_invalid_cleared">GitHub Token 無效或已過期，已自動清除並回退匿名限額，請重新設定</string>
+    <string name="vm_main_verify_done_logging_in">驗證完成，正在自動登入…</string>
+    <string name="vm_main_verify_incomplete">驗證未完成，請重試</string>
+    <string name="vm_main_announcements_unread">公告（%1$d 則未讀）</string>
+    <string name="vm_main_announcements">公告</string>
+    <string name="vm_main_bookmark_links">收藏網盤連結</string>
+    <string name="vm_main_sort_drives">排序網盤</string>
+    <string name="vm_main_github_account_failed">無法取得 GitHub 帳號資訊，請檢查網路或重新設定 Token</string>
+    <string name="vm_main_added_download_install_hint">已加入下載，完成後點擊「開啟」即可安裝</string>
+    <string name="vm_main_apk_not_found">未找到 APK 下載連結</string>
+    <string name="vm_main_added_download_mirror_install_hint">已透過鏡像站加入下載，完成後點擊「開啟」即可安裝</string>
+    <string name="vm_main_preparing_update_package">正在準備更新套件…</string>
+
+    <!-- GitHub Token -->
+    <string name="vm_github_token_usage">Token 僅用於提升 API 限額（匿名 60/小時，認證後 5000/小時）。經 Android Keystore AES-GCM 加密儲存。</string>
+    <string name="vm_github_token_howto_title">如何取得 Token：</string>
+    <string name="vm_github_token_howto_body">1. 電腦瀏覽器開啟 GitHub，右上角頭像 → Settings\n2. 左側 Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. 勾選 public_repo 即可瀏覽公開倉庫；如需在首頁看到自己的私有倉庫，再勾選 repo\n4. 有效期建議選 90 天或 No expiration，產生後複製貼上到上方輸入框</string>
+    <string name="vm_github_no_browser_link_copied">未找到可用瀏覽器，連結已複製</string>
+    <string name="vm_github_get_token">↗ 從 GitHub 取得 Token</string>
+    <string name="vm_github_token_security_tip">安全提示：僅給最小權限，勿勾選刪除/管理類權限；Token 不以明文儲存、不上傳，清除只需清空後儲存。</string>
+    <string name="vm_github_token_cleared">已清除 GitHub Token</string>
+    <string name="vm_github_token_saved">GitHub Token 已儲存（@%1$s）</string>
+    <string name="vm_github_token_save_failed">儲存失敗：本機加密金鑰暫時不可用，請稍後重試</string>
+    <string name="vm_github_token_invalid">Token 無效或已過期，請重新產生後再儲存</string>
+    <string name="vm_github_token_check_failed">無法校驗 Token（網路異常），請連網後重試</string>
+    <string name="vm_github_clear_token_title">清除 GitHub Token？</string>
+    <string name="vm_github_clear_token_message">清除後 GitHub API 回退匿名限額（60 次/小時/IP）。</string>
+
+    <!-- 收藏 -->
+    <string name="vm_bookmark_enter_link">請輸入網盤連結</string>
+    <string name="vm_bookmark_added">已收藏</string>
+    <string name="vm_bookmark_moved">已移動到「%1$s」</string>
+    <string name="vm_bookmark_deleted">已刪除</string>
+    <string name="vm_bookmark_pinned">已新增到首頁</string>
+    <string name="vm_bookmark_unpinned">已從首頁移除</string>
+    <string name="vm_bookmark_label_auto">已恢復自動文字</string>
+    <string name="vm_bookmark_label_updated">已更新捷徑文字</string>
+
+    <!-- 帳號 ViewModel -->
+    <string name="vm_ilanzou_enter_account_password">請輸入藍奏優享帳號和密碼</string>
+    <string name="vm_ilanzou_login_failed">藍奏優享登入失敗，請檢查帳號密碼</string>
+    <string name="vm_guangya_enter_account_password">請輸入光鴨帳號和密碼</string>
+    <string name="vm_guangya_login_failed">光鴨登入失敗，請檢查帳號密碼，或切換網頁登入</string>
+    <string name="vm_guangya_enter_phone">請輸入手機號碼</string>
+    <string name="vm_guangya_send_sms_failed">傳送驗證碼失敗</string>
+    <string name="vm_guangya_get_code_first">請先取得驗證碼</string>
+    <string name="vm_guangya_enter_code">請輸入驗證碼</string>
+    <string name="vm_guangya_sms_invalid">簡訊驗證碼錯誤或已過期，請重新取得</string>
+    <string name="vm_video_account_set_primary">已設為主要帳號</string>
+    <string name="vm_video_account_remark_updated">備註已更新</string>
+    <string name="vm_video_account_logged_out">已登出該帳號</string>
+    <string name="vm_video_account_logged_out_all">已登出%1$s全部帳號</string>
+    <string name="vm_xunlei_sms_send_failed_retry">簡訊傳送失敗，請重試或檢查網路</string>
+    <string name="vm_xunlei_sms_send_failed">簡訊傳送失敗</string>
+    <string name="vm_xunlei_login_failed_credentials">登入失敗，無法換取憑證</string>
+    <string name="vm_xunlei_login_failed_account">登入失敗，請檢查帳號密碼</string>
+    <string name="vm_xunlei_network_error">網路異常</string>
+    <string name="vm_xunlei_sms_login_failed">簡訊傳送失敗，請檢查網路後重試</string>
+    <string name="vm_xunlei_code_verify_failed">驗證碼校驗失敗</string>
+
+    <!-- 影片平台 -->
+    <string name="vm_video_platform_douyin">抖音</string>
+    <string name="vm_video_platform_xhs">小紅書</string>
+    <string name="vm_video_platform_kuaishou">快手</string>
+    <string name="vm_video_platform_weibo">微博</string>
+    <string name="vm_video_platform_acfun">AcFun</string>
+    <string name="vm_video_platform_bilibili">嗶哩嗶哩</string>
+    <string name="vm_video_platform_pixiv">Pixiv</string>
+    <string name="vm_video_benefit_xhs">小紅書網頁端要求登入後才能查看筆記，未登入解析會失敗</string>
+    <string name="vm_video_benefit_bilibili">登入後可解析更高清晰度；未登入只能拿到很低清的單檔案</string>
+    <string name="vm_video_benefit_pixiv">未登入只能拿到一部分公開作品；貼上瀏覽器裡的 Cookie 後可解析全部作品（含 R18 與受限作品）</string>
+</resources>

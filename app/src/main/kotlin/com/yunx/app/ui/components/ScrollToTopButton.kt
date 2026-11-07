@@ -38,8 +38,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import com.yunx.app.R
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
@@ -82,7 +84,7 @@ internal fun ScrollToTopButton(
         ) {
             Icon(
                 imageVector = Icons.Outlined.KeyboardArrowUp,
-                contentDescription = "返回顶部",
+                contentDescription = stringResource(R.string.content_desc_scroll_to_top),
                 modifier = Modifier.padding(bottom = 2.dp) // 视觉微调：箭头视觉居中
             )
         }

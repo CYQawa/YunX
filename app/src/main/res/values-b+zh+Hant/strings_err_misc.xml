@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    E5 分組：解析器 / 上傳 / 更新 / Gopeed 引擎 / 備份加密 / 日誌匯出中會顯示到介面的文案。
+-->
+<resources>
+    <!-- 網路請求公共例外 -->
+    <string name="em_http_blocked">%1$s 被風控攔截（HTTP %2$d）</string>
+    <string name="em_http_not_found">%1$s 不存在（HTTP %2$d）</string>
+    <string name="em_http_failed">%1$s 請求失敗（HTTP %2$d）</string>
+    <string name="em_http_not_json">%1$s 傳回的不是合法 JSON</string>
+    <string name="em_http_request_failed">請求失敗：%1$s</string>
+    <string name="em_what_parse">解析</string>
+
+    <!-- 解析結果錯誤提示 -->
+    <string name="em_parse_blocked">平台風控攔截了本次請求，請稍後重試</string>
+    <string name="em_parse_not_found">內容不存在、已刪除或不可見</string>
+    <string name="em_parse_network">網路請求失敗，請檢查網路後重試</string>
+    <string name="em_parse_unsupported">暫不支援此連結</string>
+    <string name="em_parse_failed">解析失敗，請稍後重試</string>
+
+    <!-- 請求對象名稱 -->
+    <string name="em_what_acfun_video">AcFun 影片</string>
+    <string name="em_what_bili_cookie">B站登入態驗證</string>
+    <string name="em_what_bili_video">B站影片資訊</string>
+    <string name="em_what_bili_playurl">B站取得直連</string>
+    <string name="em_what_bili_dash">B站取得 DASH 直連</string>
+    <string name="em_what_douyin_page">抖音分享頁</string>
+    <string name="em_what_kuaishou_page">快手作品頁</string>
+    <string name="em_what_xhs_note">小紅書筆記</string>
+    <string name="em_what_weibo_video">微博影片</string>
+    <string name="em_what_pixiv_artwork">Pixiv 作品資訊</string>
+    <string name="em_what_pixiv_pages">Pixiv 原圖清單</string>
+
+    <!-- 媒體清晰度 / 品質標籤 -->
+    <string name="em_quality_original">原圖</string>
+    <string name="em_quality_motion">動圖</string>
+    <string name="em_quality_dash">%1$s（分軌，下載後合軌）</string>
+    <string name="em_quality_number">畫質 %1$d</string>
+
+    <!-- AcFun -->
+    <string name="em_acfun_no_video_info">AcFun 影片資訊解析失敗（頁面裡沒有 videoInfo，可能已刪除）</string>
+    <string name="em_acfun_parse_failed">AcFun 影片資訊解析失敗</string>
+    <string name="em_acfun_no_stream">AcFun 未取得影片串流位址</string>
+
+    <!-- 快手 -->
+    <string name="em_kuaishou_no_init_state">快手頁面裡沒有 window.INIT_STATE（作品可能已刪除或頁面改版）</string>
+    <string name="em_kuaishou_invalid_json">window.INIT_STATE 不是合法 JSON</string>
+    <string name="em_kuaishou_no_photo">window.INIT_STATE 裡沒有作品資料</string>
+
+    <!-- B站 -->
+    <string name="em_bili_api_error">B站影片資訊介面傳回 code=%1$d msg=%2$s</string>
+    <string name="em_bili_missing_data">B站影片資訊缺少 data 欄位</string>
+    <string name="em_bili_missing_ids">B站影片資訊缺少 bvid/cid</string>
+    <string name="em_bili_no_stream">B站既未傳回單檔直連、也未傳回可合軌的分軌串流（code=%1$d msg=%2$s）：此影片可能是番劇/付費內容</string>
+    <string name="em_bili_durl_empty">B站 durl 為空</string>
+    <string name="em_bili_url_empty">B站直連為空（可能需要登入或已被風控）</string>
+
+    <!-- 抖音 -->
+    <string name="em_douyin_no_router_data">抖音分享頁裡沒有 window._ROUTER_DATA（作品可能已刪除或頁面改版）</string>
+    <string name="em_douyin_parse_failed">抖音解析失敗</string>
+    <string name="em_douyin_router_invalid_json">window._ROUTER_DATA 不是合法 JSON</string>
+    <string name="em_douyin_no_loader_data">window._ROUTER_DATA 裡沒有 loaderData</string>
+    <string name="em_douyin_no_page">window._ROUTER_DATA 裡既沒有 video_(id)/page 也沒有 note_(id)/page</string>
+    <string name="em_douyin_no_data">抖音沒有傳回此作品的資料（作品可能已刪除或不可見，也可能被風控攔截）[%1$s]</string>
+    <string name="em_douyin_ttwid_request_failed">ttwid 註冊請求失敗</string>
+    <string name="em_douyin_ttwid_failed">ttwid 註冊失敗（HTTP %1$d）</string>
+    <string name="em_douyin_ttwid_no_cookie">ttwid 註冊未傳回可用 Cookie</string>
+    <string name="em_flag_present">存在</string>
+    <string name="em_flag_missing">缺失</string>
+    <string name="em_detail_length">長度 %1$d</string>
+    <string name="em_detail_request_id">, 請求id=</string>
+
+    <!-- 小紅書 -->
+    <string name="em_xhs_parse_failed">小紅書解析失敗</string>
+    <string name="em_xhs_no_note">小紅書頁面裡沒有此筆記資料</string>
+    <string name="em_xhs_login_required">小紅書要求登入後才能檢視筆記內容，請先到「帳號」頁登入小紅書</string>
+    <string name="em_xhs_no_note_data">小紅書頁面裡沒有筆記資料（可能被風控攔截或頁面改版）</string>
+    <string name="em_xhs_state_parse_failed">小紅書頁面資料解析失敗</string>
+    <string name="em_xhs_video_no_stream">小紅書影片筆記沒有取得影片直連（筆記裡有 video 欄位，但 media.stream 裡沒有可用位址）</string>
+    <string name="em_xhs_link_invalid">小紅書分享連結失效或內容已刪除</string>
+    <string name="em_xhs_note_deleted">小紅書頁面裡沒有筆記資料（內容可能已刪除）</string>
+    <string name="em_xhs_watermark_fallback">%1$d 張圖片沒有可用的去浮水印原圖，已改用平台位址（可能帶浮水印）</string>
+
+    <!-- 微博 -->
+    <string name="em_weibo_unsupported_kind">不支援的微博連結形態：%1$s</string>
+    <string name="em_weibo_blocked">微博被風控攔截（HTTP %1$d），可更換 UA/Referer 或稍後重試</string>
+    <string name="em_weibo_not_found_code">微博內容不存在或已刪除（HTTP %1$d）</string>
+    <string name="em_weibo_fetch_failed">微博資料取得失敗（HTTP %1$d）</string>
+    <string name="em_weibo_not_json">微博介面傳回的不是 JSON（content-type: %1$s），多半被風控攔截</string>
+    <string name="em_weibo_parse_failed">微博傳回資料解析失敗</string>
+    <string name="em_weibo_not_found">微博內容不存在或已刪除</string>
+    <string name="em_weibo_video_parse_failed">微博影片介面傳回資料解析失敗</string>
+    <string name="em_weibo_video_empty">微博影片資料為空（作品可能已刪除）</string>
+
+    <!-- Pixiv -->
+    <string name="em_pixiv_login_expired">Pixiv 登入態已失效，請到「帳號」頁重新貼上 Cookie</string>
+    <string name="em_pixiv_login_required">此作品需要登入後才能解析（多為 R18 或受限作品），請在「帳號」頁貼上瀏覽器裡的 Cookie</string>
+    <string name="em_pixiv_error_message">Pixiv 作品資訊傳回錯誤：%1$s</string>
+    <string name="em_pixiv_missing_body">Pixiv 作品資訊缺少 body</string>
+    <string name="em_pixiv_ugoira_unsupported">Pixiv 動圖（ugoira）需要合成 GIF，目前版本暫不支援</string>
+    <string name="em_pixiv_no_images">Pixiv 未傳回任何可下載的原圖</string>
+
+    <!-- 上傳 -->
+    <string name="em_upload_invalid_range">上傳讀取範圍無效</string>
+    <string name="em_upload_open_failed">無法開啟所選檔案</string>
+    <string name="em_upload_read_incomplete">讀取本機檔案不完整，請重新選擇</string>
+    <string name="em_upload_unnamed_file">未命名檔案</string>
+    <string name="em_upload_size_unreadable">無法讀取所選檔案的大小，請換一個檔案後再試</string>
+    <string name="em_upload_file_failed">「%1$s」上傳失敗：%2$s</string>
+    <string name="em_upload_network_error">網路異常，請重試</string>
+    <string name="em_upload_interrupted">上傳已中斷，請重試</string>
+    <string name="em_upload_cancelled">上傳已取消</string>
+    <string name="em_upload_bad_credentials">網盤未傳回完整上傳憑證</string>
+    <string name="em_upload_service_error">網盤上傳服務傳回錯誤（HTTP %1$d）</string>
+    <string name="em_upload_create_multipart_failed">網盤無法建立分段上傳（HTTP %1$d）</string>
+    <string name="em_upload_no_multipart_task">網盤未建立分段上傳任務</string>
+    <string name="em_upload_part_failed">檔案上傳失敗（HTTP %1$d）</string>
+    <string name="em_upload_part_unconfirmed">網盤未確認上傳分段</string>
+    <string name="em_upload_merge_failed">網盤未完成分段合併</string>
+
+    <!-- Gopeed 引擎 -->
+    <string name="em_engine_path_absolute">請輸入絕對路徑（以 / 開頭）</string>
+    <string name="em_engine_dir_create_failed">無法建立此目錄：%1$s（請檢查路徑是否正確、上層目錄是否存在）</string>
+    <string name="em_engine_need_all_files">（請先授予「所有檔案存取」權限）</string>
+    <string name="em_engine_dir_not_writable">此目錄不可寫入：%1$s%2$s</string>
+    <string name="em_engine_stop_before_install">請先停止引擎，再匯入新的引擎檔案</string>
+    <string name="em_engine_dir_unavailable">引擎目錄無法使用</string>
+    <string name="em_engine_cannot_create_dir">無法建立目錄：%1$s</string>
+    <string name="em_engine_cannot_read_file">無法讀取所選檔案</string>
+    <string name="em_engine_aar_missing_so">此 AAR 中沒有 jni/%1$s/%2$s（本機首選 ABI：%3$s）</string>
+    <string name="em_engine_empty_so">解出的引擎檔案是空的</string>
+    <string name="em_engine_overwrite_failed">無法覆寫舊的引擎檔案：%1$s</string>
+    <string name="em_engine_write_failed">無法寫入引擎檔案：%1$s</string>
+    <string name="em_engine_restart_required">引擎已在此處理程序中載入過，新檔案需重新啟動應用程式後才會生效</string>
+    <string name="em_engine_stop_first">請先停止引擎</string>
+    <string name="em_engine_delete_failed">刪除失敗：%1$s</string>
+    <string name="em_engine_not_installed">尚未匯入 Gopeed 引擎（缺少 %1$s）</string>
+    <string name="em_engine_not_started">引擎未啟動</string>
+    <string name="em_engine_invoke_timeout">引擎呼叫逾時（60 秒）：%1$s %2$s</string>
+    <string name="em_engine_invoke_failed">引擎呼叫失敗：%1$s %2$s</string>
+    <string name="em_engine_response_unparsable">引擎傳回的內容無法解析：%1$s</string>
+    <string name="em_engine_error_code">引擎傳回錯誤碼 %1$d</string>
+    <string name="em_engine_no_config">引擎沒有傳回設定</string>
+    <string name="em_engine_no_task_status">引擎沒有傳回任務狀態</string>
+    <string name="em_engine_no_task_detail">引擎沒有傳回任務詳情</string>
+    <string name="em_engine_load_failed">引擎動態庫載入失敗（兩種方式都失敗）\n① System.load(%1$s)：%2$s\n② System.loadLibrary(\"gojni\")：%3$s</string>
+
+    <!-- Gopeed 內核下載 -->
+    <string name="em_kernel_notify_downloading">正在下載 Gopeed 內核</string>
+    <string name="em_kernel_fetch_version_failed">取得內核版本失敗：%1$s</string>
+    <string name="em_kernel_fetch_version_failed_short">取得內核版本失敗</string>
+    <string name="em_kernel_asset_missing">此版本（%1$s）中沒有 %2$s（本機 ABI：%3$s）；現有檔案：%4$s</string>
+    <string name="em_kernel_none">無</string>
+    <string name="em_kernel_no_pan_link">此版本的說明中沒有網盤連結，請改用 GitHub 下載</string>
+    <string name="em_kernel_source_github">GitHub 直連</string>
+    <string name="em_kernel_source_mirror">GitHub 鏡像站</string>
+    <string name="em_kernel_notify_importing">正在匯入 Gopeed 內核</string>
+    <string name="em_kernel_unknown_link">無法辨識此網盤連結：%1$s</string>
+    <string name="em_kernel_only_quark">目前僅支援夸克網盤的自動下載（此連結為 %1$s），請改用 GitHub 下載</string>
+    <string name="em_kernel_open_share_failed">開啟分享失敗：%1$s</string>
+    <string name="em_kernel_unknown_error">未知錯誤</string>
+    <string name="em_kernel_guest_link_failed">遊客取得連結失敗：%1$s</string>
+    <string name="em_kernel_link_failed">取得連結失敗：%1$s</string>
+    <string name="em_kernel_quark_guest">夸克網盤（遊客）</string>
+    <string name="em_kernel_quark_logged_in">夸克網盤（已登入）</string>
+    <string name="em_kernel_list_failed">列出分享目錄失敗：%1$s</string>
+    <string name="em_kernel_asset_not_in_root">分享中沒有 %1$s（根目錄：%2$s）</string>
+    <string name="em_kernel_asset_not_in_sub">分享中沒有 %1$s（%2$s/ 下：%3$s）</string>
+    <string name="em_kernel_list_empty">空</string>
+    <string name="em_kernel_download_failed">下載失敗</string>
+    <string name="em_kernel_download_failed_single">下載失敗（單流）</string>
+    <string name="em_kernel_downloaded_empty">下載的檔案是空的</string>
+    <string name="em_kernel_chunk_failed">分片下載失敗（%1$s）</string>
+    <string name="em_kernel_notify_merging">正在合併 Gopeed 內核分片</string>
+    <string name="em_kernel_size_mismatch">檔案大小校驗失敗：預期 %1$d 位元組，實際 %2$d 位元組（已拒絕匯入損壞的套件）</string>
+    <string name="em_kernel_sha_mismatch">內核套件校驗失敗（sha256 不符），已丟棄：%1$s</string>
+
+    <!-- 更新檢查 -->
+    <string name="em_update_unknown_error">未知錯誤</string>
+    <string name="em_update_bad_format">回應格式異常</string>
+    <string name="em_update_no_release">儲存庫尚無 Release</string>
+    <string name="em_update_rate_limited">GitHub 介面限流（HTTP %1$d），請稍後再試</string>
+    <string name="em_update_empty_response">回應為空</string>
+    <string name="em_update_missing_tag">Release 資料缺少版本號</string>
+
+    <!-- 備份與加密 -->
+    <string name="em_backup_password_too_short">備份口令至少 8 位</string>
+    <string name="em_backup_not_encrypted">不是有效的加密備份檔案</string>
+    <string name="em_backup_corrupted">加密備份檔案已損毀</string>
+    <string name="em_backup_not_valid">不是有效的雲析認證備份檔案</string>
+    <string name="em_credential_legacy_key_missing">舊加密金鑰已不存在，無法解密歷史憑證</string>
+
+    <!-- 日誌匯出 -->
+    <string name="em_log_export_title">雲析（YunX）日誌匯出\n</string>
+    <string name="em_log_export_time">匯出時間：%1$s\n</string>
+    <string name="em_log_app_version">應用程式版本：%1$s（%2$d）\n</string>
+    <string name="em_log_device">裝置：%1$s %2$s\n</string>
+    <string name="em_log_system">系統：Android %1$s（SDK %2$d）\n</string>
+    <string name="em_log_diagnostic_mode">診斷模式：%1$s\n</string>
+    <string name="em_log_enabled">已開啟</string>
+    <string name="em_log_disabled">關閉</string>
+    <string name="em_log_uid_pid">本應用程式 uid=%1$d，本次 pid=%2$d\n</string>
+    <string name="em_log_runtime_section">========== 執行日誌（logcat -d -v time）==========\n</string>
+    <string name="em_log_logcat_unavailable">（讀取日誌失敗：本機 logcat 無法使用）\n</string>
+    <string name="em_log_no_output">（無輸出）\n</string>
+    <string name="em_log_share_title">分享日誌</string>
+</resources>

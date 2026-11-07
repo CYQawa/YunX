@@ -82,11 +82,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.Manifest
@@ -99,6 +100,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.yunx.app.R
 import com.yunx.app.data.announcement.AnnouncementReadStore
 import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.download.ChunkDownloader
@@ -170,8 +172,11 @@ import com.yunx.app.ui.screens.BookmarkScreen
 import com.yunx.app.ui.screens.DownloadScreen
 import com.yunx.app.ui.screens.DriveScreen
 import com.yunx.app.ui.screens.DownloadEngineScreen
+import com.yunx.app.ui.screens.DownloadSettingsScreen
+import com.yunx.app.ui.screens.LanguageScreen
 import com.yunx.app.ui.screens.LinkOpenScreen
 import com.yunx.app.ui.screens.MultiAccountDownloadScreen
+import com.yunx.app.ui.screens.NetworkUpdateScreen
 import com.yunx.app.ui.screens.OnboardingScreen
 import com.yunx.app.ui.screens.ResolveScreen
 import com.yunx.app.ui.screens.SettingsScreen
@@ -206,6 +211,7 @@ import com.yunx.app.ui.viewmodel.XunleiAccountViewModel
 import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
 import com.yunx.app.ui.viewmodel.VideoAccountViewModel
 import com.yunx.app.util.AppLinks
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
@@ -238,6 +244,15 @@ internal const val OVERLAY_KEY_LINK_OPEN = "overlay-link-open"
 
 /** 多账号下载（两个实验性开关）设置页：从设置页那一行进入 */
 internal const val OVERLAY_KEY_MULTI_ACCOUNT = "overlay-multi-account"
+
+/** 语言选择页：从设置页「语言」那一行进入，整行长成整页 */
+internal const val OVERLAY_KEY_LANGUAGE = "overlay-language"
+
+/** 下载设置页：从设置页「下载设置」那一行进入，整行长成整页 */
+internal const val OVERLAY_KEY_DOWNLOAD_SETTINGS = "overlay-download-settings"
+
+/** 网络与更新页：从设置页「网络与更新」那一行进入，整行长成整页 */
+internal const val OVERLAY_KEY_NETWORK_UPDATE = "overlay-network-update"
 
 /**
  * 主页框架：
@@ -304,6 +319,9 @@ fun MainScreen(
     var showTheme by rememberSaveable { mutableStateOf(false) }
     var showLinkOpen by rememberSaveable { mutableStateOf(false) }
     var showMultiAccountDownload by rememberSaveable { mutableStateOf(false) }
+    var showLanguage by rememberSaveable { mutableStateOf(false) }
+    var showDownloadSettings by rememberSaveable { mutableStateOf(false) }
+    var showNetworkUpdate by rememberSaveable { mutableStateOf(false) }
     var showBookmarks by rememberSaveable { mutableStateOf(false) }
     var showGopeed by rememberSaveable { mutableStateOf(false) }
     var showAnnouncements by rememberSaveable { mutableStateOf(false) }
@@ -351,16 +369,18 @@ fun MainScreen(
      */
     val checkForUpdate: () -> Unit = {
         scope.launch {
-            SnackbarController.show("正在检查更新…")
+            SnackbarController.show(AppStrings.get(R.string.vm_main_checking_update))
             when (val result = UpdateChecker.fetchLatestRelease(ThemeController.acceptPrereleaseUpdate)) {
-                is UpdateChecker.CheckResult.Failure -> SnackbarController.show("检查更新失败：${result.reason}")
+                is UpdateChecker.CheckResult.Failure -> SnackbarController.show(
+                    AppStrings.get(R.string.vm_main_update_check_failed, result.reason)
+                )
                 is UpdateChecker.CheckResult.Success -> {
                     val release = result.release
                     latestRelease = release
                     if (UpdateChecker.compareVersions(release.tagName, UpdateChecker.currentVersion(context)) > 0) {
                         showUpdateSheet = true
                     } else {
-                        SnackbarController.show("已是最新版本")
+                        SnackbarController.show(AppStrings.get(R.string.vm_main_up_to_date))
                     }
                 }
             }
@@ -375,7 +395,7 @@ fun MainScreen(
         if (latestRelease != null) {
             showUpdateSheet = true
         } else {
-            SnackbarController.show("暂未获取到 Release 数据，请先联网检查一次更新")
+            SnackbarController.show(AppStrings.get(R.string.vm_main_release_unavailable))
         }
     }
     /**
@@ -470,7 +490,7 @@ fun MainScreen(
             scope.launch {
                 GitHubTokenStore.setToken(context, null)
                 githubHasTokenState = false
-                SnackbarController.show("GitHub Token 无效或已过期，已自动清除并回退匿名限额，请重新配置")
+                SnackbarController.show(AppStrings.get(R.string.vm_main_github_token_invalid_cleared))
             }
         }
     }
@@ -909,10 +929,10 @@ fun MainScreen(
                 showXunleiLogin = true // 回到登录页
                 if (success) {
                     // 设备已验证受信任：自动重试密码登录（应直接成功并自动关闭登录页）
-                    SnackbarController.show("验证完成，正在自动登录…")
+                    SnackbarController.show(AppStrings.get(R.string.vm_main_verify_done_logging_in))
                     xunleiViewModel.retryLoginAfterVerify()
                 } else {
-                    SnackbarController.show("验证未完成，请重试")
+                    SnackbarController.show(AppStrings.get(R.string.vm_main_verify_incomplete))
                 }
             },
             onBack = {
@@ -1053,6 +1073,9 @@ fun MainScreen(
         showTheme -> OVERLAY_KEY_THEME
         showLinkOpen -> OVERLAY_KEY_LINK_OPEN
         showMultiAccountDownload -> OVERLAY_KEY_MULTI_ACCOUNT
+        showLanguage -> OVERLAY_KEY_LANGUAGE
+        showDownloadSettings -> OVERLAY_KEY_DOWNLOAD_SETTINGS
+        showNetworkUpdate -> OVERLAY_KEY_NETWORK_UPDATE
         showBookmarks -> OVERLAY_KEY_BOOKMARKS
         showGopeed -> OVERLAY_KEY_GOPEED
         showAnnouncements -> OVERLAY_KEY_ANNOUNCEMENTS
@@ -1124,9 +1147,19 @@ fun MainScreen(
                     rememberSharedContentState(OVERLAY_KEY_LINK_OPEN),
                     animatedVisibilityScope = sourceScope
                 )
-                // 「多账号下载」行 → 多账号下载设置页：同样走容器变换
-                val multiAccountRowModifier = Modifier.sharedBounds(
-                    rememberSharedContentState(OVERLAY_KEY_MULTI_ACCOUNT),
+                // 「语言」行 → 语言选择页
+                val languageRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_LANGUAGE),
+                    animatedVisibilityScope = sourceScope
+                )
+                // 「下载设置」行 → 下载设置页
+                val downloadSettingsRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_DOWNLOAD_SETTINGS),
+                    animatedVisibilityScope = sourceScope
+                )
+                // 「网络与更新」行 → 网络与更新页
+                val networkUpdateRowModifier = Modifier.sharedBounds(
+                    rememberSharedContentState(OVERLAY_KEY_NETWORK_UPDATE),
                     animatedVisibilityScope = sourceScope
                 )
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -1138,7 +1171,7 @@ fun MainScreen(
                     //   自己再传 style 会覆盖注入值，柔性形变直接失效。
                     MediumFlexibleTopAppBar(
                         title = {
-                            Text(text = currentTab.title)
+                            Text(text = stringResource(currentTab.titleRes))
                         },
                         actions = {
                             // 公告入口：所有 Tab 都显示（收藏只在解析页出现，公告是全局入口），
@@ -1164,9 +1197,9 @@ fun MainScreen(
                                     Icon(
                                         imageVector = Icons.Outlined.Campaign,
                                         contentDescription = if (unreadAnnouncementCount > 0) {
-                                            "公告（$unreadAnnouncementCount 条未读）"
+                                            stringResource(R.string.vm_main_announcements_unread, unreadAnnouncementCount)
                                         } else {
-                                            "公告"
+                                            stringResource(R.string.vm_main_announcements)
                                         },
                                         modifier = Modifier.sharedBounds(
                                             rememberSharedContentState(OVERLAY_KEY_ANNOUNCEMENTS),
@@ -1195,7 +1228,7 @@ fun MainScreen(
                                         animatedVisibilityScope = sourceScope
                                     )
                                 ) {
-                                    Icon(Icons.Outlined.Bookmarks, contentDescription = "收藏网盘链接")
+                                    Icon(Icons.Outlined.Bookmarks, contentDescription = stringResource(R.string.vm_main_bookmark_links))
                                 }
                             }
                             // 账号页标题右上角：网盘列表排序 / 隐藏未登录
@@ -1205,7 +1238,7 @@ fun MainScreen(
                                 IconButton(onClick = { showDriveSort = true }) {
                                     Icon(
                                         imageVector = Icons.Outlined.SwapVert,
-                                        contentDescription = "排序网盘"
+                                        contentDescription = stringResource(R.string.vm_main_sort_drives)
                                     )
                                 }
                             }
@@ -1356,7 +1389,7 @@ fun MainScreen(
                                                 currentTab = MainTab.Resolve
                                             } else {
                                                 // 取不到 login：Token 无效/已过期，或网络异常
-                                                SnackbarController.show("无法获取 GitHub 账号信息，请检查网络或重新配置 Token")
+                                                SnackbarController.show(AppStrings.get(R.string.vm_main_github_account_failed))
                                             }
                                         }
                                     },
@@ -1408,13 +1441,17 @@ fun MainScreen(
                                     supportRowModifier = supportRowModifier,
                                     engineRowModifier = engineRowModifier,
                                     linkOpenRowModifier = linkOpenRowModifier,
-                                    multiAccountRowModifier = multiAccountRowModifier,
+                                    languageRowModifier = languageRowModifier,
+                                    downloadSettingsRowModifier = downloadSettingsRowModifier,
+                                    networkUpdateRowModifier = networkUpdateRowModifier,
                                     onThemeClick = { showTheme = true },
                                     onAboutClick = { showAbout = true },
                                     onSupportClick = { showSupport = true },
                                     onGopeedClick = { showGopeed = true },
                                     onLinkOpenClick = { showLinkOpen = true },
-                                    onMultiAccountDownloadClick = { showMultiAccountDownload = true },
+                                    onLanguageClick = { showLanguage = true },
+                                    onDownloadSettingsClick = { showDownloadSettings = true },
+                                    onNetworkUpdateClick = { showNetworkUpdate = true },
                                     backupManager = backupManager,
                                     // 手动检查更新与开发调试预览都复用 MainScreen 的更新弹窗状态
                                     onCheckUpdate = checkForUpdate,
@@ -1529,6 +1566,15 @@ fun MainScreen(
                             OVERLAY_KEY_MULTI_ACCOUNT -> MultiAccountDownloadScreen(
                                 onBack = { showMultiAccountDownload = false }
                             )
+                            OVERLAY_KEY_LANGUAGE -> LanguageScreen(onBack = { showLanguage = false })
+                            OVERLAY_KEY_DOWNLOAD_SETTINGS -> DownloadSettingsScreen(
+                                onBack = { showDownloadSettings = false },
+                                // 「多账号下载」入口透传给下载设置页
+                                onMultiAccountClick = { showMultiAccountDownload = true }
+                            )
+                            OVERLAY_KEY_NETWORK_UPDATE -> NetworkUpdateScreen(
+                                onBack = { showNetworkUpdate = false }
+                            )
                             OVERLAY_KEY_GOPEED -> DownloadEngineScreen(onBack = { showGopeed = false })
                             OVERLAY_KEY_ANNOUNCEMENTS -> AnnouncementScreen(
                                 viewModel = announcementViewModel,
@@ -1573,9 +1619,9 @@ fun MainScreen(
                             downloadManager.enqueue(url = apk.downloadUrl, fileName = apk.name)
                             currentTab = MainTab.Download
                         }
-                        SnackbarController.show("已加入下载，完成后点击「打开」即可安装")
+                        SnackbarController.show(AppStrings.get(R.string.vm_main_added_download_install_hint))
                     } else {
-                        SnackbarController.show("未找到 APK 下载链接")
+                        SnackbarController.show(AppStrings.get(R.string.vm_main_apk_not_found))
                     }
                 },
                 onDownloadMirror = {
@@ -1599,15 +1645,15 @@ fun MainScreen(
                             )
                             currentTab = MainTab.Download
                         }
-                        SnackbarController.show("已通过镜像站加入下载，完成后点击「打开」即可安装")
+                        SnackbarController.show(AppStrings.get(R.string.vm_main_added_download_mirror_install_hint))
                     } else {
-                        SnackbarController.show("未找到 APK 下载链接")
+                        SnackbarController.show(AppStrings.get(R.string.vm_main_apk_not_found))
                     }
                 },
                 // 网盘更新：优先自动「转存 → 取直链 → 下载」，不适合自动化时回落到解析页
                 onNetdiskUpdate = { link ->
                     showUpdateSheet = false
-                    SnackbarController.show("正在准备更新包…")
+                    SnackbarController.show(AppStrings.get(R.string.vm_main_preparing_update_package))
                     resolveViewModel.startUpdateDownload(link)
                 },
                 onLater = { showUpdateSheet = false },
@@ -1648,20 +1694,17 @@ fun MainScreen(
             text = {
                 Column {
                     Text(
-                        text = "Token 仅用于提升 API 限额（匿名 60/小时，认证后 5000/小时）。经 Android Keystore AES-GCM 加密存储。",
+                        text = stringResource(R.string.vm_github_token_usage),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "如何获取 Token：",
+                        text = stringResource(R.string.vm_github_token_howto_title),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "1. 电脑浏览器打开 GitHub，右上角头像 → Settings\n" +
-                            "2. 左侧 Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n" +
-                            "3. 勾选 public_repo 即可浏览公开仓库；如需在主页看到自己的私有仓库，再勾选 repo\n" +
-                            "4. 有效期建议选 90 天或 No expiration，生成后复制粘贴到上方输入框",
+                        text = stringResource(R.string.vm_github_token_howto_body),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1671,20 +1714,20 @@ fun MainScreen(
                             // 与设置页「GitHub 仓库」同一口径：没有可用浏览器就复制链接，不静默失败
                             if (!AppLinks.openGitHubTokenPage(context)) {
                                 copyToClipboard(context, AppLinks.GITHUB_TOKEN_PAGE)
-                                SnackbarController.show("未找到可用浏览器，链接已复制")
+                                SnackbarController.show(AppStrings.get(R.string.vm_github_no_browser_link_copied))
                             }
                         },
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Text(
-                            text = "↗ 从 GitHub 获取 Token",
+                            text = stringResource(R.string.vm_github_get_token),
                             style = MaterialTheme.typography.bodySmall,
                             textDecoration = TextDecoration.Underline
                         )
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "安全提示：仅给最小权限，勿勾选删除/管理类权限；Token 不明文保存、不上传，清除只需清空后保存。",
+                        text = stringResource(R.string.vm_github_token_security_tip),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1706,7 +1749,11 @@ fun MainScreen(
                                 Icon(
                                     if (passwordVisible) Icons.Outlined.Visibility
                                     else Icons.Outlined.VisibilityOff,
-                                    contentDescription = if (passwordVisible) "隐藏" else "显示"
+                                    contentDescription = if (passwordVisible) {
+                                        stringResource(R.string.vm_password_hide)
+                                    } else {
+                                        stringResource(R.string.vm_password_show)
+                                    }
                                 )
                             }
                         }
@@ -1721,7 +1768,7 @@ fun MainScreen(
                         GitHubTokenStore.setToken(context, null)
                         githubHasTokenState = false
                         showGitHubTokenDialog = false
-                        SnackbarController.show("已清除 GitHub Token")
+                        SnackbarController.show(AppStrings.get(R.string.vm_github_token_cleared))
                     } else {
                         // 保存前先校验：无效 Token 会让 GitHub 拒绝之后的所有请求（含公开仓库解析）
                         scope.launch {
@@ -1732,20 +1779,24 @@ fun MainScreen(
                                     if (GitHubTokenStore.setToken(context, input)) {
                                         githubHasTokenState = true
                                         showGitHubTokenDialog = false
-                                        SnackbarController.show("GitHub Token 已保存（@${check.login}）")
+                                        SnackbarController.show(
+                                            AppStrings.get(R.string.vm_github_token_saved, check.login)
+                                        )
                                     } else {
-                                        tokenError = "保存失败：本机加密密钥暂时不可用，请稍后重试"
+                                        tokenError = AppStrings.get(R.string.vm_github_token_save_failed)
                                     }
                                 }
-                                TokenCheck.Invalid -> tokenError = "Token 无效或已过期，请重新生成后再保存"
-                                TokenCheck.Unknown -> tokenError = "无法校验 Token（网络异常），请联网后重试"
+                                TokenCheck.Invalid -> tokenError =
+                                    AppStrings.get(R.string.vm_github_token_invalid)
+                                TokenCheck.Unknown -> tokenError =
+                                    AppStrings.get(R.string.vm_github_token_check_failed)
                             }
                         }
                     }
-                }) { Text("保存") }
+                }) { Text(stringResource(R.string.vm_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showGitHubTokenDialog = false }) { Text("取消") }
+                TextButton(onClick = { showGitHubTokenDialog = false }) { Text(stringResource(R.string.vm_cancel)) }
             }
         )
     }
@@ -1754,18 +1805,18 @@ fun MainScreen(
     if (showGitHubClearConfirm) {
         AlertDialog(
             onDismissRequest = { showGitHubClearConfirm = false },
-            title = { Text("清除 GitHub Token？") },
-            text = { Text("清除后 GitHub API 回退匿名限额（60 次/小时/IP）。") },
+            title = { Text(stringResource(R.string.vm_github_clear_token_title)) },
+            text = { Text(stringResource(R.string.vm_github_clear_token_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     GitHubTokenStore.setToken(context, null)
                     githubHasTokenState = false
                     showGitHubClearConfirm = false
-                    SnackbarController.show("已清除 GitHub Token")
-                }) { Text("清除", color = MaterialTheme.colorScheme.error) }
+                    SnackbarController.show(AppStrings.get(R.string.vm_github_token_cleared))
+                }) { Text(stringResource(R.string.vm_clear), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showGitHubClearConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showGitHubClearConfirm = false }) { Text(stringResource(R.string.vm_cancel)) }
             }
         )
     }
@@ -1835,10 +1886,10 @@ private fun MainBottomBar(
                     icon = {
                         Icon(
                             imageVector = if (currentTab == tab) tab.selectedIcon else tab.unselectedIcon,
-                            contentDescription = tab.title
+                            contentDescription = stringResource(tab.titleRes)
                         )
                     },
-                    label = { Text(tab.title) }
+                    label = { Text(stringResource(tab.titleRes)) }
                 )
             }
         }
@@ -1862,10 +1913,10 @@ private fun MainNavigationRail(
                 icon = {
                     Icon(
                         imageVector = if (currentTab == tab) tab.selectedIcon else tab.unselectedIcon,
-                        contentDescription = tab.title
+                        contentDescription = stringResource(tab.titleRes)
                     )
                 },
-                label = { Text(tab.title) },
+                label = { Text(stringResource(tab.titleRes)) },
                 alwaysShowLabel = currentTab == tab
             )
         }

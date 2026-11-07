@@ -16,9 +16,296 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
+<!--
+    默认语言 = 简体中文。其余语言见 values-b+zh+Hant / values-en / values-ja / values-fr。
+    ★ 语言名称本身（简体中文 / 繁體中文 / English / 日本語 / Français）在各语言下保持原文，
+      避免用户误切到看不懂的语言后找不回来。
+    ★ 目前只完成了「核心页面」（底部导航、设置主页、主题与外观页）的抽取，
+      其余页面的硬编码中文仍待后续批次迁移。
+-->
 <resources>
     <string name="app_name">云析</string>
     <!-- 系统「选中文本 → 更多」菜单里显示的条目名（见 AndroidManifest 的 ProcessTextLink）：
          比光秃秃一个「云析」更清楚要干什么 -->
     <string name="process_text_action">用云析解析</string>
+
+    <!-- ================= 语言 ================= -->
+    <string name="language_follow_system">跟随系统</string>
+    <string name="language_zh_hans">简体中文</string>
+    <string name="language_zh_hant">繁體中文</string>
+    <string name="language_en">English</string>
+    <string name="language_ja">日本語</string>
+    <string name="language_fr">Français</string>
+    <string name="section_language">语言</string>
+
+    <!-- ================= 底部导航 ================= -->
+    <string name="tab_resolve">解析</string>
+    <string name="tab_account">账号</string>
+    <string name="tab_download">下载</string>
+    <string name="tab_settings">设置</string>
+
+    <!-- ================= 通用操作 ================= -->
+    <string name="action_back">返回</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_apply">应用</string>
+
+    <!-- ================= 主题与外观页 ================= -->
+    <string name="theme_title">主题与外观</string>
+    <string name="section_appearance_mode">外观模式</string>
+    <string name="appearance_mode_hint">选择应用的明暗外观</string>
+    <string name="appearance_follow_system">跟随系统</string>
+    <string name="appearance_light">浅色</string>
+    <string name="appearance_dark">深色</string>
+    <string name="section_file_name">文件名显示</string>
+    <string name="file_name_hint">文件名过长时的展示方式</string>
+    <string name="file_name_marquee">跑马灯滚动</string>
+    <string name="file_name_multiline">多行显示</string>
+    <string name="theme_color_title">主题色</string>
+    <string name="theme_color_summary_dynamic">动态色彩（跟随壁纸）</string>
+    <string name="theme_color_summary_custom">自定义颜色</string>
+    <string name="theme_color_summary_default">默认蓝色</string>
+    <string name="theme_color_dynamic_switch">动态色彩</string>
+    <string name="theme_color_dynamic_hint">从系统壁纸自动取色</string>
+    <string name="theme_color_palette_label">主题颜色</string>
+    <string name="color_custom">自定义</string>
+    <string name="section_desktop_icon">桌面图标</string>
+    <string name="icon_classic">经典图标</string>
+    <string name="icon_new">新图标</string>
+    <string name="icon_apply_hint">Android 12+ 立即生效；部分设备需回到桌面或重启启动器后查看。</string>
+    <string name="color_hex_desc">十六进制颜色</string>
+    <string name="color_hue">色相</string>
+    <string name="color_saturation">饱和度</string>
+    <string name="color_value">明度</string>
+    <string name="color_blue">蓝色</string>
+    <string name="color_indigo">靛蓝</string>
+    <string name="color_purple">紫色</string>
+    <string name="color_rose">玫红</string>
+    <string name="color_red">红色</string>
+    <string name="color_orange">橙色</string>
+    <string name="color_gold">金黄</string>
+    <string name="color_green">绿色</string>
+    <string name="color_cyan">青色</string>
+    <string name="color_sky">天蓝</string>
+
+    <!-- ================= 设置主页 ================= -->
+    <string name="section_download">下载</string>
+    <string name="settings_download_engine">下载引擎</string>
+    <string name="settings_download_threads">下载线程数</string>
+    <string name="settings_multi_account_download">多账号下载</string>
+    <string name="settings_download_dir">下载保存目录</string>
+    <string name="settings_max_tasks">最大同时下载任务数</string>
+    <string name="settings_speed_limit">下载速度限制</string>
+    <string name="settings_auto_retry">失败自动重试</string>
+    <string name="settings_no_transfer">免转存下载</string>
+    <string name="settings_keep_downloading">锁屏后保持下载</string>
+    <string name="settings_notification_progress">通知栏下载进度</string>
+    <string name="section_appearance">外观</string>
+    <string name="settings_theme_entry">主题与外观</string>
+    <string name="section_general">通用</string>
+    <string name="settings_thumbnails">列表缩略图</string>
+    <string name="settings_clipboard_detect">自动识别剪贴板</string>
+    <string name="settings_check_update">检查更新</string>
+    <string name="settings_accept_prerelease">接受预发布版更新</string>
+    <string name="settings_github_mirror">GitHub 下载镜像</string>
+    <string name="settings_proxy">网络代理</string>
+    <string name="settings_export_log">导出日志</string>
+    <string name="section_auth_backup">认证备份</string>
+    <string name="settings_export_auth">导出认证信息</string>
+    <string name="settings_import_auth">导入认证信息</string>
+    <string name="section_link_open">链接唤起</string>
+    <string name="settings_link_open">网盘链接一键唤起</string>
+    <string name="section_about">关于</string>
+    <string name="settings_about_app">关于云析</string>
+    <string name="settings_support_dev">支持开发</string>
+    <string name="settings_qq_group">QQ 交流群</string>
+    <string name="settings_github_repo">GitHub 仓库</string>
+
+    <!-- ================= 二级设置页入口 ================= -->
+    <string name="settings_language">语言</string>
+    <string name="settings_language_desc">界面语言：%1$s</string>
+    <string name="settings_download_settings">下载设置</string>
+    <string name="settings_download_settings_desc">并发、限速、重试与后台下载</string>
+    <string name="settings_network_update">网络与更新</string>
+    <string name="settings_network_update_desc">预发布版本、下载镜像与网络代理</string>
+
+    <!-- ================= 二级页分区标题 ================= -->
+    <string name="section_download_strategy">下载策略</string>
+    <string name="section_download_background">后台与取链</string>
+    <string name="section_download_more">更多</string>
+    <string name="section_update">更新</string>
+    <string name="section_network">网络</string>
+
+    <!-- ================= 二级页提示 ================= -->
+    <string name="language_page_hint">选择应用界面语言。切换后界面立即刷新，无需重启应用。</string>
+    <string name="download_settings_page_hint">以下选项影响下载行为，修改后对新任务生效，正在下载的任务不受影响。</string>
+    <string name="network_update_page_hint">更新来源与网络连接相关设置。代理仅用于访问 GitHub 等海外资源，不影响网盘解析。</string>
+
+    <!-- ================= 设置页行描述 ================= -->
+    <string name="settings_download_engine_desc_gopeed">Gopeed 引擎（内置 gomobile 核心，按真实路径落盘）</string>
+    <string name="settings_download_engine_desc_builtin">内置分片下载器（默认，走 SAF/MediaStore 保存）</string>
+    <string name="settings_download_threads_desc">按网盘分别设置分片并发数（默认 32，最高 512）</string>
+    <string name="settings_download_dir_desc_engine">Gopeed：%1$s</string>
+    <string name="settings_download_dir_desc_engine_default">Gopeed 默认 %1$s（点击自定义）</string>
+    <string name="settings_download_dir_desc_custom">已自定义：%1$s</string>
+    <string name="settings_download_dir_desc_default">默认 %1$s（点击自定义）</string>
+    <string name="settings_theme_entry_desc">主题色、动态色彩与深色模式</string>
+    <string name="settings_thumbnails_desc_on">图片文件在列表里显示小图（需要向网盘取图，会多花一点流量）</string>
+    <string name="settings_thumbnails_desc_off">已关闭，列表只显示文件图标（不发取图请求）</string>
+    <string name="settings_clipboard_detect_desc_on">复制分享链接后自动提示解析</string>
+    <string name="settings_clipboard_detect_desc_off">已关闭，应用不再读取剪贴板</string>
+    <string name="settings_check_update_desc">检查 GitHub 是否有新版本可用</string>
+    <string name="settings_export_log_desc">导出崩溃日志与应用信息，便于排查问题</string>
+    <string name="settings_export_auth_desc">使用至少 8 位口令加密网盘与视频平台的 Cookie/JWT 后导出</string>
+    <string name="settings_import_auth_desc">选择加密或明文的认证备份文件，恢复网盘与视频平台登录</string>
+    <string name="settings_link_open_desc">点分享链接（或分享到云析）直接进来解析；可按平台逐个开关</string>
+    <string name="settings_about_app_desc">版本信息、支持平台与技术说明</string>
+    <string name="settings_support_dev_desc">微信扫码捐赠，支持项目持续维护</string>
+    <string name="settings_qq_group_desc">群号 %1$s（点击加入群聊，长按复制群号）</string>
+    <string name="settings_github_repo_desc">%1$s · 查看源码与反馈问题</string>
+
+    <!-- ================= 下载设置页 ================= -->
+    <string name="settings_max_tasks_desc">同时下载 %1$d 个任务，超出的排队等待（内置下载器与 Gopeed 引擎共用）</string>
+    <string name="settings_speed_limit_desc_unlimited">不限制下载速度</string>
+    <string name="settings_speed_limit_desc">限制为 %1$s</string>
+    <string name="settings_auto_retry_desc_never">失败后不自动重试</string>
+    <string name="settings_auto_retry_desc">失败后自动重试 %1$d 次（断点续传）</string>
+    <string name="settings_no_transfer_desc_on">夸克：解析出直链后直接下载，不把文件转存到自己的网盘</string>
+    <string name="settings_no_transfer_desc_off">夸克：先转存到临时目录再取链（下载完成后自动清理）</string>
+    <string name="settings_keep_downloading_desc">开启后下载时获取 WakeLock 维持网络，并可加入「忽略电池优化」白名单</string>
+    <string name="settings_notification_progress_desc_no_perm">通知未开启，下载通知将不可见（点击去开启）</string>
+    <string name="settings_notification_progress_desc_on">完整通知：进度条 + 下载速度</string>
+    <string name="settings_notification_progress_desc_simple">仅显示通知（隐藏下载速度）</string>
+    <string name="settings_multi_account_download_desc">实验性：同一网盘多个账号轮流取链 / 单文件多源提速</string>
+
+    <!-- ================= 网络与更新页 ================= -->
+    <string name="settings_accept_prerelease_desc_on">检查更新时包含 GitHub Pre-release（可能不稳定）</string>
+    <string name="settings_accept_prerelease_desc_off">只接收正式版更新</string>
+    <string name="settings_github_mirror_desc_custom">已自定义：%1$s</string>
+    <string name="settings_github_mirror_desc_default">默认：%1$s</string>
+    <string name="settings_proxy_desc_on">已启用：%1$s</string>
+    <string name="settings_proxy_desc_off">未启用（直连）</string>
+
+    <!-- ================= 设置页对话框 ================= -->
+    <string name="dialog_max_tasks_title">最大同时下载任务数</string>
+    <string name="option_max_tasks">同时下载 %1$d 个任务</string>
+    <string name="dialog_speed_limit_title">下载速度限制</string>
+    <string name="option_speed_unlimited">不限速</string>
+    <string name="option_custom_kb">自定义 KB/s</string>
+    <string name="dialog_auto_retry_title">失败自动重试</string>
+    <string name="option_retry_never">不自动重试</string>
+    <string name="option_retry_times">失败后自动重试 %1$d 次</string>
+    <string name="dialog_battery_title">保持后台下载</string>
+    <string name="dialog_battery_message">为确保障屏后下载不中断，建议将云析加入「忽略电池优化」白名单。是否前往系统设置？</string>
+    <string name="action_go_settings">前往设置</string>
+    <string name="action_not_now">暂不</string>
+    <string name="dialog_mirror_title">GitHub 下载镜像</string>
+    <string name="dialog_mirror_label">镜像前缀 URL</string>
+    <string name="dialog_mirror_hint">留空使用默认镜像：%1$s</string>
+    <string name="action_restore_default">恢复默认</string>
+    <string name="action_confirm">确定</string>
+    <string name="action_close">关闭</string>
+    <string name="dialog_proxy_title">网络代理</string>
+    <string name="dialog_proxy_enable">启用代理</string>
+    <string name="dialog_proxy_host">代理主机地址（如 127.0.0.1）</string>
+    <string name="dialog_proxy_port">代理端口（如 7890）</string>
+    <string name="dialog_proxy_hint">代理用于加速 GitHub 等海外资源；不启用时所有请求直连。</string>
+    <string name="dialog_engine_dir_title">自定义 Gopeed 下载目录</string>
+    <string name="dialog_engine_dir_message">Gopeed 只能按真实文件路径落盘，读不了系统文件选择器给的目录。请填一个绝对路径，例如 %1$s/YunX。</string>
+    <string name="dialog_engine_dir_label">目录路径</string>
+    <string name="dialog_log_title">导出日志</string>
+    <string name="dialog_log_choose">选择日志导出方式：</string>
+    <string name="dialog_log_share">分享日志（发送到其他应用）</string>
+    <string name="dialog_log_save">保存到下载目录</string>
+    <string name="dialog_log_clear">清空日志缓存（logcat -c）</string>
+    <string name="dialog_log_export_zip">导出诊断日志（zip）</string>
+    <string name="dialog_dev_title">开发调试</string>
+    <string name="dialog_dev_show_update">显示检查更新弹窗</string>
+    <string name="dialog_dev_diagnostic">诊断模式</string>
+    <string name="dialog_dev_diagnostic_on">详细日志写入 Android/data/%1$s/files/diagnostic_logs</string>
+    <string name="dialog_dev_diagnostic_off">关闭：不写任何诊断日志</string>
+    <string name="dialog_dev_download_debug">下载调试</string>
+    <string name="dialog_dev_download_debug_on">已在记录：下载页长按任务 → 调试信息（关闭会清空日志）</string>
+    <string name="dialog_dev_download_debug_off">关闭：不记录下载调试日志</string>
+    <string name="dialog_dev_full_sha">全量 SHA-256</string>
+    <string name="dialog_dev_full_sha_on">已开启：保存后记录整文件 SHA-256（写入调试日志）</string>
+    <string name="dialog_dev_full_sha_off">关闭：不算整文件摘要（默认，省 CPU）</string>
+    <string name="dialog_disable_debug_title">关闭下载调试？</string>
+    <string name="dialog_disable_debug_message">关闭后会清空已记录的全部下载调试日志，且无法恢复；「全量 SHA-256」也会被一并关闭（下次开启下载调试后需手动重新开启）。确定要关闭吗？</string>
+    <string name="action_close_and_clear">关闭并清空</string>
+    <string name="dialog_threads_title">下载线程数</string>
+    <string name="dialog_threads_hint">按网盘分别设置分片并发数；线程数不是越多越好，适当调整</string>
+    <string name="dialog_threads_fixed">固定 8 线程</string>
+    <string name="dialog_threads_count">%1$d 线程</string>
+    <string name="dialog_platform_threads_title">%1$s线程数</string>
+    <string name="loading_exporting_auth">正在导出认证…</string>
+    <string name="loading_importing_auth">正在导入认证…</string>
+    <string name="dialog_export_auth_title">导出认证信息</string>
+    <string name="dialog_export_auth_hint">设置至少 8 位密码对认证文件进行 AES 加密。密码请务必牢记，丢失无法找回。</string>
+    <string name="dialog_export_auth_password">加密密码（至少 8 位）</string>
+    <string name="dialog_export_scope">导出范围</string>
+    <string name="dialog_export_scope_logged_in">仅导出当前已登录的账号</string>
+    <string name="dialog_export_scope_all">导出全部绑定的账号</string>
+    <string name="action_export">导出</string>
+    <string name="dialog_import_auth_title">导入认证信息</string>
+    <string name="dialog_import_auth_hint">该备份文件已加密，请输入导出时设置的密码进行解密。</string>
+    <string name="dialog_import_auth_password">解密密码</string>
+    <string name="action_decrypt_import">解密并导入</string>
+
+    <!-- ================= 通用组件 ================= -->
+    <string name="badge_experimental">实验性</string>
+    <string name="content_desc_scroll_to_top">返回顶部</string>
+    <string name="content_desc_selected">已选择</string>
+    <string name="content_desc_close_menu">关闭菜单</string>
+    <string name="content_desc_open_menu">打开菜单</string>
+    <!-- Settings / NetworkUpdate snackbar & platform names -->
+    <string name="platform_quark">夸克网盘</string>
+    <string name="platform_uc">UC 网盘</string>
+    <string name="platform_xunlei">迅雷网盘</string>
+    <string name="platform_baidu">百度网盘</string>
+    <string name="platform_c139">139 网盘</string>
+    <string name="platform_pan123">123 云盘</string>
+    <string name="platform_pan115">115 网盘</string>
+    <string name="platform_guangya">光鸭云盘</string>
+    <string name="platform_ilanzou">蓝奏云优享版</string>
+    <string name="platform_lanzou">蓝奏云</string>
+    <string name="platform_github">GitHub</string>
+    <string name="snack_no_browser_link_copied">未找到可用浏览器，链接已复制</string>
+    <string name="snack_gopeed_dir_updated">Gopeed 下载目录已更新：%1$s</string>
+    <string name="snack_engine_dir_no_real_path">这个位置拿不到真实路径，请手动输入目录</string>
+    <string name="snack_dir_not_writable_hint">这个目录不可写，请手动输入或先授予「所有文件访问」</string>
+    <string name="snack_download_dir_updated">下载保存目录已更新</string>
+    <string name="snack_read_file_failed">读取文件失败</string>
+    <string name="snack_import_failed">导入失败：%1$s</string>
+    <string name="snack_auth_imported">已恢复 %1$d 个平台的认证信息</string>
+    <string name="snack_folder_picker_unavailable">无法打开文件夹选择器，请恢复或启用系统文件选择器后重试</string>
+    <string name="snack_download_dir_reset">已恢复默认下载目录</string>
+    <string name="snack_qq_not_installed">未安装 QQ，群号已复制：%1$s</string>
+    <string name="snack_qq_group_copied">群号已复制：%1$s</string>
+    <string name="snack_dir_not_writable">这个目录不可写</string>
+    <string name="snack_gopeed_dir_set">Gopeed 下载目录已设为 %1$s</string>
+    <string name="snack_log_shared">日志已分享</string>
+    <string name="snack_log_export_failed">导出日志失败</string>
+    <string name="snack_log_saved">已保存到下载目录</string>
+    <string name="snack_log_save_failed">保存失败</string>
+    <string name="snack_log_cleared">日志缓存已清空</string>
+    <string name="snack_log_clear_failed">清空失败</string>
+    <string name="snack_diag_log_shared">诊断日志已打包分享（%1$s）</string>
+    <string name="snack_diag_log_empty">暂时没有可导出的诊断日志</string>
+    <string name="snack_diagnostic_on">诊断模式已开启</string>
+    <string name="snack_diagnostic_off">诊断模式已关闭</string>
+    <string name="snack_download_debug_on">下载调试已开启</string>
+    <string name="snack_full_sha_on">已开启全量 SHA-256 校验</string>
+    <string name="snack_full_sha_off">已关闭全量 SHA-256 校验</string>
+    <string name="snack_download_debug_off">下载调试已关闭，日志已清空；全量 SHA-256 已一并关闭</string>
+    <string name="snack_export_failed">导出失败</string>
+    <string name="snack_auth_exported_encrypted">已加密导出到下载目录</string>
+    <string name="snack_auth_exported">已导出到下载目录</string>
+    <string name="snack_decrypt_failed">密码错误，解密失败</string>
+    <string name="snack_mirror_default_restored">已恢复默认镜像</string>
+    <string name="snack_mirror_invalid_prefix">镜像前缀需以 http:// 或 https:// 开头</string>
+    <string name="snack_mirror_updated">GitHub 镜像已更新</string>
+    <string name="snack_proxy_host_required">请填写代理主机地址</string>
+    <string name="snack_proxy_port_invalid">代理端口需为 1-65535 之间的数字</string>
+    <string name="snack_proxy_enabled">代理已启用：%1$s</string>
+    <string name="snack_proxy_disabled">已关闭代理，恢复直连</string>
 </resources>

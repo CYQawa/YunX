@@ -18,12 +18,14 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.Pan115AccountDao
 import com.yunx.app.data.db.Pan115AccountEntity
 import com.yunx.app.data.db.resolveAccountSlot
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.network.Pan115Api
 import com.yunx.app.data.network.Pan115Constants
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -60,7 +62,7 @@ class Pan115AccountRepository(
             Pan115AccountEntity(
                 id = slot.id,
                 cookie = value,
-                nickname = nickname.ifBlank { "115用户" },
+                nickname = nickname.ifBlank { AppStrings.get(R.string.er_pan115_default_nickname) },
                 isPrimary = slot.isPrimary,
                 remark = slot.remark
             )

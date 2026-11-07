@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.repository
 
+import com.yunx.app.R
 import com.yunx.app.data.db.XunleiAccountEntity
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.XunleiApi
@@ -25,6 +26,7 @@ import com.yunx.app.data.network.XunleiConstants
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.ShareSession
+import com.yunx.app.util.AppStrings
 
 /**
  * 迅雷分享解析仓库：解析分享 → 转存到临时目录 → 文件详情取直链。
@@ -56,7 +58,7 @@ class XunleiResolveRepository(
     private val guestDeviceId: String by lazy { XunleiApi.newDeviceId() }
 
     private suspend fun token(): String =
-        accountProvider() ?: throw IllegalStateException("请先登录迅雷网盘")
+        accountProvider() ?: throw IllegalStateException(AppStrings.get(R.string.er_xunlei_login_required))
 
     /**
      * 列表用 token：未登录返回空串 ⇒ 走**匿名分享接口**（带 Authorization 反而被判 unauthenticated）。
@@ -80,12 +82,12 @@ class XunleiResolveRepository(
         // refreshProvider 内部负责读取 refreshToken、刷新并持久化新 token
         // 刷新失败（refresh_token 被轮换/过期）→ 抛明确错误引导重新登录，而不是继续发无效请求
         if (refreshProvider?.invoke() == null) {
-            throw IllegalStateException("迅雷登录已过期，请重新登录")
+            throw IllegalStateException(AppStrings.get(R.string.er_xunlei_login_expired))
         }
     }
 
     private suspend fun deviceId(): String =
-        deviceIdProvider() ?: throw IllegalStateException("缺少设备标识")
+        deviceIdProvider() ?: throw IllegalStateException(AppStrings.get(R.string.er_device_id_missing))
 
     /** 设备标识：未登录时回退游客设备标识，别让「缺少设备标识」把匿名列目录挡在门外 */
     private suspend fun deviceIdOrGuest(): String = deviceIdProvider() ?: guestDeviceId
@@ -120,13 +122,13 @@ class XunleiResolveRepository(
     override suspend fun createSession(link: String, pwd: String?, cookie: String): Result<ShareSession> =
         runCatching {
             val shareId = ShareLinkParser.parse(link)?.shareId
-                ?: throw IllegalArgumentException("无法识别迅雷分享链接")
+                ?: throw IllegalArgumentException(AppStrings.get(R.string.er_share_link_unrecognized))
             val effectivePwd = pwd?.takeIf { it.isNotBlank() } ?: ShareLinkParser.parse(link)?.pwd ?: ""
             passCodes[shareId] = effectivePwd
             // 游客模式：未登录时 token 为空 → 匿名请求（无 Authorization 头）
             val access = accessOrEmpty()
             val result = api.getShare(shareId, effectivePwd, access, deviceIdOrGuest(), captcha())
-                ?: throw IllegalStateException("未获取到分享信息")
+                ?: throw IllegalStateException(AppStrings.get(R.string.er_share_info_missing))
             ShareSession(shareId, result.passCodeToken, result.title)
         }.fold(
             onSuccess = { Result.success(it) },
@@ -146,14 +148,14 @@ class XunleiResolveRepository(
                     val page = api.getShare(
                         session.shareId, passCodes[session.shareId] ?: "", access,
                         deviceIdOrGuest(), captcha(), pageToken
-                    ) ?: throw IllegalStateException("未获取到文件列表")
+                    ) ?: throw IllegalStateException(AppStrings.get(R.string.er_get_file_list_failed))
                     files += page.files
                     page.nextPageToken
                 } else {
                     val page = api.getShareDetail(
                         session.shareId, dirFid, session.stoken, access,
                         deviceIdOrGuest(), captcha(), pageToken
-                    ) ?: throw IllegalStateException("未获取到文件列表")
+                    ) ?: throw IllegalStateException(AppStrings.get(R.string.er_get_file_list_failed))
                     files += page.files
                     page.nextPageToken
                 }
@@ -170,7 +172,7 @@ class XunleiResolveRepository(
         // 临时目录必须建在「本次取链那个账号」的网盘里：多账号下载时各账号各自转存、各自清理
         val id = identityFor(cookie)
         api.ensureTempDir(id.token, id.deviceId, id.captcha)
-            ?: throw IllegalStateException("创建临时目录失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_create_temp_dir_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -192,7 +194,7 @@ class XunleiResolveRepository(
             accessToken = id.token,
             deviceId = id.deviceId,
             captchaToken = id.captcha
-        ) ?: throw IllegalStateException("转存失败")
+        ) ?: throw IllegalStateException(AppStrings.get(R.string.er_save_failed))
         newId
     }.fold(
         onSuccess = { Result.success(it) },
@@ -202,7 +204,7 @@ class XunleiResolveRepository(
     override suspend fun getDownloadLink(fid: String, cookie: String): Result<DownloadLink> = runCatching {
         val id = identityFor(cookie)
         api.getFileDetail(fid, id.token, id.deviceId, id.captcha)
-            ?: throw IllegalStateException("获取下载链接失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
     }.fold(
         onSuccess = { Result.success(it) },
         onFailure = { Result.failure(it) }
@@ -221,7 +223,7 @@ class XunleiResolveRepository(
         val dirFid = ensureTempDir(cookie).getOrThrow()
         val savedFid = transferFile(session, file, dirFid, cookie).getOrThrow()
         val link = api.getFileDetail(savedFid, id.token, id.deviceId, id.captcha)
-            ?: throw IllegalStateException("获取下载链接失败")
+            ?: throw IllegalStateException(AppStrings.get(R.string.er_get_download_url_failed))
         // 拿到直链后立即删除临时转存的文件（对齐官方 batchDelete；失败不阻断下载）
         runCatching { api.batchDelete(listOf(savedFid), id.token, id.deviceId, id.captcha) }
         link

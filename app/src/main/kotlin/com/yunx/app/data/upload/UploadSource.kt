@@ -22,6 +22,8 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -51,7 +53,7 @@ data class UploadSource(
      */
     fun open(resolver: ContentResolver, start: Long = 0L, end: Long = size): InputStream {
         if (start < 0 || end < start || end > size) {
-            throw IllegalArgumentException("上传读取范围无效")
+            throw IllegalArgumentException(AppStrings.get(R.string.em_upload_invalid_range))
         }
         val descriptor = runCatching { resolver.openFileDescriptor(uri, "r") }.getOrNull()
         if (descriptor != null) {
@@ -61,7 +63,8 @@ data class UploadSource(
             if (positioned) return BoundedInputStream(stream, end - start)
             runCatching { stream.close() }
         }
-        val raw = resolver.openInputStream(uri) ?: throw IOException("无法打开所选文件")
+        val raw = resolver.openInputStream(uri)
+            ?: throw IOException(AppStrings.get(R.string.em_upload_open_failed))
         if (start > 0) {
             val buffer = ByteArray(SKIP_BUFFER)
             var remaining = start
@@ -69,7 +72,7 @@ data class UploadSource(
                 val read = raw.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
                 if (read < 0) {
                     runCatching { raw.close() }
-                    throw IOException("读取本地文件不完整，请重新选择")
+                    throw IOException(AppStrings.get(R.string.em_upload_read_incomplete))
                 }
                 remaining -= read
             }
@@ -140,7 +143,7 @@ data class UploadSource(
                 ?: "application/octet-stream"
             return UploadSource(
                 uri = uri,
-                name = name.trim().ifBlank { "未命名文件" },
+                name = name.trim().ifBlank { AppStrings.get(R.string.em_upload_unnamed_file) },
                 size = size,
                 mimeType = type
             )

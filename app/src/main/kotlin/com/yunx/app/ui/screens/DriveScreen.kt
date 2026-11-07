@@ -86,9 +86,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.data.db.BaiduAccountEntity
 import com.yunx.app.data.db.C139AccountEntity
 import com.yunx.app.data.db.GuangYaAccountEntity
@@ -292,79 +294,79 @@ fun DriveScreen(
     // 夸克：登录态由数据库驱动；已登录则副标题显示昵称
     val quark = DriveAccount(
         id = "quark",
-        name = "夸克网盘",
-        description = quarkAccount?.nickname ?: "点击登录，支持解析下载",
-        avatarText = "夸",
+        name = stringResource(R.string.csb_drive_name_quark),
+        description = quarkAccount?.nickname ?: stringResource(R.string.csb_drive_desc_login),
+        avatarText = stringResource(R.string.csb_drive_avatar_quark),
         isLoggedIn = quarkAccount != null
     )
     val uc = DriveAccount(
         id = "uc",
-        name = "UC网盘",
-        description = ucAccount?.nickname ?: "点击登录，支持解析下载",
+        name = stringResource(R.string.csb_drive_name_uc),
+        description = ucAccount?.nickname ?: stringResource(R.string.csb_drive_desc_login),
         avatarText = "UC",
         isLoggedIn = ucAccount != null
     )
     val xunlei = DriveAccount(
         id = "xunlei",
-        name = "迅雷网盘",
-        description = xunleiAccount?.nickname ?: "点击登录，支持解析下载",
-        avatarText = "迅",
+        name = stringResource(R.string.csb_drive_name_xunlei),
+        description = xunleiAccount?.nickname ?: stringResource(R.string.csb_drive_desc_login),
+        avatarText = stringResource(R.string.csb_drive_avatar_xunlei),
         isLoggedIn = xunleiAccount != null
     )
     val baidu = DriveAccount(
         id = "baidu",
-        name = "百度网盘",
-        description = baiduAccount?.nickname ?: "点击登录，支持解析下载",
-        avatarText = "度",
+        name = stringResource(R.string.csb_drive_name_baidu),
+        description = baiduAccount?.nickname ?: stringResource(R.string.csb_drive_desc_login),
+        avatarText = stringResource(R.string.csb_drive_avatar_baidu),
         isLoggedIn = baiduAccount != null
     )
     val c139 = DriveAccount(
         id = "c139",
-        name = "139网盘",
-        description = c139Account?.nickname ?: "点击登录，支持解析下载",
+        name = stringResource(R.string.csb_drive_name_c139),
+        description = c139Account?.nickname ?: stringResource(R.string.csb_drive_desc_login),
         avatarText = "139",
         isLoggedIn = c139Account != null
     )
     val pan123 = DriveAccount(
         id = "pan123",
-        name = "123云盘",
-        description = pan123Account?.nickname ?: "点击登录，支持解析下载",
+        name = stringResource(R.string.csb_drive_name_pan123),
+        description = pan123Account?.nickname ?: stringResource(R.string.csb_drive_desc_login),
         avatarText = "123",
         isLoggedIn = pan123Account != null
     )
     val pan115 = DriveAccount(
         id = "pan115",
-        name = "115网盘",
-        description = pan115Account?.nickname ?: "点击登录，支持解析下载",
+        name = stringResource(R.string.csb_drive_name_pan115),
+        description = pan115Account?.nickname ?: stringResource(R.string.csb_drive_desc_login),
         avatarText = "115",
         isLoggedIn = pan115Account != null
     )
     val guangya = DriveAccount(
         id = "guangya",
-        name = "光鸭云盘",
-        description = guangyaAccount?.nickname ?: "点击登录，支持解析下载",
-        avatarText = "光",
+        name = stringResource(R.string.csb_drive_name_guangya),
+        description = guangyaAccount?.nickname ?: stringResource(R.string.csb_drive_desc_login),
+        avatarText = stringResource(R.string.csb_drive_avatar_guangya),
         isLoggedIn = guangyaAccount != null
     )
     val ilanzou = DriveAccount(
         id = "ilanzou",
-        name = "蓝奏云优享版",
-        description = ilanzouAccount?.nickname?.let { maskAccount(it) } ?: "点击登录，支持解析下载",
-        avatarText = "蓝优",
+        name = stringResource(R.string.csb_drive_name_ilanzou),
+        description = ilanzouAccount?.nickname?.let { maskAccount(it) } ?: stringResource(R.string.csb_drive_desc_login),
+        avatarText = stringResource(R.string.csb_drive_avatar_ilanzou),
         isLoggedIn = ilanzouAccount != null
     )
     val lanzou = DriveAccount(
         id = "lanzou",
-        name = "蓝奏云",
-        description = lanzouAccount?.nickname?.let { maskAccount(it) } ?: "点击登录，支持解析下载",
-        avatarText = "蓝",
+        name = stringResource(R.string.csb_drive_name_lanzou),
+        description = lanzouAccount?.nickname?.let { maskAccount(it) } ?: stringResource(R.string.csb_drive_desc_login),
+        avatarText = stringResource(R.string.csb_drive_avatar_lanzou),
         isLoggedIn = lanzouAccount != null
     )
     // GitHub：把 GitHub 当网盘浏览下载；此处仅做 Token 管理（提升 API 限额），浏览入口在解析页
     val github = DriveAccount(
         id = "github",
         name = "GitHub",
-        description = if (githubHasToken) "已配置 Token" else "点击配置 Token",
+        description = if (githubHasToken) stringResource(R.string.csb_drive_github_configured) else stringResource(R.string.csb_drive_github_config_prompt),
         avatarText = "GH",
         isLoggedIn = githubHasToken
     )
@@ -537,8 +539,8 @@ fun DriveScreen(
         0
     }
     val hiddenHint = listOfNotNull(
-        hiddenUnloggedCount.takeIf { it > 0 }?.let { "$it 个未登录的网盘" },
-        hiddenVideoCount.takeIf { it > 0 }?.let { "$it 个未登录的视频平台" }
+        hiddenUnloggedCount.takeIf { it > 0 }?.let { stringResource(R.string.csb_drive_hidden_drives_count, it) },
+        hiddenVideoCount.takeIf { it > 0 }?.let { stringResource(R.string.csb_drive_hidden_videos_count, it) }
     ).joinToString("、")
 
     // 进入网盘页加载空间详情（仅已登录平台）
@@ -651,11 +653,11 @@ fun DriveScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
-                    AccountSectionLabel("网盘账号")
+                    AccountSectionLabel(stringResource(R.string.csb_drive_section_accounts))
                 }
                 item {
                     Text(
-                        text = "登录后即可自动携带凭证解析与下载",
+                        text = stringResource(R.string.csb_drive_accounts_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -675,7 +677,7 @@ fun DriveScreen(
                     // 别让账号「凭空消失」：明确告诉用户藏了什么、去哪恢复
                     item(key = "drive_hidden_hint") {
                         Text(
-                            text = "已隐藏 $hiddenHint，点右上角排序可恢复",
+                            text = stringResource(R.string.csb_drive_hidden_hint, hiddenHint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 4.dp)
@@ -684,7 +686,7 @@ fun DriveScreen(
                 }
                 // 视频解析：平台列表与登录态全部由 VideoAccountSection 自己呈现，这里只透传数据与回调
                 item(key = "video_section_label") {
-                    AccountSectionLabel("视频解析")
+                    AccountSectionLabel(stringResource(R.string.csb_drive_section_video))
                 }
                 item(key = "video_section") {
                     VideoAccountSection(
@@ -874,7 +876,7 @@ fun DriveScreen(
                         onGitHubBrowseHome()
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                ) { Text("浏览我的主页", modifier = Modifier.fillMaxWidth()) }
+                ) { Text(stringResource(R.string.csb_drive_github_browse_home), modifier = Modifier.fillMaxWidth()) }
                 // 配置 Token
                 TextButton(
                     onClick = {
@@ -882,7 +884,7 @@ fun DriveScreen(
                         onGitHubTokenClick()
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                ) { Text("配置 Token", modifier = Modifier.fillMaxWidth()) }
+                ) { Text(stringResource(R.string.csb_drive_github_config_token), modifier = Modifier.fillMaxWidth()) }
                 // 清除 Token
                 TextButton(
                     onClick = {
@@ -892,7 +894,7 @@ fun DriveScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                 ) {
                     Text(
-                        "清除 Token",
+                        stringResource(R.string.csb_drive_github_clear_token),
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1053,13 +1055,13 @@ private fun DriveAccountCardContent(
             account.isLoggedIn && onMoreClick != null -> IconButton(onClick = onMoreClick) {
                 Icon(
                     imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "更多",
+                    contentDescription = stringResource(R.string.csb_drive_more),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             account.isLoggedIn -> LoginBadge(isLoggedIn = true)
             clickable -> Text(
-                text = "去登录",
+                text = stringResource(R.string.csb_drive_go_login),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -1078,7 +1080,7 @@ private fun QuotaInlineBar(quota: QuotaInfo) {
     }
     Column {
         Text(
-            text = "已用 ${formatBytes(quota.used)} / ${formatBytes(quota.total)}",
+            text = stringResource(R.string.csb_drive_quota_used, formatBytes(quota.used), formatBytes(quota.total)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1099,9 +1101,9 @@ private fun QuotaInlineBar(quota: QuotaInfo) {
 @Composable
 private fun LoginBadge(isLoggedIn: Boolean) {
     val (label, color) = if (isLoggedIn) {
-        "已登录" to MaterialTheme.colorScheme.primary
+        stringResource(R.string.csb_drive_logged_in) to MaterialTheme.colorScheme.primary
     } else {
-        "未登录" to MaterialTheme.colorScheme.outline
+        stringResource(R.string.csb_drive_not_logged_in) to MaterialTheme.colorScheme.outline
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -1159,7 +1161,7 @@ private fun DriveSortDialog(
     val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.42f).dp
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("排序与显示") },
+        title = { Text(stringResource(R.string.csb_drive_sort_title)) },
         text = {
             Column {
                 // 整行可点：Switch 本身触摸区不大，整行点能少一脚踩空
@@ -1171,9 +1173,9 @@ private fun DriveSortDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "隐藏未登录的网盘", style = MaterialTheme.typography.bodyLarge)
+                        Text(text = stringResource(R.string.csb_drive_hide_unlogged), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = "只显示已登录的账号，随时可以在这里恢复",
+                            text = stringResource(R.string.csb_drive_hide_unlogged_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1186,12 +1188,12 @@ private fun DriveSortDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "顺序",
+                        text = stringResource(R.string.csb_drive_order_label),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = onReset) { Text("恢复默认") }
+                    TextButton(onClick = onReset) { Text(stringResource(R.string.csb_drive_restore_default)) }
                 }
                 // 11 行会超出 AlertDialog 的默认高度：给高度上限再滚动，别把「完成」顶出屏幕
                 Column(
@@ -1222,7 +1224,7 @@ private fun DriveSortDialog(
                             )
                             if (!account.isLoggedIn) {
                                 Text(
-                                    text = "未登录",
+                                    text = stringResource(R.string.csb_drive_not_logged_in),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.padding(end = 4.dp)
@@ -1235,7 +1237,7 @@ private fun DriveSortDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.KeyboardArrowUp,
-                                    contentDescription = "上移 ${account.name}"
+                                    contentDescription = stringResource(R.string.csb_drive_move_up, account.name)
                                 )
                             }
                             IconButton(
@@ -1244,7 +1246,7 @@ private fun DriveSortDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.KeyboardArrowDown,
-                                    contentDescription = "下移 ${account.name}"
+                                    contentDescription = stringResource(R.string.csb_drive_move_down, account.name)
                                 )
                             }
                         }
@@ -1253,7 +1255,7 @@ private fun DriveSortDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("完成") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.csb_drive_done)) }
         }
     )
 }

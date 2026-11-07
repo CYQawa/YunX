@@ -54,7 +54,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
+import com.yunx.app.R
 import com.yunx.app.data.network.XunleiConstants
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
 import com.yunx.app.ui.components.YunXWavyLoading
@@ -182,10 +184,10 @@ fun XunleiVerifyWebViewScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("迅雷安全验证", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.lg_xunlei_verify_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lg_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)

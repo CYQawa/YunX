@@ -20,6 +20,7 @@ package com.yunx.app.ui.viewmodel
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
 import com.yunx.app.data.upload.UploadProgress
 import com.yunx.app.data.upload.UploadRunner
@@ -39,6 +40,7 @@ import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.ui.preview.CloudPreview
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -118,7 +120,7 @@ class C139CloudViewModel(
     }
 
     private suspend fun cookie(): String =
-        cookieProvider() ?: throw IllegalStateException("请先登录139网盘")
+        cookieProvider() ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_139))
 
     // ---------- 目录浏览 ----------
 
@@ -238,7 +240,7 @@ class C139CloudViewModel(
                 val files = api.listFolders(dirId, cookie())
                 _moveUiState.value = C139CloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _moveUiState.value = C139CloudUiState.Error(e.message ?: "加载失败")
+                _moveUiState.value = C139CloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -275,14 +277,14 @@ class C139CloudViewModel(
         if (!folder.isdir) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cookie = cookie()
                 val tasks = mutableListOf<Pair<ShareFile, String>>()
                 collectFolderFiles(folder.fid, folder.fname, cookie, tasks, 0)
                 if (tasks.isEmpty()) {
-                    cloudMessage = "文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_folder_empty)
                     actionFile = null
                     return@launch
                 }
@@ -290,7 +292,7 @@ class C139CloudViewModel(
                 tasks.forEachIndexed { index, (file, relPath) ->
                     // 用户点击「中断」：跳过剩余项（已入队任务保留下载）
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = api.getDownloadUrl(file.fid, cookie) ?: return@runCatching
                         downloadManager.enqueue(
@@ -304,14 +306,14 @@ class C139CloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断下载"
+                    cloudMessage = AppStrings.get(R.string.vc_download_interrupted)
                     actionFile = null
                     return@launch
                 }
-                cloudMessage = "已加入 $okCount 个下载任务"
+                cloudMessage = AppStrings.get(R.string.vc_download_added, okCount)
                 actionFile = null
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_folder_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -335,7 +337,7 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 val link = api.getDownloadUrl(file.fid, cookie())
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 pendingDownload = PendingDownload(
                     url = link.downloadUrl,
                     // 139 getDownloadUrl 响应不含 name → 用列表里的文件名（与分享链接下载一致，避免 fileId 乱码）
@@ -348,7 +350,7 @@ class C139CloudViewModel(
                 )
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -366,12 +368,12 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 val link = api.getDownloadUrl(file.fid, cookie())
-                    ?: throw IllegalStateException("获取下载链接失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_get_download_link_failed))
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
                 CloudPreview.open(file, link.downloadUrl, downloadHeaders(), isHls = link.isHls)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "预览失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_preview_failed)
             } finally {
                 isOperating = false
             }
@@ -393,11 +395,11 @@ class C139CloudViewModel(
                     platform = DownloadPlatform.C139,
                     headers = pd.headers
                 )
-                cloudMessage = "已加入下载：${pd.fileName}"
+                cloudMessage = AppStrings.get(R.string.vc_download_added_named, pd.fileName)
                 actionFile = null
                 downloadTriggered++
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_download_failed)
             } finally {
                 isOperating = false
             }
@@ -417,11 +419,11 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 api.renameFile(file.fid, newName, cookie())
-                cloudMessage = "已重命名"
+                cloudMessage = AppStrings.get(R.string.vc_renamed)
                 actionFile = null
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "重命名失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_rename_failed)
             } finally {
                 isOperating = false
             }
@@ -437,10 +439,10 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 api.createDir(parentId, newName, cookie())
-                cloudMessage = "已创建文件夹「$newName」"
+                cloudMessage = AppStrings.get(R.string.vc_folder_created, newName)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "新建文件夹失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_create_folder_failed)
             } finally {
                 isOperating = false
             }
@@ -454,14 +456,14 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 val taskId = api.moveFiles(listOf(file.fid), toDirId, cookie())
-                    ?: throw IllegalStateException("移动失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_move_failed))
                 pollTask(taskId)
-                cloudMessage = "已移动到目标目录"
+                cloudMessage = AppStrings.get(R.string.vc_moved)
                 actionFile = null
                 delay(1500)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -484,7 +486,7 @@ class C139CloudViewModel(
                 val info = api.createShare(coLst, caLst, ShareExpire.daysOrNull(expiredType), file.fname, cookie())
                 shareResult = info
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -498,14 +500,14 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 val taskId = api.deleteFiles(listOf(file.fid), cookie())
-                    ?: throw IllegalStateException("删除失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_delete_failed))
                 pollTask(taskId)
-                cloudMessage = "已删除「${file.fname}」"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_named, file.fname)
                 actionFile = null
                 delay(1200)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -520,7 +522,7 @@ class C139CloudViewModel(
         if (files.isEmpty()) return
         viewModelScope.launch {
             isOperating = true
-            folderProgress = "正在收集文件…"
+            folderProgress = AppStrings.get(R.string.vc_collecting_files)
             downloadCancelRequested = false
             try {
                 val cookie = cookie()
@@ -534,7 +536,7 @@ class C139CloudViewModel(
                     }
                 }
                 if (tasks.isEmpty()) {
-                    cloudMessage = "所选文件夹为空"
+                    cloudMessage = AppStrings.get(R.string.vc_selected_folder_empty)
                     exitMultiSelect()
                     return@launch
                 }
@@ -543,7 +545,7 @@ class C139CloudViewModel(
                 tasks.forEachIndexed { index, (file, relPath) ->
                     // 用户点击「中断」：跳过剩余项（已入队任务保留下载）
                     if (downloadCancelRequested) return@forEachIndexed
-                    folderProgress = "正在加入下载 ${index + 1}/${tasks.size}"
+                    folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
                         val link = api.getDownloadUrl(file.fid, cookie) ?: return@runCatching
                         downloadManager.enqueue(
@@ -558,18 +560,18 @@ class C139CloudViewModel(
                     }
                 }
                 if (downloadCancelRequested) {
-                    cloudMessage = "已中断批量下载"
+                    cloudMessage = AppStrings.get(R.string.vc_batch_download_interrupted)
                     exitMultiSelect()
                     return@launch
                 }
                 cloudMessage = if (failCount > 0) {
-                    "已加入 $okCount 个下载任务（$failCount 个失败）"
+                    AppStrings.get(R.string.vc_download_added_with_failures, okCount, failCount)
                 } else {
-                    "已加入 $okCount 个下载任务"
+                    AppStrings.get(R.string.vc_download_added, okCount)
                 }
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "批量下载失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_batch_download_failed)
             } finally {
                 isOperating = false
                 folderProgress = null
@@ -588,12 +590,12 @@ class C139CloudViewModel(
             try {
                 val coLst = files.filter { !it.isdir }.map { it.fid }
                 val caLst = files.filter { it.isdir }.map { it.fid }
-                val title = if (files.size == 1) files[0].fname else "分享 ${files.size} 个文件"
+                val title = if (files.size == 1) files[0].fname else AppStrings.get(R.string.vc_share_n_files, files.size)
                 val info = api.createShare(coLst, caLst, ShareExpire.daysOrNull(expiredType), title, cookie())
                 shareResult = info
                 exitMultiSelect()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "分享失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_share_failed)
             } finally {
                 isOperating = false
             }
@@ -608,14 +610,14 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 val taskId = api.moveFiles(files.map { it.fid }, toDirId, cookie())
-                    ?: throw IllegalStateException("移动失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_move_failed))
                 pollTask(taskId)
-                cloudMessage = "已移动 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_moved_items, files.size)
                 exitMultiSelect()
                 delay(1500)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "移动失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_move_failed)
             } finally {
                 isOperating = false
             }
@@ -630,14 +632,14 @@ class C139CloudViewModel(
             isOperating = true
             try {
                 val taskId = api.deleteFiles(files.map { it.fid }, cookie())
-                    ?: throw IllegalStateException("删除失败")
+                    ?: throw IllegalStateException(AppStrings.get(R.string.vc_delete_failed))
                 pollTask(taskId)
-                cloudMessage = "已删除 ${files.size} 项"
+                cloudMessage = AppStrings.get(R.string.vc_deleted_items, files.size)
                 exitMultiSelect()
                 delay(1200)
                 reloadCurrent()
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "删除失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_delete_failed)
             } finally {
                 isOperating = false
             }
@@ -659,7 +661,7 @@ class C139CloudViewModel(
                 val files = api.listCloudFiles(current.dirId, cookie())
                 _uiState.value = C139CloudUiState.Loaded(files, current.pathNames, current.dirId)
             } catch (e: Exception) {
-                cloudMessage = e.message ?: "刷新失败"
+                cloudMessage = e.message ?: AppStrings.get(R.string.vc_refresh_failed)
             } finally {
                 refreshing = false
             }
@@ -682,7 +684,7 @@ class C139CloudViewModel(
                 val files = api.listCloudFiles(dirId, cookie())
                 _uiState.value = C139CloudUiState.Loaded(files, pathNames, dirId)
             } catch (e: Exception) {
-                _uiState.value = C139CloudUiState.Error(e.message ?: "加载失败")
+                _uiState.value = C139CloudUiState.Error(e.message ?: AppStrings.get(R.string.vc_load_failed))
             }
         }
     }
@@ -694,11 +696,11 @@ class C139CloudViewModel(
             val status = api.getTask(taskId, cookie())
             if (status.status == "Succeed" || status.progress >= 100) return
             if (status.results.any { it.second.isNotBlank() && it.second != "0000" }) {
-                throw IllegalStateException("任务失败（${status.results.first().second}）")
+                throw IllegalStateException(AppStrings.get(R.string.vc_task_failed, status.results.first().second))
             }
             delay(800)
         }
-        throw IllegalStateException("任务超时")
+        throw IllegalStateException(AppStrings.get(R.string.vc_task_timeout))
     }
 
     // ---------- 上传（139 分片直传） ----------
@@ -711,8 +713,8 @@ class C139CloudViewModel(
         if (outcome.uploaded > 0 || outcome.failed > 0) reloadCurrent()
         cloudMessage = when {
             outcome.error != null -> outcome.error
-            outcome.cancelled -> "已取消上传"
-            else -> "已上传 ${outcome.uploaded} 个文件"
+            outcome.cancelled -> AppStrings.get(R.string.vc_upload_cancelled)
+            else -> AppStrings.get(R.string.vc_upload_done, outcome.uploaded)
         }
     }
 
@@ -725,7 +727,7 @@ class C139CloudViewModel(
     fun uploadFiles(resolver: ContentResolver, uris: List<Uri>) {
         val dir = (uiState.value as? C139CloudUiState.Loaded)?.dirId ?: "/"
         uploadRunner.start(resolver, uris) { io, source ->
-            val cookie = cookieProvider() ?: throw IllegalStateException("请先登录移动云盘")
+            val cookie = cookieProvider() ?: throw IllegalStateException(AppStrings.get(R.string.vc_login_required_cmcc))
             api.upload(io, source, dir, cookie)
         }
     }

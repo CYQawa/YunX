@@ -21,6 +21,7 @@ package com.yunx.app.data.gopeed
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.yunx.app.R
 import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.download.ChunkDownloader
 import com.yunx.app.data.download.ChunkResult
@@ -38,6 +39,7 @@ import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.repository.QuarkAccountRepository
 import com.yunx.app.data.repository.QuarkResolveRepository
 import com.yunx.app.data.update.UpdateChecker
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.LogRedactor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -110,7 +112,8 @@ object KernelProvisioner {
     private const val NOTIFY_INTERVAL_MS = 2000L
 
     /** 前台通知标题（保活期间不变，只有副标题里的进度在动） */
-    private const val NOTIFY_TITLE = "正在下载 Gopeed 内核"
+    private val NOTIFY_TITLE: String
+        get() = AppStrings.get(R.string.em_kernel_notify_downloading)
 
     /** 下载阶段（界面按它渲染那个不可关闭的进度弹窗） */
     sealed interface Phase {
@@ -239,7 +242,11 @@ object KernelProvisioner {
         _phase.value = Phase.FetchingRelease
         val result = when (val r = UpdateChecker.fetchLatestRelease(repo = KERNEL_REPO)) {
             is UpdateChecker.CheckResult.Failure ->
-                Result.failure(IllegalStateException("获取内核版本失败：${r.reason}"))
+                Result.failure(
+                    IllegalStateException(
+                        AppStrings.get(R.string.em_kernel_fetch_version_failed, r.reason)
+                    )
+                )
             is UpdateChecker.CheckResult.Success -> buildRelease(r.release)
         }
         result
@@ -252,7 +259,9 @@ object KernelProvisioner {
                 )
             }
             .onFailure {
-                _phase.value = Phase.Failed(it.message ?: "获取内核版本失败")
+                _phase.value = Phase.Failed(
+                    it.message ?: AppStrings.get(R.string.em_kernel_fetch_version_failed_short)
+                )
                 Log.e(TAG, "获取内核 Release 失败：${it.message}", it)
             }
         result
@@ -263,9 +272,14 @@ object KernelProvisioner {
         val asset = release.assets.firstOrNull { it.name.equals(want, ignoreCase = true) }
             ?: return Result.failure(
                 IllegalStateException(
-                    "这个版本（${release.tagName}）里没有 $want" +
-                        "（本机 ABI：${GopeedEngine.preferredAbi()}）；" +
-                        "现有包：${release.assets.joinToString("、") { it.name }.ifBlank { "无" }}"
+                    AppStrings.get(
+                        R.string.em_kernel_asset_missing,
+                        release.tagName,
+                        want,
+                        GopeedEngine.preferredAbi(),
+                        release.assets.joinToString("、") { it.name }
+                            .ifBlank { AppStrings.get(R.string.em_kernel_none) }
+                    )
                 )
             )
         return Result.success(
@@ -298,7 +312,9 @@ object KernelProvisioner {
                 val plan = when (source) {
                     Source.PAN -> {
                         val panUrl = release.panUrl
-                            ?: throw IllegalStateException("这个版本的说明里没有网盘链接，请改用 GitHub 下载")
+                            ?: throw IllegalStateException(
+                                AppStrings.get(R.string.em_kernel_no_pan_link)
+                            )
                         resolveFromPan(appContext, panUrl, release.assetName).also {
                             cleanupDirFid = it.cleanupDirFid
                             cleanupCookie = it.cleanupCookie
@@ -309,14 +325,14 @@ object KernelProvisioner {
                         url = release.directUrl,
                         size = release.assetSize,
                         headers = emptyMap(),
-                        label = "GitHub 直链",
+                        label = AppStrings.get(R.string.em_kernel_source_github),
                         digest = release.digest
                     )
                     Source.GITHUB_MIRROR -> Plan(
                         url = mirrorUrl(appContext, release.directUrl),
                         size = release.assetSize,
                         headers = emptyMap(),
-                        label = "GitHub 镜像站",
+                        label = AppStrings.get(R.string.em_kernel_source_mirror),
                         // 镜像站失效/超时时回退直连：与「网盘更新」的 APK 下载同一口径
                         fallbackUrl = release.directUrl,
                         digest = release.digest
@@ -329,7 +345,7 @@ object KernelProvisioner {
                 val bytes = downloadToPrivate(appContext, plan, target, chunkDir)
 
                 _phase.value = Phase.Importing
-                notifyStage("正在导入 Gopeed 内核", 100)
+                notifyStage(AppStrings.get(R.string.em_kernel_notify_importing), 100)
                 // 导入前必须先停引擎：installFromAar 不允许在 RUNNING 时覆盖 .so（Go 侧还占着它）
                 val wasRunning = GopeedEngine.state.value == GopeedEngine.State.RUNNING
                 val downloadDir = GopeedEngine.resolveDownloadDir(appContext)
@@ -418,10 +434,12 @@ object KernelProvisioner {
         assetName: String
     ): Plan {
         val parsed = ShareLinkParser.parse(panUrl)
-            ?: throw IllegalStateException("看不懂这个网盘链接：$panUrl")
+            ?: throw IllegalStateException(
+                AppStrings.get(R.string.em_kernel_unknown_link, panUrl)
+            )
         if (parsed.platform != SharePlatform.QUARK) {
             throw IllegalStateException(
-                "目前只支持夸克网盘的自动下载（这个链接是 ${parsed.platform}），请改用 GitHub 下载"
+                AppStrings.get(R.string.em_kernel_only_quark, parsed.platform)
             )
         }
         val api = QuarkApi()
@@ -432,13 +450,23 @@ object KernelProvisioner {
         }.getOrNull().orEmpty()
         val repo = QuarkResolveRepository(api)
         val session: ShareSession = repo.createSession(panUrl, parsed.pwd, cookie).getOrElse {
-            throw IllegalStateException("打开分享失败：${it.message ?: "未知错误"}")
+            throw IllegalStateException(
+                AppStrings.get(
+                    R.string.em_kernel_open_share_failed,
+                    it.message ?: AppStrings.get(R.string.em_kernel_unknown_error)
+                )
+            )
         }
         val file = findAsset(repo, session, cookie, assetName)
         val link: DownloadLink = if (cookie.isBlank()) {
             Log.d(TAG, "夸克未登录，走游客取链")
             repo.getGuestShareDownloadLink(session, file).getOrElse {
-                throw IllegalStateException("游客取链失败：${it.message ?: "未知错误"}")
+                throw IllegalStateException(
+                    AppStrings.get(
+                        R.string.em_kernel_guest_link_failed,
+                        it.message ?: AppStrings.get(R.string.em_kernel_unknown_error)
+                    )
+                )
             }
         } else {
             // 用户口径：转存优先，免转存兜底
@@ -447,7 +475,11 @@ object KernelProvisioner {
                 Log.w(TAG, "转存取链失败，回退免转存：${saved.exceptionOrNull()?.message}")
                 repo.getShareDownloadLinkWithoutSave(session, file, cookie).getOrElse { e ->
                     throw IllegalStateException(
-                        "取链失败：${e.message ?: saved.exceptionOrNull()?.message ?: "未知错误"}"
+                        AppStrings.get(
+                            R.string.em_kernel_link_failed,
+                            e.message ?: saved.exceptionOrNull()?.message
+                                ?: AppStrings.get(R.string.em_kernel_unknown_error)
+                        )
                     )
                 }
             }
@@ -467,7 +499,11 @@ object KernelProvisioner {
             url = link.downloadUrl,
             size = if (link.size > 0L) link.size else file.fsize,
             headers = headers,
-            label = if (cookie.isBlank()) "夸克网盘（游客）" else "夸克网盘（已登录）",
+            label = if (cookie.isBlank()) {
+                AppStrings.get(R.string.em_kernel_quark_guest)
+            } else {
+                AppStrings.get(R.string.em_kernel_quark_logged_in)
+            },
             cleanupDirFid = link.cleanupDirFid,
             cleanupCookie = if (cookie.isBlank()) guestCookie else cookie,
             repo = repo
@@ -485,19 +521,27 @@ object KernelProvisioner {
             firstOrNull { !it.isdir && it.fname.equals(assetName, ignoreCase = true) }
 
         val root = repo.listFiles(session, "0", cookie).getOrElse {
-            throw IllegalStateException("列出分享目录失败：${it.message ?: "未知错误"}")
+            throw IllegalStateException(
+                AppStrings.get(
+                    R.string.em_kernel_list_failed,
+                    it.message ?: AppStrings.get(R.string.em_kernel_unknown_error)
+                )
+            )
         }
         root.pick()?.let { return it }
         val sub = root.firstOrNull { it.isdir } ?: throw IllegalStateException(
-            "分享里没有 $assetName（根目录：${names(root)}）"
+            AppStrings.get(R.string.em_kernel_asset_not_in_root, assetName, names(root))
         )
         val inner = repo.listFiles(session, sub.fid, cookie).getOrNull().orEmpty()
         inner.pick()?.let { return it }
-        throw IllegalStateException("分享里没有 $assetName（${sub.fname}/ 下：${names(inner)}）")
+        throw IllegalStateException(
+            AppStrings.get(R.string.em_kernel_asset_not_in_sub, assetName, sub.fname, names(inner))
+        )
     }
 
     private fun names(files: List<ShareFile>): String =
-        files.joinToString("、") { it.fname }.ifBlank { "空" }
+        files.joinToString("、") { it.fname }
+            .ifBlank { AppStrings.get(R.string.em_kernel_list_empty) }
 
     // ---------- 分片下载（私有目录） ----------
 
@@ -541,7 +585,7 @@ object KernelProvisioner {
                 runCatching { target.delete() }
             }
         }
-        throw lastFailure ?: IllegalStateException("下载失败")
+        throw lastFailure ?: IllegalStateException(AppStrings.get(R.string.em_kernel_download_failed))
     }
 
     /** 单地址下载：能探到大小就分片并发，探不到就退回单流整文件 */
@@ -572,8 +616,10 @@ object KernelProvisioner {
             val ok = engine.downloadFull(TASK_ID, url, target, plan.headers, -1L) { bytes ->
                 reportProgress(counter, bytes, -1L, 1)
             }
-            if (!ok) throw IllegalStateException("下载失败（单流）")
-            if (target.length() <= 0L) throw IllegalStateException("下载下来的文件是空的")
+            if (!ok) throw IllegalStateException(AppStrings.get(R.string.em_kernel_download_failed_single))
+            if (target.length() <= 0L) {
+                throw IllegalStateException(AppStrings.get(R.string.em_kernel_downloaded_empty))
+            }
             return target.length()
         }
 
@@ -621,16 +667,16 @@ object KernelProvisioner {
             val ok = engine.downloadFull(TASK_ID, url, target, plan.headers, total) { bytes ->
                 reportProgress(single, bytes, total, 1)
             }
-            if (!ok) throw IllegalStateException("下载失败（单流）")
+            if (!ok) throw IllegalStateException(AppStrings.get(R.string.em_kernel_download_failed_single))
             return target.length()
         }
         if (results.any { it == ChunkResult.FAILED }) {
-            throw IllegalStateException("分片下载失败（$url）")
+            throw IllegalStateException(AppStrings.get(R.string.em_kernel_chunk_failed, url))
         }
 
         // 合并：边写边删分片，峰值 ≈ 目标文件本身
         _phase.value = Phase.Merging(0)
-        notifyStage("正在合并 Gopeed 内核分片", 100)
+        notifyStage(AppStrings.get(R.string.em_kernel_notify_merging), 100)
         val written = withContext(Dispatchers.IO) {
             FileOutputStream(target).use { out ->
                 engine.mergeChunksToStream(parts.map { it.first }, out, onProgress = { done ->
@@ -640,7 +686,9 @@ object KernelProvisioner {
             }
         }
         if (written != total) {
-            throw IllegalStateException("文件大小校验失败：期望 $total 字节，实际 $written 字节（已拒绝导入损坏的包）")
+            throw IllegalStateException(
+                AppStrings.get(R.string.em_kernel_size_mismatch, total, written)
+            )
         }
         Log.d(TAG, "分片合并完成：$written 字节 → ${target.absolutePath}")
         return written
@@ -708,7 +756,7 @@ object KernelProvisioner {
         if (expected.length != 64) return
         val actual = withDigest(target)
         if (actual != expected) {
-            throw IllegalStateException("内核包校验失败（sha256 不匹配），已丢弃：$actual")
+            throw IllegalStateException(AppStrings.get(R.string.em_kernel_sha_mismatch, actual))
         }
         Log.d(TAG, "sha256 校验通过：$actual")
     }

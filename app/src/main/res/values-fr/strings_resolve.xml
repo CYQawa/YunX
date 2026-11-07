@@ -1,0 +1,250 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    Groupe G6 : analyse / détail du partage / aperçu média et texte / favoris / onboarding et autorisations.
+-->
+<resources>
+    <!-- Noms d\'affichage des plateformes -->
+    <string name="rs_platform_quark">Quark Drive</string>
+    <string name="rs_platform_uc">UC Drive</string>
+    <string name="rs_platform_xunlei">Xunlei Drive</string>
+    <string name="rs_platform_baidu">Baidu Drive</string>
+    <string name="rs_platform_139">139 Drive</string>
+    <string name="rs_platform_123">123 Drive</string>
+    <string name="rs_platform_115">115 Drive</string>
+    <string name="rs_platform_guangya">Guangya Drive</string>
+    <string name="rs_platform_ilanzou">Lanczou Youxiang</string>
+    <string name="rs_platform_lanzou">Lanczou Drive</string>
+    <string name="rs_platform_generic">Drive</string>
+
+    <!-- Libellés courts des plateformes (tuiles des raccourcis d\'accueil) -->
+    <string name="rs_short_quark">Quark</string>
+    <string name="rs_short_xunlei">Xunlei</string>
+    <string name="rs_short_baidu">Baidu</string>
+    <string name="rs_short_guangya">Guangya</string>
+    <string name="rs_short_ilanzou">Youxiang</string>
+    <string name="rs_short_lanzou">Lanczou</string>
+
+    <!-- État analyse / transfert / téléchargement -->
+    <string name="rs_login_required_save">Connectez-vous à %1$s pour transférer (les invités ne peuvent que parcourir la liste des fichiers)</string>
+    <string name="rs_login_required_download">Connectez-vous à %1$s pour télécharger (les invités ne peuvent que parcourir la liste des fichiers)</string>
+    <string name="rs_login_first">Veuillez d\'abord vous connecter à %1$s</string>
+    <string name="rs_saved_to">Enregistré dans %1$s</string>
+    <string name="rs_transfer_failed">Échec du transfert</string>
+    <string name="rs_transfer_interrupted">Transfert groupé interrompu</string>
+    <string name="rs_transferred_count">%1$d élément(s) transféré(s) vers %2$s</string>
+    <string name="rs_collecting_files">Collecte des fichiers…</string>
+    <string name="rs_folder_empty">Le dossier sélectionné est vide</string>
+    <string name="rs_download_interrupted">Téléchargement groupé interrompu</string>
+    <string name="rs_no_direct_link">Aucun lien de téléchargement direct obtenu</string>
+    <string name="rs_added_downloads">%1$d tâche(s) de téléchargement ajoutée(s)</string>
+    <string name="rs_download_link_failed">Échec de l\'obtention du lien de téléchargement</string>
+    <string name="rs_added_and_failed">%1$d ajouté(s), %2$d en échec</string>
+    <string name="rs_failure_reason"> (raison : %1$s)</string>
+    <string name="rs_no_downloadable">Aucun fichier téléchargeable dans la sélection</string>
+    <string name="rs_download_failed">Échec du téléchargement</string>
+    <string name="rs_parse_failed_retry">Échec de l\'analyse, veuillez réessayer plus tard</string>
+    <string name="rs_add_download_failed">Échec de l\'ajout de la tâche de téléchargement, veuillez réessayer plus tard</string>
+    <string name="rs_no_audio_stream">Cette plateforme n\'a pas de flux audio séparé ; la vidéo complète sera d\'abord téléchargée, puis la piste audio extraite</string>
+    <string name="rs_unrecognized_link">Lien de partage non reconnu</string>
+    <string name="rs_parse_failed">Échec de l\'analyse</string>
+    <string name="rs_guest_retry_hint">%1$s (non connecté ; allez sur la page Drive pour vous connecter à %2$s et réessayer)</string>
+    <string name="rs_update_quark_guest_limit">Ce paquet de mise à jour dépasse la limite de téléchargement invité de Quark (environ 50 Mo). Connectez-vous à Quark Drive pour le télécharger directement.</string>
+    <string name="rs_repo_info_failed">Impossible d\'obtenir les informations du dépôt : %1$s/%2$s</string>
+    <string name="rs_parent_repo_failed">Impossible d\'ouvrir le dépôt amont : %1$s</string>
+    <string name="rs_github_code">Code</string>
+    <string name="rs_github_load_dir_failed">Échec du chargement du répertoire</string>
+    <string name="rs_github_download_zip">Télécharger le ZIP des sources complètes</string>
+    <string name="rs_github_load_releases_failed">Échec du chargement des Releases</string>
+    <string name="rs_badge_draft">Brouillon</string>
+    <string name="rs_badge_prerelease">Préversion</string>
+    <string name="rs_badge_latest">Dernière</string>
+    <string name="rs_load_more">Charger plus</string>
+    <string name="rs_release_not_found">Release introuvable : %1$s</string>
+    <string name="rs_owner_repos_failed">Impossible d\'obtenir les dépôts de %1$s</string>
+    <string name="rs_open_repo_failed">Impossible d\'ouvrir le dépôt : %1$s</string>
+    <string name="rs_unknown_dir">Répertoire inconnu : %1$s</string>
+    <string name="rs_missing_link">Lien de partage manquant</string>
+    <string name="rs_bookmarked_to">Ajouté aux favoris dans « %1$s »</string>
+    <string name="rs_cannot_get_link">Impossible d\'obtenir le lien de téléchargement</string>
+    <string name="rs_resolve_first">Veuillez d\'abord analyser un partage</string>
+    <string name="rs_online_preview">Aperçu en ligne</string>
+    <string name="rs_file_list_failed">Échec de l\'obtention de la liste des fichiers</string>
+
+    <!-- Détail du partage -->
+    <string name="rs_cancel_selection">Annuler la sélection</string>
+    <string name="rs_selected_count">%1$d sélectionné(s)</string>
+    <string name="rs_all_selected">Tout est sélectionné</string>
+    <string name="rs_tap_select_more">Touchez pour sélectionner plus de fichiers</string>
+    <string name="rs_deselect_all">Tout désélectionner</string>
+    <string name="rs_select_all">Tout sélectionner</string>
+    <string name="rs_back">Retour</string>
+    <string name="rs_share_content">Contenu partagé</string>
+    <string name="rs_total_items">%1$d élément(s) au total</string>
+    <string name="rs_match_items">%1$d / %2$d correspondant(s)</string>
+    <string name="rs_add_to_bookmark">Ajouter aux favoris</string>
+    <string name="rs_close_search">Fermer la recherche</string>
+    <string name="rs_search_files">Rechercher des fichiers</string>
+    <string name="rs_search_current_dir">Rechercher dans ce dossier</string>
+    <string name="rs_clear_search">Effacer la recherche</string>
+    <string name="rs_dir_empty">Ce dossier est vide</string>
+    <string name="rs_no_match_files">Aucun fichier ne correspond à « %1$s »</string>
+    <string name="rs_transfer">Transférer</string>
+    <string name="rs_download">Télécharger</string>
+    <string name="rs_large_file_title">Téléchargement d\'un gros fichier</string>
+    <string name="rs_baidu_limit_message">Baidu Drive limite le débit des non-membres au-delà de 300 Mo ; le téléchargement peut être lent. Continuer ?</string>
+    <string name="rs_dont_show_again">Ne plus afficher ce message</string>
+    <string name="rs_continue_download">Continuer le téléchargement</string>
+    <string name="rs_cancel">Annuler</string>
+    <string name="rs_interrupt">Interrompre</string>
+    <string name="rs_batch_processing">Traitement par lots</string>
+    <string name="rs_fetching_link_progress">Obtention du lien de téléchargement %1$s</string>
+    <string name="rs_batch_processing_wait">Traitement par lots en cours, veuillez patienter…</string>
+    <string name="rs_guest_notice_quark">Navigation en invité : les petits fichiers jusqu\'à environ 50 Mo peuvent être téléchargés directement ; les fichiers plus volumineux et les transferts nécessitent une connexion sur la page Drive</string>
+    <string name="rs_guest_notice_uc">Navigation en invité : le téléchargement est autorisé sans limite de taille ; les transferts nécessitent une connexion sur la page Drive</string>
+    <string name="rs_guest_notice_default">Navigation en invité : vous pouvez consulter la liste des fichiers ; le téléchargement et les transferts nécessitent une connexion sur la page Drive</string>
+    <string name="rs_go_up">Remonter d\'un niveau</string>
+    <string name="rs_root_dir">Racine</string>
+    <string name="rs_folder">Dossier</string>
+    <string name="rs_more">Plus</string>
+
+    <!-- Page d\'analyse -->
+    <string name="rs_fetch_link_title">Obtenir le lien de téléchargement</string>
+    <string name="rs_fetching_link_wait">Obtention du lien de téléchargement, veuillez patienter…</string>
+    <string name="rs_input_hint">Collez un lien de partage ou un code pour analyser le contenu partagé en un geste</string>
+    <string name="rs_input_placeholder">Ex. : https://pan.quark.cn/s/xxxx, un code Xunlei ou un code 139 Drive</string>
+    <string name="rs_clear_link">Effacer le lien</string>
+    <string name="rs_extract_code_optional">Code d\'extraction (facultatif)</string>
+    <string name="rs_auto_or_manual">Détection automatique ou saisie manuelle</string>
+    <string name="rs_clear_code">Effacer le code</string>
+    <string name="rs_parsing">Analyse…</string>
+    <string name="rs_start_resolve">Lancer l\'analyse</string>
+    <string name="rs_shortcuts">Raccourcis</string>
+    <string name="rs_manage">Gérer</string>
+    <string name="rs_no_shortcuts">Aucun raccourci d\'accueil pour l\'instant</string>
+    <string name="rs_shortcuts_hint">Sur la page « Liens en favoris », appuyez longuement sur un favori → Ajouter à l\'accueil</string>
+    <string name="rs_remove_from_home">Retirer de l\'accueil</string>
+    <string name="rs_remove_shortcut_msg">« %1$s » ne figurera plus dans les raccourcis d\'accueil</string>
+    <string name="rs_remove">Retirer</string>
+    <string name="rs_loading">Chargement…</string>
+    <string name="rs_detected_share">Lien de partage %1$s détecté</string>
+    <string name="rs_paste_and_resolve_q">Le coller dans le champ et lancer l\'analyse ?</string>
+    <string name="rs_ignore">Ignorer</string>
+    <string name="rs_paste_and_resolve">Coller et analyser</string>
+
+    <!-- Aperçu -->
+    <string name="rs_preview">Aperçu</string>
+    <string name="rs_preview_image">Aperçu de l\'image</string>
+    <string name="rs_open_with_text_preview">Ouvrez ce fichier avec « Aperçu texte »</string>
+    <string name="rs_image_load_failed">Échec du chargement de l\'image : le lien direct a peut-être expiré ou nécessite une authentification ; téléchargez le fichier pour le consulter localement</string>
+    <string name="rs_online_play_failed">Échec de la lecture en ligne (%1$s) : téléchargez le fichier et ouvrez-le dans un lecteur local</string>
+    <string name="rs_content_empty">Le fichier est vide ou ne peut pas être décodé</string>
+    <string name="rs_read_file_failed">Échec de la lecture du fichier : %1$s</string>
+    <string name="rs_unknown_error">Erreur inconnue</string>
+    <string name="rs_reading_prefix">Lecture des premiers 512 Ko…</string>
+    <string name="rs_text_file">Fichier texte</string>
+    <string name="rs_truncated_notice">Tronqué ; téléchargez le fichier pour voir le contenu complet (seuls les premiers 512 Ko sont lus)</string>
+    <string name="rs_no_preview_content">Rien à prévisualiser</string>
+    <string name="rs_preview_response_empty">La réponse est vide</string>
+
+    <!-- Favoris -->
+    <string name="rs_bookmarks_title">Liens en favoris</string>
+    <string name="rs_add_bookmark">Ajouter un favori</string>
+    <string name="rs_link_copied">Lien copié</string>
+    <string name="rs_all">Tout</string>
+    <string name="rs_home">Accueil</string>
+    <string name="rs_no_bookmarks">Aucun lien en favori pour l\'instant</string>
+    <string name="rs_no_bookmarks_hint">Appuyez sur « Ajouter aux favoris » dans la page d\'analyse, ou sur + en haut à droite pour en ajouter un manuellement</string>
+    <string name="rs_share_link_label">Lien de partage</string>
+    <string name="rs_paste_share_link">Coller le lien de partage</string>
+    <string name="rs_title_optional">Titre (facultatif)</string>
+    <string name="rs_category">Catégorie</string>
+    <string name="rs_custom">Personnalisée</string>
+    <string name="rs_custom_category">Catégorie personnalisée</string>
+    <string name="rs_bookmark">Favori</string>
+    <string name="rs_edit_category">Modifier la catégorie</string>
+    <string name="rs_confirm">OK</string>
+    <string name="rs_resolve">Analyser</string>
+    <string name="rs_copy_link">Copier le lien</string>
+    <string name="rs_add_to_home">Ajouter à l\'accueil</string>
+    <string name="rs_custom_icon_text">Texte de l\'icône personnalisé</string>
+    <string name="rs_delete">Supprimer</string>
+    <string name="rs_custom_icon_hint">Texte affiché dans la tuile du raccourci d\'accueil, %1$d caractères maximum.</string>
+    <string name="rs_color_block_text">Texte de la tuile</string>
+    <string name="rs_color_block_auto">Laissez vide pour utiliser les %1$d premiers caractères du titre</string>
+    <string name="rs_save">Enregistrer</string>
+
+    <!-- Onboarding -->
+    <string name="rs_app_name">YunX</string>
+    <string name="rs_app_icon_desc">Icône YunX</string>
+    <string name="rs_onboarding_tagline">Analyse de liens Drive et vidéo · Aperçu en ligne · Téléchargements rapides</string>
+    <string name="rs_fact_drives">10 drives</string>
+    <string name="rs_fact_video_platforms">7 plateformes vidéo</string>
+    <string name="rs_fact_chunked_download">Téléchargement segmenté</string>
+    <string name="rs_fact_free">Entièrement gratuit</string>
+    <string name="rs_open_source_repo">Dépôt open source</string>
+    <string name="rs_qq_not_installed">QQ n\'est pas installé ; numéro de groupe copié : %1$s</string>
+    <string name="rs_qq_group">Groupe QQ %1$s</string>
+    <string name="rs_open_qq">Ouvrir QQ</string>
+    <string name="rs_read_before_use">À lire avant utilisation</string>
+    <string name="rs_terms_intro">YunX est un outil open source. Les conditions et la clause de non-responsabilité sont ci-dessous.</string>
+    <string name="rs_terms_title">Conditions d\'utilisation</string>
+    <string name="rs_terms_1">Cette application est un outil open source d\'analyse et de téléchargement de liens de partage de drives, destiné uniquement à l\'étude personnelle et aux échanges techniques. Ne l\'utilisez à aucune fin commerciale.</string>
+    <string name="rs_terms_2">Respectez les conditions d\'utilisation des drives que vous utilisez ainsi que les lois locales. N\'utilisez pas cette application pour télécharger ou diffuser des contenus contrefaisants ou illégaux.</string>
+    <string name="rs_terms_3">Les identifiants de compte Drive (Cookie / Token) sont stockés uniquement sur cet appareil et ne sont jamais envoyés à un serveur.</string>
+    <string name="rs_terms_4">L\'application est fournie « en l\'état ». Aucune garantie n\'est donnée quant au taux de réussite de l\'analyse ou à la vitesse de téléchargement, et aucun engagement n\'est pris sur vos résultats.</string>
+    <string name="rs_disclaimer_title">Clause de non-responsabilité</string>
+    <string name="rs_disclaimer_1">Le contenu téléchargé reste la propriété de ses auteurs originaux. Veuillez le supprimer dans les 24 heures suivant le téléchargement.</string>
+    <string name="rs_disclaimer_2">Vous êtes seul responsable des conséquences de l\'utilisation de cette application ; le développeur décline toute responsabilité en découlant.</string>
+    <string name="rs_license_title">Licence open source</string>
+    <string name="rs_license_body">Ce projet est open source sous licence GNU AGPL-3.0 ; le code source est disponible sur %1$s.</string>
+    <string name="rs_terms_agree">En touchant « Commencer » ci-dessous, vous confirmez avoir lu et accepté les conditions ci-dessus</string>
+    <string name="rs_previous">Précédent</string>
+    <string name="rs_next">Suivant</string>
+    <string name="rs_get_started">Commencer</string>
+
+    <!-- Préparation des autorisations -->
+    <string name="rs_permissions_title">Préparation des autorisations</string>
+    <string name="rs_permissions_intro_required">YunX n\'utilise que les autorisations système ci-dessous. L\'autorisation de stockage est requise pour enregistrer des fichiers sous Android 9 et antérieur ; les deux autres peuvent être ignorées et modifiées plus tard dans les Réglages.</string>
+    <string name="rs_permissions_intro_optional">YunX n\'utilise que les autorisations système ci-dessous. Elles peuvent toutes être ignorées et modifiées plus tard dans les Réglages.</string>
+    <string name="rs_perm_notification_title">Autorisation de notification</string>
+    <string name="rs_perm_notification_desc">La progression et les notifications de fin de téléchargement s\'affichent dans la barre de notifications, et le service de premier plan fonctionne plus stablement. Si elle est désactivée, les téléchargements continuent mais la progression n\'est plus visible.</string>
+    <string name="rs_perm_granted">Activée</string>
+    <string name="rs_perm_grant">Autoriser</string>
+    <string name="rs_perm_go_settings">Ouvrir les réglages</string>
+    <string name="rs_perm_background_title">Exécution en arrière-plan</string>
+    <string name="rs_perm_background_desc">Ajoutez YunX à la liste des applications exemptées d\'optimisation de la batterie pour que les téléchargements ne soient pas gelés lorsque l\'écran est verrouillé ou l\'application en arrière-plan (recommandé).</string>
+    <string name="rs_perm_whitelisted">Liste blanche</string>
+    <string name="rs_perm_storage_title">Autorisation de stockage</string>
+    <string name="rs_perm_storage_desc_required">L\'enregistrement de fichiers dans le dossier Téléchargements du système nécessite l\'autorisation de stockage ; sous Android 9 et antérieur, elle est obligatoire.</string>
+    <string name="rs_perm_storage_desc_optional">Sous Android 10 et ultérieur, les fichiers sont enregistrés via la médiathèque du système et l\'autorisation de stockage n\'est pas nécessaire.</string>
+    <string name="rs_perm_authorized">Accordée</string>
+    <string name="rs_perm_no_need">Non requise</string>
+    <string name="rs_perm_go_settings_grant">Autoriser dans les réglages</string>
+    <string name="rs_perm_skip_impact_required">Si ignorée : sans autorisation de notification → la progression n\'apparaît pas dans la barre de notifications ; sans liste blanche d\'arrière-plan → les téléchargements peuvent se mettre en pause lorsque l\'écran s\'éteint. L\'autorisation de stockage est obligatoire : vous devez l\'accorder avant de commencer.</string>
+    <string name="rs_perm_skip_impact_optional">Si ignorée : sans autorisation de notification → la progression n\'apparaît pas dans la barre de notifications ; sans liste blanche d\'arrière-plan → les téléchargements peuvent se mettre en pause lorsque l\'écran s\'éteint. Sous Android 10 et ultérieur, l\'autorisation de stockage n\'est pas nécessaire pour enregistrer des fichiers.</string>
+    <string name="rs_category_uncategorized">Non classé</string>
+    <string name="rs_category_video">Vidéo</string>
+    <string name="rs_category_document">Documents</string>
+    <string name="rs_category_software">Logiciels</string>
+    <string name="rs_category_music">Musique</string>
+    <string name="rs_category_image">Images</string>
+    <string name="rs_category_archive">Archives</string>
+    <string name="rs_category_other">Autre</string>
+</resources>

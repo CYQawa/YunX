@@ -1,0 +1,226 @@
+<!--
+    デフォルト言語 = 簡体字中国語。各言語の対応版: values-b+zh+Hant / values-en / values-ja / values-fr。
+    i18n バッチ E2（接頭辞 e2_）で生成。UC / Quark / Lanzou / GuangYa / 139 / Xunlei / StarSea / GitHub のネットワーク層の例外・エラーメッセージを収録。
+-->
+<resources>
+    <!-- StarSea 中国語コマンド解析 -->
+    <string name="e2_starsea_missing_data">コマンド解析に失敗しました：応答に data がありません</string>
+    <string name="e2_starsea_missing_pwd_id">コマンド解析に失敗しました：共有 ID を取得できませんでした</string>
+    <string name="e2_starsea_empty">コマンドが空か形式が正しくありません</string>
+    <string name="e2_starsea_auth_failed">コマンド解析サービスの認証に失敗しました（Key が無効または更新済み）</string>
+    <string name="e2_starsea_too_long">コマンドが長すぎます</string>
+    <string name="e2_starsea_rate_limited">コマンド解析サービスが制限中です。しばらくしてから再試行してください</string>
+    <string name="e2_starsea_unavailable">コマンド解析サービスのアドレスが利用できません</string>
+    <string name="e2_starsea_http_failed">コマンド解析に失敗しました（HTTP %1$d）</string>
+
+    <!-- 123 クラウドドライブのログイン -->
+    <string name="e2_pan123_too_frequent">123 のログイン要求が多すぎます。しばらくしてから再試行してください</string>
+    <string name="e2_pan123_login_failed">123 のログインに失敗しました。アカウントとパスワードを確認して再試行してください</string>
+    <string name="e2_pan123_verify_required">123 では追加のセキュリティ認証が必要です。Web ログインに切り替えて認証を完了してください</string>
+    <string name="e2_pan123_api_changed">123 のログイン API が変更されました。しばらくしてから再試行してください</string>
+    <string name="e2_pan123_service_unavailable">123 のログインサービスは一時的に利用できません。しばらくしてから再試行してください</string>
+    <string name="e2_pan123_account_locked">123 アカウントは一時的にログインできません。公式クライアントでアカウント状態を確認してください</string>
+    <!-- 共有有効期限 -->
+    <string name="e2_share_expire_unknown">不明な共有有効期限コード：%1$d</string>
+
+    <!-- 139 クラウドドライブのコマンド -->
+    <string name="e2_c139_kouling_missing_info">139 クラウドドライブのコマンド解析に失敗しました：応答に共有情報がありません</string>
+    <string name="e2_c139_kouling_missing_link">139 クラウドドライブのコマンド解析に失敗しました：応答に共有リンクがありません</string>
+    <string name="e2_c139_kouling_no_url">139 クラウドドライブのコマンド解析に失敗しました：共有リンクが返されませんでした</string>
+    <string name="e2_c139_kouling_bad_response">139 クラウドドライブのコマンド解析に失敗しました：サーバーの応答形式が異常です</string>
+    <string name="e2_c139_kouling_failed_code">139 クラウドドライブのコマンド解析に失敗しました（%1$s）</string>
+    <string name="e2_c139_kouling_failed_desc">139 クラウドドライブのコマンド解析に失敗しました：%1$s（%2$s）</string>
+    <!-- Xunlei -->
+    <string name="e2_xunlei_sms_sent">SMS を送信しました</string>
+    <string name="e2_xunlei_login_success">ログインしました</string>
+    <string name="e2_xunlei_empty_file_unsupported">Xunlei クラウドドライブは空のファイルのアップロードに対応していません</string>
+    <string name="e2_xunlei_share_enter_passcode">抽出コードを入力してください</string>
+    <string name="e2_xunlei_share_passcode_wrong">抽出コードが違います</string>
+    <string name="e2_xunlei_share_passcode_required">この共有には抽出コードが必要です</string>
+    <string name="e2_xunlei_request_failed">リクエストに失敗しました</string>
+    <string name="e2_xunlei_response_empty">リクエストに失敗しました：応答が空です</string>
+    <string name="e2_xunlei_response_parse_failed_http">応答の解析に失敗しました（HTTP %1$d）</string>
+    <string name="e2_xunlei_captcha_mismatch">認証コードが現在のログイン方法と一致しません。Xunlei の Web に再ログインしてください</string>
+    <string name="e2_xunlei_captcha_refresh_failed">認証コードを更新しても失敗しました</string>
+    <string name="e2_xunlei_kouling_http_failed">コマンド解析に失敗しました（HTTP %1$d）</string>
+    <string name="e2_xunlei_kouling_bad_response">コマンド解析に失敗しました：応答形式が異常です</string>
+    <string name="e2_xunlei_kouling_no_share">コマンド「%1$s」に対応するクラウド共有がありません</string>
+    <!-- 139 クラウドドライブ -->
+    <string name="e2_c139_kouling_response_empty">139 クラウドドライブのコマンド解析に失敗しました：応答が空です</string>
+    <string name="e2_c139_kouling_decrypt_failed">139 クラウドドライブのコマンド解析に失敗しました：応答の復号に失敗しました</string>
+    <string name="e2_c139_missing_authorization">ログイン状態に authorization がありません。再ログインしてください</string>
+    <string name="e2_c139_account_parse_failed">ログイン状態からアカウントを解析できません。再ログインしてください</string>
+    <string name="e2_c139_no_folder_id">China Mobile Cloud がフォルダ ID を返しませんでした</string>
+    <string name="e2_c139_no_upload_task">China Mobile Cloud がアップロードタスクを返しませんでした</string>
+    <string name="e2_c139_same_name_exists">China Mobile Cloud に同名のファイルが既にあります。名前を変更して再アップロードしてください</string>
+    <string name="e2_c139_upload_task_not_created">China Mobile Cloud がアップロードタスクを作成しませんでした</string>
+    <string name="e2_c139_no_upload_id">China Mobile Cloud がアップロード ID を返しませんでした</string>
+    <string name="e2_c139_no_upload_url">China Mobile Cloud がアップロード URL を返しませんでした</string>
+    <string name="e2_c139_incomplete_parts">China Mobile Cloud が完全なアップロードパートを返しませんでした</string>
+    <string name="e2_c139_invalid_part_index">China Mobile Cloud のアップロードパート番号が無効です</string>
+    <string name="e2_c139_transfer_create_failed">転送タスクの作成に失敗しました（%1$s）</string>
+    <string name="e2_c139_transfer_query_failed">転送結果の照会に失敗しました（%1$s）</string>
+
+    <!-- 共通のクラウドドライブ操作エラー -->
+    <string name="e2_get_file_list_failed">ファイル一覧の取得に失敗しました</string>
+    <string name="e2_get_file_list_failed_code">ファイル一覧の取得に失敗しました（%1$s）</string>
+    <string name="e2_get_folder_list_failed">フォルダ一覧の取得に失敗しました</string>
+    <string name="e2_get_download_link_failed">ダウンロードリンクの取得に失敗しました</string>
+    <string name="e2_get_download_link_failed_code">ダウンロードリンクの取得に失敗しました（%1$s）</string>
+    <string name="e2_get_upload_url_failed">アップロード URL の取得に失敗しました</string>
+    <string name="e2_get_quota_failed">ストレージ詳細の取得に失敗しました</string>
+    <string name="e2_create_folder_failed">フォルダの作成に失敗しました</string>
+    <string name="e2_create_upload_task_failed">アップロードタスクの作成に失敗しました</string>
+    <string name="e2_create_share_failed">共有の作成に失敗しました</string>
+    <string name="e2_create_share_no_link">共有の作成に失敗しました：リンクが返されませんでした</string>
+    <string name="e2_upload_failed_http">ファイルのアップロードに失敗しました（HTTP %1$d）</string>
+    <string name="e2_merge_upload_failed">アップロードパートの統合に失敗しました</string>
+    <string name="e2_rename_failed">名前の変更に失敗しました</string>
+    <string name="e2_move_failed">移動に失敗しました</string>
+    <string name="e2_delete_failed">削除に失敗しました</string>
+    <string name="e2_query_task_failed">タスクの照会に失敗しました</string>
+    <string name="e2_request_empty_response">リクエストに失敗しました：応答が空です</string>
+    <string name="e2_error_with_code">%1$s（code=%2$s）</string>
+    <!-- GuangYa -->
+    <string name="e2_guangya_share_restricted">この GuangYa 共有はログインして転送してからダウンロードする必要があります。先に GuangYa クラウドにログインしてください</string>
+    <string name="e2_guangya_captcha_failed_login">GuangYa のセキュリティ認証に失敗しました。再試行するか Web ログインに切り替えてください</string>
+    <string name="e2_guangya_web_captcha_required">GuangYa では Web の人間認証が必要です。しばらくしてから再試行するか、アカウントとパスワードでログインしてください</string>
+    <string name="e2_guangya_captcha_failed_password">GuangYa のセキュリティ認証に失敗しました。再試行するかアカウントとパスワードでログインしてください</string>
+    <string name="e2_send_sms_failed">認証コードの送信に失敗しました</string>
+    <string name="e2_sms_too_frequent">認証コードのリクエストが多すぎます。しばらくしてから再試行してください</string>
+    <string name="e2_sms_code_invalid">SMS 認証コードが間違っているか期限切れです。再取得してください</string>
+    <string name="e2_guangya_get_quota_failed">容量情報の取得に失敗しました</string>
+    <string name="e2_guangya_get_share_info_failed">共有情報の取得に失敗しました</string>
+    <string name="e2_guangya_get_share_token_failed">共有アクセストークンの取得に失敗しました</string>
+    <string name="e2_guangya_invalid_share_link">GuangYa の共有リンクが無効です</string>
+    <string name="e2_guangya_get_share_files_failed">共有ファイル一覧の取得に失敗しました</string>
+    <string name="e2_guangya_get_download_url_failed">ダウンロード URL の取得に失敗しました</string>
+    <string name="e2_guangya_no_valid_download_url">GuangYa が有効なダウンロード URL を返しませんでした。ダウンロード権限を確認してください</string>
+    <string name="e2_guangya_restore_failed">転送に失敗しました</string>
+    <string name="e2_guangya_list_pagination_duplicate">GuangYa のファイル一覧ページングが重複しています。再試行してください</string>
+    <string name="e2_guangya_folder_not_created">GuangYa がフォルダを作成しませんでした。同名のファイルがないか確認してください</string>
+    <string name="e2_guangya_upload_task_not_created">GuangYa がアップロードタスクを作成しませんでした</string>
+    <string name="e2_guangya_query_upload_failed">アップロード結果の照会に失敗しました</string>
+    <string name="e2_guangya_upload_verifying">GuangYa はアップロード内容を検証中です。しばらくしてから一覧を更新してください</string>
+    <string name="e2_guangya_task_status_failed">タスク状態の照会に失敗しました</string>
+    <string name="e2_guangya_operation_failed">GuangYa の操作に失敗しました</string>
+    <string name="e2_guangya_operation_pending">GuangYa の操作はまだ処理中です。しばらくしてから一覧を更新して結果を確認してください</string>
+    <string name="e2_guangya_login_failed">GuangYa のログインに失敗しました。アカウントとパスワードを確認するか、Web ログインに切り替えてください</string>
+    <string name="e2_guangya_login_too_frequent">GuangYa へのログイン試行が多すぎます。しばらくしてから再試行してください</string>
+    <string name="e2_guangya_wrong_credentials">GuangYa のアカウントまたはパスワードが正しくありません。確認して再試行してください</string>
+    <string name="e2_guangya_password_not_set">この GuangYa アカウントにはパスワードが設定されていません。Web ログインに切り替えてください</string>
+    <string name="e2_guangya_sms_required">GuangYa では SMS 認証が必要です。Web ログインに切り替えて続行してください</string>
+    <string name="e2_guangya_share_passcode_invalid">GuangYa 共有の抽出コードが違うか未入力です</string>
+    <string name="e2_guangya_share_unavailable">GuangYa 共有はキャンセル、期限切れ、またはアクセスできません</string>
+    <string name="e2_guangya_download_restricted">GuangYa 共有のダウンロードが制限されています。公式サイトでこの共有のダウンロード権限を確認してください</string>
+    <string name="e2_guangya_no_space">GuangYa クラウドの容量が不足しています</string>
+    <string name="e2_request_failed_http">リクエストに失敗しました（HTTP %1$d）</string>
+    <!-- 共通の応答・アップロードエラー（UC / Quark） -->
+    <string name="e2_download_empty_response">ダウンロードリンクの取得に失敗しました：応答が空です</string>
+    <string name="e2_response_parse_failed">応答の解析に失敗しました</string>
+    <string name="e2_response_parse_failed_http">応答の解析に失敗しました（HTTP %1$d）</string>
+    <string name="e2_response_missing_data">応答に data がありません</string>
+    <string name="e2_download_link_missing">ダウンロードリンクが返されませんでした</string>
+    <string name="e2_upload_request_failed">アップロードリクエストに失敗しました</string>
+    <string name="e2_request_failed">リクエストに失敗しました</string>
+
+    <!-- Quark のゲスト制限 -->
+    <string name="e2_quark_guest_size_limit">このファイルはゲストの取得上限（Quark では実測約 50MB）を超えています。先に Quark ドライブへログインしてからダウンロードしてください</string>
+    <string name="e2_quark_guest_login_required">この共有をダウンロードするには Quark ドライブへのログインが必要です</string>
+    <string name="e2_quark_login_expired">Quark のログイン状態が無効になりました。「ドライブ」ページで再度ログインしてからお試しください</string>
+    <string name="e2_quark_guest_server_limit">サーバーがゲスト制限によりこのファイルを拒否しました（Quark の約 50MB 上限）</string>
+
+    <!-- UC のゲスト制限 -->
+    <string name="e2_uc_guest_login_required">この共有をダウンロードするには UC ドライブへのログインが必要です</string>
+    <string name="e2_uc_guest_size_limit">このファイルはゲストの取得上限を超えています。先に UC ドライブへログインしてからダウンロードしてください</string>
+    <string name="e2_uc_share_invalid">共有が無効になったか、抽出コードが違います。もう一度解析してください</string>
+    <string name="e2_uc_token_expired">ファイルトークンの有効期限が切れました。共有を再解析してください</string>
+
+    <!-- ドライブのアップロード共通エラー -->
+    <string name="e2_upload_empty_file">このドライブは空のファイルのアップロードに対応していません</string>
+    <string name="e2_upload_task_missing">ドライブがアップロードタスクを返しませんでした</string>
+    <string name="e2_upload_host_missing">ドライブがアップロードサーバーを返しませんでした</string>
+    <string name="e2_upload_credential_missing">ドライブが完全なアップロード資格情報を返しませんでした</string>
+    <string name="e2_upload_auth_missing">ドライブがアップロード認可を発行しませんでした</string>
+    <string name="e2_upload_part_unconfirmed">ドライブがアップロードの分割パートを確認しませんでした</string>
+    <string name="e2_upload_callback_missing">ドライブがアップロードコールバックを返しませんでした</string>
+    <string name="e2_upload_merge_failed_generic">ドライブがアップロード分割パートの結合を完了しませんでした</string>
+
+    <!-- 藍奏 -->
+    <string name="e2_lanzou_login_invalid">藍奏のログイン状態が無効です。再度ログインしてください</string>
+    <string name="e2_lanzou_credentials_required">藍奏雲のアカウントとパスワードを入力してください</string>
+    <string name="e2_lanzou_login_failed">藍奏雲のログインに失敗しました。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_login_failed_credentials">藍奏雲のログインに失敗しました。アカウントとパスワードを確認してください</string>
+    <string name="e2_lanzou_login_no_credential">藍奏雲のログインで有効な資格情報を取得できませんでした。再度お試しください</string>
+    <string name="e2_lanzou_file_paging_duplicate">藍奏のファイルページングが重複しました。更新してから再度お試しください</string>
+    <string name="e2_lanzou_folder_info_missing">藍奏が新しいフォルダ情報を返しませんでした</string>
+    <string name="e2_lanzou_login_expired">藍奏のログインが期限切れです。Web で再度ログインしてください</string>
+    <string name="e2_lanzou_verify_page_before_upload">藍奏が認証ページを返しました。公式サイトで認証を完了してからアップロードしてください</string>
+    <string name="e2_lanzou_upload_response_invalid">藍奏のアップロード応答が異常です。再度お試しください</string>
+    <string name="e2_lanzou_too_frequent_short">藍奏へのリクエストが頻繁すぎます。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_upload_failed_zt">藍奏のアップロードに失敗しました（zt=%1$s）</string>
+    <string name="e2_lanzou_upload_failed_detail">：%1$s</string>
+    <string name="e2_lanzou_upload_failed_hint">、公式サイトでファイルの種類とサイズを確認してください</string>
+    <string name="e2_lanzou_upload_file_info_missing">藍奏がアップロードしたファイルの情報を返しませんでした</string>
+    <string name="e2_lanzou_share_link_missing">藍奏が共有リンクを返しませんでした</string>
+    <string name="e2_lanzou_share_paging_error">藍奏の共有ページングが異常です。再度お試しください</string>
+    <string name="e2_lanzou_too_frequent">藍奏へのリクエストが頻繁すぎます。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_passcode_wrong">藍奏の抽出コードが違います。確認してから再解析してください</string>
+    <string name="e2_lanzou_parse_failed">藍奏の解析に失敗しました。共有リンクと抽出コードを確認してから再度お試しください</string>
+    <string name="e2_lanzou_paging_duplicate">藍奏のページングが重複しました。フォルダを開き直してください</string>
+    <string name="e2_lanzou_download_page_invalid">藍奏のダウンロードページのアドレスが異常です。共有リンクを確認してください</string>
+    <string name="e2_lanzou_passcode_required">この藍奏の共有には抽出コードが必要です。入力してから再解析してください</string>
+    <string name="e2_lanzou_download_params_missing">藍奏の共有ページにダウンロードパラメータがありません。再解析してください</string>
+    <string name="e2_lanzou_download_url_unavailable">藍奏のダウンロードアドレスは一時的に利用できません。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_download_url_loop">藍奏のダウンロードアドレスが循環しています。再解析してください</string>
+    <string name="e2_lanzou_verify_required">藍奏は追加の認証が必要です。共有ページで認証を完了してから再度お試しください</string>
+    <string name="e2_lanzou_verify_page_no_task">藍奏が返したのは認証ページで、ダウンロードタスクは作成されていません。共有ページで認証を完了してから再度お試しください</string>
+    <string name="e2_lanzou_download_url_expired">藍奏のダウンロードアドレスは期限切れです。しばらくしてから再解析してください</string>
+    <string name="e2_lanzou_download_too_frequent">藍奏のダウンロードリクエストが頻繁すぎます。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_verify_service_unavailable">藍奏のダウンロード認証サービスは一時的に利用できません。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_verify_expired">藍奏のダウンロード認証が期限切れです。再解析してください</string>
+    <string name="e2_lanzou_redirect_too_many">藍奏のページリダイレクトが多すぎます。再解析してください</string>
+    <string name="e2_lanzou_share_link_invalid">藍奏の共有リンクが無効です</string>
+    <string name="e2_lanzou_share_page_too_large">藍奏の共有ページが大きすぎるか異常です</string>
+    <string name="e2_lanzou_share_cancelled">藍奏のファイル共有は取消済みか存在しません</string>
+    <string name="e2_lanzou_operation_failed">藍奏のファイル操作に失敗しました。公式サイトで権限とファイルの種類を確認してください</string>
+    <string name="e2_lanzou_operation_failed_zt">藍奏のファイル操作に失敗しました（%1$s）。公式サイトで権限とファイルの種類を確認してください</string>
+    <string name="e2_lanzou_verify_page_retry">藍奏が認証ページを返しました。しばらくしてから再度お試しいただくか、共有ページで認証を完了してください</string>
+    <string name="e2_lanzou_parse_service_error">藍奏の解析サービスの応答が異常です。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_parse_service_too_large">藍奏の解析サービスの応答が大きすぎます。しばらくしてから再度お試しください</string>
+    <string name="e2_lanzou_parse_service_error_http">藍奏の解析サービスの応答が異常です（HTTP %1$d）。しばらくしてから再度お試しください</string>
+
+    <!-- 藍奏雲優享版 -->
+    <string name="e2_ilanzou_login_expired">藍奏雲優享版のログインの有効期限が切れました。もう一度ログインしてください</string>
+    <string name="e2_ilanzou_no_device_id">藍奏雲優享版から有効なデバイス ID が返されませんでした</string>
+    <string name="e2_ilanzou_credentials_required">藍奏雲優享版のアカウントとパスワードを入力してください</string>
+    <string name="e2_ilanzou_username_too_long">藍奏雲優享版のユーザー名が長すぎます</string>
+    <string name="e2_ilanzou_password_too_long">藍奏雲優享版のパスワードが長すぎます</string>
+    <string name="e2_ilanzou_no_login_token">藍奏雲優享版のログイン認証情報が返されませんでした。Web ログインに切り替えてください</string>
+    <string name="e2_ilanzou_default_nickname">藍奏雲優享版ユーザー</string>
+    <string name="e2_ilanzou_paging_duplicate">藍奏雲優享版のページングが重複または不完全です。フォルダを開き直してください</string>
+    <string name="e2_ilanzou_folder_info_missing">藍奏雲優享版から新しいフォルダ情報が返されませんでした。更新して確認してください</string>
+    <string name="e2_ilanzou_upload_auth_missing">藍奏雲優享版からアップロード認証が返されませんでした</string>
+    <string name="e2_ilanzou_instant_upload_unconfirmed">藍奏雲優享版が瞬速アップロードを確認できませんでした</string>
+    <string name="e2_ilanzou_upload_account_missing">藍奏雲優享版からアップロード用アカウント情報が返されませんでした。ログインし直してからお試しください</string>
+    <string name="e2_ilanzou_upload_failed_http">ファイルのアップロードに失敗しました（HTTP %1$d）</string>
+    <string name="e2_ilanzou_multipart_create_failed">藍奏雲優享版でマルチパートアップロードを作成できませんでした</string>
+    <string name="e2_ilanzou_multipart_id_missing">藍奏雲優享版からマルチパートアップロード ID が返されませんでした</string>
+    <string name="e2_ilanzou_part_unconfirmed">藍奏雲優享版がアップロード済みのパートを確認できませんでした</string>
+    <string name="e2_ilanzou_multipart_merge_failed">藍奏雲優享版でアップロードパートを結合できませんでした</string>
+    <string name="e2_ilanzou_upload_result_missing">藍奏雲優享版からアップロード結果が返されませんでした</string>
+    <string name="e2_ilanzou_upload_file_id_unconfirmed">藍奏雲優享版がアップロードしたファイル ID を確認できませんでした</string>
+    <string name="e2_ilanzou_upload_still_processing">藍奏雲優享版はまだアップロードを処理中です。しばらくしてから一覧を更新してください</string>
+    <string name="e2_ilanzou_no_download_url">藍奏雲優享版からダウンロード URL が返されませんでした</string>
+    <string name="e2_ilanzou_no_download_url_permission">藍奏雲優享版からダウンロード URL が返されませんでした。ファイルの権限を確認してください</string>
+    <string name="e2_ilanzou_share_request_failed">藍奏雲優享版の共有リクエストに失敗しました（%1$d）</string>
+    <string name="e2_ilanzou_access_challenge_failed">藍奏雲優享版のアクセス認証に失敗しました。しばらくしてから再試行するか、Web ログインを使用してください</string>
+    <string name="e2_ilanzou_access_challenge_failed_short">藍奏雲優享版のアクセス認証に失敗しました。しばらくしてから再試行してください</string>
+    <string name="e2_ilanzou_request_failed">藍奏雲優享版のリクエストに失敗しました（%1$d）</string>
+    <string name="e2_ilanzou_login_failed">藍奏雲優享版のログインに失敗しました。アカウントとパスワードを確認してください</string>
+    <string name="e2_ilanzou_request_failed_hint">藍奏雲優享版のリクエストに失敗しました（%1$d）。ログイン情報を確認するか、しばらくしてから再試行してください</string>
+
+    <!-- 藍奏共有の既定タイトル -->
+    <string name="e2_lanzou_default_share_title">藍奏の共有</string>
+    <string name="e2_lanzou_cloud_default_share_title">藍奏雲の共有</string>
+</resources>

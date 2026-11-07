@@ -1,0 +1,64 @@
+<!--
+    默认语言 = 简体中文。逐语言对照见 values-b+zh+Hant / values-en / values-ja / values-fr。
+    由 i18n 批次 G7 生成（前缀 vc_），覆盖云盘 ViewModel 的操作提示、登录与错误文案。
+-->
+<resources>
+    <!-- 通用操作提示 -->
+    <string name="vc_load_failed">加载失败</string>
+    <string name="vc_refresh_failed">刷新失败</string>
+    <string name="vc_collecting_files">正在收集文件…</string>
+    <string name="vc_folder_empty">文件夹为空</string>
+    <string name="vc_selected_folder_empty">所选文件夹为空</string>
+    <string name="vc_adding_download_progress">正在加入下载 %1$d/%2$d</string>
+    <string name="vc_download_interrupted">已中断下载</string>
+    <string name="vc_batch_download_interrupted">已中断批量下载</string>
+    <string name="vc_download_added">已加入 %1$d 个下载任务</string>
+    <string name="vc_download_added_with_failures">已加入 %1$d 个下载任务（%2$d 个失败）</string>
+    <string name="vc_download_added_named">已加入下载：%1$s</string>
+    <string name="vc_download_folder_failed">下载文件夹失败</string>
+    <string name="vc_batch_download_failed">批量下载失败</string>
+    <string name="vc_download_failed">下载失败</string>
+    <string name="vc_get_download_link_failed">获取下载链接失败</string>
+    <string name="vc_preview_failed">预览失败</string>
+    <string name="vc_renamed">已重命名</string>
+    <string name="vc_rename_failed">重命名失败</string>
+    <string name="vc_folder_created">已创建文件夹「%1$s」</string>
+    <string name="vc_create_folder_failed">新建文件夹失败</string>
+    <string name="vc_moved">已移动到目标目录</string>
+    <string name="vc_move_failed">移动失败</string>
+    <string name="vc_moved_items">已移动 %1$d 项</string>
+    <string name="vc_deleted_named">已删除「%1$s」</string>
+    <string name="vc_delete_failed">删除失败</string>
+    <string name="vc_deleted_items">已删除 %1$d 项</string>
+    <string name="vc_share_failed">分享失败</string>
+    <string name="vc_create_share_failed">创建分享失败</string>
+    <string name="vc_get_share_link_failed">获取分享链接失败</string>
+    <string name="vc_share_n_files">分享 %1$d 个文件</string>
+    <string name="vc_upload_cancelled">已取消上传</string>
+    <string name="vc_upload_done">已上传 %1$d 个文件</string>
+
+    <!-- 未登录提示 -->
+    <string name="vc_login_required_uc">请先登录 UC 网盘</string>
+    <string name="vc_login_required_quark">请先登录夸克网盘</string>
+    <string name="vc_login_required_xunlei">请先登录迅雷网盘</string>
+    <string name="vc_login_required_xunlei_cloud">请先登录迅雷云盘</string>
+    <string name="vc_login_required_139">请先登录139网盘</string>
+    <string name="vc_login_required_cmcc">请先登录移动云盘</string>
+    <string name="vc_login_required_baidu">请先登录百度网盘</string>
+    <string name="vc_login_required_pan123">请先登录123云盘</string>
+    <string name="vc_login_required_pan123_spaced">请先登录 123 云盘</string>
+    <string name="vc_login_required_guangya">请先登录光鸭云盘</string>
+    <string name="vc_login_required_lanzou">请先登录蓝奏云</string>
+    <string name="vc_login_required_ilanzou">请先登录蓝奏云优享版</string>
+    <string name="vc_login_required_pan115">请先登录115网盘</string>
+
+    <!-- 平台专属提示 -->
+    <string name="vc_xunlei_device_id_missing">设备标识缺失，请重新登录迅雷云盘</string>
+    <string name="vc_task_failed">任务失败（%1$s）</string>
+    <string name="vc_task_timeout">任务超时</string>
+    <string name="vc_lanzou_session_expired">蓝奏登录态已失效，请重新登录</string>
+    <string name="vc_lanzou_move_folder_unsupported">蓝奏云暂不支持移动文件夹</string>
+    <string name="vc_lanzou_share_single_only">蓝奏一次只能分享一个文件或文件夹，已分享第一项</string>
+    <string name="vc_ilanzou_share_unsupported">蓝奏云优享版暂不支持创建分享</string>
+    <string name="vc_ilanzou_session_expired">蓝奏优享登录已过期，请重新登录</string>
+</resources>

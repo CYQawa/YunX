@@ -1,0 +1,97 @@
+<!--
+    Français. Correspond à values/strings_err_api1.xml.
+    Généré par le lot i18n E1 (préfixe e1_).
+-->
+<resources>
+    <!-- Concaténation d'erreurs courantes -->
+    <string name="e1_errno_suffix">" (errno=%1$d)"</string>
+    <string name="e1_with_errno">%1$s (errno=%2$d)</string>
+    <string name="e1_with_code">%1$s (code=%2$d)</string>
+    <string name="e1_request_failed_http">Échec de la requête (HTTP %1$d)</string>
+    <string name="e1_response_empty">Échec de la requête : la réponse est vide</string>
+    <string name="e1_response_empty_http">Échec de la requête : la réponse est vide (%1$d)</string>
+    <string name="e1_response_parse_failed_http">Échec de l\'analyse de la réponse (HTTP %1$d)</string>
+    <string name="e1_upload_failed_http">Échec de l\'envoi du fichier (HTTP %1$d)</string>
+    <string name="e1_get_user_info_failed">Impossible d\'obtenir les informations utilisateur</string>
+    <string name="e1_get_space_info_failed">Impossible d\'obtenir les informations d\'espace</string>
+    <string name="e1_get_space_detail_failed">Impossible d\'obtenir le détail de l\'espace</string>
+    <string name="e1_get_file_list_failed">Impossible d\'obtenir la liste des fichiers</string>
+    <string name="e1_get_share_list_failed">Impossible d\'obtenir la liste des partages</string>
+    <string name="e1_get_download_link_failed">Impossible d\'obtenir le lien de téléchargement</string>
+    <string name="e1_merge_upload_failed">Échec de la fusion des segments envoyés</string>
+    <string name="e1_upload_task_create_failed">Échec de la création de la tâche d\'envoi</string>
+    <string name="e1_get_upload_url_failed">Impossible d\'obtenir l\'URL d\'envoi</string>
+    <string name="e1_create_folder_failed">Échec de la création du dossier</string>
+    <string name="e1_rename_failed">Échec du renommage</string>
+    <string name="e1_move_failed">Échec du déplacement</string>
+    <string name="e1_delete_failed">Échec de la suppression</string>
+    <string name="e1_copy_save_failed">Échec de l\'enregistrement</string>
+    <string name="e1_create_share_failed">Échec de la création du partage</string>
+    <string name="e1_no_download_link">Aucun lien de téléchargement n\'a été renvoyé</string>
+
+    <!-- Baidu Netdisk -->
+    <string name="e1_baidu_verify_pwd_failed">Échec de la vérification du code d\'accès</string>
+    <string name="e1_baidu_no_share_key">La clé de partage n\'a pas été renvoyée</string>
+    <string name="e1_baidu_no_share_link">Le lien de partage n\'a pas été renvoyé</string>
+    <string name="e1_baidu_need_pwd_or_login_errno">Ce partage nécessite un code d\'accès ou une connexion à Baidu Netdisk (errno=%1$d)</string>
+    <string name="e1_baidu_need_pwd_errno">Ce partage nécessite un code d\'accès (errno=%1$d)</string>
+    <string name="e1_baidu_get_share_list_failed">Impossible d\'obtenir la liste des fichiers partagés</string>
+    <string name="e1_baidu_empty_file_unsupported">Baidu Netdisk ne prend pas en charge l\'envoi de fichiers vides</string>
+    <string name="e1_baidu_session_token_failed">Impossible d\'obtenir le jeton de session Baidu, veuillez vous reconnecter</string>
+    <string name="e1_baidu_bdstoken_failed">Impossible d\'obtenir bdstoken, veuillez vous reconnecter</string>
+    <string name="e1_baidu_no_upload_task">Baidu n\'a pas créé de tâche d\'envoi</string>
+    <string name="e1_baidu_no_upload_blocks">Baidu n\'a pas renvoyé les segments à envoyer</string>
+    <string name="e1_baidu_no_upload_node">Baidu n\'a pas renvoyé de nœud d\'envoi disponible, veuillez réessayer plus tard</string>
+    <string name="e1_baidu_invalid_block_index">Baidu a renvoyé un index de segment d\'envoi invalide</string>
+    <string name="e1_baidu_block_response_error">Réponse anormale de Baidu pour un segment envoyé, veuillez réessayer</string>
+    <string name="e1_baidu_block_verify_failed">Échec de la vérification d\'un segment envoyé sur Baidu, veuillez réessayer</string>
+    <string name="e1_baidu_transfer_no_file">Échec de l\'enregistrement : aucun nouveau fichier renvoyé</string>
+    <string name="e1_baidu_get_fast_link_failed">Impossible d\'obtenir le lien de téléchargement rapide</string>
+    <string name="e1_baidu_list_failed">Échec du chargement de la liste des fichiers Baidu</string>
+    <string name="e1_baidu_list_failed_errno">Échec du chargement de la liste des fichiers Baidu (errno=%1$d)</string>
+    <string name="e1_baidu_list_failed_errno_msg">Échec du chargement de la liste des fichiers Baidu (errno=%1$d) : %2$s</string>
+    <string name="e1_baidu_list_incomplete">Réponse incomplète de la liste des fichiers Baidu, veuillez actualiser et réessayer</string>
+    <string name="e1_baidu_login_expired_suffix">, la session a expiré. Veuillez vous reconnecter à Baidu Netdisk</string>
+
+    <!-- 123 Cloud Drive -->
+    <string name="e1_123_enter_account_pwd">Veuillez saisir votre compte et votre mot de passe</string>
+    <string name="e1_123_account_pwd_too_long">Le compte ou le mot de passe est trop long</string>
+    <string name="e1_123_login_network_error">Erreur réseau, impossible de joindre le service de connexion 123. Veuillez réessayer plus tard</string>
+    <string name="e1_123_share_expired">Ce partage a expiré</string>
+    <string name="e1_123_share_id_missing">Impossible d\'identifier l\'ID de partage (S3KeyFlag manquant)</string>
+    <string name="e1_123_copy_save_failed_msg">Échec de l\'enregistrement : %1$s</string>
+    <string name="e1_123_no_folder_id">123 n\'a pas renvoyé l\'ID du dossier</string>
+    <string name="e1_123_no_upload_task">123 n\'a pas renvoyé la tâche d\'envoi</string>
+    <string name="e1_123_no_upload_file_id">123 n\'a pas renvoyé l\'ID du fichier envoyé</string>
+    <string name="e1_123_upload_task_not_created">123 n\'a pas créé de tâche d\'envoi</string>
+    <string name="e1_123_no_upload_credential">123 n\'a pas renvoyé les identifiants d\'envoi</string>
+    <string name="e1_123_no_upload_url">123 n\'a pas renvoyé d\'URL d\'envoi</string>
+    <string name="e1_123_create_share_no_data">Échec de la création du partage : aucune donnée renvoyée</string>
+    <string name="e1_123_create_share_no_key">Échec de la création du partage : ShareKey non renvoyé</string>
+
+    <!-- 115 Cloud Drive -->
+    <string name="e1_115_missing_pickcode">Pickcode manquant, impossible d\'obtenir le lien de téléchargement</string>
+    <string name="e1_115_upload_too_large">L\'interface web de 115 est limitée à 5 Go par fichier ; utilisez le client officiel pour les fichiers plus volumineux</string>
+    <string name="e1_115_invalid_upload_server">115 a renvoyé un serveur d\'envoi invalide</string>
+    <string name="e1_115_incomplete_upload_credential">Identifiants d\'envoi 115 incomplets</string>
+    <string name="e1_115_upload_failed">Échec de l\'envoi vers 115</string>
+    <string name="e1_115_select_files_to_move">Veuillez sélectionner les fichiers à déplacer</string>
+    <string name="e1_115_select_files_to_delete">Veuillez sélectionner les fichiers à supprimer</string>
+    <string name="e1_115_missing_sharer_id">Identifiant du partageur manquant, veuillez analyser à nouveau le lien de partage</string>
+    <string name="e1_115_missing_user_id">La session ne contient pas l\'ID utilisateur, veuillez vous reconnecter à 115</string>
+    <string name="e1_115_select_files_to_share">Veuillez sélectionner les fichiers à partager</string>
+    <string name="e1_115_create_share_no_code">Échec de la création du partage : le code de partage manque dans la réponse</string>
+    <string name="e1_115_unknown_reason">Raison inconnue</string>
+    <string name="e1_115_share_expiry_warning">Le partage a été créé, mais la durée de validité n\'a pas été appliquée (valeur par défaut du serveur) : %1$s</string>
+    <string name="e1_115_login_expired">Session expirée, veuillez vous reconnecter à 115</string>
+    <string name="e1_115_need_access_code">Ce partage nécessite un code d\'accès, veuillez le saisir et réessayer</string>
+    <string name="e1_115_wrong_access_code">Code d\'accès incorrect, veuillez vérifier et réessayer</string>
+    <string name="e1_115_share_gone">Le lien de partage n\'existe pas ou a été supprimé</string>
+    <string name="e1_115_empty_folder_share">Le partage d\'un dossier vide n\'est pas autorisé</string>
+    <string name="e1_115_busy">L\'opération précédente n\'est pas encore terminée, veuillez réessayer plus tard</string>
+    <string name="e1_115_web_size_limit">115 a refusé de fournir un lien direct au client web (fichier trop volumineux) ; utilisez le client 115 pour ordinateur ou mobile</string>
+    <string name="e1_115_client_too_old">115 juge la version actuelle trop ancienne et a refusé le lien direct ; utilisez le client 115 pour ordinateur ou mobile</string>
+    <string name="e1_115_download_protocol_key_16">Le protocole de téléchargement 115 requiert une clé de 16 octets</string>
+    <string name="e1_115_download_response_length">Longueur anormale dans la réponse de téléchargement 115</string>
+    <string name="e1_115_download_missing_rsa_sep">La réponse de téléchargement 115 ne contient pas le séparateur RSA</string>
+</resources>

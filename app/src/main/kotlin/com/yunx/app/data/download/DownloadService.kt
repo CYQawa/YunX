@@ -38,6 +38,7 @@ import android.os.Build
 import android.os.IBinder
 import com.yunx.app.MainActivity
 import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -64,7 +65,8 @@ class DownloadService : Service() {
         when (intent?.action) {
             ACTION_STOP -> stopSelf()
             else -> {
-                val title = intent?.getStringExtra(EXTRA_TITLE) ?: "下载中…"
+                val title = intent?.getStringExtra(EXTRA_TITLE)
+                    ?: AppStrings.get(R.string.ed_notif_downloading_default)
                 val progress = intent?.getIntExtra(EXTRA_PROGRESS, -1) ?: -1
                 val speed = intent?.getStringExtra(EXTRA_SPEED) ?: ""
                 val showSpeed = intent?.getBooleanExtra(EXTRA_SHOW_SPEED, true) ?: true
@@ -108,10 +110,10 @@ class DownloadService : Service() {
             .setContentTitle(title)
             // 完整通知显示下载速度；合并/抽音轨阶段单独提示（都要跑几秒到几十秒）；简化模式仅提示下载中
             .setContentText(
-                if (speed == MERGE_TEXT) "正在合并分片，完成前请勿关闭应用"
-                else if (speed == AUDIO_TEXT) "正在提取音频，完成前请勿关闭应用"
-                else if (hasSpeed) "下载速度 $speed"
-                else "正在后台下载，完成前请勿关闭应用"
+                if (speed == MERGE_TEXT) AppStrings.get(R.string.ed_notif_merging)
+                else if (speed == AUDIO_TEXT) AppStrings.get(R.string.ed_notif_extracting)
+                else if (hasSpeed) AppStrings.get(R.string.ed_notif_speed, speed)
+                else AppStrings.get(R.string.ed_notif_background)
             )
             .setContentIntent(contentIntent)
             .setOngoing(true)
@@ -148,7 +150,7 @@ class DownloadService : Service() {
             // ③ 状态栏胶囊的简短文案（等价于 Notification.Builder.setShortCriticalText(...)）
             notification.extras.putCharSequence(
                 EXTRA_SHORT_CRITICAL_TEXT,
-                if (progress in 0..100) "$progress%" else "下载中"
+                if (progress in 0..100) "$progress%" else AppStrings.get(R.string.ed_notif_status_downloading)
             )
         }
         return notification
@@ -227,7 +229,7 @@ class DownloadService : Service() {
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 if (nm.getNotificationChannel(CHANNEL_ID) == null) {
                     nm.createNotificationChannel(
-                        NotificationChannel(CHANNEL_ID, "下载任务", NotificationManager.IMPORTANCE_LOW)
+                        NotificationChannel(CHANNEL_ID, AppStrings.get(R.string.ed_notif_channel_name), NotificationManager.IMPORTANCE_LOW)
                     )
                 }
             }
@@ -311,8 +313,11 @@ class DownloadService : Service() {
             linger: Boolean
         ): Notification {
             val contentIntent = openDownloadTabIntent(context)
-            val title = if (success) "下载完成" else "下载失败"
-            val text = if (success) fileName else if (error.isBlank()) fileName else "$fileName：$error"
+            val title = if (success) AppStrings.get(R.string.ed_notif_completed)
+            else AppStrings.get(R.string.ed_notif_failed)
+            val text = if (success) fileName
+            else if (error.isBlank()) fileName
+            else AppStrings.get(R.string.ed_notif_text_error, fileName, error)
             val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification.Builder(context, CHANNEL_ID)
             } else {
@@ -342,7 +347,11 @@ class DownloadService : Service() {
             val notification = builder.build()
             if (linger && Build.VERSION.SDK_INT >= 36) {
                 notification.extras.putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
-                notification.extras.putCharSequence(EXTRA_SHORT_CRITICAL_TEXT, if (success) "完成" else "失败")
+                notification.extras.putCharSequence(
+                    EXTRA_SHORT_CRITICAL_TEXT,
+                    if (success) AppStrings.get(R.string.ed_notif_short_done)
+                    else AppStrings.get(R.string.ed_notif_short_failed)
+                )
             }
             return notification
         }

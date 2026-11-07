@@ -18,8 +18,10 @@
 
 package com.yunx.app.data.network.video
 
+import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.DiagnosticLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -131,7 +133,7 @@ object DouyinParser : VideoParser {
                     url = url,
                     kind = VideoMediaKind.IMAGE,
                     fileName = imageFileName(link.id, title, i + 1),
-                    quality = "原图",
+                    quality = AppStrings.get(R.string.em_quality_original),
                     headers = mediaHeaders
                 )
             }
@@ -193,12 +195,12 @@ object DouyinParser : VideoParser {
                         "Referer" to IESDOUYIN_REFERER,
                         "Cookie" to cookieHeader
                     ),
-                    what = "抖音分享页"
+                    what = AppStrings.get(R.string.em_what_douyin_page)
                 )
                 val routerJson = VideoHttp.extractInlineJson(html, "window._ROUTER_DATA")
                     ?: throw VideoParseException(
                         VideoParseErrorKind.UNKNOWN,
-                        "抖音分享页里没有 window._ROUTER_DATA（作品可能已删除或页面改版）"
+                        AppStrings.get(R.string.em_douyin_no_router_data)
                     )
                 return extractVideoData(routerJson, link.id)
             } catch (e: VideoParseException) {
@@ -208,7 +210,10 @@ object DouyinParser : VideoParser {
             }
         }
         // 上面每一轮都以 return 或 throw 结束，这里只是为了满足编译器的可达性检查
-        throw VideoParseException(VideoParseErrorKind.UNKNOWN, "抖音解析失败")
+        throw VideoParseException(
+            VideoParseErrorKind.UNKNOWN,
+            AppStrings.get(R.string.em_douyin_parse_failed)
+        )
     }
 
     // ------------------------------------------------------------------ 隐藏 WebView 路线
@@ -299,7 +304,7 @@ object DouyinParser : VideoParser {
                     fileName = "${base}_${index + 1}${if (isMotion) ".jpg" else imageExtension(url)}",
                     headers = mediaHeaders,
                     // 动图（Live Photo）：带上「会动的那一半」，下载时合成动态照片
-                    quality = if (isMotion) "动图" else "",
+                    quality = if (isMotion) AppStrings.get(R.string.em_quality_motion) else "",
                     motionUrl = motionUrl
                 )
             }
@@ -632,15 +637,22 @@ object DouyinParser : VideoParser {
         val router = try {
             JSONObject(routerJson)
         } catch (e: Exception) {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "window._ROUTER_DATA 不是合法 JSON", e)
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_douyin_router_invalid_json),
+                e
+            )
         }
         val loaderData = router.optJSONObject("loaderData")
-            ?: throw VideoParseException(VideoParseErrorKind.UNKNOWN, "window._ROUTER_DATA 里没有 loaderData")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_douyin_no_loader_data)
+            )
         val page = loaderData.optJSONObject("video_(id)/page")
             ?: loaderData.optJSONObject("note_(id)/page")
             ?: throw VideoParseException(
                 VideoParseErrorKind.UNKNOWN,
-                "window._ROUTER_DATA 里既没有 video_(id)/page 也没有 note_(id)/page"
+                AppStrings.get(R.string.em_douyin_no_page)
             )
         val videoInfoRes = page.optObjectAny("videoInfoRes", "video_info_res")
         val itemList = videoInfoRes?.optArrayAny("item_list", "itemList")
@@ -651,15 +663,27 @@ object DouyinParser : VideoParser {
         //   字段名取自真实返回（不存在的 id 也会回显 itemId 与 isSpider）。
         val echoedId = page.optStringAny("itemId", "item_id")
         val detail = buildString {
-            append("videoInfoRes=").append(if (videoInfoRes == null) "缺失" else "存在")
-            append(", item_list=").append(if (itemList == null) "缺失" else "长度 ${itemList.length()}")
-            append(", itemId=").append(echoedId.ifBlank { "缺失" })
-            append(", 请求id=").append(expectedId)
+            append("videoInfoRes=").append(
+                if (videoInfoRes == null) {
+                    AppStrings.get(R.string.em_flag_missing)
+                } else {
+                    AppStrings.get(R.string.em_flag_present)
+                }
+            )
+            append(", item_list=").append(
+                if (itemList == null) {
+                    AppStrings.get(R.string.em_flag_missing)
+                } else {
+                    AppStrings.get(R.string.em_detail_length, itemList.length())
+                }
+            )
+            append(", itemId=").append(echoedId.ifBlank { AppStrings.get(R.string.em_flag_missing) })
+            append(AppStrings.get(R.string.em_detail_request_id)).append(expectedId)
             append(", isSpider=").append(page.optBoolean("isSpider"))
         }
         throw VideoParseException(
             VideoParseErrorKind.UNKNOWN,
-            "抖音没有返回该作品的数据（作品可能已删除或不可见，也可能被风控拦截）[$detail]"
+            AppStrings.get(R.string.em_douyin_no_data, detail)
         )
     }
 
@@ -761,11 +785,18 @@ object DouyinParser : VideoParser {
         val response = try {
             client.newCall(request).execute()
         } catch (e: IOException) {
-            throw VideoParseException(VideoParseErrorKind.NETWORK, "ttwid 注册请求失败", e)
+            throw VideoParseException(
+                VideoParseErrorKind.NETWORK,
+                AppStrings.get(R.string.em_douyin_ttwid_request_failed),
+                e
+            )
         }
         response.use { resp ->
             if (!resp.isSuccessful) {
-                throw VideoParseException(VideoParseErrorKind.UNKNOWN, "ttwid 注册失败（HTTP ${resp.code}）")
+                throw VideoParseException(
+                    VideoParseErrorKind.UNKNOWN,
+                    AppStrings.get(R.string.em_douyin_ttwid_failed, resp.code)
+                )
             }
             val registered = resp.headers.values("Set-Cookie").firstNotNullOfOrNull { extractTtwid(it) }
             val redirectUrl = try {
@@ -780,7 +811,10 @@ object DouyinParser : VideoParser {
                 null
             }
             fromCallback ?: registered
-                ?: throw VideoParseException(VideoParseErrorKind.UNKNOWN, "ttwid 注册未返回可用 Cookie")
+                ?: throw VideoParseException(
+                    VideoParseErrorKind.UNKNOWN,
+                    AppStrings.get(R.string.em_douyin_ttwid_no_cookie)
+                )
         }
     }
 

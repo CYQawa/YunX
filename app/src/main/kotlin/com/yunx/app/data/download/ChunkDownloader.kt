@@ -19,6 +19,8 @@
 package com.yunx.app.data.download
 
 import android.util.Log
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
 import com.yunx.app.util.LogRedactor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -384,9 +386,11 @@ class ChunkDownloader(private val clientProvider: () -> OkHttpClient) {
                 // ★ 最终响应若是 HTML（防盗链/过期/错误页），直接失败，绝不存盘
                 if (response.header("Content-Type").orEmpty().contains("text/html", ignoreCase = true)) {
                     Log.w(TAG, "downloadFull: task=$taskId 返回 text/html（疑似过期/防盗链/错误页），终止")
-                    throw IllegalStateException("下载失败：链接已失效或需要 Referer（返回 HTML 页）")
+                    throw IllegalStateException(AppStrings.get(R.string.ed_html_page_error))
                 }
-                if (!response.isSuccessful) throw IllegalStateException("下载失败 HTTP ${response.code}")
+                if (!response.isSuccessful) {
+                    throw IllegalStateException(AppStrings.get(R.string.ed_http_error, response.code))
+                }
                 val body = response.body ?: return@use false
                 // 已知总大小时写时硬截断：服务器多给/Content-Range 偏差的字节直接丢弃，文件永不膨胀
                 val expected = if (total > 0) (total - existing).coerceAtLeast(0) else -1L

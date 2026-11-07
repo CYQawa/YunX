@@ -53,8 +53,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.yunx.app.R
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
 import com.yunx.app.ui.theme.spatialDefault
@@ -153,7 +155,7 @@ fun BoxScope.CustomFabMenu(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Icon(
                                         imageVector = Icons.Filled.Check,
-                                        contentDescription = "已选择",
+                                        contentDescription = stringResource(R.string.content_desc_selected),
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
@@ -176,7 +178,7 @@ fun BoxScope.CustomFabMenu(
             ) {
                 Icon(
                     imageVector = if (expanded) Icons.Filled.Close else Icons.Filled.Add,
-                    contentDescription = if (expanded) "关闭菜单" else "打开菜单",
+                    contentDescription = if (expanded) stringResource(R.string.content_desc_close_menu) else stringResource(R.string.content_desc_open_menu),
                     modifier = Modifier
                         .size(24.dp)
                         .graphicsLayer { rotationZ = fabRotation }

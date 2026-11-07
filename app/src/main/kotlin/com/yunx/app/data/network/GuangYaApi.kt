@@ -18,6 +18,7 @@
 
 package com.yunx.app.data.network
 
+import com.yunx.app.R
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.data.network.model.FileThumbnail
 import com.yunx.app.data.network.model.QuotaInfo
@@ -27,6 +28,7 @@ import com.yunx.app.data.network.model.ShareInfo
 import com.yunx.app.data.upload.UploadIo
 import com.yunx.app.data.upload.UploadPhase
 import com.yunx.app.data.upload.UploadSource
+import com.yunx.app.util.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -59,7 +61,7 @@ data class GuangYaSmsChallenge(
  * 已登录用户需「转存到临时目录 → 从个人盘取链」，未登录则要求先登录。
  */
 class GuangYaShareRestrictedException :
-    Exception("该光鸭分享需登录并转存后下载，请先登录光鸭云盘")
+    Exception(AppStrings.get(R.string.e2_guangya_share_restricted))
 
 /**
  * 光鸭云盘 API 封装（文档 §1-§7）。
@@ -118,7 +120,7 @@ class GuangYaApi(
                     tokens = doSignIn(normalized, password, captcha.token, device)
                 } catch (e: CaptchaException) {
                     if (attempt >= 2) throw IllegalStateException(
-                        "光鸭安全验证未通过，请重试或切换网页登录"
+                        AppStrings.get(R.string.e2_guangya_captcha_failed_login)
                     )
                     attempt++
                     captcha = initCaptcha(device, meta, "POST:/v1/auth/signin")
@@ -179,7 +181,7 @@ class GuangYaApi(
             var captcha = initCaptcha(device, meta, "POST:/v1/auth/verification")
             // 初始化返回 url 表示必须走网页人机验证：应用内无法完成，直接给出可执行提示
             if (!captcha.url.isNullOrBlank()) {
-                throw IllegalStateException("光鸭需要网页人机验证，请稍后重试或改用账号密码登录")
+                throw IllegalStateException(AppStrings.get(R.string.e2_guangya_web_captcha_required))
             }
             var attempt = 0
             var challenge: GuangYaSmsChallenge? = null
@@ -187,11 +189,11 @@ class GuangYaApi(
                 try {
                     challenge = doSendSmsCode(phoneNumber, captcha.token, device)
                 } catch (e: CaptchaException) {
-                    if (attempt >= 2) throw IllegalStateException("光鸭安全验证未通过，请重试或改用账号密码登录")
+                    if (attempt >= 2) throw IllegalStateException(AppStrings.get(R.string.e2_guangya_captcha_failed_password))
                     attempt++
                     captcha = initCaptcha(device, meta, "POST:/v1/auth/verification")
                     if (!captcha.url.isNullOrBlank()) {
-                        throw IllegalStateException("光鸭需要网页人机验证，请稍后重试或改用账号密码登录")
+                        throw IllegalStateException(AppStrings.get(R.string.e2_guangya_web_captcha_required))
                     }
                 }
             }
@@ -214,9 +216,9 @@ class GuangYaApi(
         ) {
             throw CaptchaException()
         }
-        ensureAccountSuccess(json, "发送验证码失败")
+        ensureAccountSuccess(json, AppStrings.get(R.string.e2_send_sms_failed))
         val verificationId = accountString(json, "verification_id")
-        if (verificationId.isBlank()) throw IllegalStateException("验证码请求过于频繁，请稍后重试")
+        if (verificationId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_sms_too_frequent))
         return GuangYaSmsChallenge(
             verificationId = verificationId,
             isUser = accountBoolean(json, "is_user"),
@@ -228,7 +230,7 @@ class GuangYaApi(
     suspend fun verifySmsCode(verificationId: String, code: String, device: GuangYaDevice): String =
         withContext(Dispatchers.IO) {
             if (!Regex("^[0-9]{4,8}$").matches(code)) {
-                throw IllegalStateException("短信验证码错误或已过期，请重新获取")
+                throw IllegalStateException(AppStrings.get(R.string.e2_sms_code_invalid))
             }
             val body = JSONObject()
                 .put("client_id", GuangYaConstants.CLIENT_ID)
@@ -237,9 +239,9 @@ class GuangYaApi(
             val json = executeJson(
                 accountRequest(GuangYaConstants.VERIFICATION_VERIFY, body.toString(), device).build()
             )
-            ensureAccountSuccess(json, "短信验证码错误或已过期，请重新获取")
+            ensureAccountSuccess(json, AppStrings.get(R.string.e2_sms_code_invalid))
             val token = accountString(json, "verification_token")
-            if (token.isBlank()) throw IllegalStateException("短信验证码错误或已过期，请重新获取")
+            if (token.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_sms_code_invalid))
             token
         }
 
@@ -256,7 +258,7 @@ class GuangYaApi(
             .put("verification_code", code)
             .put("verification_token", verificationToken)
         val json = executeJson(accountRequest(GuangYaConstants.SIGNIN, body.toString(), device).build())
-        ensureAccountSuccess(json, "短信验证码错误或已过期，请重新获取")
+        ensureAccountSuccess(json, AppStrings.get(R.string.e2_sms_code_invalid))
         parseTokens(json)
     }
 
@@ -275,7 +277,7 @@ class GuangYaApi(
             .put("verification_code", code)
             .put("verification_token", verificationToken)
         val json = executeJson(accountRequest(GuangYaConstants.SIGNUP, body.toString(), device).build())
-        ensureAccountSuccess(json, "短信验证码错误或已过期，请重新获取")
+        ensureAccountSuccess(json, AppStrings.get(R.string.e2_sms_code_invalid))
         parseTokens(json)
     }
 
@@ -301,7 +303,7 @@ class GuangYaApi(
                 val json = executeJson(
                     businessRequest(GuangYaConstants.GET_ASSETS, JSONObject().toString(), device, accessToken).build()
                 )
-                checkBusiness(json, "获取容量信息失败")
+                checkBusiness(json, AppStrings.get(R.string.e2_guangya_get_quota_failed))
                 val data = dataOf(json) ?: return@runCatching null
                 val total = data.optString("totalSpaceSize").toLongOrNull()
                     ?: data.optLong("totalSpaceSize")
@@ -324,7 +326,7 @@ class GuangYaApi(
                     token = null
                 ).build()
             )
-            checkBusiness(json, "获取分享信息失败")
+            checkBusiness(json, AppStrings.get(R.string.e2_guangya_get_share_info_failed))
             val data = dataOf(json) ?: json
             firstNonBlank(data.optString("title"), data.optString("shareName"))
                 .ifBlank { null }
@@ -341,10 +343,10 @@ class GuangYaApi(
                 token = null
             ).build()
         )
-        checkBusiness(json, "获取分享访问令牌失败")
-        val data = dataOf(json) ?: throw IllegalStateException("光鸭分享链接无效")
+        checkBusiness(json, AppStrings.get(R.string.e2_guangya_get_share_token_failed))
+        val data = dataOf(json) ?: throw IllegalStateException(AppStrings.get(R.string.e2_guangya_invalid_share_link))
         firstNonBlank(data.optString("accessToken"), data.optString("access_token"))
-            .ifBlank { throw IllegalStateException("光鸭分享链接无效") }
+            .ifBlank { throw IllegalStateException(AppStrings.get(R.string.e2_guangya_invalid_share_link)) }
     }
 
     /**
@@ -375,7 +377,7 @@ class GuangYaApi(
         val json = executeJson(
             businessRequest(GuangYaConstants.SHARE_FILES, body.toString(), device = null, token = null).build()
         )
-        checkBusiness(json, "获取分享文件列表失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_guangya_get_share_files_failed))
         val data = dataOf(json) ?: return@withContext Pair(emptyList(), null)
         val list = parseFileList(listArray(data))
         val next = data.optString("cursor").takeIf { it.isNotBlank() }
@@ -405,13 +407,13 @@ class GuangYaApi(
         if (json.optString("code") == "207") {
             throw GuangYaShareRestrictedException()
         }
-        checkBusiness(json, "获取下载地址失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_guangya_get_download_url_failed))
         val data = dataOf(json) ?: return@withContext null
         val url = firstNonBlank(
             data.optString("signedURL"), data.optString("signedUrl"), data.optString("downloadUrl"),
             data.optString("download_url"), data.optString("url"), data.optString("cdnUrl")
         )
-        if (url.isBlank()) throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
+        if (url.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_guangya_no_valid_download_url))
         val size = data.optString("size").toLongOrNull() ?: file.fsize
         DownloadLink(fid = file.fid, filename = file.fname, downloadUrl = url, size = size)
     }
@@ -435,7 +437,7 @@ class GuangYaApi(
         val json = executeJson(
             businessRequest(GuangYaConstants.RESTORE_SHARE, body.toString(), null, accountToken).build()
         )
-        checkBusiness(json, "转存失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_guangya_restore_failed))
         val taskId = dataOf(json)?.optString("taskId").orEmpty()
         if (taskId.isNotBlank()) waitTask(accountToken, taskId)
     }
@@ -461,12 +463,12 @@ class GuangYaApi(
             .put("maxRestoreCount", 0)
             .put("downloadType", 1)
         val json = executeJson(businessRequest(GuangYaConstants.SHARE_FILE, body.toString(), null, accessToken).build())
-        checkBusiness(json, "创建分享失败")
-        val data = dataOf(json) ?: throw IllegalStateException("创建分享失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_create_share_failed))
+        val data = dataOf(json) ?: throw IllegalStateException(AppStrings.get(R.string.e2_create_share_failed))
         val shareUrl = data.optString("shareUrl")
         val shareId = firstNonBlank(data.optString("shareId"), data.optString("id"))
         val url = shareUrl.ifBlank {
-            if (shareId.isBlank()) throw IllegalStateException("创建分享失败")
+            if (shareId.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_create_share_failed))
             "${GuangYaConstants.WEB_SITE}/s/$shareId"
         }
         val realCode = data.optString("code").ifBlank { code }
@@ -488,14 +490,14 @@ class GuangYaApi(
                 .put("sortType", 0)
                 .put("page", page)
             val json = executeJson(businessRequest(GuangYaConstants.FILE_LIST, body.toString(), null, accessToken).build())
-            checkBusiness(json, "获取文件列表失败")
+            checkBusiness(json, AppStrings.get(R.string.e2_get_file_list_failed))
             val data = dataOf(json)
             if (data == null) break
             val list = parseFileList(listArray(data))
             if (list.isEmpty()) break
             var added = 0
             list.forEach { if (seen.add(it.fid)) { all.add(it); added++ } }
-            if (added == 0) throw IllegalStateException("光鸭文件列表分页重复，请重试")
+            if (added == 0) throw IllegalStateException(AppStrings.get(R.string.e2_guangya_list_pagination_duplicate))
             val total = data.optString("total").toLongOrNull() ?: data.optLong("total", 0L)
             if (total > 0 && all.size >= total) break
             if (total <= 0 && list.size < GuangYaConstants.PAGE_SIZE) break
@@ -511,11 +513,11 @@ class GuangYaApi(
             .put("dirName", name)
             .put("failIfNameExist", true)
         val json = executeJson(businessRequest(GuangYaConstants.CREATE_DIR, body.toString(), null, accessToken).build())
-        checkBusiness(json, "新建文件夹失败")
-        val data = dataOf(json) ?: throw IllegalStateException("光鸭未创建文件夹，请检查是否存在同名文件")
+        checkBusiness(json, AppStrings.get(R.string.e2_create_folder_failed))
+        val data = dataOf(json) ?: throw IllegalStateException(AppStrings.get(R.string.e2_guangya_folder_not_created))
         val id = firstNonBlank(data.optString("fileId"), data.optString("id"))
         if (id.isBlank() || data.optString("resType") == "1") {
-            throw IllegalStateException("光鸭未创建文件夹，请检查是否存在同名文件")
+            throw IllegalStateException(AppStrings.get(R.string.e2_guangya_folder_not_created))
         }
         id
     }
@@ -550,10 +552,10 @@ class GuangYaApi(
         )
         val code = json.optString("code")
         // 156 = 秒传命中：业务上算成功，但 checkBusiness 只认 code 0
-        if (code != "156") checkBusiness(json, "创建上传任务失败")
-        val data = dataOf(json) ?: throw IllegalStateException("光鸭未创建上传任务")
+        if (code != "156") checkBusiness(json, AppStrings.get(R.string.e2_create_upload_task_failed))
+        val data = dataOf(json) ?: throw IllegalStateException(AppStrings.get(R.string.e2_guangya_upload_task_not_created))
         val taskId = data.optString("taskId").takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("光鸭未创建上传任务")
+            ?: throw IllegalStateException(AppStrings.get(R.string.e2_guangya_upload_task_not_created))
         if (code != "156") {
             // 凭据可能平铺在 data，也可能裹在 creds 里
             fun field(key: String): String = data.optString(key).ifBlank {
@@ -584,11 +586,11 @@ class GuangYaApi(
             if (statusCode.isNotBlank() && statusCode != "0" &&
                 statusCode !in GuangYaConstants.UPLOAD_PENDING_CODES
             ) {
-                checkBusiness(status, "查询上传结果失败")
+                checkBusiness(status, AppStrings.get(R.string.e2_guangya_query_upload_failed))
             }
             delay(GuangYaConstants.UPLOAD_POLL_INTERVAL_MS)
         }
-        throw IllegalStateException("光鸭正在校验上传内容，请稍后刷新列表")
+        throw IllegalStateException(AppStrings.get(R.string.e2_guangya_upload_verifying))
     }
 
     /** 重命名（文档 §5.3）。 */
@@ -600,7 +602,7 @@ class GuangYaApi(
                 null, accessToken
             ).build()
         )
-        checkBusiness(json, "重命名失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_rename_failed))
         dataOf(json)?.optString("taskId")?.takeIf { it.isNotBlank() }?.let { waitTask(accessToken, it) }
     }
 
@@ -614,7 +616,7 @@ class GuangYaApi(
                 null, accessToken
             ).build()
         )
-        checkBusiness(json, "移动失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_move_failed))
         dataOf(json)?.optString("taskId")?.takeIf { it.isNotBlank() }?.let { waitTask(accessToken, it) }
     }
 
@@ -628,7 +630,7 @@ class GuangYaApi(
                 null, accessToken
             ).build()
         )
-        checkBusiness(json, "删除失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_delete_failed))
         dataOf(json)?.optString("taskId")?.takeIf { it.isNotBlank() }?.let { waitTask(accessToken, it) }
     }
 
@@ -641,13 +643,13 @@ class GuangYaApi(
                 null, accessToken
             ).build()
         )
-        checkBusiness(json, "获取下载地址失败")
+        checkBusiness(json, AppStrings.get(R.string.e2_guangya_get_download_url_failed))
         val data = dataOf(json) ?: return@withContext null
         val url = firstNonBlank(
             data.optString("signedURL"), data.optString("signedUrl"), data.optString("downloadUrl"),
             data.optString("download_url"), data.optString("url"), data.optString("cdnUrl")
         )
-        if (url.isBlank()) throw IllegalStateException("光鸭未返回有效下载地址，请确认下载权限")
+        if (url.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_guangya_no_valid_download_url))
         val size = data.optString("size").toLongOrNull() ?: file.fsize
         DownloadLink(fid = file.fid, filename = file.fname, downloadUrl = url, size = size)
     }
@@ -663,7 +665,7 @@ class GuangYaApi(
                     null, accessToken
                 ).build()
             )
-            checkBusiness(json, "任务状态查询失败")
+            checkBusiness(json, AppStrings.get(R.string.e2_guangya_task_status_failed))
             val data = dataOf(json) ?: return@repeat
             val status = data.optInt("status", 0)
             val detail = data.optJSONObject("detail")
@@ -671,11 +673,11 @@ class GuangYaApi(
             when {
                 status == 2 && detailCode == 0 -> return@withContext
                 status == 3 || (status == 2 && detailCode != 0) ->
-                    throw IllegalStateException(detail?.optString("msg").orEmpty().ifBlank { "光鸭操作失败" })
+                    throw IllegalStateException(detail?.optString("msg").orEmpty().ifBlank { AppStrings.get(R.string.e2_guangya_operation_failed) })
             }
             delay(GuangYaConstants.TASK_DELAY_MS)
         }
-        throw IllegalStateException("光鸭操作仍在处理中，请稍后刷新列表确认结果")
+        throw IllegalStateException(AppStrings.get(R.string.e2_guangya_operation_pending))
     }
 
     // ---------- 内部 ----------
@@ -685,7 +687,7 @@ class GuangYaApi(
     private fun parseTokens(json: JSONObject): GuangYaTokens {
         val data = json.optJSONObject("data") ?: json
         val access = firstNonBlank(data.optString("access_token"), data.optString("accessToken"))
-        if (access.isBlank()) throw IllegalStateException("光鸭登录失败，请检查账号密码，或切换网页登录")
+        if (access.isBlank()) throw IllegalStateException(AppStrings.get(R.string.e2_guangya_login_failed))
         val refresh = firstNonBlank(data.optString("refresh_token"), data.optString("refreshToken"))
         return GuangYaTokens(access, refresh, expiresInSeconds(data))
     }
@@ -741,12 +743,12 @@ class GuangYaApi(
         )
         val mapped = when {
             serverMsg.contains("captcha", ignoreCase = true) || code.contains("captcha", ignoreCase = true) ->
-                "光鸭安全验证未通过，请重试或改用账号密码登录"
+                AppStrings.get(R.string.e2_guangya_captcha_failed_password)
             code.contains("frequent", ignoreCase = true) || code == "429" || serverMsg.contains("频繁") ->
-                "验证码请求过于频繁，请稍后重试"
+                AppStrings.get(R.string.e2_sms_too_frequent)
             code.contains("verification", ignoreCase = true) ||
                 code.contains("code", ignoreCase = true) || serverMsg.contains("验证码") ->
-                "短信验证码错误或已过期，请重新获取"
+                AppStrings.get(R.string.e2_sms_code_invalid)
             else -> serverMsg.ifBlank { fallback }
         }
         throw IllegalStateException(mapped)
@@ -776,12 +778,12 @@ class GuangYaApi(
             json.optString("msg"), json.optString("message"), json.optString("error_description")
         )
         return when (code) {
-            "too_many_requests" -> "光鸭登录尝试过于频繁，请稍后重试"
+            "too_many_requests" -> AppStrings.get(R.string.e2_guangya_login_too_frequent)
             "invalid_password", "invalid_account_or_password", "invalid_credentials", "unauthenticated", "user_not_found" ->
-                "光鸭账号或密码不正确，请检查后重试"
-            "password_required", "password_not_set" -> "该光鸭账号尚未设置密码，请切换网页登录"
-            "verification_required", "verification_code_required" -> "光鸭需要短信验证，请切换网页登录继续"
-            else -> serverMsg.ifBlank { "光鸭登录失败，请检查账号密码，或切换网页登录" }
+                AppStrings.get(R.string.e2_guangya_wrong_credentials)
+            "password_required", "password_not_set" -> AppStrings.get(R.string.e2_guangya_password_not_set)
+            "verification_required", "verification_code_required" -> AppStrings.get(R.string.e2_guangya_sms_required)
+            else -> serverMsg.ifBlank { AppStrings.get(R.string.e2_guangya_login_failed) }
         }
     }
 
@@ -865,13 +867,13 @@ class GuangYaApi(
             json.optString("msg"), json.optString("message"), json.optString("error_description")
         )
         val mapped = when (code) {
-            "209" -> "光鸭分享提取码错误或缺失"
-            "200", "201", "202" -> "光鸭分享已取消、过期或不可访问"
-            "205", "206", "207", "504" -> "光鸭分享下载受限，请在官网确认该分享的下载权限"
-            "157" -> "光鸭网盘空间不足"
+            "209" -> AppStrings.get(R.string.e2_guangya_share_passcode_invalid)
+            "200", "201", "202" -> AppStrings.get(R.string.e2_guangya_share_unavailable)
+            "205", "206", "207", "504" -> AppStrings.get(R.string.e2_guangya_download_restricted)
+            "157" -> AppStrings.get(R.string.e2_guangya_no_space)
             else -> null
         }
-        throw IllegalStateException(mapped ?: serverMsg.ifBlank { "$fallback（code=$code）" })
+        throw IllegalStateException(mapped ?: serverMsg.ifBlank { AppStrings.get(R.string.e2_error_with_code, fallback, code) })
     }
 
     private fun isSuccess(json: JSONObject): Boolean {
@@ -947,8 +949,8 @@ class GuangYaApi(
         client.newCall(request).execute().use { response ->
             val body = response.body?.string()
             if (body.isNullOrBlank()) {
-                if (!response.isSuccessful) throw IllegalStateException("请求失败（HTTP ${response.code}）")
-                throw IllegalStateException("请求失败：响应为空")
+                if (!response.isSuccessful) throw IllegalStateException(AppStrings.get(R.string.e2_request_failed_http, response.code))
+                throw IllegalStateException(AppStrings.get(R.string.e2_request_empty_response))
             }
             return JSONObject(body)
         }

@@ -1,0 +1,97 @@
+<!--
+    YunX (云析) - A network drive share-link parser and high-speed downloader for Android.
+    Copyright (C) 2026 CYQawa
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<!--
+    E3 グループ：データ層 Repository の例外 / エラーメッセージ（e.message 経由で表示）。
+-->
+<resources>
+    <string name="er_share_link_unrecognized">共有リンクを認識できません</string>
+    <string name="er_login_account_missing">ログイン状態にアカウント情報がありません。再度ログインしてください</string>
+    <string name="er_get_download_url_failed">ダウンロードリンクの取得に失敗しました</string>
+    <string name="er_create_transfer_task_failed">転送タスクの作成に失敗しました</string>
+    <string name="er_save_timeout_or_failed">転送がタイムアウトしたか失敗しました</string>
+    <string name="er_c139_kouling_invalid">139 ドライブの共有コードの解析に失敗しました：返された共有リンクが無効です</string>
+    <string name="er_c139_transfer_not_needed">139 の共有は転送不要です</string>
+    <string name="er_c139_use_share_download_link">139 の共有では getShareDownloadLink を使用してください</string>
+    <string name="er_guangya_share_title">光鴨の共有</string>
+    <string name="er_guangya_temp_dir_not_needed">光鴨の共有では一時ディレクトリの事前作成は不要です</string>
+    <string name="er_guangya_login_required">先に光鴨ドライブにログインしてください</string>
+    <string name="er_guangya_use_share_download_link">光鴨の共有では getShareDownloadLink を使用してください</string>
+    <string name="er_guangya_no_download_url">光鴨から有効なダウンロード URL が返されませんでした。ダウンロード権限を確認してください</string>
+    <string name="er_guangya_duplicate_file">光鴨の一時ディレクトリに同名ファイルがあり、ダウンロード対象を特定できません</string>
+    <string name="er_guangya_size_mismatch">光鴨の転送ファイルのサイズが一致しません</string>
+    <string name="er_guangya_target_not_visible">光鴨への転送は送信済みですが、対象ファイルがまだ表示されません。しばらくしてから再試行してください</string>
+    <string name="er_guangya_share_login_required">この光鴨の共有はログインして転送した後にダウンロードできます。先に光鴨ドライブにログインしてください</string>
+    <string name="er_pan115_login_required">先に115ドライブにログインしてください</string>
+    <string name="er_pan115_create_temp_dir_failed">115の一時ディレクトリの作成に失敗しました</string>
+    <string name="er_pan115_create_temp_subdir_failed">115の転送用一時ディレクトリの作成に失敗しました</string>
+    <string name="er_pan115_file_not_found_after_save">転送は完了しましたが、対象ディレクトリにファイルが見つかりません。115ドライブを確認してください</string>
+    <string name="er_pan115_use_share_download_link">115 の共有では getShareDownloadLink を使用してください</string>
+    <string name="er_pan115_pc_required">この共有ファイルは115の PC クライアントでのみダウンロードできます。先に「ドライブ」ページで115ドライブにログインしてください</string>
+    <string name="er_pan115_pc_url_unavailable">この共有ファイルの PC 用ダウンロードリンクを一時的に取得できません。しばらくしてから再試行してください</string>
+    <string name="er_share_file_no_url_after_save">共有ファイルの転送後にダウンロードリンクを取得できませんでした。しばらくしてから再試行してください</string>
+    <string name="er_space_insufficient">ドライブの空き容量が不足しています：この共有には %1$s が必要ですが、空きは %2$s です。容量を空けるか、別の方法でダウンロードしてください</string>
+    <string name="er_pan123_transfer_not_needed">123 の共有は転送不要です</string>
+    <string name="er_pan123_login_required">先に123ドライブにログインしてください</string>
+    <string name="er_pan123_use_share_download_link">123 の共有では getShareDownloadLink を使用してください</string>
+    <string name="er_share_token_missing">共有の認証情報を取得できませんでした</string>
+    <string name="er_get_file_list_failed">ファイル一覧を取得できませんでした</string>
+    <string name="er_get_dir_failed">ドライブのディレクトリ取得に失敗しました</string>
+    <string name="er_create_temp_dir_failed">一時ディレクトリの作成に失敗しました</string>
+    <string name="er_create_temp_subdir_failed">転送用一時ディレクトリの作成に失敗しました</string>
+    <string name="er_save_failed">転送に失敗しました</string>
+    <string name="er_save_timeout">転送がタイムアウトしました。しばらくしてから再試行してください</string>
+    <string name="er_xunlei_login_required">先に迅雷ドライブにログインしてください</string>
+    <string name="er_xunlei_login_expired">迅雷のログインが期限切れです。再度ログインしてください</string>
+    <string name="er_device_id_missing">デバイス識別子がありません</string>
+    <string name="er_share_info_missing">共有情報を取得できませんでした</string>
+    <string name="er_guest_download_unsupported">このプラットフォームでは未ログイン時にダウンロードできません。ログインしてから再試行してください</string>
+    <string name="er_lanzou_pwd_required">この藍奏の共有には抽出コードが必要です。入力して再解析してください</string>
+    <string name="er_lanzou_session_expired">藍奏の共有セッションが無効になりました。再解析してください</string>
+    <string name="er_lanzou_transfer_unsupported">藍奏の共有は直接転送に対応していません。ダウンロードしてアップロードしてください</string>
+    <string name="er_lanzou_use_share_download_link">藍奏の共有では getShareDownloadLink を使用してください</string>
+    <string name="er_folder_download_unsupported">フォルダは直接ダウンロードできません</string>
+    <string name="er_ilanzou_share_title">藍奏雲プレミアムの共有</string>
+    <string name="er_ilanzou_login_required">先に藍奏雲プレミアムにログインしてください</string>
+    <string name="er_ilanzou_save_processing">藍奏プレミアムはまだ転送を処理中です。しばらくしてから一覧を更新してください</string>
+    <string name="er_ilanzou_use_share_download_link">藍奏プレミアムの共有では getShareDownloadLink を使用してください</string>
+    <string name="er_ilanzou_temp_dir_not_needed">藍奏プレミアムの共有では一時ディレクトリは不要です</string>
+    <string name="er_video_platform_unsupported">%1$s の解析にはまだ対応していません</string>
+    <string name="er_lanzou_credential_check_failed">藍奏雲のログイン認証情報の検証に失敗しました。再試行してください</string>
+    <string name="er_lanzou_credential_invalid">藍奏雲のログイン認証情報が無効です。再試行してください</string>
+    <string name="er_xunlei_captcha_method_mismatch">認証コードが現在のログイン方法と一致しません。迅雷のウェブ版に再度ログインしてください</string>
+    <string name="er_xunlei_web_login_expired">迅雷のウェブログインが期限切れです。迅雷のログインページから再度ログインしてください</string>
+    <string name="er_announcement_empty_response">レスポンスが空です（HTTP %1$d）</string>
+    <string name="er_announcement_network_error">ネットワークエラー</string>
+    <string name="er_announcement_bad_response">レスポンス形式が不正です</string>
+    <string name="er_announcement_request_failed">リクエストに失敗しました</string>
+    <string name="er_announcement_empty_data">レスポンスデータが空です</string>
+    <string name="er_announcement_parse_failed">データの解析に失敗しました</string>
+    <string name="er_time_just_now">たった今</string>
+    <string name="er_time_minutes_ago">%1$d 分前</string>
+    <string name="er_time_hours_ago">%1$d 時間前</string>
+    <string name="er_time_days_ago">%1$d 日前</string>
+    <string name="er_baidu_default_nickname">百度ユーザー</string>
+    <string name="er_c139_default_nickname">139 ユーザー</string>
+    <string name="er_guangya_default_nickname">光鴨ユーザー</string>
+    <string name="er_lanzou_default_nickname">藍奏雲ユーザー</string>
+    <string name="er_pan115_default_nickname">115 ユーザー</string>
+    <string name="er_quark_default_nickname">夸克ユーザー</string>
+    <string name="er_uc_default_nickname">UC ユーザー</string>
+    <string name="er_xunlei_default_nickname">迅雷ユーザー</string>
+</resources>

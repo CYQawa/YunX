@@ -18,7 +18,9 @@
 
 package com.yunx.app.data.network.video
 
+import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
+import com.yunx.app.util.AppStrings
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -45,22 +47,30 @@ object AcFunParser : VideoParser {
             put("Referer", REFERER)
             if (cookie.isNotBlank()) put("Cookie", cookie)
         }
-        val html = VideoHttp.getText(url, headers, "AcFun 视频")
+        val html = VideoHttp.getText(url, headers, AppStrings.get(R.string.em_what_acfun_video))
 
         val raw = VideoHttp.extractInlineJson(html, "window.videoInfo")
             ?: throw VideoParseException(
-                VideoParseErrorKind.NOT_FOUND, "AcFun 视频信息解析失败（页面里没有 videoInfo，可能已删除）"
+                VideoParseErrorKind.NOT_FOUND,
+                AppStrings.get(R.string.em_acfun_no_video_info)
             )
         // 这段内嵌 JSON 被转义了两层：参考实现先还原 `\\"` → `\"`，再把 `\"` → `"`，否则 JSONObject 解析不了
         val jsonText = VideoHttp.unescapeQuotes(raw.replace("\\\\\"", "\\\""))
         val info = runCatching { JSONObject(jsonText) }.getOrElse {
-            throw VideoParseException(VideoParseErrorKind.UNKNOWN, "AcFun 视频信息解析失败", it)
+            throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_acfun_parse_failed),
+                it
+            )
         }
 
         val title = info.str("title")
         val description = info.str("description")
         val m3u8Url = pickM3u8(info)
-            ?: throw VideoParseException(VideoParseErrorKind.UNKNOWN, "AcFun 未取到视频流地址")
+            ?: throw VideoParseException(
+                VideoParseErrorKind.UNKNOWN,
+                AppStrings.get(R.string.em_acfun_no_stream)
+            )
 
         return VideoParseResult(
             platform = platform,

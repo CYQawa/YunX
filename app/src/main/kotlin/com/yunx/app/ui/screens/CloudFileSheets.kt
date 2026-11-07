@@ -96,12 +96,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yunx.app.R
 import com.yunx.app.data.network.model.ShareExpire
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.upload.UploadPhase
@@ -124,6 +126,7 @@ import com.yunx.app.ui.theme.ListGroupGap
 import com.yunx.app.ui.theme.listGroupShape
 import com.yunx.app.ui.theme.spatialDefault
 import com.yunx.app.ui.theme.spatialFast
+import com.yunx.app.util.AppStrings
 
 /** 文件操作菜单类型（FileActionSheet 内切换） */
 private enum class ActionStep { MENU, MOVE, SHARE, RENAME, DELETE }
@@ -132,11 +135,12 @@ private enum class ActionStep { MENU, MOVE, SHARE, RENAME, DELETE }
  * 默认有效期选项：名称 + UI 中性码（[ShareExpire]；各平台 API 取值不同，由 ViewModel 负责转换，Agent.md §3.20）。
  * 115 的档位与中性码不同（长期/1 天/3 天/7 天/15 天），由 115 云盘页传入 `ShareExpire.PAN115_OPTIONS`。
  */
-private val defaultExpireOptions = listOf(
-    "永久有效" to ShareExpire.FOREVER,
-    "1 天" to ShareExpire.ONE_DAY,
-    "7 天" to ShareExpire.SEVEN_DAYS,
-    "30 天" to ShareExpire.THIRTY_DAYS
+@Composable
+private fun defaultExpireOptions(): List<Pair<String, Int>> = listOf(
+    stringResource(R.string.csa_expire_forever) to ShareExpire.FOREVER,
+    stringResource(R.string.csa_expire_1day) to ShareExpire.ONE_DAY,
+    stringResource(R.string.csa_expire_7days) to ShareExpire.SEVEN_DAYS,
+    stringResource(R.string.csa_expire_30days) to ShareExpire.THIRTY_DAYS
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -160,7 +164,7 @@ internal fun FileActionSheet(
     /** 提取码规则（各平台不同，见 [PasscodeMode]） */
     passcodeMode: PasscodeMode = PasscodeMode.OPTIONAL,
     /** 有效期档位（默认六平台通用档；115 传 [ShareExpire.PAN115_OPTIONS]） */
-    expireOptions: List<Pair<String, Int>> = defaultExpireOptions,
+    expireOptions: List<Pair<String, Int>> = defaultExpireOptions(),
     moveStep: @Composable (onBack: () -> Unit, onDone: () -> Unit) -> Unit
 ) {
     var step by remember { mutableStateOf(ActionStep.MENU) }
@@ -201,7 +205,7 @@ internal fun FileActionSheet(
                 ActionStep.MOVE -> moveStep({ step = ActionStep.MENU }, onDismiss)
 
                 ActionStep.SHARE -> ShareStep(
-                    title = "分享文件",
+                    title = stringResource(R.string.csa_share_file_title),
                     subtitle = file.fname,
                     operating = operating,
                     passcodeMode = passcodeMode,
@@ -219,7 +223,7 @@ internal fun FileActionSheet(
 
                 // 删除确认：与批量删除共用同一份确认 UI，取消则退回菜单
                 ActionStep.DELETE -> ConfirmDeleteContent(
-                    target = "「${file.fname}」",
+                    target = stringResource(R.string.csa_quoted_name, file.fname),
                     operating = operating,
                     onCancel = { step = ActionStep.MENU },
                     onConfirm = {
@@ -261,7 +265,7 @@ internal fun FileSheetHeader(file: ShareFile) {
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = if (file.isdir) "文件夹" else "文件",
+                text = if (file.isdir) stringResource(R.string.csa_label_folder) else stringResource(R.string.csa_label_file),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -288,13 +292,13 @@ internal fun CloudAddMenu(
         IconButton(onClick = { expanded = true }) {
             Icon(
                 imageVector = Icons.Outlined.Add,
-                contentDescription = "新建",
+                contentDescription = stringResource(R.string.csa_cd_new),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("创建文件夹") },
+                text = { Text(stringResource(R.string.csa_create_folder)) },
                 leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, contentDescription = null) },
                 onClick = {
                     expanded = false
@@ -303,7 +307,7 @@ internal fun CloudAddMenu(
             )
             DropdownMenuItem(
                 // 未接入上传的页面把「开发中」写在文案里：比灰掉一个没有说明的菜单项更容易看懂
-                text = { Text(if (onUploadFile == null) "上传文件（开发中）" else "上传文件") },
+                text = { Text(if (onUploadFile == null) stringResource(R.string.csa_upload_developing) else stringResource(R.string.csa_upload_file)) },
                 leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
                 onClick = {
                     expanded = false
@@ -324,10 +328,10 @@ internal fun CloudAddMenu(
 internal fun cloudNameError(raw: String): String? {
     val name = raw.trim()
     return when {
-        name.isEmpty() -> "名称不能为空"
-        name == "." || name == ".." -> "名称不能是 . 或 .."
-        name.length > 255 -> "名称最多 255 个字符"
-        name.any { it == '/' || it == '\\' || it.code < 0x20 } -> "名称不能含 / \\ 或控制字符"
+        name.isEmpty() -> AppStrings.get(R.string.csa_name_error_empty)
+        name == "." || name == ".." -> AppStrings.get(R.string.csa_name_error_dots)
+        name.length > 255 -> AppStrings.get(R.string.csa_name_error_too_long)
+        name.any { it == '/' || it == '\\' || it.code < 0x20 } -> AppStrings.get(R.string.csa_name_error_invalid_chars)
         else -> null
     }
 }
@@ -347,7 +351,7 @@ internal fun CreateFolderDialog(
     val showError = touched && error != null
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("创建文件夹") },
+        title = { Text(stringResource(R.string.csa_create_folder)) },
         text = {
             Column {
                 OutlinedTextField(
@@ -356,12 +360,12 @@ internal fun CreateFolderDialog(
                         name = it
                         touched = true
                     },
-                    label = { Text("文件夹名称") },
+                    label = { Text(stringResource(R.string.csa_folder_name)) },
                     singleLine = true,
                     isError = showError,
                     supportingText = {
                         Text(
-                            text = if (showError) error!! else "创建在当前目录下",
+                            text = if (showError) error!! else stringResource(R.string.csa_create_in_current_dir),
                             color = if (showError) {
                                 MaterialTheme.colorScheme.error
                             } else {
@@ -377,11 +381,11 @@ internal fun CreateFolderDialog(
                 onClick = { onConfirm(name.trim()) },
                 enabled = error == null
             ) {
-                Text("创建")
+                Text(stringResource(R.string.csa_create))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.csa_cancel)) }
         }
     )
 }
@@ -416,16 +420,16 @@ private fun ActionMenu(
         if (!file.isdir) {
             ActionItem(
                 icon = Icons.Outlined.Download,
-                title = "下载",
-                desc = "使用内置下载功能保存到本机",
+                title = stringResource(R.string.csa_download),
+                desc = stringResource(R.string.csa_action_download_desc),
                 tint = MaterialTheme.colorScheme.primary,
                 onClick = onDownload
             )
         } else if (onDownloadFolder != null) {
             ActionItem(
                 icon = Icons.Outlined.Download,
-                title = "下载文件夹",
-                desc = "递归下载整个文件夹，保持目录结构",
+                title = stringResource(R.string.csa_download_folder),
+                desc = stringResource(R.string.csa_action_download_folder_desc),
                 tint = MaterialTheme.colorScheme.primary,
                 onClick = onDownloadFolder
             )
@@ -434,37 +438,37 @@ private fun ActionMenu(
         if (onPreview != null) {
             ActionItem(
                 icon = Icons.Outlined.Visibility,
-                title = "在线预览",
-                desc = "不下载，直接在应用内查看",
+                title = stringResource(R.string.csa_online_preview),
+                desc = stringResource(R.string.csa_action_preview_desc),
                 tint = MaterialTheme.colorScheme.primary,
                 onClick = onPreview
             )
         }
         ActionItem(
             icon = Icons.Outlined.Share,
-            title = "分享",
-            desc = "生成分享链接（可设提取码/有效期）",
+            title = stringResource(R.string.csa_share),
+            desc = stringResource(R.string.csa_action_share_desc),
             tint = MaterialTheme.colorScheme.primary,
             onClick = onShare
         )
         ActionItem(
             icon = Icons.Outlined.DriveFileMove,
-            title = "移动到",
-            desc = "移动到网盘的其他目录",
+            title = stringResource(R.string.csa_move_to),
+            desc = stringResource(R.string.csa_action_move_desc),
             tint = MaterialTheme.colorScheme.primary,
             onClick = onMove
         )
         ActionItem(
             icon = Icons.Outlined.Edit,
-            title = "重命名",
-            desc = "修改文件名",
+            title = stringResource(R.string.csa_rename),
+            desc = stringResource(R.string.csa_action_rename_desc),
             tint = MaterialTheme.colorScheme.primary,
             onClick = onRename
         )
         ActionItem(
             icon = Icons.Outlined.Delete,
-            title = "删除",
-            desc = "删除网盘文件",
+            title = stringResource(R.string.csa_delete),
+            desc = stringResource(R.string.csa_action_delete_desc),
             tint = MaterialTheme.colorScheme.error,
             onClick = onDelete
         )
@@ -529,11 +533,11 @@ internal fun QuarkMoveStep(
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        StepHeader(title = "移动到", subtitle = subtitle, onBack = onBack)
+        StepHeader(title = stringResource(R.string.csa_move_to), subtitle = subtitle, onBack = onBack)
 
         Spacer(modifier = Modifier.height(8.dp))
         CrumbBar(
-            rootTitle = "根目录",
+            rootTitle = stringResource(R.string.csa_root_dir),
             pathNames = (moveState as? QuarkCloudUiState.Loaded)?.pathNames ?: emptyList(),
             onNavigate = { viewModel.moveNavigateToLevel(it) }
         )
@@ -574,7 +578,7 @@ internal fun QuarkMoveStep(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "当前目录没有子文件夹，可直接移动到此处",
+                            stringResource(R.string.csa_no_subfolders_move_here),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -602,7 +606,7 @@ internal fun QuarkMoveStep(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        val dirName = (moveState as? QuarkCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: "根目录"
+        val dirName = (moveState as? QuarkCloudUiState.Loaded)?.pathNames?.lastOrNull() ?: stringResource(R.string.csa_root_dir)
         Button(
             onClick = {
                 val to = (moveState as? QuarkCloudUiState.Loaded)?.dirFid ?: "0"
@@ -619,7 +623,7 @@ internal fun QuarkMoveStep(
             } else {
                 Icon(Icons.Outlined.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("移动到此处（$dirName）")
+                Text(stringResource(R.string.csa_move_here, dirName))
             }
         }
     }
@@ -642,7 +646,7 @@ private fun ShareStep(
     subtitle: String,
     operating: Boolean,
     passcodeMode: PasscodeMode,
-    expireOptions: List<Pair<String, Int>> = defaultExpireOptions,
+    expireOptions: List<Pair<String, Int>> = defaultExpireOptions(),
     onBack: () -> Unit,
     onCreateShare: (withPassword: Boolean, passcode: String, expiredType: Int) -> Unit
 ) {
@@ -666,7 +670,7 @@ private fun ShareStep(
         // 提取码：按平台规则渲染（四种规则见 PasscodeMode）
         when (passcodeMode) {
             PasscodeMode.OPTIONAL -> {
-                Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.csa_passcode), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(6.dp))
                 // 间距置 0 + checkedShape 指回未选中形状：避免两段之间出现缝/豁口（选中态由填充色表达）
                 ButtonGroup(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
@@ -678,7 +682,7 @@ private fun ShareStep(
                             checkedShape = ButtonGroupDefaults.connectedLeadingButtonShape
                         )
                     ) {
-                        Text("无提取码")
+                        Text(stringResource(R.string.csa_no_passcode))
                     }
                     ToggleButton(
                         enabled = !operating,
@@ -691,7 +695,7 @@ private fun ShareStep(
                             checkedShape = ButtonGroupDefaults.connectedTrailingButtonShape
                         )
                     ) {
-                        Text("设置提取码")
+                        Text(stringResource(R.string.csa_set_passcode))
                     }
                 }
                 // 切到「设置提取码」时输入框淡入 + 展开（收起时反向），不再突然出现/消失
@@ -705,7 +709,7 @@ private fun ShareStep(
                         PasscodeField(
                             passcode = passcode,
                             onPasscodeChange = { passcode = it },
-                            label = "4 位提取码"
+                            label = stringResource(R.string.csa_passcode_4digit)
                         )
                     }
                 }
@@ -715,9 +719,9 @@ private fun ShareStep(
                 val allowBlank = passcodeMode == PasscodeMode.REQUIRED_OR_AUTO
                 Text(
                     text = if (allowBlank) {
-                        "分享必须带提取码，可自定义 4 位（留空由服务端生成）"
+                        stringResource(R.string.csa_share_passcode_required_auto)
                     } else {
-                        "分享必须带 4 位提取码"
+                        stringResource(R.string.csa_share_passcode_required)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -726,15 +730,15 @@ private fun ShareStep(
                 PasscodeField(
                     passcode = passcode,
                     onPasscodeChange = { passcode = it },
-                    label = if (allowBlank) "提取码（4 位字母数字，可留空）" else "提取码（4 位字母数字）"
+                    label = if (allowBlank) stringResource(R.string.csa_passcode_label_optional) else stringResource(R.string.csa_passcode_label_required)
                 )
             }
 
             PasscodeMode.SERVER_GENERATED -> {
-                Text("提取码", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.csa_passcode), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "提取码由服务端自动生成，分享创建后可在结果里查看",
+                    text = stringResource(R.string.csa_passcode_server_generated),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -743,7 +747,7 @@ private fun ShareStep(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("有效期", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.csa_validity), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(6.dp))
         // FlowRow 而不是 Row：115 有 5 档（永久/1/3/7/15 天），一行放不下会把最右一档压扁，
         // 换行后每档都保持自然宽度；其余平台的 4 档也照常一行显示。
@@ -793,7 +797,7 @@ private fun ShareStep(
             } else {
                 Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("创建分享")
+                Text(stringResource(R.string.csa_create_share))
             }
         }
     }
@@ -833,13 +837,13 @@ private fun RenameStep(
             .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        StepHeader(title = "重命名", subtitle = file.fname, onBack = onBack)
+        StepHeader(title = stringResource(R.string.csa_rename), subtitle = file.fname, onBack = onBack)
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("新文件名") },
+            label = { Text(stringResource(R.string.csa_new_file_name)) },
             enabled = !operating,
             isError = nameError != null,
             supportingText = { nameError?.let { Text(it) } },
@@ -854,7 +858,7 @@ private fun RenameStep(
                 .fillMaxWidth()
                 .heightIn(min = 50.dp)
         ) {
-            Text(if (operating) "重命名中…" else "确认重命名")
+            Text(if (operating) stringResource(R.string.csa_renaming) else stringResource(R.string.csa_confirm_rename))
         }
     }
 }
@@ -880,10 +884,10 @@ private fun ConfirmDeleteContent(
             .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 32.dp)
     ) {
-        Text("删除文件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.csa_delete_file_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "确定要删除$target 吗？",
+            text = stringResource(R.string.csa_confirm_delete_target, target),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -899,7 +903,7 @@ private fun ConfirmDeleteContent(
                 .fillMaxWidth()
                 .heightIn(min = 50.dp)
         ) {
-            Text("删除")
+            Text(stringResource(R.string.csa_delete))
         }
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(
@@ -909,7 +913,7 @@ private fun ConfirmDeleteContent(
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text("取消")
+            Text(stringResource(R.string.csa_cancel))
         }
     }
 }
@@ -955,24 +959,28 @@ internal fun ShareResultDialog(
     val snackbarHostState = rememberGlobalSnackbarHostState()
     // 拼接分享文案（按平台区分：139 / 123 / UC / 迅雷 / 百度 / 115 / 夸克）
     val platformName = when {
-        info.shareUrl.contains("139.com") -> "139网盘"
-        info.shareUrl.contains("123pan") || info.shareUrl.contains("123865") -> "123云盘"
-        info.shareUrl.contains("uc.cn") -> "UC网盘"
-        info.shareUrl.contains("xunlei.com") -> "迅雷网盘"
-        info.shareUrl.contains("baidu.com") -> "百度网盘"
-        info.shareUrl.contains("115") -> "115网盘"
-        else -> "夸克网盘"
+        info.shareUrl.contains("139.com") -> stringResource(R.string.csa_platform_139)
+        info.shareUrl.contains("123pan") || info.shareUrl.contains("123865") -> stringResource(R.string.csa_platform_123)
+        info.shareUrl.contains("uc.cn") -> stringResource(R.string.csa_platform_uc)
+        info.shareUrl.contains("xunlei.com") -> stringResource(R.string.csa_platform_xunlei)
+        info.shareUrl.contains("baidu.com") -> stringResource(R.string.csa_platform_baidu)
+        info.shareUrl.contains("115") -> stringResource(R.string.csa_platform_115)
+        else -> stringResource(R.string.csa_platform_quark)
     }
+    val shareLead = stringResource(R.string.csa_share_text, platformName, info.title)
+    val shareLinkLine = stringResource(R.string.csa_share_text_link, info.shareUrl)
+    val sharePasscodeLine = stringResource(R.string.csa_share_text_passcode, info.passcode)
     val shareText = buildString {
-        append("我用${platformName}分享了「${info.title}」\n")
-        append("链接：${info.shareUrl}")
+        append(shareLead + "\n")
+        append(shareLinkLine)
         if (info.passcode.isNotBlank()) {
-            append("\n提取码：${info.passcode}")
+            append("\n" + sharePasscodeLine)
         }
     }
+    val shareTextCopiedMessage = stringResource(R.string.csa_share_text_copied)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("分享成功") },
+        title = { Text(stringResource(R.string.csa_share_success)) },
         text = {
             // 横屏/小屏时内容超高可滚动，避免按钮被挤出屏幕
             Column(
@@ -991,7 +999,7 @@ internal fun ShareResultDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "有效期：" + expireLabel(info.expiredType),
+                    text = stringResource(R.string.csa_validity_label, expireLabel(info.expiredType)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1013,16 +1021,16 @@ internal fun ShareResultDialog(
                 onClick = {
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("share_text", shareText))
-                    SnackbarController.show("分享文案已复制")
+                    SnackbarController.show(shareTextCopiedMessage)
                 }
             ) {
                 Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("复制全部")
+                Text(stringResource(R.string.csa_copy_all))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("完成") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.csa_done)) }
         }
     )
 }
@@ -1039,7 +1047,7 @@ internal fun StepHeader(
         IconButton(onClick = onBack, enabled = !LocalFileOperationBusy.current) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "返回"
+                contentDescription = stringResource(R.string.csa_back)
             )
         }
         Spacer(modifier = Modifier.width(4.dp))
@@ -1090,17 +1098,18 @@ private fun randomPasscode(): String {
 }
 
 /** 中性码 → 展示文案；未知值显示「未知」而不是 fail-open 成「永久有效」（115 用自己的 101..105 码位） */
+@Composable
 private fun expireLabel(type: Int): String = when (type) {
-    ShareExpire.FOREVER -> "永久有效"
-    ShareExpire.ONE_DAY -> "1 天"
-    ShareExpire.SEVEN_DAYS -> "7 天"
-    ShareExpire.THIRTY_DAYS -> "30 天"
-    ShareExpire.PAN115_FOREVER -> "永久有效"
-    ShareExpire.PAN115_ONE_DAY -> "1 天"
-    ShareExpire.PAN115_THREE_DAYS -> "3 天"
-    ShareExpire.PAN115_SEVEN_DAYS -> "7 天"
-    ShareExpire.PAN115_FIFTEEN_DAYS -> "15 天"
-    else -> "未知"
+    ShareExpire.FOREVER -> stringResource(R.string.csa_expire_forever)
+    ShareExpire.ONE_DAY -> stringResource(R.string.csa_expire_1day)
+    ShareExpire.SEVEN_DAYS -> stringResource(R.string.csa_expire_7days)
+    ShareExpire.THIRTY_DAYS -> stringResource(R.string.csa_expire_30days)
+    ShareExpire.PAN115_FOREVER -> stringResource(R.string.csa_expire_forever)
+    ShareExpire.PAN115_ONE_DAY -> stringResource(R.string.csa_expire_1day)
+    ShareExpire.PAN115_THREE_DAYS -> stringResource(R.string.csa_expire_3days)
+    ShareExpire.PAN115_SEVEN_DAYS -> stringResource(R.string.csa_expire_7days)
+    ShareExpire.PAN115_FIFTEEN_DAYS -> stringResource(R.string.csa_expire_15days)
+    else -> stringResource(R.string.csa_unknown)
 }
 
 /** 批量操作步骤类型 */
@@ -1123,7 +1132,7 @@ internal fun BatchActionSheet(
     /** 提取码规则（各平台不同，见 [PasscodeMode]） */
     passcodeMode: PasscodeMode = PasscodeMode.OPTIONAL,
     /** 有效期档位（默认六平台通用档；115 传 [ShareExpire.PAN115_OPTIONS]） */
-    expireOptions: List<Pair<String, Int>> = defaultExpireOptions,
+    expireOptions: List<Pair<String, Int>> = defaultExpireOptions(),
     initialStep: BatchStep = BatchStep.MENU,
     moveStep: @Composable (onBack: () -> Unit, onDone: () -> Unit) -> Unit
 ) {
@@ -1152,8 +1161,8 @@ internal fun BatchActionSheet(
                 )
 
                 BatchStep.SHARE -> ShareStep(
-                    title = "分享文件",
-                    subtitle = "已选 $count 项",
+                    title = stringResource(R.string.csa_share_file_title),
+                    subtitle = stringResource(R.string.csa_selected_count, count),
                     operating = operating,
                     passcodeMode = passcodeMode,
                     expireOptions = expireOptions,
@@ -1200,12 +1209,12 @@ private fun BatchMenu(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "批量操作",
+                    text = stringResource(R.string.csa_batch_actions),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = "已选 $count 项",
+                    text = stringResource(R.string.csa_selected_count, count),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1218,29 +1227,29 @@ private fun BatchMenu(
 
         ActionItem(
             icon = Icons.Outlined.Download,
-            title = "下载",
-            desc = "批量下载到本机",
+            title = stringResource(R.string.csa_download),
+            desc = stringResource(R.string.csa_action_batch_download_desc),
             tint = MaterialTheme.colorScheme.primary,
             onClick = onDownload
         )
         ActionItem(
             icon = Icons.Outlined.Share,
-            title = "分享",
-            desc = "将选中项创建为一个分享链接",
+            title = stringResource(R.string.csa_share),
+            desc = stringResource(R.string.csa_action_batch_share_desc),
             tint = MaterialTheme.colorScheme.primary,
             onClick = onShare
         )
         ActionItem(
             icon = Icons.Outlined.DriveFileMove,
-            title = "移动到",
-            desc = "批量移动到网盘的其他目录",
+            title = stringResource(R.string.csa_move_to),
+            desc = stringResource(R.string.csa_action_batch_move_desc),
             tint = MaterialTheme.colorScheme.primary,
             onClick = onMove
         )
         ActionItem(
             icon = Icons.Outlined.Delete,
-            title = "删除",
-            desc = "批量删除网盘文件",
+            title = stringResource(R.string.csa_delete),
+            desc = stringResource(R.string.csa_action_batch_delete_desc),
             tint = MaterialTheme.colorScheme.error,
             onClick = onDelete
         )
@@ -1275,9 +1284,9 @@ internal fun UploadProgressDialog(progress: UploadProgress, onCancel: () -> Unit
         title = {
             Text(
                 if (progress.count > 1) {
-                    "正在上传（${progress.index}/${progress.count}）"
+                    stringResource(R.string.csa_uploading_progress, progress.index, progress.count)
                 } else {
-                    "正在上传"
+                    stringResource(R.string.csa_uploading)
                 }
             )
         },
@@ -1298,9 +1307,9 @@ internal fun UploadProgressDialog(progress: UploadProgress, onCancel: () -> Unit
                 ) {
                     Text(
                         text = when (progress.phase) {
-                            UploadPhase.PREPARING -> "正在校验文件…"
-                            UploadPhase.UPLOADING -> "正在上传"
-                            UploadPhase.FINISHING -> "等待网盘确认…"
+                            UploadPhase.PREPARING -> stringResource(R.string.csa_upload_phase_preparing)
+                            UploadPhase.UPLOADING -> stringResource(R.string.csa_uploading)
+                            UploadPhase.FINISHING -> stringResource(R.string.csa_upload_phase_finishing)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1315,7 +1324,7 @@ internal fun UploadProgressDialog(progress: UploadProgress, onCancel: () -> Unit
         },
         confirmButton = {
             TextButton(onClick = onCancel, enabled = !progress.cancelling) {
-                Text(if (progress.cancelling) "正在取消…" else "取消")
+                Text(if (progress.cancelling) stringResource(R.string.csa_cancelling) else stringResource(R.string.csa_cancel))
             }
         }
     )

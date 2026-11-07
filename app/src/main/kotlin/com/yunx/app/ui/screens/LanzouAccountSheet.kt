@@ -18,6 +18,10 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -102,7 +106,7 @@ fun LanzouAccountSheet(
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(account.updatedAt))
     }
     // 账号可能是手机号/邮箱等敏感信息，展示时脱敏（与其它网盘一致，不明文列出账号）
-    val displayName = maskAccount(account.nickname).ifBlank { "蓝奏云用户" }
+    val displayName = maskAccount(account.nickname).ifBlank { stringResource(R.string.sh_lanzou_user) }
 
     val snackbarHostState = rememberGlobalSnackbarHostState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -140,7 +144,7 @@ fun LanzouAccountSheet(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = displayName.take(1).ifBlank { "蓝" },
+                            text = displayName.take(1).ifBlank { stringResource(R.string.sh_lanzou_avatar) },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -163,7 +167,7 @@ fun LanzouAccountSheet(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "蓝奏云 · 已登录",
+                            text = stringResource(R.string.sh_lanzou_logged_in),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -174,7 +178,7 @@ fun LanzouAccountSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "登录信息",
+                text = stringResource(R.string.sh_login_info),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -185,7 +189,7 @@ fun LanzouAccountSheet(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    InfoRow(label = "登录时间", value = loginTime)
+                    InfoRow(label = stringResource(R.string.sh_login_time), value = loginTime)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "Cookie",
@@ -205,14 +209,14 @@ fun LanzouAccountSheet(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         if (truncated) {
                             TextButton(onClick = { showFullToken = !showFullToken }) {
-                                Text(if (showFullToken) "收起" else "展开全部")
+                                Text(if (showFullToken) stringResource(R.string.sh_collapse) else stringResource(R.string.sh_expand_all))
                             }
                         }
                         TextButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("lanzou_cookie", account.cookie))
-                                SnackbarController.show("Cookie 已复制")
+                                SnackbarController.show(AppStrings.get(R.string.sh_cookie_copied))
                             }
                         ) {
                             Icon(
@@ -221,7 +225,7 @@ fun LanzouAccountSheet(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("复制")
+                            Text(stringResource(R.string.sh_copy))
                         }
                     }
                 }

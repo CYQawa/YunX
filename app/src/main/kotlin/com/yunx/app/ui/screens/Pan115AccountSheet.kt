@@ -18,6 +18,10 @@
 
 package com.yunx.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.yunx.app.R
+import com.yunx.app.util.AppStrings
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -170,7 +174,7 @@ fun Pan115AccountSheet(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "115网盘 · 已登录",
+                            text = stringResource(R.string.sh_pan115_logged_in),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -182,7 +186,7 @@ fun Pan115AccountSheet(
 
             // 登录信息
             Text(
-                text = "登录信息",
+                text = stringResource(R.string.sh_login_info),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -196,15 +200,15 @@ fun Pan115AccountSheet(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     InfoRow(
-                        label = "登录账号",
+                        label = stringResource(R.string.sh_login_account),
                         value = Pan115Constants.cookieValue(account.cookie, "UID").orEmpty()
                             .ifBlank { account.nickname }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    InfoRow(label = "登录时间", value = loginTime)
+                    InfoRow(label = stringResource(R.string.sh_login_time), value = loginTime)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "登录 Cookie",
+                        text = stringResource(R.string.sh_pan115_login_cookie),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -224,14 +228,14 @@ fun Pan115AccountSheet(
                     ) {
                         if (cookieTruncated) {
                             TextButton(onClick = { showFullCookie = !showFullCookie }) {
-                                Text(if (showFullCookie) "收起" else "展开全部")
+                                Text(if (showFullCookie) stringResource(R.string.sh_collapse) else stringResource(R.string.sh_expand_all))
                             }
                         }
                         TextButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("pan115_cookie", account.cookie))
-                                SnackbarController.show("Cookie 已复制")
+                                SnackbarController.show(AppStrings.get(R.string.sh_cookie_copied))
                             }
                         ) {
                             Icon(
@@ -240,7 +244,7 @@ fun Pan115AccountSheet(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("复制")
+                            Text(stringResource(R.string.sh_copy))
                         }
                     }
                 }
