@@ -1,26 +1,39 @@
 ---
 name: 其他Bug
-about: Create a report to help us improve
-title: ''
-labels: ''
+about: 创建一个 Bug 报告，帮助我们定位和修复问题
+title: '[Bug] '
+labels: bug
 assignees: ''
 
 ---
 
-**描述bug**
-清晰的描述你遇到的bug
+**应用版本**
+请填写版本号，例如 `v1.3.1`；如果使用 nightly 包，请同时填写构建日期或 commit。
+
+**设备与系统**
+请填写手机型号、Android 版本、ROM 版本和 Android System WebView 版本。
+
+**描述问题**
+请清晰描述你遇到的问题，以及问题发生前后的操作。
 
 **复现步骤**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. ...
+2. ...
+3. ...
 
+**期望结果**
+你认为正常情况下应该发生什么？
 
-**截屏**
-If applicable, add screenshots to help explain your problem.
+**实际结果**
+实际发生了什么？是否出现报错、闪退或界面卡住？
 
+**复现率**
+例如：3 次中 3 次、5 次中 2 次，或暂时无法稳定复现。
 
-**其他内容**
-Add any other context about the problem here.
+**截图或日志**
+可附截图。若问题涉及下载、登录或网络请求，请尽量在“设置 → 导出日志”中导出日志后上传。
+
+**其他信息**
+是否尝试过最新 nightly、清除数据、切换网络或更换下载引擎？
+
+> 隐私提示：请勿上传 Cookie、Token、手机号、真实姓名或包含敏感信息的私人分享链接。
