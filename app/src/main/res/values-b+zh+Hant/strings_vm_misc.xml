@@ -118,7 +118,7 @@
     <string name="vm_about_feature_netdisk_title">網盤分享解析</string>
     <string name="vm_about_feature_netdisk_desc">夸克 / UC / 迅雷 / 百度 / 139 / 123 / 115 / 光鴨 / 藍奏雲 / 藍奏雲優享版 直連識別</string>
     <string name="vm_about_feature_video_title">影片連結解析</string>
-    <string name="vm_about_feature_video_desc">抖音 / 小紅書 / 快手 / 微博 / AcFun 免登入；嗶哩嗶哩登入後畫質更高，Pixiv 未登入只能解析部分公開作品、貼上瀏覽器 Cookie 後可解析全部作品</string>
+    <string name="vm_about_feature_video_desc">抖音 / 快手 / 微博 / AcFun 免登入；小紅書需登入後解析；嗶哩嗶哩登入後畫質更高，Pixiv 未登入只能解析部分公開作品、貼上瀏覽器 Cookie 後可解析全部作品</string>
     <string name="vm_about_feature_preview_title">線上預覽與播放</string>
     <string name="vm_about_feature_preview_desc">圖片 / 影片 / 音訊線上觀看（自動帶請求標頭），網盤裡的文字檔案也能開啟</string>
     <string name="vm_about_feature_mux_title">音影片合軌</string>
@@ -175,7 +175,7 @@
     <string name="vm_main_preparing_update_package">正在準備更新套件…</string>
 
     <!-- GitHub Token -->
-    <string name="vm_github_token_usage">Token 僅用於提升 API 限額（匿名 60/小時，認證後 5000/小時）。經 Android Keystore AES-GCM 加密儲存。</string>
+    <string name="vm_github_token_usage">Token 僅用於提升 API 限額（匿名 60/小時，認證後 5000/小時），並保存在應用程式私有資料中。</string>
     <string name="vm_github_token_howto_title">如何取得 Token：</string>
     <string name="vm_github_token_howto_body">1. 電腦瀏覽器開啟 GitHub，右上角頭像 → Settings\n2. 左側 Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. 勾選 public_repo 即可瀏覽公開倉庫；如需在首頁看到自己的私有倉庫，再勾選 repo\n4. 有效期建議選 90 天或 No expiration，產生後複製貼上到上方輸入框</string>
     <string name="vm_github_no_browser_link_copied">未找到可用瀏覽器，連結已複製</string>

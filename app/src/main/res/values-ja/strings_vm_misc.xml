@@ -118,7 +118,7 @@
     <string name="vm_about_feature_netdisk_title">ドライブ共有の解析</string>
     <string name="vm_about_feature_netdisk_desc">Quark / UC / 迅雷 / Baidu / 139 / 123 / 115 / 光鴨 / 藍奏雲 / 藍奏雲プレミアム の直リンク検出</string>
     <string name="vm_about_feature_video_title">動画リンクの解析</string>
-    <string name="vm_about_feature_video_desc">抖音 / 小红书 / 快手 / 微博 / AcFun はログイン不要。哔哩哔哩はログイン後に高画質、Pixiv は未ログインだと一部の公開作品のみ解析でき、ブラウザの Cookie を貼り付けるとすべての作品を解析できます</string>
+    <string name="vm_about_feature_video_desc">抖音 / 快手 / 微博 / AcFun はログイン不要。小红书はログイン後に解析できます。哔哩哔哩はログイン後に高画質、Pixiv は未ログインだと一部の公開作品のみ解析でき、ブラウザの Cookie を貼り付けるとすべての作品を解析できます</string>
     <string name="vm_about_feature_preview_title">オンラインプレビューと再生</string>
     <string name="vm_about_feature_preview_desc">画像 / 動画 / 音声をオンラインで表示（リクエストヘッダーを自動付与）。ドライブ内のテキストファイルも開けます</string>
     <string name="vm_about_feature_mux_title">音声・動画の結合</string>
@@ -175,7 +175,7 @@
     <string name="vm_main_preparing_update_package">更新パッケージを準備しています…</string>
 
     <!-- GitHub Token -->
-    <string name="vm_github_token_usage">Token は API の上限を引き上げるためだけに使用されます（匿名 60 回/時、認証後 5000 回/時）。Android Keystore AES-GCM で暗号化して保存されます。</string>
+    <string name="vm_github_token_usage">Token は API 上限の引き上げにのみ使用され（匿名 60 回/時、認証後 5000 回/時）、アプリのローカルなプライベートデータに保存されます。</string>
     <string name="vm_github_token_howto_title">Token の取得方法：</string>
     <string name="vm_github_token_howto_body">1. パソコンのブラウザで GitHub を開き、右上のアバター → Settings\n2. 左側の Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. public_repo にチェックすると公開リポジトリを閲覧できます。ホーム画面に自分のプライベートリポジトリを表示したい場合は repo にもチェックしてください\n4. 有効期限は 90 日または No expiration を推奨します。生成後にコピーして上の入力欄に貼り付けてください</string>
     <string name="vm_github_no_browser_link_copied">利用可能なブラウザが見つかりません。リンクをコピーしました</string>

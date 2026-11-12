@@ -119,7 +119,7 @@
     <string name="vm_about_feature_netdisk_title">Analyse des partages de drive</string>
     <string name="vm_about_feature_netdisk_desc">Détection des liens directs pour Quark / UC / Xunlei / Baidu / 139 / 123 / 115 / Guangya / Lanzou / Lanzou Premium</string>
     <string name="vm_about_feature_video_title">Analyse des liens vidéo</string>
-    <string name="vm_about_feature_video_desc">Douyin / Xiaohongshu / Kuaishou / Weibo / AcFun sans connexion ; Bilibili offre une meilleure qualité après connexion ; Pixiv ne résout que certaines œuvres publiques sans connexion, collez le cookie de votre navigateur pour résoudre toutes les œuvres</string>
+    <string name="vm_about_feature_video_desc">Douyin / Kuaishou / Weibo / AcFun sans connexion ; Xiaohongshu nécessite une connexion ; Bilibili offre une meilleure qualité après connexion ; Pixiv ne résout que certaines œuvres publiques sans connexion, collez le cookie de votre navigateur pour résoudre toutes les œuvres</string>
     <string name="vm_about_feature_preview_title">Aperçu et lecture en ligne</string>
     <string name="vm_about_feature_preview_desc">Affichez images / vidéos / audios en ligne (en-têtes de requête ajoutés automatiquement) ; les fichiers texte des drives peuvent aussi être ouverts</string>
     <string name="vm_about_feature_mux_title">Fusion audio/vidéo</string>
@@ -176,7 +176,7 @@
     <string name="vm_main_preparing_update_package">Préparation du paquet de mise à jour…</string>
 
     <!-- GitHub Token -->
-    <string name="vm_github_token_usage">Le Token sert uniquement à augmenter la limite de l\'API (60/h anonyme, 5000/h authentifié). Il est chiffré et stocké via Android Keystore AES-GCM.</string>
+    <string name="vm_github_token_usage">Le Token sert uniquement à augmenter la limite de l\'API (60/h anonyme, 5000/h authentifié) et il est stocké dans les données privées locales de l\'application.</string>
     <string name="vm_github_token_howto_title">Comment obtenir un Token :</string>
     <string name="vm_github_token_howto_body">1. Ouvrez GitHub dans un navigateur sur ordinateur, cliquez sur votre avatar en haut à droite → Settings\n2. À gauche, Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. Cochez public_repo pour parcourir les dépôts publics ; pour voir vos dépôts privés sur la page d\'accueil, cochez aussi repo\n4. Une validité de 90 jours ou No expiration est recommandée ; après génération, copiez-collez le Token dans le champ ci-dessus</string>
     <string name="vm_github_no_browser_link_copied">Aucun navigateur disponible. Lien copié.</string>
