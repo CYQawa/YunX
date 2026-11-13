@@ -18,6 +18,7 @@
 
 package com.yunx.app.ui.viewmodel
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -26,18 +27,32 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yunx.app.R
+import com.yunx.app.data.db.AppDatabase
 import com.yunx.app.data.db.BookmarkDao
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.download.DownloadManager
+import com.yunx.app.data.download.DownloadManagerHolder
 import com.yunx.app.data.download.DownloadPathPolicy
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSource
+import com.yunx.app.data.network.BaiduApi
 import com.yunx.app.data.network.BaiduConstants
+import com.yunx.app.data.network.C139Api
 import com.yunx.app.data.network.C139Constants
+import com.yunx.app.data.network.C139DeviceInfo
 import com.yunx.app.data.network.C139KoulingParser
+import com.yunx.app.data.network.GuangYaApi
 import com.yunx.app.data.network.GuangYaConstants
+import com.yunx.app.data.network.ILanzouApi
 import com.yunx.app.data.network.ILanzouConstants
+import com.yunx.app.data.network.LanzouApi
 import com.yunx.app.data.network.LanzouConstants
+import com.yunx.app.data.network.Pan115Api
+import com.yunx.app.data.network.Pan123Api
+import com.yunx.app.data.network.QuarkApi
+import com.yunx.app.data.network.UCApi
+import com.yunx.app.data.network.XunleiApi
+import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.network.GitHubApi
 import com.yunx.app.data.network.GitHubCommitDateCache
 import com.yunx.app.data.network.GitHubResponseCache
@@ -86,6 +101,7 @@ import com.yunx.app.data.repository.UCAccountRepository
 import com.yunx.app.data.repository.UCResolveRepository
 import com.yunx.app.data.repository.XunleiAccountRepository
 import com.yunx.app.data.repository.XunleiResolveRepository
+import com.yunx.app.data.repository.VideoAccountRepository
 import com.yunx.app.data.repository.VideoParseRepository
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.preview.PreviewKind
@@ -2422,6 +2438,109 @@ class ResolveViewModel(
                 multiSourceDownloadProvider,
                 videoParseRepository
             ) as T
+        }
+
+        companion object {
+            fun createDefault(context: Context): Factory {
+                val appContext = context.applicationContext
+                val db = AppDatabase.get(appContext)
+                val settings = SettingsRepository(appContext)
+                val downloadManager = DownloadManagerHolder.get(appContext)
+
+                val quarkApi = QuarkApi()
+                val quarkAccount = QuarkAccountRepository(db.quarkAccountDao(), quarkApi)
+                val quarkResolve = QuarkResolveRepository(quarkApi)
+
+                val ucApi = UCApi()
+                val ucAccount = UCAccountRepository(db.ucAccountDao(), ucApi)
+                val ucResolve = UCResolveRepository(ucApi)
+
+                val xunleiApi = XunleiApi()
+                val xunleiAccount = XunleiAccountRepository(db.xunleiAccountDao(), xunleiApi)
+                val xunleiResolve = XunleiResolveRepository(
+                    api = xunleiApi,
+                    accountProvider = { xunleiAccount.getAccount()?.accessToken },
+                    deviceIdProvider = { xunleiAccount.getAccount()?.deviceId },
+                    captchaProvider = { xunleiAccount.getAccount()?.captchaToken },
+                    refreshProvider = {
+                        val acc = xunleiAccount.getAccount()
+                        if (acc == null || acc.refreshToken.isBlank()) null
+                        else xunleiApi.refreshToken(acc.refreshToken, acc.deviceId, acc.authType)?.also { (at, nrt) ->
+                            xunleiAccount.updateTokens(at, nrt)
+                        }
+                    },
+                    accountByTokenProvider = { token ->
+                        xunleiAccount.getAccounts().firstOrNull { it.accessToken == token }
+                    }
+                )
+
+                val baiduApi = BaiduApi()
+                val baiduAccount = BaiduAccountRepository(db.baiduAccountDao(), baiduApi)
+                val baiduResolve = BaiduResolveRepository(baiduApi)
+
+                val c139Api = C139Api(deviceInfoProvider = { C139DeviceInfo.from(appContext) })
+                val c139Account = C139AccountRepository(db.c139AccountDao())
+                val c139Resolve = C139ResolveRepository(c139Api)
+
+                val pan123Api = Pan123Api()
+                val pan123Account = Pan123AccountRepository(db.pan123AccountDao(), pan123Api)
+                val pan123Resolve = Pan123ResolveRepository(
+                    api = pan123Api,
+                    tokenProvider = { pan123Account.getAccount()?.accessToken }
+                )
+
+                val pan115Api = Pan115Api()
+                val pan115Account = Pan115AccountRepository(db.pan115AccountDao(), pan115Api)
+                val pan115Resolve = Pan115ResolveRepository(pan115Api)
+
+                val guangyaApi = GuangYaApi()
+                val guangyaAccount = GuangYaAccountRepository(db.guangyaAccountDao(), guangyaApi)
+                val guangyaResolve = GuangYaResolveRepository(
+                    api = guangyaApi,
+                    tokenProvider = { guangyaAccount.ensureAccessToken() }
+                )
+
+                val ilanzouApi = ILanzouApi()
+                val ilanzouAccount = ILanzouAccountRepository(db.ilanzouAccountDao(), ilanzouApi)
+                val ilanzouResolve = ILanzouResolveRepository(ilanzouApi, ilanzouAccount)
+
+                val lanzouApi = LanzouApi()
+                val lanzouAccount = LanzouAccountRepository(db.lanzouAccountDao(), lanzouApi)
+                val lanzouResolve = LanzouResolveRepository(lanzouApi)
+
+                val videoParseRepo = VideoParseRepository(VideoAccountRepository(db.videoAccountDao()))
+                val githubApi = GitHubApi()
+
+                return Factory(
+                    accountRepository = quarkAccount,
+                    resolveRepository = quarkResolve,
+                    ucAccountRepository = ucAccount,
+                    ucResolveRepository = ucResolve,
+                    xunleiAccountRepository = xunleiAccount,
+                    xunleiResolveRepository = xunleiResolve,
+                    baiduAccountRepository = baiduAccount,
+                    baiduResolveRepository = baiduResolve,
+                    c139AccountRepository = c139Account,
+                    c139ResolveRepository = c139Resolve,
+                    pan123AccountRepository = pan123Account,
+                    pan123ResolveRepository = pan123Resolve,
+                    pan115AccountRepository = pan115Account,
+                    pan115ResolveRepository = pan115Resolve,
+                    guangyaAccountRepository = guangyaAccount,
+                    guangyaResolveRepository = guangyaResolve,
+                    ilanzouAccountRepository = ilanzouAccount,
+                    ilanzouResolveRepository = ilanzouResolve,
+                    lanzouAccountRepository = lanzouAccount,
+                    lanzouResolveRepository = lanzouResolve,
+                    downloadManager = downloadManager,
+                    bookmarkDao = db.bookmarkDao(),
+                    githubApi = githubApi,
+                    noSaveDownloadProvider = { settings.quarkNoSaveDownload },
+                    multiAccountDownloadProvider = { settings.multiAccountDownload },
+                    multiSourceDownloadProvider = { settings.multiSourceActive() },
+                    videoParseRepository = videoParseRepo
+                )
+            }
         }
     }
 }

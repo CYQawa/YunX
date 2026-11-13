@@ -186,4 +186,7 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">正在合併分片 · %1$d%%</string>
+
+    <!-- 控制中心快捷磁貼 -->
+    <string name="dl_tile_label">雲析下載</string>
 </resources>

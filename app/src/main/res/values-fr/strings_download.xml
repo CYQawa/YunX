@@ -186,4 +186,7 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">Fusion des segments · %1$d%%</string>
+
+    <!-- Tuile de paramètres rapides -->
+    <string name="dl_tile_label">YunX Téléchargement</string>
 </resources>

@@ -21,4 +21,12 @@
     <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@android:color/background_dark</item>
     </style>
+
+    <!-- 控制中心快捷解析悬浮窗透明主题 -->
+    <style name="Theme.FloatingDialog" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+    </style>
 </resources>
