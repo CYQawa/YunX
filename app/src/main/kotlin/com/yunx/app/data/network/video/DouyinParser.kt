@@ -241,25 +241,32 @@ object DouyinParser : VideoParser {
     private suspend fun fetchViaWebView(link: DetectedVideoLink): WebPayload? {
         val type = pathType(link)
         val url = "https://www.douyin.com/$type/${link.id}"
-        val json = HeadlessWebView.loadAndExtract(
+        var acceptedObject: JSONObject? = null
+        HeadlessWebView.loadAndExtract(
             url = url,
             userAgent = VideoHttp.UA_CHROME,
-            readyCheckJs = readyCheckJs(),
+            // 参数仍必填。图集改看 EXTRACT_JS 的归约结果，这条布尔脚本不会被执行。
+            readyCheckJs = "false",
             extractJs = EXTRACT_JS,
             // 页面要在 WebView 里跑完 acrawler 挑战 → 重载 → 挂载 → 再自己发详情请求才拿到数据，
             // 实测视频页冷启动要 25s 上下，所以留足余量（比默认值大）
             timeoutMs = 40_000L,
             // 钩子必须在文档开始前挂上，才能拿到页面自己发出的详情响应（视频那条路要用）
-            extraDocumentStartJs = listOf(XHR_DETAIL_HOOK_JS)
+            extraDocumentStartJs = listOf(XHR_DETAIL_HOOK_JS),
+            acceptExtract = { raw ->
+                acceptedObject = acceptDouyinExtract(raw)
+                acceptedObject != null
+            }
         ) ?: return null
-        val obj = runCatching { JSONObject(json) }.getOrNull() ?: return null
-        obj.optString("error").takeIf { it.isNotBlank() && it != "null" }?.let { err ->
-            DiagnosticLog.warn(DiagnosticLog.NETWORK, "douyin_webview_extract_failed", err)
-            return null
-        }
-        // 图片与动图资源由脚本**成对**产出（同一个数据源、下标一致）
+        // 复用就绪检查已解析的对象；缓存仅属于本次请求，避免并发解析串数据。
+        val obj = acceptedObject ?: return null
+        // 图片与动图由脚本成对产出。图片可以丢掉空串；动图必须留住空位，
+        // 否则后面的 Live Photo 会挂到错误的静图上。
         val images = obj.optJSONArray("images")?.toStringList().orEmpty()
-        val motions = obj.optJSONArray("motions")?.toStringList().orEmpty()
+        val motions = douyinMotionPlaceholders(
+            images.size,
+            obj.optJSONArray("motions")?.toRawStringList().orEmpty()
+        )
         // 诊断：用了哪个数据源、拿到几张图/几张动图、SSR 状态、首项字段名 —— 排查「为什么没有动图」全靠这一行
         DiagnosticLog.warn(
             DiagnosticLog.NETWORK, "douyin_webview_media",
@@ -286,6 +293,10 @@ object DouyinParser : VideoParser {
     /** `JSONArray` → `List<String>`（丢掉空值；解析脚本给的字段都是字符串） */
     private fun JSONArray.toStringList(): List<String> =
         (0 until length()).mapNotNull { optString(it).takeIf(String::isNotBlank) }
+
+    /** `JSONArray` → `List<String>`（保留空串，动图下标要和静图对齐） */
+    private fun JSONArray.toRawStringList(): List<String> =
+        (0 until length()).map { optString(it) }
 
     /** 把 WebView 取回的事实拼成解析结果（图文优先：详情里 `images` 有值就是图文） */
     private fun buildFromWebView(link: DetectedVideoLink, payload: WebPayload): VideoParseResult {
@@ -387,31 +398,84 @@ object DouyinParser : VideoParser {
 """
 
     /**
-     * 就绪判断：**两条路任一条成立即可**。
+     * 图集是否已经齐，供隐藏 WebView 决定要不要结束等待。
      *
-     * ★ 不能按链接里的类型分支（2026-10-22 修）：`/video/<id>`、`?modal_id=<id>` 这类链接抖音会自行
-     *   302 到真正的作品页（图文 / 动图会落到 `/note/<id>`），于是「按链接判类型」必然判错 ——
-     *   视频那条判据（等 XHR 钩子）在图文页上**永远不会成立**，只能干等到 40s 超时后整条解析失败。
-     * ★ DOM 那条判据只认**真正的作品图**：`biz_tag=aweme_images` 或 `tplv-dy-aweme-images`。
-     *   封面是 `biz_tag=pcweb_cover`、「相关推荐」带 `WEBPC_RELATED`，两者都不算 —— 否则视频页会
-     *   刚渲染出封面就「就绪」，拿回一堆封面当作品图（视频直链只在钩子数据里，早退就丢了）。
+     * ★ 看的是 [EXTRACT_JS] 归约后的结果，不再是「第一张作品图挂上 DOM」或
+     *   `window.__yunxAwemeDetail` 变成任意非空字符串。`src` 为 `dom` 时即使已经有好几张图也继续等
+     *   —— 轮播往往先画出第一帧，这时收工就只会拿到一张。
+     * ★ `src` 为 `ssr` 或 `hook` 且 [imageCount] > 0 才算图集齐了。两种钩子形态
+     *   （`aweme_detail.images` 与 `image_post_info.images`）在脚本里都收成 `src=hook`。
+     * ★ 视频作品没有图集：[videoUrl] 非空即可结束。空白与字面量 `"null"` 由调用方事先当成没有直链。
      */
-    private fun readyCheckJs(): String = """
-(function () {
-  var raw = window.__yunxAwemeDetail;
-  if (typeof raw === 'string' && raw.length > 0) return 'true';
-  var imgs = document.querySelectorAll('img');
-  for (var i = 0; i < imgs.length; i++) {
-    if (isWorkImage(imgs[i].src || '')) return 'true';
-  }
-  return 'false';
-  function isWorkImage(s) {
-    if (!s || s.indexOf('douyinpic.com') < 0) return false;
-    if (s.indexOf('WEBPC_RELATED') >= 0) return false;
-    return s.indexOf('biz_tag=aweme_images') >= 0 || s.indexOf('tplv-dy-aweme-images') >= 0;
-  }
-})()
-"""
+    internal fun douyinGalleryReady(src: String, imageCount: Int, videoUrl: String): Boolean {
+        if (videoUrl.isNotBlank()) return true
+        return (src == "ssr" || src == "hook") && imageCount > 0
+    }
+
+    /**
+     * 动图 URL 按静图下标对齐：下标 `i` 仍属于第 `i` 张静图。
+     *
+     * 空白或字面量 `"null"` 变成 `""`；列表短于 [imageCount] 时用 `""` 补齐。
+     * 不能先滤掉空串，否则后面的 Live Photo 会挂到错误的静图上。
+     */
+    internal fun douyinMotionPlaceholders(imageCount: Int, motions: List<String>): List<String> =
+        List(imageCount) { index ->
+            val raw = motions.getOrNull(index).orEmpty()
+            if (raw.isBlank() || raw == "null") "" else raw
+        }
+
+    /**
+     * 把 [EXTRACT_JS] 的 JSON 文本交给 [douyinGalleryReady]。
+     *
+     * 超限或畸形 JSON、`error` 为非空字符串（字面量 `"null"` 除外）、或 `org.json` 抛错时返回 null，
+     * 轮询继续。40 秒超时仍返回 null，[parse] 再走 [fetchWorkData]，不把 DOM 兜底当成超时成功。
+     * 只数非空图片 URL；`video` 为空白或字面量 `"null"` 时当成没有视频直链。
+     */
+    private fun acceptDouyinExtract(raw: String): JSONObject? {
+        if (!douyinExtractWithinLimits(raw)) return null
+        return runCatching {
+            val obj = JSONObject(raw)
+            val error = obj.optString("error")
+            if (error.isNotBlank() && error != "null") {
+                null
+            } else {
+                val images = obj.optJSONArray("images")
+                val imageCount = if (images == null) {
+                    0
+                } else {
+                    (0 until images.length()).count { images.optString(it).isNotBlank() }
+                }
+                val videoUrl = obj.optString("video").takeIf { it.isNotBlank() && it != "null" }.orEmpty()
+                obj.takeIf { douyinGalleryReady(it.optString("src"), imageCount, videoUrl) }
+            }
+        }.getOrNull()
+    }
+
+    /** 归约结果只含元数据和 URL；解析前限制为 256K 字符、16 层，防止轮询耗尽内存或栈。 */
+    internal fun douyinExtractWithinLimits(raw: String): Boolean {
+        if (raw.length > 256 * 1024) return false
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (ch in raw) {
+            if (inString) {
+                when {
+                    escaped -> escaped = false
+                    ch == '\\' -> escaped = true
+                    ch == '"' -> inString = false
+                }
+            } else {
+                when (ch) {
+                    '"' -> inString = true
+                    '{', '[' -> if (++depth > 16) return false
+                    '}', ']' -> if (--depth < 0) return false
+                    // WebView 产出标准 JSON；拒绝 org.json 的宽松语法，避免注释或单引号绕过层数检查。
+                    '\'', '/', '#' -> return false
+                }
+            }
+        }
+        return depth == 0 && !inString
+    }
 
     /**
      * 取数：**多条数据源都试**，返回一个**小对象**（`evaluateJavascript` 会把它序列化成 JSON）。
