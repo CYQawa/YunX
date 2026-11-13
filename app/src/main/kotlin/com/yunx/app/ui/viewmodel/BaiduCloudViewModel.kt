@@ -250,7 +250,7 @@ class BaiduCloudViewModel(
     /** 百度下载直链的请求头（locatedownload 需 Cookie + netdisk UA） */
     private fun downloadHeaders(cookie: String): Map<String, String> = mapOf(
         "Cookie" to cookie,
-        "User-Agent" to BaiduConstants.UA_NETDISK
+        "User-Agent" to BaiduConstants.UA_P2SP
     )
 
     /**
@@ -296,7 +296,12 @@ class BaiduCloudViewModel(
                     if (downloadCancelRequested) return@forEachIndexed
                     folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
-                        val link = api.locateDownload(file.fidToken, cookie)
+                        val link = api.locateDownload(
+                            path = file.fidToken,
+                            fsId = file.fid,
+                            cookie = cookie,
+                            fileSize = file.fsize
+                        )
                         downloadManager.enqueue(
                             url = link,
                             fileName = relPath, // 相对路径：Download/文件夹A/子目录/文件.mp4
@@ -333,25 +338,30 @@ class BaiduCloudViewModel(
     private var pendingDownload: PendingDownload? = null
 
     /** 下载文件：取直链 → 弹出下载确认弹窗（对齐解析页行为，确认后入队） */
-    fun downloadFile() {
-        val file = actionFile ?: return
+    fun downloadFile(file: ShareFile? = actionFile) {
+        val target = file ?: return
         viewModelScope.launch {
             isOperating = true
             try {
-                val url = api.locateDownload(file.fidToken, cookie())
+                val url = api.locateDownload(
+                    path = target.fidToken,
+                    fsId = target.fid,
+                    cookie = cookie(),
+                    fileSize = target.fsize
+                )
                 val link = DownloadLink(
-                    fid = file.fidToken,
-                    filename = file.fname,
+                    fid = target.fidToken,
+                    filename = target.fname,
                     downloadUrl = url,
-                    size = file.fsize
+                    size = target.fsize
                 )
                 pendingDownload = PendingDownload(
                     url = url,
-                    fileName = file.fname,
-                    size = file.fsize,
+                    fileName = target.fname,
+                    size = target.fsize,
                     headers = mapOf(
                         "Cookie" to cookie(),
-                        "User-Agent" to BaiduConstants.UA_NETDISK
+                        "User-Agent" to BaiduConstants.UA_P2SP
                     )
                 )
                 downloadLink = link // 弹下载确认弹窗（长按直链可复制）
@@ -374,7 +384,13 @@ class BaiduCloudViewModel(
             isOperating = true
             try {
                 val ck = cookie()
-                val url = api.locateDownload(file.fidToken, ck)
+                val url = api.locateDownload(
+                    path = file.fidToken,
+                    fsId = file.fid,
+                    cookie = ck,
+                    fileSize = file.fsize,
+                    forceCdn = true
+                )
                 // 先清 actionFile 再开预览：否则关掉预览时文件操作弹窗会重新弹出来
                 actionFile = null
                 CloudPreview.open(file, url, downloadHeaders(ck))
@@ -562,7 +578,12 @@ class BaiduCloudViewModel(
                     if (downloadCancelRequested) return@forEachIndexed
                     folderProgress = AppStrings.get(R.string.vc_adding_download_progress, index + 1, tasks.size)
                     runCatching {
-                        val link = api.locateDownload(file.fidToken, cookie)
+                        val link = api.locateDownload(
+                            path = file.fidToken,
+                            fsId = file.fid,
+                            cookie = cookie,
+                            fileSize = file.fsize
+                        )
                         downloadManager.enqueue(
                             url = link,
                             fileName = if (relPath.contains('/')) relPath else file.fname,

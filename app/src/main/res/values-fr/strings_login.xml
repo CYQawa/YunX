@@ -21,10 +21,10 @@
     <string name="lg_baidu_risk_ack">J\'ai lu et compris les risques ci-dessus</string>
     <string name="lg_baidu_tutorial_1">1. Connectez-vous à votre compte Baidu dans la page web ci-dessous</string>
     <string name="lg_baidu_tutorial_2">2. La connexion est détectée automatiquement. Sinon, appuyez sur « Enregistrer » en haut à droite</string>
-    <string name="lg_baidu_tutorial_3">3. Ou appuyez sur l\'icône « Coller » pour saisir le Cookie manuellement (doit contenir BDUSS=)</string>
+    <string name="lg_baidu_tutorial_3">3. Ou appuyez sur l\'icône « Coller » pour saisir le Cookie manuellement (doit contenir BDUSS= et un STOKEN= du domaine Pan)</string>
     <string name="lg_baidu_tutorial_4">4. Le Cookie est durable ; reconnectez-vous lorsqu\'il expire</string>
-    <string name="lg_baidu_cookie_hint">Copiez le Cookie complet depuis la session web connectée (doit contenir BDUSS=)</string>
-    <string name="lg_baidu_cookie_invalid">Cookie invalide. Vérifiez qu\'il contient BDUSS=</string>
+    <string name="lg_baidu_cookie_hint">Copiez le Cookie complet depuis la session web connectée (doit contenir BDUSS= et STOKEN=)</string>
+    <string name="lg_baidu_cookie_invalid">Cookie invalide ou session incomplète. Vérifiez qu\'il contient BDUSS= et STOKEN=.</string>
 
     <!-- Xunlei compte / SMS -->
     <string name="lg_xunlei_title">Connexion Xunlei Netdisk</string>

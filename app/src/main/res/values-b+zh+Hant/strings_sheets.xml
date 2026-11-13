@@ -110,6 +110,8 @@
 
     <!-- 下載直鏈彈窗 -->
     <string name="sh_direct_link_generated">下載直鏈已產生（有效期約 15-30 分鐘）</string>
+    <string name="sh_baidu_p2p_task_generated">百度 P2P 任務已產生（只下載、不上傳做種）</string>
+    <string name="sh_baidu_p2p_task_description">該任務使用 Seed / POP / TPDATA 取分片，不是可直接複製的 HTTP 直鏈。本機只發起下載請求，不監聽連接埠、不接受上傳。</string>
     <string name="sh_copy_download_link">複製下載連結</string>
     <string name="sh_download_link_copied">下載連結已複製</string>
     <string name="sh_download_start_hint">開始下載後，可在「下載」頁檢視儲存進度</string>

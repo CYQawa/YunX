@@ -110,6 +110,8 @@
 
     <!-- Download link dialog -->
     <string name="sh_direct_link_generated">Download link generated (valid for about 15-30 minutes)</string>
+    <string name="sh_baidu_p2p_task_generated">Baidu P2P task created (download only, no seeding)</string>
+    <string name="sh_baidu_p2p_task_description">This task fetches chunks through Seed / POP / TPDATA and is not an HTTP direct link you can copy. This device only sends download requests; it does not listen on ports or accept uploads.</string>
     <string name="sh_copy_download_link">Copy download link</string>
     <string name="sh_download_link_copied">Download link copied</string>
     <string name="sh_download_start_hint">After starting, you can check the progress on the \"Downloads\" page</string>

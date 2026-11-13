@@ -125,7 +125,12 @@ class BaiduResolveRepository(private val api: BaiduApi) : ShareResolveRepository
         val transferred = api.transfer(shareId, uk, session.stoken, file.fid, dirPath, cookie)
         // locatedownload 按转存后的完整路径取链，返回 appallNN.baidupcs.com CDN 直链
         // （自带 sign/expires，删除转存后仍有效；仅需 BDUSS + 手机 UA 即可满速下载）
-        val dlink = api.locateDownload(transferred.path, cookie)
+        val dlink = api.locateDownload(
+            path = transferred.path,
+            fsId = transferred.fsId,
+            cookie = cookie,
+            fileSize = file.fsize
+        )
         // appall 直链不依赖转存文件存活：取链成功后立即删除临时转存，网盘不留残留
         deleteTransferred(transferred.path, cookie)
         DownloadLink(

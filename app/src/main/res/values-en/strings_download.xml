@@ -186,4 +186,20 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">Merging chunks · %1$d%%</string>
+
+    <!-- Baidu download settings -->
+    <string name="settings_baidu_download">Baidu Netdisk</string>
+    <string name="settings_baidu_download_desc_cdn">CDN / HTTP direct link (default, most compatible) · Switch to P2P and tune workers and slow-speed thresholds</string>
+    <string name="settings_baidu_download_desc_p2p">P2P (download only, no upload) · %1$d workers · switch nodes after %2$d s below %3$d KiB/s</string>
+    <string name="settings_baidu_download_mode">Download mode</string>
+    <string name="settings_baidu_mode_cdn">CDN / HTTP direct link</string>
+    <string name="settings_baidu_mode_cdn_desc">Use the plaintext nodes returned by locatedownload for the best compatibility.</string>
+    <string name="settings_baidu_mode_p2p">P2P (download only, no upload)</string>
+    <string name="settings_baidu_mode_p2p_desc">Schedule TPDATA using the Seed range_list; no listening ports, no seeding, and no uploads.</string>
+    <string name="settings_baidu_p2p_params">P2P parameters (enter any value; it is clamped to the valid range when saved)</string>
+    <string name="settings_baidu_p2p_workers">Workers (1-32)</string>
+    <string name="settings_baidu_p2p_window">Slow-speed window (seconds, 1-120)</string>
+    <string name="settings_baidu_p2p_speed">Slow-speed threshold (KiB/s, 1-1048576)</string>
+    <string name="settings_baidu_p2p_min_chunk">Minimum chunk to switch (KiB, 0-4194304)</string>
+    <string name="settings_baidu_p2p_hint">Switch away from the current node when the average speed in the window falls below the threshold and the current chunk is at least the minimum switch size; fall back to CDN after all candidates fail.</string>
 </resources>

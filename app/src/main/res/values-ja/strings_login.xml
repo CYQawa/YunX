@@ -21,10 +21,10 @@
     <string name="lg_baidu_risk_ack">上記のリスクを理解しました</string>
     <string name="lg_baidu_tutorial_1">1. 下のウェブページで Baidu アカウントにログインします</string>
     <string name="lg_baidu_tutorial_2">2. ログインは自動で検出されます。自動で検出されない場合は右上の「保存」をタップします</string>
-    <string name="lg_baidu_tutorial_3">3. または「貼り付け」アイコンをタップして Cookie を手動入力します（BDUSS= を含む必要があります）</string>
+    <string name="lg_baidu_tutorial_3">3. または「貼り付け」アイコンをタップして Cookie を手動入力します（BDUSS= と Pan ドメインの STOKEN= が必要です）</string>
     <string name="lg_baidu_tutorial_4">4. Cookie は長期間有効です。失効したら再ログインしてください</string>
-    <string name="lg_baidu_cookie_hint">ログイン状態のウェブページから完全な Cookie をコピーしてください（BDUSS= を含む必要があります）</string>
-    <string name="lg_baidu_cookie_invalid">Cookie が無効です。BDUSS= が含まれているか確認してください</string>
+    <string name="lg_baidu_cookie_hint">ログイン状態のウェブページから完全な Cookie をコピーしてください（BDUSS= と STOKEN= が必要です）</string>
+    <string name="lg_baidu_cookie_invalid">Cookie が無効か、ログイン状態が不完全です。BDUSS= と STOKEN= が含まれているか確認してください</string>
 
     <!-- Xunlei アカウント / SMS -->
     <string name="lg_xunlei_title">Xunlei ネットディスク ログイン</string>

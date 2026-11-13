@@ -21,10 +21,10 @@
     <string name="lg_baidu_risk_ack">I have read and understood the risks above</string>
     <string name="lg_baidu_tutorial_1">1. Sign in to your Baidu account in the web page below</string>
     <string name="lg_baidu_tutorial_2">2. Sign-in is detected automatically. If not, tap \"Save\" in the top-right corner</string>
-    <string name="lg_baidu_tutorial_3">3. Or tap the \"Paste\" icon to enter the Cookie manually (must include BDUSS=)</string>
+    <string name="lg_baidu_tutorial_3">3. Or tap the \"Paste\" icon to enter the Cookie manually (must include BDUSS= and a Pan-domain STOKEN=)</string>
     <string name="lg_baidu_tutorial_4">4. The Cookie is long-lived; sign in again once it expires</string>
-    <string name="lg_baidu_cookie_hint">Copy the full Cookie from the signed-in web session (must include BDUSS=)</string>
-    <string name="lg_baidu_cookie_invalid">Invalid Cookie. Please check that it includes BDUSS=</string>
+    <string name="lg_baidu_cookie_hint">Copy the full Cookie from the signed-in web session (must include BDUSS= and STOKEN=)</string>
+    <string name="lg_baidu_cookie_invalid">Invalid Cookie or incomplete sign-in state. Check that it includes BDUSS= and STOKEN=.</string>
 
     <!-- Xunlei account / SMS -->
     <string name="lg_xunlei_title">Xunlei Netdisk sign-in</string>

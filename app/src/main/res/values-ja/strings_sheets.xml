@@ -110,6 +110,8 @@
 
     <!-- ダウンロード直リンクダイアログ -->
     <string name="sh_direct_link_generated">ダウンロードリンクを生成しました（有効期限 約15〜30分）</string>
+    <string name="sh_baidu_p2p_task_generated">Baidu P2P タスクを作成しました（ダウンロードのみ、シードなし）</string>
+    <string name="sh_baidu_p2p_task_description">このタスクは Seed / POP / TPDATA でチャンクを取得するため、コピー可能な HTTP 直リンクではありません。この端末はダウンロード要求のみを送信し、ポート待受やアップロードの受け付けは行いません。</string>
     <string name="sh_copy_download_link">ダウンロードリンクをコピー</string>
     <string name="sh_download_link_copied">ダウンロードリンクをコピーしました</string>
     <string name="sh_download_start_hint">ダウンロード開始後、「ダウンロード」ページで保存の進捗を確認できます</string>

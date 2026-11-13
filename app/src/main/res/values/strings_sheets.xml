@@ -111,6 +111,8 @@
 
     <!-- 下载直链弹窗 -->
     <string name="sh_direct_link_generated">下载直链已生成（有效期约 15-30 分钟）</string>
+    <string name="sh_baidu_p2p_task_generated">百度 P2P 任务已生成（只下载、不上传做种）</string>
+    <string name="sh_baidu_p2p_task_description">该任务使用 Seed / POP / TPDATA 取分片，不是可直接复制的 HTTP 直链。本机只发起下载请求，不监听端口、不接受上传。</string>
     <string name="sh_copy_download_link">复制下载链接</string>
     <string name="sh_download_link_copied">下载链接已复制</string>
     <string name="sh_download_start_hint">开始下载后，可在「下载」页查看保存进度</string>

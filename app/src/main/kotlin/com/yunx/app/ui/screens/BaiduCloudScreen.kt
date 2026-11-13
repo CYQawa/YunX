@@ -182,12 +182,14 @@ fun BaiduCloudScreen(
     val settingsRepo = remember { SettingsRepository(context) }
     var limitHintDismissed by remember { mutableStateOf(settingsRepo.baiduLimitHintDismissed) }
     var showBaiduLimitDialog by remember { mutableStateOf(false) }
-    var pendingBaiduDownload by remember { mutableStateOf<String?>(null) } // "single" / "batch"
+    // 文件操作弹窗关闭时会把 actionFile 清空；这里保存已捕获目标文件的待执行动作，
+    // 避免用户在限速提示中点「继续下载」后才读取 actionFile，导致下载入口直接返回。
+    var pendingBaiduDownload by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     /** 判断是否需要弹限速提示；需要则记录待执行动作并弹窗，否则直接执行 */
-    fun maybeShowBaiduLimit(files: List<ShareFile>, action: String, onProceed: () -> Unit) {
+    fun maybeShowBaiduLimit(files: List<ShareFile>, onProceed: () -> Unit) {
         if (!limitHintDismissed && files.any { it.fsize > BAIDU_LIMIT_BYTES }) {
-            pendingBaiduDownload = action
+            pendingBaiduDownload = onProceed
             showBaiduLimitDialog = true
         } else {
             onProceed()
@@ -464,7 +466,7 @@ fun BaiduCloudScreen(
                             count = viewModel.selected.size,
                             actions = listOf(
                                 MultiSelectAction(stringResource(R.string.csa_download), Icons.Outlined.Download, MaterialTheme.colorScheme.primary) {
-                                    maybeShowBaiduLimit(viewModel.selected, "batch") { viewModel.downloadSelected() }
+                                    maybeShowBaiduLimit(viewModel.selected) { viewModel.downloadSelected() }
                                 },
                                 MultiSelectAction(stringResource(R.string.csa_share), Icons.Outlined.Share, MaterialTheme.colorScheme.primary) {
                                     batchInitial = BatchStep.SHARE
@@ -508,7 +510,7 @@ fun BaiduCloudScreen(
             operating = viewModel.isOperating,
             onDownload = {
                 viewModel.actionFile?.let { f ->
-                    maybeShowBaiduLimit(listOf(f), "single") { viewModel.downloadFile() }
+                    maybeShowBaiduLimit(listOf(f)) { viewModel.downloadFile(f) }
                 }
             },
             onDownloadFolder = { viewModel.downloadFolder() },
@@ -539,7 +541,7 @@ fun BaiduCloudScreen(
         BatchActionSheet(
             count = viewModel.selected.size,
             operating = viewModel.isOperating,
-            onDownload = { maybeShowBaiduLimit(viewModel.selected, "batch") { viewModel.downloadSelected() } },
+            onDownload = { maybeShowBaiduLimit(viewModel.selected) { viewModel.downloadSelected() } },
             passcodeMode = PasscodeMode.REQUIRED,
             onShare = { _, passcode, expiredType -> viewModel.shareSelected(expiredType, passcode) },
             onDelete = {
@@ -626,10 +628,7 @@ fun BaiduCloudScreen(
                         showBaiduLimitDialog = false
                         settingsRepo.baiduLimitHintDismissed = neverShow
                         limitHintDismissed = neverShow
-                        when (pendingBaiduDownload) {
-                            "single" -> viewModel.downloadFile()
-                            "batch" -> viewModel.downloadSelected()
-                        }
+                        pendingBaiduDownload?.invoke()
                         pendingBaiduDownload = null
                     }
                 ) { Text(stringResource(R.string.csa_continue_download)) }

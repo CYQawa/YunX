@@ -186,4 +186,20 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">結合中 · %1$d%%</string>
+
+    <!-- Baidu ダウンロード設定 -->
+    <string name="settings_baidu_download">Baidu ネットディスク</string>
+    <string name="settings_baidu_download_desc_cdn">CDN / HTTP 直リンク（既定、互換性が最も高い）· P2P への切り替えとスレッド/低速閾値の調整が可能</string>
+    <string name="settings_baidu_download_desc_p2p">P2P（ダウンロードのみ、アップロードなし）· %1$d スレッド · %2$d 秒間 %3$d KiB/s 未満が続くとノードを切り替え</string>
+    <string name="settings_baidu_download_mode">ダウンロード方式</string>
+    <string name="settings_baidu_mode_cdn">CDN / HTTP 直リンク</string>
+    <string name="settings_baidu_mode_cdn_desc">locatedownload が返す平文ノードを使用し、互換性を優先します。</string>
+    <string name="settings_baidu_mode_p2p">P2P（ダウンロードのみ、アップロードなし）</string>
+    <string name="settings_baidu_mode_p2p_desc">Seed range_list に従って TPDATA をスケジュールします。ポート待受・シード・アップロードは行いません。</string>
+    <string name="settings_baidu_p2p_params">P2P パラメータ（任意の数値を入力可能。保存時に有効範囲へ補正されます）</string>
+    <string name="settings_baidu_p2p_workers">ダウンロードスレッド数（1〜32）</string>
+    <string name="settings_baidu_p2p_window">低速判定ウィンドウ（秒、1〜120）</string>
+    <string name="settings_baidu_p2p_speed">低速閾値（KiB/s、1〜1048576）</string>
+    <string name="settings_baidu_p2p_min_chunk">切り替え最小チャンク（KiB、0〜4194304）</string>
+    <string name="settings_baidu_p2p_hint">ウィンドウ内の平均速度が閾値を下回り、現在のチャンクが切り替え最小サイズ以上の場合、現在のノードを切断して次へ切り替えます。全候補が失敗した場合は CDN にフォールバックします。</string>
 </resources>

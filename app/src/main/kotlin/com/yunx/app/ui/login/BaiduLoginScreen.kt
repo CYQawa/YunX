@@ -83,8 +83,8 @@ import kotlinx.coroutines.launch
 /**
  * 百度网盘登录页：
  * - WebView 加载百度网盘官网，由用户手动登录；
- * - 自动登录检测：网页内登录完成后自动提取 Cookie（关键字段 BDUSS/STOKEN）并校验落库（右上角「保存」保留作手动兜底）；
- * - 支持手动粘贴 Cookie（需含 BDUSS=）。
+ * - 自动登录检测：页面稳定后连续采样 Cookie，要求 BDUSS + Pan 域 STOKEN，并经接口校验后落库；
+ * - 支持手动粘贴 Cookie（需含 BDUSS= 与 STOKEN=）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,14 +145,19 @@ fun BaiduLoginScreen(
         }
     }
 
-    // 自动登录检测：网页内登录完成（BDUSS 出现并通过接口校验）即自动保存登录；右上角「保存」保留作手动兜底
+    // 自动登录检测：BDUSS + Pan 域 STOKEN 连续稳定出现并通过接口校验后自动保存；右上角「保存」保留作手动兜底
     rememberWebLoginAutoDetect(
-        sampleCredential = { CookieManager.getInstance().getCookie(BaiduConstants.COOKIE_DOMAIN).orEmpty() },
+        sampleCredential = { readBaiduCookies() },
         isPlausible = { BaiduConstants.isValidCookie(it) },
         validateAndSave = { viewModel.saveBaiduAccount(it) },
-        isPaused = { isSaving || isSavingManual || showCookieDialog },
+        isPaused = { isSaving || isSavingManual || showCookieDialog || isLoading },
         onInFlightChange = { isSaving = it },
-        onAutoSaved = onSaved
+        onAutoSaved = {
+            // 校验通过后再持久化 WebView Cookie；此时登录跳转已稳定，不会把中间态写盘
+            CookieManager.getInstance().flush()
+            onSaved()
+        },
+        requiredStableSamples = 2
     )
 
     DisposableEffect(Unit) {
@@ -189,16 +194,16 @@ fun BaiduLoginScreen(
                         onClick = {
                             scope.launch {
                                 isSaving = true
-                                val cookie = CookieManager.getInstance()
-                                    .getCookie(BaiduConstants.COOKIE_DOMAIN)
-                                    .orEmpty()
+                                val cookie = readBaiduCookies(flush = true)
                                 val saved = viewModel.saveBaiduAccount(cookie)
                                 isSaving = false
                                 if (saved) {
                                     SnackbarController.show(AppStrings.get(R.string.lg_login_success))
                                     onSaved()
                                 } else {
-                                    SnackbarController.show(AppStrings.get(R.string.lg_no_login_state))
+                                    SnackbarController.show(
+                                        AppStrings.get(R.string.lg_baidu_cookie_invalid)
+                                    )
                                 }
                             }
                         },
@@ -375,4 +380,18 @@ fun BaiduLoginScreen(
             }
         )
     }
+}
+
+/**
+ * 读取百度登录 Cookie。
+ *
+ * 不能只读 `https://pan.baidu.com` 的单次结果就落库：登录跳转期间 WebView 会分步写入
+ * BDUSS 与 Pan 域 STOKEN，且中间态会出现裸 `undefined`。这里交给
+ * [BaiduConstants.extractCookies] 合并 Pan 域与根域、清洗无效项；
+ * 调用方再通过稳定采样与 `gettemplatevariable` 校验决定是否保存。
+ */
+private fun readBaiduCookies(flush: Boolean = false): String {
+    val manager = CookieManager.getInstance()
+    if (flush) manager.flush()
+    return BaiduConstants.extractCookies { manager.getCookie(it) }
 }

@@ -186,4 +186,20 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">正在合并分片 · %1$d%%</string>
+
+    <!-- 百度下载设置 -->
+    <string name="settings_baidu_download">百度网盘</string>
+    <string name="settings_baidu_download_desc_cdn">CDN / HTTP 直链（默认，兼容性最好）· 可切换 P2P 并调整线程/低速阈值</string>
+    <string name="settings_baidu_download_desc_p2p">P2P（只下载、不上传）· %1$d 线程 · 持续 %2$d 秒低于 %3$d KiB/s 时切换节点</string>
+    <string name="settings_baidu_download_mode">下载方式</string>
+    <string name="settings_baidu_mode_cdn">CDN / HTTP 直链</string>
+    <string name="settings_baidu_mode_cdn_desc">使用 locatedownload 返回的明文节点，兼容性最好。</string>
+    <string name="settings_baidu_mode_p2p">P2P（只下载、不上传）</string>
+    <string name="settings_baidu_mode_p2p_desc">按 Seed range_list 调度 TPDATA；不监听端口、不做种、不接受上传。</string>
+    <string name="settings_baidu_p2p_params">P2P 参数（可直接输入任意数值，保存时自动修正到有效范围）</string>
+    <string name="settings_baidu_p2p_workers">下载线程数（1-32）</string>
+    <string name="settings_baidu_p2p_window">低速判定窗口（秒，1-120）</string>
+    <string name="settings_baidu_p2p_speed">低速阈值（KiB/s，1-1048576）</string>
+    <string name="settings_baidu_p2p_min_chunk">最小切换分片（KiB，0-4194304）</string>
+    <string name="settings_baidu_p2p_hint">窗口内平均速度低于阈值，且当前分片不小于最小切换分片时，断开当前节点换下一个；全部候选失败后自动走 CDN。</string>
 </resources>

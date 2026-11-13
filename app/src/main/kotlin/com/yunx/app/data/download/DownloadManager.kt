@@ -32,6 +32,8 @@ import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.security.CredentialCipher
 import com.yunx.app.data.security.PlaintextCredentialCipher
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.data.network.BaiduConstants
+import com.yunx.app.data.network.BaiduP2pSpec
 import okhttp3.Request
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -173,6 +175,26 @@ private const val MAX_STREAM_RETRIES = 3
 
 /** 暂停/删除时等待任务协程退出的上限（毫秒）：阻塞式 IO 不响应取消，不能无限等，否则按钮「点不动」 */
 private const val JOB_EXIT_WAIT_MS = 10_000L
+
+/**
+ * 下载引擎分流策略（纯函数，便于单测）：
+ * - 需要本地后处理、GitHub 镜像回退、P2P 快照只能走内置下载器；
+ * - 百度选择 P2P 模式时全局固定走内置下载器，即使本次取链失败回退到 CDN；
+ *   这样 P2P/CDN 混合调度、断点分片和“只下载不上传”逻辑始终由同一实现负责。
+ */
+internal fun shouldUseEngineForTask(
+    platform: String,
+    needMerge: Boolean,
+    engine: String,
+    engineInstalled: Boolean,
+    baiduDownloadMode: String
+): Boolean =
+    !needMerge &&
+        platform != DownloadPlatform.GITHUB &&
+        !(platform == DownloadPlatform.BAIDU &&
+            baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P) &&
+        engine == SettingsRepository.ENGINE_GOPEED &&
+        engineInstalled
 
 /** 重试区间（主池 part_i 或弹性区间 seg_{start}_{end}） */
 private data class RetryRange(val start: Long, val end: Long, val file: File)
@@ -794,7 +816,11 @@ class DownloadManager(
         }
         if (shouldUseEngine(
                 taskPlatform,
-                needMerge = mergeAudioUrl.isNotBlank() || motionUrl.isNotBlank() || audioOnly
+                needMerge = mergeAudioUrl.isNotBlank() ||
+                    motionUrl.isNotBlank() ||
+                    audioOnly ||
+                    // P2P 快照只有本项目内置下载器认识；Gopeed 会把它当未知协议。
+                    BaiduP2pSpec.isP2p(url)
             )
         ) {
             // 任务登记、下载页展示、完成清理回调都与内置下载器完全一致，只有「执行」交给 Gopeed 引擎
@@ -810,10 +836,13 @@ class DownloadManager(
      * **需要本地后处理的任务**（DASH 合轨、动图合成、抽取音轨 —— 引擎都没有这些能力）也始终用内置下载器。
      */
     private fun shouldUseEngine(platform: String, needMerge: Boolean = false): Boolean =
-        !needMerge &&
-            platform != DownloadPlatform.GITHUB &&
-            settings.downloadEngine == SettingsRepository.ENGINE_GOPEED &&
-            GopeedEngine.isInstalled(context)
+        shouldUseEngineForTask(
+            platform = platform,
+            needMerge = needMerge,
+            engine = settings.downloadEngine,
+            engineInstalled = GopeedEngine.isInstalled(context),
+            baiduDownloadMode = settings.baiduDownloadMode
+        )
 
     /**
      * 磁力链接是否可下：返回 null = 可以（交给引擎），否则是给用户看的拦截原因。
@@ -1490,6 +1519,40 @@ class DownloadManager(
             Log.d(TAG, "runTask: id=$id HLS 转码流下载 origin=${LogRedactor.url(task.url)}")
             hlsDownload(id, task, headers)
             return
+        }
+
+        // 百度 P2P 快照不是 HTTP URL，不能交给大小探测。控制面/数据面失败时，
+        // 只在「还没有任何进度」的情况下切到快照内置的明文 CDN；已有分片则交给
+        // runTaskWithRetry 续跑，避免一次节点抖动把已下数据全部丢掉。
+        val p2pSpec = BaiduP2pSpec.decode(task.url)
+        if (p2pSpec != null) {
+            try {
+                p2pDownload(id, task, p2pSpec, headers)
+                return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val progressed = chunkDirOf(id).walkTopDown()
+                    .filter { it.isFile && it.name.startsWith("part_") }
+                    .sumOf { it.length() }
+                val fallback = p2pSpec.cdnUrls.firstOrNull()
+                if (progressed > 0L || fallback.isNullOrBlank()) throw e
+                Log.w(
+                    TAG,
+                    "runTask: id=$id P2P 初始化失败，回退 CDN：${e.message}"
+                )
+                DownloadDebugLog.record(
+                    id, "P2P 回退 CDN",
+                    "尚未产生分片，切换到 ${LogRedactor.url(fallback)}：${e.message ?: e.javaClass.simpleName}"
+                )
+                DiagnosticLog.warn(
+                    DiagnosticLog.DOWNLOAD, "baidu_p2p_cdn_fallback",
+                    "task=$id | ${e.message}"
+                )
+                chunkDirOf(id).deleteRecursively()
+                taskPartDigests.remove(id)
+                task = task.copy(url = fallback)
+            }
         }
 
         // 总大小以服务器探测为准（Range0-0 的 Content-Range 是真实总大小），
@@ -2436,6 +2499,131 @@ class DownloadManager(
                 emptyMap()
             }
         }
+
+    /**
+     * 百度 P2P 任务：按 1 MiB 原生分片下载，再把完整 part 交给通用合并/保存流程。
+     *
+     * 并发上限固定 8：POP 节点的单文件承载能力没有 CDN 那样的公开阈值，
+     * 8 路能明显缩短建连等待，又不会把节点打挂后触发整段回退。
+     */
+    private suspend fun p2pDownload(
+        id: Long,
+        task: DownloadTaskEntity,
+        spec: BaiduP2pSpec,
+        headers: Map<String, String>
+    ) {
+        if (!isTaskActive()) return
+        val total = spec.fileSize
+        if (total <= 0L) throw IllegalStateException("百度 P2P 文件大小非法：$total")
+        val range = BaiduConstants.P2P_RANGE_SIZE.toLong()
+        val totalRanges = ((total + range - 1) / range).toInt()
+        // 并发数可由设置页覆盖；仍受平台线程数与总片数约束。
+        val configuredWorkers = settings.baiduP2pWorkers.coerceAtLeast(1)
+        val workers = min(
+            threadProvider(task.platform).coerceAtLeast(1),
+            configuredWorkers
+        ).coerceAtMost(totalRanges).coerceAtLeast(1)
+        val rawChunk = (total + workers - 1) / workers
+        val chunkSize = ((rawChunk + range - 1) / range) * range
+        val chunkCount = ((total + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
+        val actualWorkers = min(workers, chunkCount)
+        val chunkDir = chunkDirOf(id).apply { mkdirs() }
+        val plan = "p2p chunks=$chunkCount total=$total fgid=${spec.fgid.take(16)}"
+        val planFile = File(chunkDir, "plan.txt")
+        if (planFile.exists() && planFile.readText() != plan) {
+            Log.w(TAG, "p2pDownload: id=$id P2P 分片计划变化，清空旧 part")
+            chunkDir.deleteRecursively()
+            chunkDir.mkdirs()
+        }
+        planFile.writeText(plan)
+
+        val parts = (0 until chunkCount).map { i ->
+            val start = i.toLong() * chunkSize
+            val end = minOf(start + chunkSize, total) - 1
+            val expected = end - start + 1
+            File(chunkDir, "part_$i").also { part ->
+                val length = part.length()
+                if (length > expected) {
+                    java.io.RandomAccessFile(part, "rw").use { it.setLength(expected) }
+                } else if (length < expected && length % range != 0L) {
+                    // 只可能是上次进程死在 append 中间；完整 1 MiB 块之前的数据才可信。
+                    java.io.RandomAccessFile(part, "rw").use { it.setLength(length - length % range) }
+                }
+            }
+        }
+        val partDigests = ConcurrentHashMap<String, String>()
+        taskPartDigests[id] = partDigests
+        val downloaded = AtomicLong(0L)
+        parts.forEachIndexed { i, part ->
+            val start = i.toLong() * chunkSize
+            val end = minOf(start + chunkSize, total) - 1
+            downloaded.addAndGet(part.length().coerceIn(0L, end - start + 1))
+        }
+        val initial = minOf(downloaded.get(), total)
+        downloaded.set(initial)
+        dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, initial, total)
+        _stats.update { it + (id to DownloadStats(0L, -1L, actualWorkers)) }
+        val lastPersistAt = AtomicLong(0L)
+        val speedRecorder = SpeedRecorder()
+        DiagnosticLog.log(
+            DiagnosticLog.DOWNLOAD, "baidu_p2p_plan", taskId = id, status = "downloading", size = total,
+            summary = "workers=$actualWorkers chunkSize=$chunkSize chunks=$chunkCount 已有=$initial"
+        )
+
+        val downloaderP2p = BaiduP2pDownloader(
+            slowNodeWindowMillis = settings.baiduP2pSlowSeconds * 1000L,
+            slowNodeMinBytesPerSecond = settings.baiduP2pSlowKbps * 1024L,
+            slowNodeMinRemainBytes = settings.baiduP2pMinRemainKb * 1024L
+        )
+        val cookie = headers.entries
+            .firstOrNull { it.key.equals("Cookie", ignoreCase = true) }
+            ?.value
+            .orEmpty()
+        val session = downloaderP2p.prepare(spec, cookie)
+        val onProgress: suspend (Long) -> Unit = { delta ->
+            speedLimiter.awaitAllow(delta)
+            val new = minOf(downloaded.addAndGet(delta), total)
+            val speed = speedRecorder.onBytes(new)
+            if (speed != null) {
+                val remain = if (speed > 0L) (total - new) * 1000 / speed else -1L
+                _stats.update {
+                    it + (id to DownloadStats(speed, remain, actualWorkers))
+                }
+            }
+            persistProgressIfDue(id, new, total, force = false, lastAt = lastPersistAt)
+            notifyProgress(id, task.fileName, new, total)
+        }
+        coroutineScope {
+            parts.mapIndexed { index, part ->
+                async(DownloadManager.chunkIoDispatcher) {
+                    val start = index.toLong() * chunkSize
+                    val end = minOf(start + chunkSize, total) - 1
+                    downloaderP2p.downloadRange(
+                        spec = spec,
+                        session = session,
+                        start = start,
+                        endInclusive = end,
+                        partFile = part,
+                        onBytes = onProgress
+                    )
+                }
+            }.awaitAll()
+        }
+        if (!isTaskActive()) return
+        parts.forEachIndexed { index, part ->
+            val start = index.toLong() * chunkSize
+            val end = minOf(start + chunkSize, total) - 1
+            val expected = end - start + 1
+            if (part.length() != expected) {
+                throw IllegalStateException(
+                    "P2P 分片 ${index + 1}/$chunkCount 大小不符：" +
+                        "期望 $expected，实际 ${part.length()}"
+                )
+            }
+        }
+        persistProgressIfDue(id, total, total, force = true, lastAt = lastPersistAt)
+        finishDownload(id, chunkDir, parts, task.fileName, total)
+    }
 
     /**
      * 分片流式合并 → **直接写入最终保存位置** → 完成后清空分片目录。

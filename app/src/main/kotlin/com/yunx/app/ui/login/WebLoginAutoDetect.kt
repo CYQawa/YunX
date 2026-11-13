@@ -21,6 +21,7 @@ package com.yunx.app.ui.login
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,8 @@ private const val AUTO_DETECT_SAME_CREDENTIAL_RETRY_MS = 10_000L
  * @param onInFlightChange 自动校验在途/结束回调（true=开始校验）。调用方应借此同步禁用右上角「保存」按钮，
  *   避免自动校验期间用户再点「保存」造成并发重复写库/重复「登录成功」提示
  * @param onAutoSaved 自动登录成功（已落库），由调用方关闭登录页
+ * @param requiredStableSamples 触发校验前，同一份凭证至少连续出现的次数。WebView 登录收尾时
+ *   Cookie 会分多步写入，关键字段齐全不代表已经稳定；百度登录页要求 2 次。
  */
 @Composable
 fun rememberWebLoginAutoDetect(
@@ -66,7 +69,8 @@ fun rememberWebLoginAutoDetect(
     validateAndSave: suspend (String) -> Boolean,
     isPaused: () -> Boolean = { false },
     onInFlightChange: (Boolean) -> Unit = {},
-    onAutoSaved: () -> Unit
+    onAutoSaved: () -> Unit,
+    requiredStableSamples: Int = 1
 ) {
     // 检测是否已结束（自动保存成功 / 页面已关闭）；校验在途时置 true，防止与手动保存并发重复写库
     var finished by remember { mutableStateOf(false) }
@@ -75,6 +79,10 @@ fun rememberWebLoginAutoDetect(
     // 最近一次「校验失败」的凭证原文与时间：相同凭证不立即重打接口，等凭证变化或超时后再试
     var lastFailedCredential by remember { mutableStateOf("") }
     var lastFailedTs by remember { mutableLongStateOf(0L) }
+    // 连续出现的凭证及次数：挡住「BDUSS 先到、Pan STOKEN 后到」这类一次采样就结束的中间态
+    var lastCandidateCredential by remember { mutableStateOf("") }
+    var stableSampleCount by remember { mutableIntStateOf(0) }
+    val stableSampleTarget = requiredStableSamples.coerceAtLeast(1)
 
     LaunchedEffect(Unit) {
         while (!finished) {
@@ -87,7 +95,19 @@ fun rememberWebLoginAutoDetect(
             } catch (e: Exception) {
                 null
             }
-            if (credential.isNullOrBlank() || !isPlausible(credential)) continue
+            if (credential.isNullOrBlank() || !isPlausible(credential)) {
+                lastCandidateCredential = ""
+                stableSampleCount = 0
+                continue
+            }
+
+            if (credential == lastCandidateCredential) {
+                stableSampleCount++
+            } else {
+                lastCandidateCredential = credential
+                stableSampleCount = 1
+            }
+            if (stableSampleCount < stableSampleTarget) continue
 
             val now = System.currentTimeMillis()
             // 同一份凭证刚校验失败过：跳过（登录中间态的值一般是临时的，等页面写入最终凭证）

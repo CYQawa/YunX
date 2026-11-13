@@ -413,11 +413,13 @@ fun MainScreen(
     val popupAnnouncement by announcementViewModel.popup.collectAsState()
     LaunchedEffect(Unit) { announcementViewModel.checkStartup() }
 
-
+    val settings = remember { SettingsRepository(context) }
     val api = remember { QuarkApi() }
     val ucApi = remember { UCApi() }
     val xunleiApi = remember { XunleiApi() }
-    val baiduApi = remember { BaiduApi() }
+    val baiduApi = remember {
+        BaiduApi(downloadModeProvider = { settings.baiduDownloadMode })
+    }
     val appContext = context.applicationContext
     val c139Api = remember(appContext) {
         C139Api(deviceInfoProvider = { C139DeviceInfo.from(appContext) })
@@ -429,7 +431,6 @@ fun MainScreen(
     val lanzouApi = remember { LanzouApi() }
     val db = remember { AppDatabase.get(context) }
 
-    val settings = remember { SettingsRepository(context) }
     val repository = remember {
         QuarkAccountRepository(db.quarkAccountDao(), api)
     }

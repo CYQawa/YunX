@@ -186,4 +186,20 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">正在合併分片 · %1$d%%</string>
+
+    <!-- 百度下載設定 -->
+    <string name="settings_baidu_download">百度網盤</string>
+    <string name="settings_baidu_download_desc_cdn">CDN / HTTP 直鏈（預設，相容性最好）· 可切換 P2P 並調整執行緒/低速閾值</string>
+    <string name="settings_baidu_download_desc_p2p">P2P（只下載、不上傳）· %1$d 執行緒 · 持續 %2$d 秒低於 %3$d KiB/s 時切換節點</string>
+    <string name="settings_baidu_download_mode">下載方式</string>
+    <string name="settings_baidu_mode_cdn">CDN / HTTP 直鏈</string>
+    <string name="settings_baidu_mode_cdn_desc">使用 locatedownload 傳回的明文節點，相容性最好。</string>
+    <string name="settings_baidu_mode_p2p">P2P（只下載、不上傳）</string>
+    <string name="settings_baidu_mode_p2p_desc">按 Seed range_list 排程 TPDATA；不監聽連接埠、不做種、不接受上傳。</string>
+    <string name="settings_baidu_p2p_params">P2P 參數（可直接輸入任意數值，儲存時自動修正到有效範圍）</string>
+    <string name="settings_baidu_p2p_workers">下載執行緒數（1-32）</string>
+    <string name="settings_baidu_p2p_window">低速判定視窗（秒，1-120）</string>
+    <string name="settings_baidu_p2p_speed">低速閾值（KiB/s，1-1048576）</string>
+    <string name="settings_baidu_p2p_min_chunk">最小切換分片（KiB，0-4194304）</string>
+    <string name="settings_baidu_p2p_hint">視窗內平均速度低於閾值，且目前分片不小於最小切換分片時，斷開目前節點換下一個；全部候選失敗後自動走 CDN。</string>
 </resources>

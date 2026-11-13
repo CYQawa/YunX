@@ -186,4 +186,20 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">Fusion des segments · %1$d%%</string>
+
+    <!-- Paramètres de téléchargement Baidu -->
+    <string name="settings_baidu_download">Baidu Netdisk</string>
+    <string name="settings_baidu_download_desc_cdn">Lien direct CDN / HTTP (par défaut, meilleure compatibilité) · Passez en P2P et ajustez les threads et les seuils de faible débit</string>
+    <string name="settings_baidu_download_desc_p2p">P2P (téléchargement uniquement, sans envoi) · %1$d threads · changement de nœud après %2$d s sous %3$d KiB/s</string>
+    <string name="settings_baidu_download_mode">Mode de téléchargement</string>
+    <string name="settings_baidu_mode_cdn">Lien direct CDN / HTTP</string>
+    <string name="settings_baidu_mode_cdn_desc">Utilise les nœuds en clair renvoyés par locatedownload pour une meilleure compatibilité.</string>
+    <string name="settings_baidu_mode_p2p">P2P (téléchargement uniquement, sans envoi)</string>
+    <string name="settings_baidu_mode_p2p_desc">Planifie TPDATA selon le Seed range_list ; aucun port en écoute, aucun seeding et aucun envoi.</string>
+    <string name="settings_baidu_p2p_params">Paramètres P2P (saisissez une valeur libre ; elle est ramenée dans la plage valide à l\'enregistrement)</string>
+    <string name="settings_baidu_p2p_workers">Threads de téléchargement (1-32)</string>
+    <string name="settings_baidu_p2p_window">Fenêtre de faible débit (secondes, 1-120)</string>
+    <string name="settings_baidu_p2p_speed">Seuil de faible débit (KiB/s, 1-1048576)</string>
+    <string name="settings_baidu_p2p_min_chunk">Taille minimale de segment pour changer (KiB, 0-4194304)</string>
+    <string name="settings_baidu_p2p_hint">Si la vitesse moyenne dans la fenêtre passe sous le seuil et que le segment actuel atteint la taille minimale, le nœud actuel est abandonné au profit du suivant ; après échec de tous les candidats, bascule vers CDN.</string>
 </resources>

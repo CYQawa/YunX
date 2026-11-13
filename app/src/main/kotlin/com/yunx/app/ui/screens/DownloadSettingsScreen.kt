@@ -32,6 +32,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +48,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Power
@@ -123,6 +125,11 @@ fun DownloadSettingsScreen(
     var speedLimitBps by remember { mutableStateOf(settingsRepo.downloadSpeedLimit) }
     var retryCount by remember { mutableStateOf(settingsRepo.downloadRetryCount) }
     var quarkNoSave by remember { mutableStateOf(settingsRepo.quarkNoSaveDownload) }
+    var baiduDownloadMode by remember { mutableStateOf(settingsRepo.baiduDownloadMode) }
+    var baiduP2pWorkers by remember { mutableStateOf(settingsRepo.baiduP2pWorkers) }
+    var baiduP2pSlowSeconds by remember { mutableStateOf(settingsRepo.baiduP2pSlowSeconds) }
+    var baiduP2pSlowKbps by remember { mutableStateOf(settingsRepo.baiduP2pSlowKbps) }
+    var baiduP2pMinRemainKb by remember { mutableStateOf(settingsRepo.baiduP2pMinRemainKb) }
     var keepLocked by remember { mutableStateOf(settingsRepo.keepDownloadWhenLocked) }
     var showSpeed by remember { mutableStateOf(settingsRepo.notificationShowSpeed) }
 
@@ -130,6 +137,7 @@ fun DownloadSettingsScreen(
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRetryDialog by remember { mutableStateOf(false) }
     var showBatteryDialog by remember { mutableStateOf(false) }
+    var showBaiduP2pDialog by remember { mutableStateOf(false) }
 
     // 通知是否可用（areNotificationsEnabled 不是 Compose 状态源，手动提升为状态，返回页面时刷新）
     var notificationsEnabled by remember {
@@ -210,7 +218,7 @@ fun DownloadSettingsScreen(
             // 最大同时下载任务数：内置下载器与 Gopeed 引擎共用同一上限
             SettingsItem(
                 icon = Icons.Outlined.Layers,
-                shape = listGroupShape(if (engineOn) ListGroupPos.SINGLE else ListGroupPos.FIRST),
+                shape = listGroupShape(ListGroupPos.FIRST),
                 title = stringResource(R.string.settings_max_tasks),
                 description = stringResource(R.string.settings_max_tasks_desc, maxConcurrent),
                 onClick = { showConcurrencyDialog = true }
@@ -237,7 +245,7 @@ fun DownloadSettingsScreen(
 
                     SettingsItem(
                         icon = Icons.Outlined.Refresh,
-                        shape = listGroupShape(ListGroupPos.LAST),
+                        shape = listGroupShape(ListGroupPos.MIDDLE),
                         title = stringResource(R.string.settings_auto_retry),
                         description = if (retryCount == 0) {
                             stringResource(R.string.settings_auto_retry_desc_never)
@@ -248,6 +256,25 @@ fun DownloadSettingsScreen(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(ListGroupGap))
+
+            SettingsItem(
+                icon = Icons.Outlined.Cloud,
+                shape = listGroupShape(ListGroupPos.LAST),
+                title = stringResource(R.string.settings_baidu_download),
+                description = if (baiduDownloadMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P) {
+                    stringResource(
+                        R.string.settings_baidu_download_desc_p2p,
+                        baiduP2pWorkers,
+                        baiduP2pSlowSeconds,
+                        baiduP2pSlowKbps
+                    )
+                } else {
+                    stringResource(R.string.settings_baidu_download_desc_cdn)
+                },
+                onClick = { showBaiduP2pDialog = true }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -560,5 +587,168 @@ fun DownloadSettingsScreen(
                 }
             }
         )
+    }
+
+    if (showBaiduP2pDialog) {
+        BaiduP2pSettingsDialog(
+            mode = baiduDownloadMode,
+            workers = baiduP2pWorkers,
+            slowSeconds = baiduP2pSlowSeconds,
+            slowKbps = baiduP2pSlowKbps,
+            minRemainKb = baiduP2pMinRemainKb,
+            onDismiss = { showBaiduP2pDialog = false },
+            onConfirm = { newMode, newWorkers, newSeconds, newKbps, newMinRemain ->
+                baiduDownloadMode = newMode
+                baiduP2pWorkers = newWorkers
+                baiduP2pSlowSeconds = newSeconds
+                baiduP2pSlowKbps = newKbps
+                baiduP2pMinRemainKb = newMinRemain
+                settingsRepo.baiduDownloadMode = newMode
+                settingsRepo.baiduP2pWorkers = newWorkers
+                settingsRepo.baiduP2pSlowSeconds = newSeconds
+                settingsRepo.baiduP2pSlowKbps = newKbps
+                settingsRepo.baiduP2pMinRemainKb = newMinRemain
+                showBaiduP2pDialog = false
+            }
+        )
+    }
+}
+
+/**
+ * 百度网盘设置：下载方式 + P2P 线程/低速切换参数。
+ *
+ * 保存时按后端可接受范围修正：线程 1..32、窗口 1..120 秒、
+ * 速度 1..1048576 KiB/s、最小分片 0..4194304 KiB。
+ */
+@Composable
+private fun BaiduP2pSettingsDialog(
+    mode: String,
+    workers: Int,
+    slowSeconds: Int,
+    slowKbps: Int,
+    minRemainKb: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int, Int, Int, Int) -> Unit
+) {
+    var editMode by remember { mutableStateOf(mode) }
+    var workersText by remember { mutableStateOf(workers.toString()) }
+    var secondsText by remember { mutableStateOf(slowSeconds.toString()) }
+    var kbpsText by remember { mutableStateOf(slowKbps.toString()) }
+    var minRemainText by remember { mutableStateOf(minRemainKb.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_baidu_download)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    stringResource(R.string.settings_baidu_download_mode),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                BaiduModeRow(
+                    title = stringResource(R.string.settings_baidu_mode_cdn),
+                    description = stringResource(R.string.settings_baidu_mode_cdn_desc),
+                    selected = editMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN,
+                    onSelect = { editMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_CDN }
+                )
+                BaiduModeRow(
+                    title = stringResource(R.string.settings_baidu_mode_p2p),
+                    description = stringResource(R.string.settings_baidu_mode_p2p_desc),
+                    selected = editMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P,
+                    onSelect = { editMode = SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P }
+                )
+                if (editMode == SettingsRepository.BAIDU_DOWNLOAD_MODE_P2P) {
+                    Text(
+                        stringResource(R.string.settings_baidu_p2p_params),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    OutlinedTextField(
+                        value = workersText,
+                        onValueChange = { input -> workersText = input.filter { it in '0'..'9' } },
+                        label = { Text(stringResource(R.string.settings_baidu_p2p_workers)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = secondsText,
+                        onValueChange = { input -> secondsText = input.filter { it in '0'..'9' } },
+                        label = { Text(stringResource(R.string.settings_baidu_p2p_window)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = kbpsText,
+                        onValueChange = { input -> kbpsText = input.filter { it in '0'..'9' } },
+                        label = { Text(stringResource(R.string.settings_baidu_p2p_speed)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = minRemainText,
+                        onValueChange = { input -> minRemainText = input.filter { it in '0'..'9' } },
+                        label = { Text(stringResource(R.string.settings_baidu_p2p_min_chunk)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        stringResource(R.string.settings_baidu_p2p_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm(
+                    editMode,
+                    workersText.toIntOrNull()?.coerceIn(1, 32) ?: workers,
+                    secondsText.toIntOrNull()?.coerceIn(1, 120) ?: slowSeconds,
+                    kbpsText.toIntOrNull()?.coerceIn(1, 1_048_576) ?: slowKbps,
+                    minRemainText.toIntOrNull()?.coerceIn(0, 4_194_304) ?: minRemainKb
+                )
+            }) { Text(stringResource(R.string.action_confirm)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun BaiduModeRow(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onSelect: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

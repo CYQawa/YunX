@@ -110,6 +110,8 @@
 
     <!-- Boîte de dialogue du lien de téléchargement -->
     <string name="sh_direct_link_generated">Lien de téléchargement généré (valable environ 15-30 minutes)</string>
+    <string name="sh_baidu_p2p_task_generated">Tâche P2P Baidu créée (téléchargement uniquement, sans seeding)</string>
+    <string name="sh_baidu_p2p_task_description">Cette tâche récupère les segments via Seed / POP / TPDATA ; ce n\'est pas un lien direct HTTP copiable. Cet appareil envoie uniquement des requêtes de téléchargement, sans écouter de ports ni accepter d\'envois.</string>
     <string name="sh_copy_download_link">Copier le lien de téléchargement</string>
     <string name="sh_download_link_copied">Lien de téléchargement copié</string>
     <string name="sh_download_start_hint">Après le démarrage, suivez la progression sur la page « Téléchargements »</string>

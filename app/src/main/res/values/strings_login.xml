@@ -21,10 +21,10 @@
     <string name="lg_baidu_risk_ack">我已阅读并了解上述风险</string>
     <string name="lg_baidu_tutorial_1">1. 在下方网页中登录百度账号</string>
     <string name="lg_baidu_tutorial_2">2. 登录完成后将自动检测登录；若未自动登录，点右上角「保存」</string>
-    <string name="lg_baidu_tutorial_3">3. 或点击「粘贴」图标，手动输入 Cookie（需含 BDUSS=）</string>
+    <string name="lg_baidu_tutorial_3">3. 或点击「粘贴」图标，手动输入 Cookie（需含 BDUSS= 与 STOKEN=，优先使用 Pan 域登录态）</string>
     <string name="lg_baidu_tutorial_4">4. Cookie 长期有效，失效后需重新登录</string>
-    <string name="lg_baidu_cookie_hint">从网页登录态复制完整的 Cookie（需包含 BDUSS=）</string>
-    <string name="lg_baidu_cookie_invalid">Cookie 无效，请检查是否包含 BDUSS=</string>
+    <string name="lg_baidu_cookie_hint">从网页登录态复制完整的 Cookie（需包含 BDUSS= 与 STOKEN=）</string>
+    <string name="lg_baidu_cookie_invalid">Cookie 无效或登录态不完整，请确认包含 BDUSS= 与 STOKEN=</string>
 
     <!-- 迅雷账号密码 / 短信 -->
     <string name="lg_xunlei_title">迅雷网盘登录</string>

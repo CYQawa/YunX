@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yunx.app.data.network.BaiduP2pSpec
 import com.yunx.app.data.network.model.DownloadLink
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.rememberGlobalSnackbarHostState
@@ -72,6 +73,7 @@ fun DownloadLinkDialog(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isP2p = BaiduP2pSpec.isP2p(link.downloadUrl)
     // Dialog 内提示宿主（AlertDialog 为独立窗口）
     val snackbarHostState = rememberGlobalSnackbarHostState()
 
@@ -95,45 +97,59 @@ fun DownloadLinkDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.sh_direct_link_generated),
+                    text = if (isP2p) {
+                        stringResource(R.string.sh_baidu_p2p_task_generated)
+                    } else {
+                        stringResource(R.string.sh_direct_link_generated)
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
+                if (isP2p) {
                     Text(
-                        text = link.downloadUrl,
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClickLabel = stringResource(R.string.sh_copy_download_link),
-                                onLongClick = {
-                                    copyToClipboard(context, link.downloadUrl)
-                                    SnackbarController.show(AppStrings.get(R.string.sh_download_link_copied))
-                                }
-                            ),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
+                        text = stringResource(R.string.sh_baidu_p2p_task_description),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                TextButton(onClick = {
-                    copyToClipboard(context, link.downloadUrl)
-                    SnackbarController.show(AppStrings.get(R.string.sh_download_link_copied))
-                }) {
-                    Icon(Icons.Outlined.ContentCopy, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.sh_copy_download_link))
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
+                    ) {
+                        Text(
+                            text = link.downloadUrl,
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClickLabel = stringResource(R.string.sh_copy_download_link),
+                                    onLongClick = {
+                                        copyToClipboard(context, link.downloadUrl)
+                                        SnackbarController.show(
+                                            AppStrings.get(R.string.sh_download_link_copied)
+                                        )
+                                    }
+                                ),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    TextButton(onClick = {
+                        copyToClipboard(context, link.downloadUrl)
+                        SnackbarController.show(AppStrings.get(R.string.sh_download_link_copied))
+                    }) {
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.sh_copy_download_link))
+                    }
                 }
                 Text(
                     text = stringResource(R.string.sh_download_start_hint),

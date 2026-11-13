@@ -29,6 +29,8 @@ object LogRedactor {
 
     fun url(value: Any?): String {
         val raw = value?.toString()?.takeIf { it.isNotBlank() } ?: return "<none>"
+        // P2P 快照本身包含 fgid/密钥/CDN 候选，长度可达数 KB；日志只保留协议名。
+        if (raw.startsWith("baidu-p2p://", ignoreCase = true)) return "baidu-p2p://<redacted>"
         return runCatching {
             val uri = URI(raw)
             val scheme = uri.scheme?.lowercase() ?: return@runCatching "<relative-url>"
