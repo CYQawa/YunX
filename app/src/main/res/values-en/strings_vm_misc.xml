@@ -118,7 +118,7 @@
     <string name="vm_about_feature_netdisk_title">Drive share parsing</string>
     <string name="vm_about_feature_netdisk_desc">Direct link detection for Quark / UC / Xunlei / Baidu / 139 / 123 / 115 / Guangya / Lanzou / Lanzou Premium</string>
     <string name="vm_about_feature_video_title">Video link parsing</string>
-    <string name="vm_about_feature_video_desc">Douyin / Xiaohongshu / Kuaishou / Weibo / AcFun work without login; Bilibili offers higher quality after login; Pixiv only resolves some public works without login, paste your browser cookie to resolve all works</string>
+    <string name="vm_about_feature_video_desc">Douyin / Kuaishou / Weibo / AcFun work without login; Xiaohongshu requires login; Bilibili offers higher quality after login; Pixiv only resolves some public works without login, paste your browser cookie to resolve all works</string>
     <string name="vm_about_feature_preview_title">Online preview &amp; playback</string>
     <string name="vm_about_feature_preview_desc">View images / videos / audio online (request headers added automatically); text files in drives can also be opened</string>
     <string name="vm_about_feature_mux_title">Audio/video muxing</string>
@@ -175,7 +175,7 @@
     <string name="vm_main_preparing_update_package">Preparing update package…</string>
 
     <!-- GitHub Token -->
-    <string name="vm_github_token_usage">The Token only raises the API limit (60/hour anonymous, 5000/hour authenticated). It is encrypted and stored using Android Keystore AES-GCM.</string>
+    <string name="vm_github_token_usage">The Token is used only to raise the API limit (60/hour anonymous, 5000/hour authenticated) and is stored in the private local data of the app.</string>
     <string name="vm_github_token_howto_title">How to get a Token:</string>
     <string name="vm_github_token_howto_body">1. Open GitHub in a desktop browser, click your avatar in the top right → Settings\n2. On the left, Developer settings → Personal access tokens → Tokens (classic) → Generate new token\n3. Check public_repo to browse public repositories; to see your own private repositories on the home page, also check repo\n4. A validity of 90 days or No expiration is recommended; after generating, copy and paste it into the field above</string>
     <string name="vm_github_no_browser_link_copied">No available browser found. Link copied.</string>
