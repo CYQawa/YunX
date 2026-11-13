@@ -52,14 +52,17 @@ import org.json.JSONObject
  *      而是**渲染进 DOM** 的。
  *   这两步都只有「真的把页面跑一遍」才能过，所以这里用 WebView 当执行环境。
  *
- * ★ 工作方式：把 WebView **挂到当前 Activity 的窗口上**（1×1、全透明，肉眼不可见），
- *   然后轮询 [readyCheckJs]，直到它返回 `true` 或超时，再执行 [extractJs] 把结果取回来，最后销毁。
+ * ★ 工作方式：把 WebView **挂到当前 Activity 的窗口上**（1×1、全透明，肉眼不可见），然后轮询到超时。
+ *   [acceptExtract] 非空时，每一轮只执行一次 [extractJs]，回调为 true 就原样返回这次的字符串
+ *   （不再看 [readyCheckJs]，也不再抽第二次）。回调为空时仍等 [readyCheckJs] 返回 `true` 再执行 [extractJs]。
+ *   最后销毁 WebView。
  *   **必须挂上窗口**：不挂的话 `requestAnimationFrame` 之类不会触发、`document.visibilityState`
  *   也不是 visible，页面的初始化脚本可能就此卡住（挑战脚本尤其容易踩这个）。
  *
  * ★ 取回值的约定（与 `WebView.evaluateJavascript` 一致）：[extractJs] 应当**直接返回对象**
  *   （不要 `JSON.stringify`）—— 回调拿到的是它的 JSON 文本；返回 `null` / `undefined` 时得到 "null"。
- *   [readyCheckJs] 应当返回布尔值（回调拿到 "true" / "false"）。
+ *   [readyCheckJs] 应当返回布尔值（回调拿到 "true" / "false"）。[acceptExtract] 收到的是解码后的
+ *   [extractJs] 文本。
  *
  * ★ 线程：`WebView` 只能在创建它的线程上用，所以整段都跑在主线程；轮询间隔用 `delay` 让出，
  *   不会卡 UI。**不要在 IO 线程调用**（内部会自己切到主线程）。
@@ -92,9 +95,12 @@ object HeadlessWebView {
     }
 
     /**
-     * 打开 [url] 并按 [readyCheckJs] 轮询，就绪后执行 [extractJs]。
+     * 打开 [url] 并轮询取数。
      *
-     * @return 就绪并取到的 JSON 文本；超时、页面报错或拿不到 Activity 时返回 null。
+     * [acceptExtract] 为空时按 [readyCheckJs] 轮询，就绪后执行 [extractJs]。
+     * 非空时每一轮只执行一次 [extractJs]，回调接受则返回**同一次**的结果。
+     *
+     * @return 取到的 JSON 文本；超时、页面报错或拿不到 Activity 时返回 null。
      */
     @SuppressLint("SetJavaScriptEnabled")
     suspend fun loadAndExtract(
@@ -105,7 +111,9 @@ object HeadlessWebView {
         timeoutMs: Long = 25_000L,
         pollIntervalMs: Long = 350L,
         /** 调用方提供的「文档开始前」脚本，按顺序注入（如把页面自己的取数响应存下来的钩子） */
-        extraDocumentStartJs: List<String> = emptyList()
+        extraDocumentStartJs: List<String> = emptyList(),
+        /** 非空时用归约结果决定是否结束等待；为空则仍走 [readyCheckJs] */
+        acceptExtract: ((String) -> Boolean)? = null
     ): String? = withContext(Dispatchers.Main.immediate) {
         val activity = resumedActivity?.get()
         if (activity == null) {
@@ -165,7 +173,17 @@ object HeadlessWebView {
             val deadline = started + timeoutMs
             while (System.currentTimeMillis() < deadline) {
                 delay(pollIntervalMs)
-                if (webView.evaluate(readyCheckJs) == "true") {
+                if (acceptExtract != null) {
+                    val extracted = webView.evaluate(extractJs)
+                    if (extracted != null && acceptExtract(extracted)) {
+                        DiagnosticLog.event(
+                            DiagnosticLog.NETWORK,
+                            "headless_done",
+                            "costMs=${System.currentTimeMillis() - started} len=${extracted.length}"
+                        )
+                        return@withContext extracted
+                    }
+                } else if (webView.evaluate(readyCheckJs) == "true") {
                     val extracted = webView.evaluate(extractJs)
                     DiagnosticLog.event(
                         DiagnosticLog.NETWORK,
@@ -214,6 +232,9 @@ object HeadlessWebView {
      */
     private fun decodeJsonValue(raw: String): String? {
         if (raw == "null") return null
+        // 对象/数组按约定直接交给调用方；避免在调用方的大小/层数检查前递归解析一遍。
+        val first = raw.firstOrNull { !it.isWhitespace() }
+        if (first == '{' || first == '[') return raw
         return runCatching {
             when (val value = org.json.JSONTokener(raw).nextValue()) {
                 is String -> value
