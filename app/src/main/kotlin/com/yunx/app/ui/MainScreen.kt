@@ -500,22 +500,9 @@ fun MainScreen(
     // 下载管理器：OkHttp 分片下载器 + Room 任务持久化 + 可配置线程数（设置页动态生效）
     // 下载客户端由全局 HttpClients 统一管理（大 Dispatcher 保障分片并发，不锁死 CDN host；
     // 并支持隐藏菜单「忽略 SSL 证书」开关，抓包调试时即时生效，无需重启）
+    // 下载管理器：全局单例，保证主界面与控制中心快捷悬浮窗共享同一套调度池
     val downloadManager = remember {
-        DownloadManager(
-            context = context,
-            dao = db.downloadTaskDao(),
-            downloader = ChunkDownloader({ HttpClients.downloadClient() }),
-            threadProvider = { platform -> settings.downloadThreadsFor(platform) },
-            // 自定义下载保存目录（SAF tree Uri），设置页可选，动态生效
-            saveDirProvider = { settings.downloadDirUri },
-            // 网络与下载策略（设置页可调，动态生效）：并发任务数 / 全局限速 / 失败重试
-            concurrencyProvider = { settings.maxConcurrentDownloads },
-            speedLimitProvider = { settings.downloadSpeedLimit },
-            retryCountProvider = { settings.downloadRetryCount },
-            // 锁屏保持下载 / 通知栏速度开关
-            keepWhenLockedProvider = { settings.keepDownloadWhenLocked },
-            showSpeedProvider = { settings.notificationShowSpeed }
-        )
+        com.yunx.app.data.download.DownloadManagerHolder.get(context)
     }
     // Android 9- 写公共 Download 需要 WRITE_EXTERNAL_STORAGE 运行时授权：
     // 下载完成保存前由 DownloadManager.storagePermissionProvider 触发动态申请，授权后自动继续保存

@@ -399,11 +399,32 @@
             android:process=":crash"
             android:theme="@style/Theme.ComposeEmptyActivity" />
 
+        <!-- 控制中心快捷解析悬浮窗：独立任务栈、透明无边框、用完即走 -->
+        <activity
+            android:name=".ui.resolve.FloatResolveActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FloatingDialog"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- 下载前台服务：下载中保持前台，避免后台限速/进程被杀 -->
         <service
             android:name=".data.download.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- 控制中心快捷磁贴：一键打开下载或识别剪贴板内容 -->
+        <service
+            android:name=".ui.tile.DownloadTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_download"
+            android:label="@string/dl_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- 文件共享：导出日志等场景（ACTION_SEND 分享） -->
         <provider

@@ -186,4 +186,7 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">Merging chunks · %1$d%%</string>
+
+    <!-- Quick Settings Tile -->
+    <string name="dl_tile_label">YunX Download</string>
 </resources>

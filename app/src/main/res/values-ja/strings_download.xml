@@ -186,4 +186,7 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">結合中 · %1$d%%</string>
+
+    <!-- クイック設定タイル -->
+    <string name="dl_tile_label">YunX ダウンロード</string>
 </resources>
