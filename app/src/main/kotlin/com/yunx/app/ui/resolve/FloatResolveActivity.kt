@@ -27,11 +27,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -61,6 +66,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -89,18 +95,55 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yunx.app.R
+import com.yunx.app.data.db.AppDatabase
+import com.yunx.app.data.download.DownloadManagerHolder
+import com.yunx.app.data.network.BaiduApi
+import com.yunx.app.data.network.C139Api
+import com.yunx.app.data.network.C139DeviceInfo
 import com.yunx.app.data.network.C139KoulingParser
 import com.yunx.app.data.network.GitHubLinkParser
+import com.yunx.app.data.network.GuangYaApi
+import com.yunx.app.data.network.Pan115Api
+import com.yunx.app.data.network.Pan123Api
+import com.yunx.app.data.network.QuarkApi
 import com.yunx.app.data.network.ShareLinkParser
 import com.yunx.app.data.network.SharePlatform
+import com.yunx.app.data.network.UCApi
+import com.yunx.app.data.network.XunleiApi
 import com.yunx.app.data.network.model.ShareFile
 import com.yunx.app.data.network.video.VideoLinkParser
 import com.yunx.app.data.network.video.VideoMedia
+import com.yunx.app.data.repository.BaiduAccountRepository
+import com.yunx.app.data.repository.C139AccountRepository
+import com.yunx.app.data.repository.GuangYaAccountRepository
+import com.yunx.app.data.repository.Pan115AccountRepository
+import com.yunx.app.data.repository.Pan123AccountRepository
+import com.yunx.app.data.repository.QuarkAccountRepository
+import com.yunx.app.data.repository.UCAccountRepository
+import com.yunx.app.data.repository.XunleiAccountRepository
+import com.yunx.app.ui.screens.BaiduSaveContent
+import com.yunx.app.ui.screens.C139SaveContent
+import com.yunx.app.ui.screens.GuangYaSaveContent
+import com.yunx.app.ui.screens.Pan115SaveContent
+import com.yunx.app.ui.screens.Pan123SaveContent
+import com.yunx.app.ui.screens.SaveToCloudContent
+import com.yunx.app.ui.screens.UCSaveContent
+import com.yunx.app.ui.screens.XunleiSaveContent
+import com.yunx.app.ui.viewmodel.BaiduCloudViewModel
+import com.yunx.app.ui.viewmodel.C139CloudViewModel
+import com.yunx.app.ui.viewmodel.GuangYaCloudViewModel
+import com.yunx.app.ui.viewmodel.Pan115CloudViewModel
+import com.yunx.app.ui.viewmodel.Pan123CloudViewModel
+import com.yunx.app.ui.viewmodel.QuarkCloudViewModel
+import com.yunx.app.ui.viewmodel.UCCoudViewModel
+import com.yunx.app.ui.viewmodel.XunleiCloudViewModel
+import kotlinx.coroutines.flow.map
 import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.items.logoRes
 import com.yunx.app.ui.theme.ComposeEmptyActivityTheme
 import com.yunx.app.ui.viewmodel.ResolveUiState
 import com.yunx.app.ui.viewmodel.ResolveViewModel
+import androidx.compose.ui.platform.LocalDensity
 
 /**
  * 控制中心快捷磁贴唤起的轻量解析悬浮窗。
@@ -150,6 +193,14 @@ class FloatResolveActivity : ComponentActivity() {
                     }
                 }
 
+                // 下载 / 转存的失败提示（游客转存拦截、取链失败、直链过期等）：浮窗用 Toast 轻提示
+                LaunchedEffect(viewModel.downloadError) {
+                    viewModel.downloadError?.let { error ->
+                        viewModel.consumeDownloadError()
+                        Toast.makeText(this@FloatResolveActivity, error, Toast.LENGTH_SHORT).show()
+                    }
+                }
+
                 FloatResolveScreen(
                     viewModel = viewModel,
                     focusTrigger = focusTrigger.value,
@@ -173,6 +224,14 @@ fun FloatResolveScreen(
     var pwd by remember { mutableStateOf("") }
     var clipboardSuggestion by remember { mutableStateOf<String?>(null) }
     var ignoredClipboard by remember { mutableStateOf<String?>(null) }
+    // 文件行展开态上提到此作用域：转存往返（Detail→Save→Detail）不丢展开状态
+    var expandedFileFid by remember { mutableStateOf<String?>(null) }
+    // 转场位移 8dp 转 px（Density 捕获进 AnimatedContent 的 transitionSpec）
+    val slidePx = with(LocalDensity.current) { 8.dp.roundToPx() }
+    // 非文件列表状态（输入/加载/视频/错误）时清空展开态，避免下次进列表残留
+    LaunchedEffect(uiState) {
+        if (uiState !is ResolveUiState.Detail) expandedFileFid = null
+    }
 
     // 剪贴板检测核心函数：前台有焦点时读取
     val detectClipboard: () -> Unit = {
@@ -266,7 +325,16 @@ fun FloatResolveScreen(
                     .fillMaxWidth()
                     .padding(20.dp)
             ) {
-                when (val state = uiState) {
+            // 内容切换极简过渡：120ms 淡入淡出 + 8dp 上移（内容只读 lambda 传入的 state，不读外层 uiState，避免转场期两个 slot 内容错乱）
+            AnimatedContent(
+                targetState = uiState,
+                modifier = Modifier.fillMaxWidth(),
+                transitionSpec = {
+                    (fadeIn(tween(120)) + slideInVertically(tween(120)) { slidePx }) togetherWith
+                        (fadeOut(tween(120)) + slideOutVertically(tween(120)) { slidePx })
+                }
+            ) { targetState ->
+                when (val state = targetState) {
                     is ResolveUiState.Idle, is ResolveUiState.Error -> {
                         FloatInputContent(
                             link = link,
@@ -301,20 +369,39 @@ fun FloatResolveScreen(
                     }
 
                     is ResolveUiState.Detail -> {
-                        FloatDetailContent(
-                            sessionTitle = state.session.title.ifBlank { stringResource(R.string.rs_share_content) },
-                            files = state.files,
-                            onFileDownload = { file ->
-                                if (file.isdir) {
-                                    viewModel.openFolder(file)
+                        if (viewModel.saveTarget != null) {
+                            // 转存步骤：平台目录选择器（转存成功后 ViewModel 清空 saveTarget 自动回列表）
+                            FloatSaveContent(
+                                viewModel = viewModel,
+                                onBack = { viewModel.dismissSave() },
+                                onDone = { }
+                            )
+                        } else {
+                            FloatDetailContent(
+                                sessionTitle = state.session.title.ifBlank { stringResource(R.string.rs_share_content) },
+                                files = state.files,
+                                onFileDownload = { file ->
+                                    if (file.isdir) {
+                                        viewModel.openFolder(file)
+                                    } else {
+                                        viewModel.fetchDownloadLink(file)
+                                    }
+                                },
+                                // 仅支持转存的平台显示转存按钮（GitHub / 视频结果没有转存）；游客点击由 ViewModel 拦下并 Toast 提示
+                                onSave = if (viewModel.canSave) {
+                                    { file -> viewModel.requestSave(file) }
                                 } else {
-                                    viewModel.fetchDownloadLink(file)
+                                    null
+                                },
+                                saving = viewModel.isSaving,
+                                expandedFile = expandedFileFid,
+                                onExpandedChange = { expandedFileFid = it },
+                                // 与主界面一致（ResolveScreen:311）：根目录时返回输入页，子目录时返回上一级
+                                onBack = {
+                                    viewModel.navigateBack()
                                 }
-                            },
-                            onBack = {
-                                viewModel.goBack()
-                            }
-                        )
+                            )
+                        }
                     }
 
                     is ResolveUiState.Video -> {
@@ -328,6 +415,7 @@ fun FloatResolveScreen(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -597,6 +685,14 @@ private fun FloatDetailContent(
     sessionTitle: String,
     files: List<ShareFile>,
     onFileDownload: (ShareFile) -> Unit,
+    /** 转存回调；null = 当前平台不支持转存（GitHub / 视频结果），不显示转存按钮 */
+    onSave: ((ShareFile) -> Unit)?,
+    /** 转存请求进行中：期间禁用行内按钮，避免重复触发 */
+    saving: Boolean,
+    /** 当前展开的文件行 fid（null = 全部收起） */
+    expandedFile: String?,
+    /** 行点击切换展开态回调 */
+    onExpandedChange: (String?) -> Unit,
     onBack: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -641,45 +737,132 @@ private fun FloatDetailContent(
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
             ) {
-                items(files) { file ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onFileDownload(file) }
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
-                            contentDescription = null,
-                            tint = if (file.isdir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = file.fname,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                items(files, key = { it.fid }) { file ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // 文件夹行点击直接进目录；文件行点击切换展开态（面板内动作另行执行）
+                                .clickable {
+                                    when {
+                                        file.isdir -> onFileDownload(file)
+                                        expandedFile == file.fid -> onExpandedChange(null)
+                                        else -> onExpandedChange(file.fid)
+                                    }
+                                }
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (file.isdir) Icons.Outlined.Folder else Icons.Outlined.InsertDriveFile,
+                                contentDescription = null,
+                                tint = if (file.isdir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp)
                             )
-                            if (!file.isdir) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = formatFileSize(context, file.fsize),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = file.fname,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                if (!file.isdir) {
+                                    Text(
+                                        text = formatFileSize(context, file.fsize),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            if (onSave != null) {
+                                // 行内「转存」按钮：打开平台目录选择器；与主界面文件操作弹窗同一图标与文案
+                                IconButton(
+                                    onClick = { onSave(file) },
+                                    enabled = !saving
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.SaveAlt,
+                                        contentDescription = stringResource(R.string.sh_save_to_cloud),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            if (!file.isdir) {
+                                IconButton(onClick = { onFileDownload(file) }, enabled = !saving) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Download,
+                                        contentDescription = stringResource(R.string.dl_start_download),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        if (!file.isdir) {
-                            IconButton(onClick = { onFileDownload(file) }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Download,
-                                    contentDescription = stringResource(R.string.dl_start_download),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+
+                        // 行内下展面板：点击文件行展开，两行动作列表（下载 / 转存）；文件夹行不展开
+                        AnimatedVisibility(
+                            visible = expandedFile == file.fid && !file.isdir,
+                            enter = expandVertically(),
+                            exit = shrinkVertically()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 12.dp, end = 8.dp, bottom = 8.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceContainerLow,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onFileDownload(file)
+                                            onExpandedChange(null)
+                                        }
+                                        .padding(vertical = 8.dp, horizontal = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Download,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = stringResource(R.string.dl_start_download),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                if (onSave != null) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onSave(file)
+                                                onExpandedChange(null)
+                                            }
+                                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.SaveAlt,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = stringResource(R.string.sh_save_to_cloud),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -774,3 +957,205 @@ private fun FloatVideoContent(
 
 private fun formatFileSize(context: Context, bytes: Long): String =
     if (bytes <= 0) "--" else Formatter.formatFileSize(context, bytes)
+
+/**
+ * 悬浮窗内的转存目录选择宿主：按当前分享平台惰性创建对应平台的 CloudViewModel
+ * （只在转存时创建需要的那一个），并复用主界面同款的平台目录选择器。
+ *
+ * - 转存成功后 [ResolveViewModel.saveToCloud] 会清空 [ResolveViewModel.saveTarget]，
+ *   这里侦听到后回调 [onDone] 回到文件列表；失败 / 未登录则保留，让用户重试。
+ * - 返回箭头回文件列表（转存进行中禁用，避免中途取消造成状态残留）。
+ */
+@Composable
+private fun FloatSaveContent(
+    viewModel: ResolveViewModel,
+    onBack: () -> Unit,
+    onDone: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val deps = remember { FloatSaveDeps(context) }
+
+    LaunchedEffect(viewModel.saveTarget) {
+        if (viewModel.saveTarget == null) onDone()
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack, enabled = !viewModel.isSaving) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = null
+                )
+            }
+            Text(
+                text = stringResource(R.string.sh_save_to_cloud),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 与主界面文件操作弹窗的 saveStep 同一套分支（见 ShareDetailScreen.saveStep）
+        when {
+            viewModel.isSaveXunlei -> XunleiSaveContent(
+                viewModel,
+                viewModel(factory = XunleiCloudViewModel.Factory(
+                    deps.xunleiApi,
+                    { deps.xunleiRepository.getAccount()?.accessToken },
+                    { deps.xunleiRepository.getAccount()?.deviceId },
+                    { deps.xunleiRepository.getAccount()?.captchaToken },
+                    deps.downloadManager,
+                    loginState = deps.xunleiLoginState
+                )),
+                onBack
+            )
+
+            viewModel.isSaveBaidu -> BaiduSaveContent(
+                viewModel,
+                viewModel(factory = BaiduCloudViewModel.Factory(
+                    deps.baiduApi,
+                    { deps.baiduRepository.getAccount()?.cookie },
+                    deps.downloadManager,
+                    loginState = deps.baiduLoginState
+                )),
+                onBack
+            )
+
+            viewModel.isSaveC139 -> C139SaveContent(
+                viewModel,
+                viewModel(factory = C139CloudViewModel.Factory(
+                    deps.c139Api,
+                    { deps.c139Repository.getAccount()?.cookie },
+                    deps.downloadManager,
+                    loginState = deps.c139LoginState
+                )),
+                onBack
+            )
+
+            viewModel.isSaveUC -> UCSaveContent(
+                viewModel,
+                viewModel(factory = UCCoudViewModel.Factory(
+                    deps.ucApi,
+                    { deps.ucRepository.getFreshCookie() },
+                    deps.downloadManager,
+                    loginState = deps.ucLoginState
+                )),
+                onBack
+            )
+
+            viewModel.isSavePan123 -> Pan123SaveContent(
+                viewModel,
+                viewModel(factory = Pan123CloudViewModel.Factory(
+                    deps.pan123Api,
+                    { deps.pan123Repository.getAccount()?.accessToken },
+                    deps.downloadManager,
+                    loginState = deps.pan123LoginState
+                )),
+                onBack
+            )
+
+            viewModel.isSavePan115 -> Pan115SaveContent(
+                viewModel,
+                viewModel(factory = Pan115CloudViewModel.Factory(
+                    deps.pan115Api,
+                    { deps.pan115Repository.getAccount()?.cookie },
+                    deps.downloadManager,
+                    loginState = deps.pan115LoginState
+                )),
+                onBack
+            )
+
+            viewModel.isSaveGuangYa -> GuangYaSaveContent(
+                viewModel,
+                viewModel(factory = GuangYaCloudViewModel.Factory(
+                    deps.guangyaApi,
+                    deps.guangyaRepository,
+                    deps.downloadManager,
+                    loginState = deps.guangyaLoginState
+                )),
+                onBack
+            )
+
+            else -> SaveToCloudContent(
+                viewModel,
+                viewModel(factory = QuarkCloudViewModel.Factory(
+                    deps.quarkApi,
+                    { deps.quarkRepository.getFreshCookie() },
+                    deps.downloadManager,
+                    loginState = deps.quarkLoginState
+                )),
+                onBack
+            )
+        }
+    }
+}
+
+/**
+ * 悬浮窗转存所需的平台依赖集合：一次构建 8 套轻量 API 与账号仓库
+ * （与 MainScreen 的装配同款；CloudViewModel 按 when 分支惰性创建，只实例化当前平台那一个）。
+ * 蓝奏两族不在转存支持范围内（canSave 不含蓝奏），不装配。
+ */
+private class FloatSaveDeps(context: Context) {
+    private val appContext = context.applicationContext
+    private val db = AppDatabase.get(appContext)
+    val downloadManager = DownloadManagerHolder.get(appContext)
+
+    val quarkApi = QuarkApi()
+    val quarkRepository = QuarkAccountRepository(db.quarkAccountDao(), quarkApi)
+    val quarkLoginState = quarkRepository.observeAccount().map { it != null }
+
+    val ucApi = UCApi()
+    val ucRepository = UCAccountRepository(db.ucAccountDao(), ucApi)
+    val ucLoginState = ucRepository.observeAccount().map { it != null }
+
+    val xunleiApi = XunleiApi()
+    val xunleiRepository = XunleiAccountRepository(db.xunleiAccountDao(), xunleiApi)
+    val xunleiLoginState = xunleiRepository.observeAccount().map { it != null }
+
+    init {
+        // 迅雷 access_token 过期（401 unauthenticated）自动刷新：refresh_token 换新并持久化（对齐官方 /v1/auth/token 抓包）
+        xunleiApi.refreshTokenProvider = { deviceId ->
+            val acc = xunleiRepository.getAccount()
+            if (acc == null || acc.refreshToken.isBlank()) null
+            else xunleiApi.refreshToken(acc.refreshToken, deviceId, acc.authType)?.also { (at, nrt) ->
+                xunleiRepository.updateTokens(at, nrt)
+            }
+        }
+        // 网页登录的 captcha：本地 9 盐签名现换（快、后台可用），签名被拒才回退网页会话
+        xunleiApi.webCaptchaRefresher = { deviceId, action ->
+            xunleiRepository.refreshWebCaptcha(deviceId, action)
+        }
+    }
+
+    val baiduApi = BaiduApi()
+    val baiduRepository = BaiduAccountRepository(db.baiduAccountDao(), baiduApi)
+    val baiduLoginState = baiduRepository.observeAccount().map { it != null }
+
+    val c139Api = C139Api(deviceInfoProvider = { C139DeviceInfo.from(appContext) })
+    val c139Repository = C139AccountRepository(db.c139AccountDao())
+    val c139LoginState = c139Repository.observeAccount().map { it != null }
+
+    val pan123Api = Pan123Api()
+    val pan123Repository = Pan123AccountRepository(db.pan123AccountDao(), pan123Api)
+    val pan123LoginState = pan123Repository.observeAccount().map { it != null }
+
+    val pan115Api = Pan115Api()
+    val pan115Repository = Pan115AccountRepository(db.pan115AccountDao(), pan115Api)
+    val pan115LoginState = pan115Repository.observeAccount().map { it != null }
+
+    val guangyaApi = GuangYaApi()
+    val guangyaRepository = GuangYaAccountRepository(db.guangyaAccountDao(), guangyaApi)
+    val guangyaLoginState = guangyaRepository.observeAccount().map { it != null }
+
+    init {
+        // 光鸭业务 API（个人盘 / 分享）必须带 did 设备头：从仓库缓存的 deviceId 同步注入
+        guangyaApi.deviceIdProvider = { guangyaRepository.cachedDeviceId() }
+    }
+}
