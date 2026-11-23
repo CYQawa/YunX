@@ -75,6 +75,11 @@ data class VideoParseResult(
     val platform: VideoPlatform,
     val title: String,
     val author: String = "",
+    /**
+     * 作者在该平台的 ID（微博 uid / B站 mid / 小红书 userId / 抖音 uid / Pixiv userId）。
+     * 只用于「详细命名」里的 `(@ID)` 段；取不到时留空，命名里就省略这一段（不猜、不填假值）。
+     */
+    val authorId: String = "",
     val avatar: String = "",
     val cover: String = "",
     /** 正文/文案：抖音/快手的分享文案、小红书笔记正文、微博正文、B站简介都落在这里 */
