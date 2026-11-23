@@ -2477,3 +2477,42 @@ private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
 3. 首次启动会出现一个「官方开源版」安全提示弹窗（确认一次后不再出现），属于同一防御机制的正常产品行为，不是 bug。
 4. 常规业务开发（解析、下载、UI、Room 等）不会触及这些代码；若你的改动意外导致其编译报错，请优先调整自己的改动方式，而不是修改自检代码。
 5. 确因架构调整需要动这部分代码时，**必须先与作者沟通确认**，且改动不得降低其对抗静态分析的能力（不得引入明文特征、不得集中到单一易定位位置）。
+
+---
+
+### 3.48 视频解析：详细文件命名 / 批量下载文件夹（两个可选开关）
+
+下载设置里有两个**互相独立**的开关，默认值都取「不改变原有行为」，不希望用的人无需理会。
+
+**① 「详细文件命名」（`SettingsRepository.mediaNamingDetailed`，默认 `false`＝关）**
+
+开启后解析结果的文件名改为：
+
+```
+平台_作者(@作者ID)_标题_时间_类型_序号.扩展名
+```
+
+- 平台简称：`xhs / dy / ks / wb / acfun / bili / pixiv`（见 `MediaNaming.platformTag`）
+- 类型段：`photo / video / motion / audio`（动图算 `motion`）
+- 时间：内容发布时间 `yyyyMMdd-HHmm`（设备本地时区）；解析器没给时间戳（`0`）就**整段省略**，不写 `19700101-0000`
+- 序号：按**总数**补零（13 张 → `01..13`，104 张 → `001..104`；单张不补零）
+- 标题：**按完整字符**截 15 字（`MediaNaming.truncate`，避免把 emoji 切成半个代理对）
+- 作者或 ID 缺失时整段省略，不留 `_(@)_` 空洞
+
+**② 「批量下载新建文件夹」（`SettingsRepository.batchDownloadFolderEnabled`，默认 `true`＝开）**
+
+- 开：多文件下载按 `作品标题/` 前缀建子文件夹，下载页据此归成一个可折叠文件夹组（原有行为）
+- 关：多文件直接平铺到默认下载目录，下载页不再分组
+- 详细命名同时开启时，文件夹名改用 `平台_作者(@ID)_时间`（`MediaNaming.folderName`）——
+  因为微博图集这类内容**没有标题**，用标题当文件夹名会算出空串、结果根本不建文件夹；
+  `folderName` 在作者与时间都缺时用**作品 ID（URL 最后一段）**兜底，避免不同作品落进同一个 `wb` 目录。
+
+**注入方式**：两个开关都遵守 §3.5，以 Provider 闭包注入 `ResolveViewModel`
+（`detailedNamingProvider` / `batchFolderProvider`），改设置即时生效，**不在构造时取快照**。
+
+**单测**：`app/src/test/kotlin/com/yunx/app/data/download/MediaNamingTest.kt`
+（平台简称 / 类型段 / 序号补零 1·13·104 / 标题截断与 emoji / 空标题 / 时间为 0 / 扩展名 / 文件夹名兜底）。
+
+**回退**：删掉 `SettingsRepository` 两个属性与 `DownloadSettingsScreen` 两个 `SettingsItem`、
+`ResolveViewModel` 的两个 Provider 形参与 `MainScreen` 的两处实参、`MediaNaming.kt`，
+以及 5 个语言文件里 `settings_media_naming*` / `settings_batch_folder*` / `dl_separator` / `dl_unknown_progress` 这 9 条字符串。
