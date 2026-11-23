@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 视频解析：详细文件命名 / 批量下载文件夹 -->
+    <string name="settings_media_naming">详细文件命名</string>
+    <string name="settings_media_naming_desc_off">用内容标题作文件名（默认）</string>
+    <string name="settings_media_naming_desc_on">平台_作者(@作者ID)_标题_时间_类型_序号</string>
+    <string name="settings_batch_folder">批量下载新建文件夹</string>
+    <string name="settings_batch_folder_desc_on">多文件按作品标题新建文件夹，下载页归为一个文件夹组</string>
+    <string name="settings_batch_folder_desc_off">多文件直接保存到默认下载目录，不新建文件夹</string>
+</resources>
