@@ -119,6 +119,8 @@ object KuaishouParser : VideoParser {
             title = title,
             // 昵称里常见的 U+3164 是占位空白字符，参考实现也会先剥掉
             author = jsonString(photo, "userName").replace("\u3164", "").trim(),
+            // 快手 photo.userId 是纯数字用户 ID（命名用）；取不到就省略 @ID 段
+            authorId = jsonString(photo, "userId"),
             avatar = jsonString(photo, "headUrl"),
             cover = coverUrl,
             // 快手的「文案」就是 caption（标题也取它），单独落到 text 供结果页展示/复制
