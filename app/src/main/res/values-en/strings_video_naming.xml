@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 视频解析：详细文件命名 / 批量下载文件夹 -->
+    <string name="settings_media_naming">Detailed file naming</string>
+    <string name="settings_media_naming_desc_off">Use the content title as the file name (default)</string>
+    <string name="settings_media_naming_desc_on">Platform_Author(@AuthorID)_Title_Time_Type_Index</string>
+    <string name="settings_batch_folder">Create folders for batch downloads</string>
+    <string name="settings_batch_folder_desc_on">Multiple files go into a folder named after the work, grouped on the download page</string>
+    <string name="settings_batch_folder_desc_off">Multiple files are saved directly to the default download folder</string>
+</resources>
