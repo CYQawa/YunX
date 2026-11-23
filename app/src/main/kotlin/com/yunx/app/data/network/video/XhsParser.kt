@@ -293,6 +293,7 @@ object XhsParser : VideoParser {
             platform = platform,
             title = title,
             author = note.optJSONObject("user")?.str("nickname").orEmpty(),
+            authorId = xhsAuthorId(note.optJSONObject("user")),
             avatar = note.optJSONObject("user")?.str("avatar").orEmpty(),
             cover = cover,
             text = note.str("desc"),
@@ -365,6 +366,7 @@ object XhsParser : VideoParser {
             title = title,
             // discovery 形态的昵称字段是大写 N 的 nickName
             author = note.optJSONObject("user")?.str("nickName").orEmpty(),
+            authorId = xhsAuthorId(note.optJSONObject("user")),
             avatar = note.optJSONObject("user")?.str("avatar").orEmpty(),
             cover = cover,
             text = note.str("desc"),
@@ -497,6 +499,25 @@ object XhsParser : VideoParser {
         put("User-Agent", VideoHttp.UA_CHROME)
         put("Referer", REFERER)
         if (cookie.isNotBlank()) put("Cookie", cookie)
+    }
+
+    /**
+     * 命名用的作者 ID —— 用户明确要求用**内部 userId**（24 位十六进制）。
+     *
+     * 依据（2026-11 实测）：`https://www.xiaohongshu.com/user/profile/<userId>` 是官方认的地址，
+     * 拿它可以直接定位到该用户（匿名会 302 到登录页，登录后即可打开），且它**不会变**；
+     * 而「小红书号」(redId) 只在部分接口返回、且可能被用户修改。
+     * 取不到 userId 时再退回 redId / red_id 等业务字段；都取不到就省略 `(@ID)` 段。
+     */
+    private fun xhsAuthorId(user: JSONObject?): String {
+        if (user == null) return ""
+        val userId = user.str("userId")
+        if (userId.isNotBlank()) return userId
+        for (key in listOf("redId", "red_id", "redIdStr", "userNum")) {
+            val value = user.str(key)
+            if (value.isNotBlank()) return value
+        }
+        return ""
     }
 
     /** 文件名主干：清洗非法字符并截断；标题为空时兜底为「平台_id」 */
