@@ -180,6 +180,8 @@ object WeiboParser : VideoParser {
             platform = platform,
             title = title,
             author = data.optJSONObject("reward")?.optJSONObject("user")?.str("name").orEmpty(),
+            authorId = data.optJSONObject("reward")?.optJSONObject("user")?.optLong("id")
+                ?.takeIf { it > 0L }?.toString().orEmpty(),
             avatar = data.optJSONObject("reward")?.optJSONObject("user")?.str("profile_image_url").orEmpty(),
             cover = cover,
             text = cleanFidText(data.str("text")),
@@ -258,6 +260,7 @@ object WeiboParser : VideoParser {
             platform = platform,
             title = title,
             author = user?.str("screen_name").orEmpty(),
+            authorId = if (userId > 0L) userId.toString() else "",
             avatar = user?.str("profile_image_url").orEmpty(),
             cover = pageInfo?.optJSONObject("page_pic")?.str("url").orEmpty(),
             text = cleanStatusText(data.str("text")),

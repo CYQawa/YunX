@@ -125,6 +125,10 @@ fun DownloadSettingsScreen(
     var quarkNoSave by remember { mutableStateOf(settingsRepo.quarkNoSaveDownload) }
     var keepLocked by remember { mutableStateOf(settingsRepo.keepDownloadWhenLocked) }
     var showSpeed by remember { mutableStateOf(settingsRepo.notificationShowSpeed) }
+    // 详细命名开关：平台_作者(@ID)_标题_类型_序号
+    var detailedNaming by remember { mutableStateOf(settingsRepo.mediaNamingDetailed) }
+    // 批量下载是否新建文件夹（默认开＝原有行为）
+    var batchFolder by remember { mutableStateOf(settingsRepo.batchDownloadFolderEnabled) }
 
     var showConcurrencyDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
@@ -295,7 +299,7 @@ fun DownloadSettingsScreen(
 
             SettingsItem(
                 icon = Icons.Outlined.Notifications,
-                shape = listGroupShape(ListGroupPos.LAST),
+                shape = listGroupShape(ListGroupPos.MIDDLE),
                 title = stringResource(R.string.settings_notification_progress),
                 description = when {
                     !notificationsEnabled -> stringResource(R.string.settings_notification_progress_desc_no_perm)
@@ -317,6 +321,44 @@ fun DownloadSettingsScreen(
                 },
                 checked = if (notificationsEnabled) showSpeed else null,
                 trailing = { Switch(checked = showSpeed, onCheckedChange = null) }
+            )
+
+            Spacer(modifier = Modifier.height(ListGroupGap))
+
+            // 批量下载是否新建文件夹：默认开（多张按作品标题建子文件夹，下载页归组）
+            SettingsItem(
+                icon = Icons.Outlined.Layers,
+                shape = listGroupShape(ListGroupPos.MIDDLE),
+                title = stringResource(R.string.settings_batch_folder),
+                description = stringResource(
+                    if (batchFolder) R.string.settings_batch_folder_desc_on
+                    else R.string.settings_batch_folder_desc_off
+                ),
+                onClick = {
+                    batchFolder = !batchFolder
+                    settingsRepo.batchDownloadFolderEnabled = batchFolder
+                },
+                checked = batchFolder,
+                trailing = { Switch(checked = batchFolder, onCheckedChange = null) }
+            )
+
+            Spacer(modifier = Modifier.height(ListGroupGap))
+
+            // 详细文件命名：默认关（沿用内容标题命名）
+            SettingsItem(
+                icon = Icons.Outlined.Layers,
+                shape = listGroupShape(ListGroupPos.LAST),
+                title = stringResource(R.string.settings_media_naming),
+                description = stringResource(
+                    if (detailedNaming) R.string.settings_media_naming_desc_on
+                    else R.string.settings_media_naming_desc_off
+                ),
+                onClick = {
+                    detailedNaming = !detailedNaming
+                    settingsRepo.mediaNamingDetailed = detailedNaming
+                },
+                checked = detailedNaming,
+                trailing = { Switch(checked = detailedNaming, onCheckedChange = null) }
             )
 
             Spacer(modifier = Modifier.height(24.dp))

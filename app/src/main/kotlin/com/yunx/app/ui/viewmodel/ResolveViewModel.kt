@@ -30,6 +30,7 @@ import com.yunx.app.data.db.BookmarkDao
 import com.yunx.app.data.db.BookmarkEntity
 import com.yunx.app.data.download.DownloadManager
 import com.yunx.app.data.download.DownloadPathPolicy
+import com.yunx.app.data.download.MediaNaming
 import com.yunx.app.data.download.DownloadPlatform
 import com.yunx.app.data.download.DownloadSource
 import com.yunx.app.data.network.BaiduConstants
@@ -160,6 +161,17 @@ class ResolveViewModel(
      * 开启后同一个文件用多个账号各取一条直链，分片轮流交给不同直链下载，见 [fetchMultiSources]。
      */
     private val multiSourceDownloadProvider: () -> Boolean = { false },
+    /**
+     * 详细文件命名开关（由上层从 SettingsRepository 注入）：开启时「全部下载」的**文件夹名**
+     * 改用 `平台_作者(@ID)_时间`（见 `MediaNaming.folderName`），而不再用作品标题 ——
+     * 微博图集这类没有标题的内容，用标题当文件夹名会得到空串，结果是根本不建文件夹。
+     */
+    private val detailedNamingProvider: () -> Boolean = { false },
+    /**
+     * 批量下载是否新建文件夹（由上层从 SettingsRepository 注入，默认 true = 原有行为）。
+     * 关闭后多文件下载直接平铺到默认目录（下载页也不再分组）。
+     */
+    private val batchFolderProvider: () -> Boolean = { true },
     /**
      * 视频解析仓库（抖音/小红书/快手/微博/AcFun/B站/Pixiv）。
      * null = 视频解析不可用（仅测试或未注入时）：解析入口会原样退回网盘/GitHub 流程。
@@ -1097,17 +1109,26 @@ class ResolveViewModel(
     }
 
     /**
-     * 批量下载一组媒体（图集的「全部下载」/多选后的「下载所选」共用）。
+     * 批量下载一组媒体。
      *
-     * ★ **多张时文件名带「作品标题/」前缀**：下载页是按 `fileName` 里的 `/` 把任务收纳成**可折叠的
-     *   文件夹组**（就是网盘「整个文件夹下载」那一套机制，见 `DownloadScreen` 的 `folderGroups`）。
-     *   于是图集批量下载在下载页是**一个分组**，而不是几十张散落各处的图片任务。
-     *   **单张不加前缀** —— 一个只有一张图的「文件夹」没有意义。
+     * @param 是否建文件夹由设置「批量下载新建文件夹」决定（默认开）：开着时多张按 `作品标题/`
+     *   （详细命名开启时用 `平台_作者(@ID)_时间`）建子文件夹，下载页按 `fileName` 里的 `/` 归组；
+     *   关掉后直接平铺到默认下载目录。单张永远不加前缀（一张图的「文件夹」没有意义）。
      */
     fun downloadVideoMedias(medias: List<VideoMedia>) {
         val result = (uiState as? ResolveUiState.Video)?.result ?: return
         if (medias.isEmpty()) return
-        val folder = if (medias.size > 1) DownloadPathPolicy.sanitizeName(result.title).take(40) else ""
+        val useFolder = medias.size > 1 && batchFolderProvider()
+        val folder = if (useFolder) {
+            if (detailedNamingProvider()) {
+                // 详细命名开：文件夹名 = 平台_作者(@ID)_时间（微博图集没有标题也不会再变成空）
+                MediaNaming.folderName(result)
+            } else {
+                DownloadPathPolicy.sanitizeName(result.title).take(40)
+            }
+        } else {
+            ""
+        }
         viewModelScope.launch {
             var okCount = 0
             var failReason: String? = null
@@ -2396,6 +2417,10 @@ class ResolveViewModel(
         private val noSaveDownloadProvider: () -> Boolean = { true },
         private val multiAccountDownloadProvider: () -> Boolean = { false },
         private val multiSourceDownloadProvider: () -> Boolean = { false },
+        /** 详细文件命名开关：开启时「全部下载」的文件夹名改用 平台_作者(@ID)_时间 */
+        private val detailedNamingProvider: () -> Boolean = { false },
+        /** 批量下载是否新建文件夹（默认 true = 原有行为） */
+        private val batchFolderProvider: () -> Boolean = { true },
         /** 视频解析仓库；null 时视频解析不可用（入口自动回退网盘/GitHub 流程） */
         private val videoParseRepository: VideoParseRepository? = null
     ) : ViewModelProvider.Factory {
@@ -2420,6 +2445,8 @@ class ResolveViewModel(
                 noSaveDownloadProvider,
                 multiAccountDownloadProvider,
                 multiSourceDownloadProvider,
+                detailedNamingProvider,
+                batchFolderProvider,
                 videoParseRepository
             ) as T
         }

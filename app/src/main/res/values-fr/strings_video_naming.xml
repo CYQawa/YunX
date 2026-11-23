@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 视频解析：详细文件命名 / 批量下载文件夹 -->
+    <string name="settings_media_naming">Nommage détaillé des fichiers</string>
+    <string name="settings_media_naming_desc_off">Utiliser le titre du contenu comme nom (par défaut)</string>
+    <string name="settings_media_naming_desc_on">Plateforme_Auteur(@IDauteur)_Titre_Heure_Type_Index</string>
+    <string name="settings_batch_folder">Créer un dossier pour les lots</string>
+    <string name="settings_batch_folder_desc_on">Les fichiers vont dans un dossier nommé d\'après l\'œuvre, groupés sur la page de téléchargement</string>
+    <string name="settings_batch_folder_desc_off">Les fichiers sont enregistrés directement dans le dossier par défaut</string>
+</resources>

@@ -76,6 +76,8 @@ object AcFunParser : VideoParser {
             platform = platform,
             title = title,
             author = info.optJSONObject("user")?.str("name").orEmpty(),
+            // AcFun 的 user.id 是数字 ID（命名用）；取不到就省略 @ID 段
+            authorId = info.optJSONObject("user")?.str("id").orEmpty(),
             // 参考实现没取封面，这里顺带带上 videoInfo 里的 coverUrl（取不到则为空）
             cover = info.str("coverUrl"),
             text = description,

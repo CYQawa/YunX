@@ -391,6 +391,7 @@ fun ResolveScreen(
                     onDownloadMedia = { viewModel.downloadVideoMedia(it) },
                     onDownloadAudio = { viewModel.downloadVideoAudio(it) },
                     onDownloadAll = { viewModel.downloadAllVideoMedia() },
+                    // 「下载所选」与「全部下载」走同一入口；是否建文件夹由设置里的开关决定
                     onDownloadSelected = { viewModel.downloadVideoMedias(it) },
                     onBack = { viewModel.backToInput() }
                 )

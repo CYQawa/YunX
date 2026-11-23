@@ -156,6 +156,9 @@ object DouyinParser : VideoParser {
             platform = platform,
             title = title,
             author = author?.optStringAny("nickname").orEmpty(),
+            // ★ 只用 uid（纯数字）。sec_uid 是 `MS4wLjABAAAA…` 这种长串，不是用户 ID，
+            //   填进文件名只会得到一串看不懂的字符 —— 没有 uid 就整段省略。
+            authorId = author?.optStringAny("uid").orEmpty(),
             // 参考实现优先 avatar_thumb，退化到 avatar_medium
             avatar = firstUrl(author?.optObjectAny("avatar_thumb", "avatar_medium")).orEmpty(),
             cover = cover,
@@ -222,6 +225,10 @@ object DouyinParser : VideoParser {
     private data class WebPayload(
         val title: String,
         val author: String,
+        /** 作者 uid（纯数字，取不到为空；用于详细命名的 @ID 段） */
+        val authorId: String = "",
+        /** 发布时间（秒，取不到为 0；用于详细命名的时间段） */
+        val timestampSeconds: Long = 0L,
         val images: List<String>,
         val video: String,
         val cover: String,
@@ -275,6 +282,9 @@ object DouyinParser : VideoParser {
         return WebPayload(
             title = obj.optString("title").takeIf { it != "null" }.orEmpty(),
             author = obj.optString("author").takeIf { it != "null" }.orEmpty(),
+            authorId = obj.optString("uid").takeIf { it != "null" }.orEmpty(),
+            timestampSeconds = obj.optLong("createTime", 0L)
+                .let { if (it > 10_000_000_000L) it / 1000L else it },
             images = images,
             video = video,
             cover = obj.optString("cover").takeIf { it != "null" }.orEmpty(),
@@ -320,6 +330,8 @@ object DouyinParser : VideoParser {
             platform = platform,
             title = payload.title,
             author = payload.author,
+            authorId = payload.authorId,
+            timestampSeconds = payload.timestampSeconds,
             // 详情里给了封面就用它，没给（图文）退回首图
             cover = payload.cover.ifBlank { payload.images.firstOrNull().orEmpty() },
             // 文案原文（完整 desc）：页面没给 desc 时退回标题（标题也是从同一份详情取的，只是可能被截过）
@@ -576,6 +588,12 @@ object DouyinParser : VideoParser {
     var author = '';
     if (d && d.author) author = d.author.nickname || d.author.unique_id || '';
     if (!author && d && d.authorInfo) author = d.authorInfo.nickname || d.authorInfo.nickName || '';
+    // 作者 ID 与发布时间（命名要用）：uid 是纯数字；createTime 多数是秒，个别来源给毫秒，交给 Kotlin 侧判断
+    var uid = '';
+    if (d && d.author && d.author.uid) uid = String(d.author.uid);
+    if (!uid && d && d.authorInfo && d.authorInfo.uid) uid = String(d.authorInfo.uid);
+    var createTime = 0;
+    if (d) createTime = d.createTime || d.create_time || 0;
 
     // 标题：优先详情里的 desc；没有就退到 document.title —— 抖音详情页标题就是「<文案> - 抖音」，
     // 去掉尾巴即可，实测与 desc 等价。
@@ -598,6 +616,8 @@ object DouyinParser : VideoParser {
       // desc 才是详情接口里的原始文案，两者不再混用
       desc: (d && d.desc) || '',
       author: author,
+      uid: uid,
+      createTime: createTime,
       video: video,
       images: images,
       motions: motions,
