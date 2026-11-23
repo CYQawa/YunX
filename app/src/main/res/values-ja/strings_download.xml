@@ -186,4 +186,8 @@
 
     <!-- DownloadEngineScreen / DownloadDebugScreen / MultiAccountDownloadScreen -->
     <string name="dl_debug_merging_live">結合中 · %1$d%%</string>
+    <!-- 設定：詳細ファイル名 -->
+    <!-- 設定：一括ダウンロードのフォルダー -->
+    <string name="dl_separator"> · </string>
+    <string name="dl_unknown_progress">…</string>
 </resources>
