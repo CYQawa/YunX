@@ -768,7 +768,7 @@ fun MainScreen(
     }
     // 视频解析仓库：解析页「视频解析」入口使用（与视频账号页共用同一份 Cookie 账号表）
     val videoParseRepository = remember {
-        VideoParseRepository(VideoAccountRepository(db.videoAccountDao()))
+        VideoParseRepository(VideoAccountRepository(db.videoAccountDao()), settings)
     }
     val resolveViewModel: ResolveViewModel = viewModel(
         factory = ResolveViewModel.Factory(
@@ -801,6 +801,10 @@ fun MainScreen(
             multiAccountDownloadProvider = { settings.multiAccountDownload },
             // 用 multiSourceActive()：C2 依赖 C1，关掉 C1 后这里也自动为 false（见 SettingsRepository）
             multiSourceDownloadProvider = { settings.multiSourceActive() },
+            // 详细文件命名：「全部下载」的文件夹名（开=平台_作者(@ID)_时间；关=作品标题）
+            detailedNamingProvider = { settings.mediaNamingDetailed },
+            // 批量下载是否新建文件夹（默认开=原有行为；关=平铺到默认目录）
+            batchFolderProvider = { settings.batchDownloadFolderEnabled },
             // 视频解析仓库（抖音/小红书/快手/微博/AcFun/B站/Pixiv）
             videoParseRepository = videoParseRepository
         )
