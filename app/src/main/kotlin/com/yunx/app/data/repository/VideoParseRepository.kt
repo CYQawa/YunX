@@ -20,6 +20,8 @@ package com.yunx.app.data.repository
 
 import com.yunx.app.R
 import com.yunx.app.data.network.HttpClients
+import com.yunx.app.data.download.MediaNaming
+import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.data.network.video.DetectedVideoLink
 import com.yunx.app.data.network.video.VideoHttp
 import com.yunx.app.data.network.video.VideoLinkParser
@@ -42,6 +44,7 @@ import okhttp3.OkHttpClient
  */
 class VideoParseRepository internal constructor(
     private val accounts: VideoAccountRepository,
+    private val settings: SettingsRepository,
     private val clientProvider: () -> OkHttpClient = { HttpClients.apiClient() }
 ) {
 
@@ -61,7 +64,9 @@ class VideoParseRepository internal constructor(
             )
         // Cookie 用「当前生效账号」（主账号优先）；未登录为空串，由解析器决定匿名可用还是提示登录
         val cookie = accounts.activeCookie(resolved.platform)
-        return parser.parse(resolved, cookie).withSecureMediaUrls()
+        val parsed = parser.parse(resolved, cookie).withSecureMediaUrls()
+        // 「详细命名」开关（下载设置）：在唯一出口统一改名 —— 新增平台不必各自记得处理
+        return if (settings.mediaNamingDetailed) MediaNaming.detailed(parsed) else parsed
     }
 
     /**
