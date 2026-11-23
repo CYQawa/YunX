@@ -21,6 +21,10 @@ package com.yunx.app.data.network.video
 import com.yunx.app.R
 import com.yunx.app.data.download.DownloadPathPolicy
 import com.yunx.app.util.AppStrings
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -195,7 +199,7 @@ object WeiboParser : VideoParser {
      * 转发微博：本项目的 [VideoParseResult] 没有嵌套字段（参考实现是构造成 `repost` 递归嵌套），
      * 这里退化成「外层**没有任何媒体**时，直接用一层被转发内容作为结果」，只取一层以避免无限递归。
      */
-    private fun buildWeiboData(
+    private suspend fun buildWeiboData(
         link: DetectedVideoLink,
         data: JSONObject,
         cookie: String,
@@ -223,17 +227,23 @@ object WeiboParser : VideoParser {
         //   把它与静图合成为一张「动态照片」，见 `VideoMedia.motionUrl`。
         val pics = data.optJSONArray("pics")
         if (pics != null) {
+            val picObjects = (0 until pics.length()).mapNotNull { pics.optJSONObject(it) }
+            // ★ 并行探测：原来是「一张接一张」串行探测，9 图就是 9 轮往返，解析明显变慢。
+            //   这里全部并发，总耗时≈最慢的那一张。
+            val picks = coroutineScope {
+                picObjects.map { pic -> async { pic to resolveBestPic(pic, mediaHeaders) } }.awaitAll()
+            }
             var imageIndex = 0
-            for (i in 0 until pics.length()) {
-                val pic = pics.optJSONObject(i) ?: continue
-                val url = pic.optJSONObject("large")?.str("url").orEmpty()
-                if (url.isBlank()) continue
+            for ((pic, pick) in picks) {
+                if (pick.url.isBlank()) continue
                 val motionUrl = pic.str("videoSrc")
                 imageIndex += 1
                 medias += VideoMedia(
-                    url = url,
+                    url = pick.url,
                     kind = VideoMediaKind.IMAGE,
                     fileName = "${base}_$imageIndex.jpg",
+                    // 探测到的真实体积一并带上：下载页能显示准确进度，不必再等服务器给 Content-Length
+                    size = if (pick.size > 0) pick.size else -1L,
                     headers = mediaHeaders,
                     quality = if (motionUrl.isNotBlank()) {
                         AppStrings.get(R.string.em_quality_motion)
@@ -277,6 +287,103 @@ object WeiboParser : VideoParser {
     }
 
     /** 微博正文里的 `&lt;br /&gt;` 换成换行，再去掉其余 HTML 标签（参考实现 text_content 原样移植） */
+    // ---------------------------- 图片「原图」解析 ----------------------------
+
+    /** 一张图的最终选择：url + 探测到的字节数（-1 = 未知） */
+    private data class PicPick(val url: String, val size: Long)
+
+    /**
+     * 取一张微博图片**最清晰**的地址。
+     *
+     * ★ 为什么不能只用 `pics[].large.url`：微博图床同一张图（同一个 pid）有多个规格，
+     *   形如 `https://wx1.sinaimg.cn/<规格>/<pid>.jpg`，规格从低到高大致是
+     *   `thumbnail` → `bmiddle` → `mw690` → `large` → `mw2000` → `orj1080`。
+     *   `large` 只是「大图」，客户端点「下载原图」拿到的那一档往往比它大 ——
+     *   这就是「解析出来的图比微博客户端下载的分辨率低」的原因。
+     *
+     * 做法：把 JSON 给的地址（largest / large / url）当作基准，把规格段分别改写成
+     * `orj1080` / `mw2000` / `large`，**并行 HEAD 比 Content-Length 取最大的一档**。
+     *
+     * ★ 为什么不能「第一个成功就用」（2026-11 的教训）：图床对**不存在的规格**可能返回
+     *   `200 + 一张 HTML 错误页`，先到先得会把这张 HTML 当成"原图"存下来 —— 用户看到的就是
+     *   「下载的不是原图」。所以必须比体积，并且排除 `Content-Type` 不是图片类型的响应。
+     * ★ 速度靠并发 + 2.5s 超时保证：3 个候选同时探，正常几十毫秒；
+     *   每张图之间也并发（见上方 `pics` 的 `map { async { ... } }`），9 图总耗时≈单张。
+     */
+    private suspend fun resolveBestPic(pic: JSONObject, headers: Map<String, String>): PicPick {
+        val direct = listOfNotNull(
+            pic.optJSONObject("largest")?.str("url")?.takeIf { it.isNotBlank() },
+            pic.optJSONObject("large")?.str("url")?.takeIf { it.isNotBlank() },
+            pic.str("url").takeIf { it.isNotBlank() }
+        ).map(::httpsUrl)
+        if (direct.isEmpty()) return PicPick("", -1L)
+
+        val candidates = LinkedHashSet<String>()
+        // 与第一版一致：把 JSON 里给的每个地址都当基准改写（同一 pid 改写后字符串相同，
+        // LinkedHashSet 会自动去重，实际候选通常只有 3~4 个），不会漏掉高清规格。
+        for (baseUrl in direct) {
+            for (spec in listOf("orj1080", "mw2000", "large")) {
+                val rewritten = rewriteSize(baseUrl, spec)
+                if (rewritten != baseUrl) candidates += rewritten
+            }
+            candidates += baseUrl
+        }
+
+        val probed = coroutineScope {
+            candidates.map { url -> async { url to sizeOf(url, headers) } }.awaitAll()
+        }
+        // 只在「探测成功（>0）且确实是图片」的候选里挑体积最大的；全失败则退回 JSON 原始地址
+        val best = probed.filter { it.second > 0 }.maxByOrNull { it.second }
+        return if (best != null) PicPick(best.first, best.second) else PicPick(direct.first(), -1L)
+    }
+
+    /**
+     * 把微博图床地址的「规格段」换掉：`https://wx1.sinaimg.cn/<规格>/<pid>.jpg` → `.../<newSize>/<pid>.jpg`。
+     * 解析不出「host + 规格 + 文件名」三段结构时原样返回（不做任何猜测）。
+     */
+    private fun rewriteSize(url: String, size: String): String {
+        // 常见形态：https://wx1.sinaimg.cn/<规格>/<pid>.jpg
+        Regex("""^(https?://[^/]+)/[^/]+/(.+)$""").find(url)?.let {
+            return "${it.groupValues[1]}/$size/${it.groupValues[2]}"
+        }
+        // 少数图片没有规格段（https://wx1.sinaimg.cn/<pid>.jpg）：在文件名前插入规格，
+        // 命中就是更清晰的版本，不命中（404）会被 sizeOf 判成 -1，自动退回原地址
+        Regex("""^(https?://[^/]+)/([^/?]+\.[A-Za-z0-9]+)(\?.*)?$""").find(url)?.let {
+            return "${it.groupValues[1]}/$size/${it.groupValues[2]}${it.groupValues[3]}"
+        }
+        return url
+    }
+
+    /**
+     * HEAD 取字节数。以下情况一律返回 -1（不参与「谁更大」的比较）：
+     * 非 2xx、**`Content-Type` 不是图片类型**（图床对不存在的规格会返回 200+HTML 错误页）、
+     * 拿不到 `Content-Length`、超过 2.5 秒、网络异常。
+     */
+    private suspend fun sizeOf(url: String, headers: Map<String, String>): Long = try {
+        withTimeoutOrNull(2_500L) {
+            val r = VideoHttp.request(url, method = "HEAD", headers = headers)
+            if (r.status !in 200..299) {
+                -1L
+            } else {
+                val contentType = r.headers.entries
+                    .firstOrNull { it.key.equals("content-type", ignoreCase = true) }
+                    ?.value?.lowercase()
+                // ★ 关键：200 但返回 HTML/JSON 的一律不算图片 —— 否则会选中"假原图"
+                if (contentType != null && !contentType.startsWith("image/")) {
+                    -1L
+                } else {
+                    r.headers.entries
+                        .firstOrNull { it.key.equals("content-length", ignoreCase = true) }
+                        ?.value?.trim()?.toLongOrNull() ?: -1L
+                }
+            }
+        } ?: -1L
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        -1L
+    }
+
     private fun cleanStatusText(raw: String): String =
         raw.replace("<br />", "\n").replace(Regex("<[^>]*>"), "")
 
