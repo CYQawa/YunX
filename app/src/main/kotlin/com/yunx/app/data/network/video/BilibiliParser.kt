@@ -198,6 +198,7 @@ object BilibiliParser : VideoParser {
             platform = platform,
             title = data.optString("title"),
             author = data.optJSONObject("owner")?.optString("name").orEmpty(),
+            authorId = data.optJSONObject("owner")?.optLong("mid", 0L)?.takeIf { it > 0L }?.toString().orEmpty(),
             avatar = data.optJSONObject("owner")?.optString("face").orEmpty(),
             cover = httpsUrl(data.optString("pic")),
             text = data.optString("desc"),
