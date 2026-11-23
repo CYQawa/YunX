@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 视频解析：详细文件命名 / 批量下载文件夹 -->
+    <string name="settings_media_naming">詳細ファイル名</string>
+    <string name="settings_media_naming_desc_off">内容のタイトルをファイル名に使う（デフォルト）</string>
+    <string name="settings_media_naming_desc_on">プラットフォーム_作者(@作者ID)_タイトル_時刻_種類_連番</string>
+    <string name="settings_batch_folder">一括ダウンロードでフォルダーを作成</string>
+    <string name="settings_batch_folder_desc_on">複数ファイルを作品名のフォルダーにまとめ、ダウンロード画面でグループ表示します</string>
+    <string name="settings_batch_folder_desc_off">複数ファイルを既定のダウンロード先に直接保存します</string>
+</resources>
