@@ -117,6 +117,7 @@ import com.yunx.app.ui.SnackbarController
 import com.yunx.app.util.AppStrings
 import com.yunx.app.ui.viewmodel.DownloadViewModel
 import com.yunx.app.ui.components.FileNameText
+import com.yunx.app.ui.components.YunXWavyLoading
 import com.yunx.app.ui.components.YunXWavyProgress
 import com.yunx.app.ui.theme.effectsDefault
 import com.yunx.app.ui.theme.effectsFast
@@ -574,12 +575,20 @@ private fun FolderDownloadGroup(
     var expanded by rememberSaveable { mutableStateOf(true) }
     val completed = tasks.count { it.status == DownloadTaskEntity.STATUS_COMPLETED }
     val totalSize = tasks.sumOf { it.totalSize }
-    // 聚合显示钳制：任何单项竞态残留都不会让"已下载 > 总大小"
-    val downloaded = minOf(tasks.sumOf { it.downloadedSize }, totalSize)
+    // 聚合显示钳制：任何单项竞态残留都不会让"已下载 > 总大小"；
+    // 但总大小未知（=0）时不能用 0 去钳，否则已下载量会被抹成 0（多图无进度的另一半原因）
+    val rawDownloaded = tasks.sumOf { it.downloadedSize }
+    val downloaded = if (totalSize > 0) minOf(rawDownloaded, totalSize) else rawDownloaded
     val fraction = if (totalSize > 0) {
         (downloaded.toFloat() / totalSize).coerceIn(0f, 1f)
     } else 0f
     val done = completed == tasks.size
+    // ★ 组内任一任务总大小未知（例如图床不返回 Content-Length）且还在下载时，
+    //   合计分母是 0，进度条与百分比都会永远停在 0 —— 这里切到「不确定进度」，
+    //   至少让用户看到正在下载、以及已下载多少字节。
+    val unknownTotal = !done && totalSize <= 0L && tasks.any {
+        it.status == DownloadTaskEntity.STATUS_DOWNLOADING || it.status == DownloadTaskEntity.STATUS_PENDING
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -621,10 +630,15 @@ private fun FolderDownloadGroup(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = stringResource(
-                            R.string.dl_folder_count,
-                            completed, tasks.size, formatSize(downloaded), formatSize(totalSize)
-                        ),
+                        text = if (unknownTotal) {
+                            // 总大小未知时不显示「x / 0 B」这种误导性数字，只报已下载量
+                            "$completed/${tasks.size}${stringResource(R.string.dl_separator)}${formatSize(downloaded)}"
+                        } else {
+                            stringResource(
+                                R.string.dl_folder_count,
+                                completed, tasks.size, formatSize(downloaded), formatSize(totalSize)
+                            )
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -643,7 +657,8 @@ private fun FolderDownloadGroup(
                         text = when {
                             done -> stringResource(R.string.dl_status_done)
                             merging -> stringResource(R.string.dl_status_merging)
-                            else -> "${(fraction * 100).toInt()}%"
+                            else -> if (unknownTotal) stringResource(R.string.dl_unknown_progress)
+                            else "${(fraction * 100).toInt()}%"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
@@ -672,15 +687,24 @@ private fun FolderDownloadGroup(
                 Column {
                     // 总体进度条（已完成时隐藏）；Expressive 波浪进度条（仅在有子任务下载中时起伏）
                     if (!done) {
-                        YunXWavyProgress(
-                            progress = { fraction },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            waving = tasks.any { it.status == DownloadTaskEntity.STATUS_DOWNLOADING }
-                        )
+                        if (unknownTotal) {
+                            // 大小未知：流动动画（indeterminate），而不是永远 0% 的死进度条
+                            YunXWavyLoading(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp)
+                            )
+                        } else {
+                            YunXWavyProgress(
+                                progress = { fraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                waving = tasks.any { it.status == DownloadTaskEntity.STATUS_DOWNLOADING }
+                            )
+                        }
                     }
                     // 子任务列表（紧凑行，含子文件夹内文件）
                     Column(
@@ -934,6 +958,9 @@ private fun DownloadTaskCard(
         task.totalSize > 0 -> (task.downloadedSize.toFloat() / task.totalSize).coerceIn(0f, 1f)
         else -> 0f
     }
+    // ★ 总大小未知（图床不给 Content-Length / 不支持 Range）：进度条改「不确定态」，
+    //   文字改报已下载字节 + 速度，否则这张卡片看起来像完全没开始。
+    val unknownTotal = isDownloading && task.totalSize <= 0L && !merging
     // 长按任务卡弹出操作菜单（复制直链 / 重新下载 / 删除）
     var showMenu by remember { mutableStateOf(false) }
 
@@ -1063,16 +1090,20 @@ private fun DownloadTaskCard(
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                     }
-                    YunXWavyProgress(
-                        progress = { fraction },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = when (task.status) {
-                            DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
-                            else -> MaterialTheme.colorScheme.primary
-                        },
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        waving = task.status == DownloadTaskEntity.STATUS_DOWNLOADING
-                    )
+                    if (unknownTotal) {
+                        YunXWavyLoading(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        YunXWavyProgress(
+                            progress = { fraction },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = when (task.status) {
+                                DownloadTaskEntity.STATUS_FAILED -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.primary
+                            },
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            waving = task.status == DownloadTaskEntity.STATUS_DOWNLOADING
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -1091,6 +1122,19 @@ private fun DownloadTaskCard(
                     } else if (merging) {
                         // 合并阶段：底部不要再显示"已下载 100%"，明确告知正在合并
                         stringResource(R.string.dl_merging_size, mergePercent, formatSize(task.totalSize))
+                    } else if (task.totalSize <= 0) {
+                        // 大小未知：报出「下载中 · 3.2 MB · 1.4 MB/s」，不让这一行成为空白
+                        buildString {
+                            val sep = stringResource(R.string.dl_separator)
+                            append(DownloadTaskEntity.statusText(task.status))
+                            append(sep)
+                            append(formatSize(task.downloadedSize))
+                            val speed = stats?.takeIf { isDownloading }?.speed ?: 0L
+                            if (speed > 0) {
+                                append(sep)
+                                append(formatSpeed(speed))
+                            }
+                        }
                     } else {
                         progressText(task)
                     },

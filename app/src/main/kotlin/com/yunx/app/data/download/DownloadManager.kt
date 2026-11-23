@@ -2063,7 +2063,13 @@ class DownloadManager(
             if (!ok2) throw IllegalStateException(AppStrings.get(R.string.ed_download_range_and_full_failed))
         }
         if (!isTaskActive()) return
-        finishDownload(id, chunkDir, listOf(partFile), task.fileName, 0)
+        // ★ 总大小未知的流式下载：落盘字节数就是真实大小。回写 totalSize 再收尾，
+        //   否则完成态会显示「0 B」，分组进度也永远没有分母 —— 表现就是整组看不到进度。
+        val actualSize = partFile.length()
+        dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, actualSize, actualSize)
+        // verifySize=false：这里的 total 是「落盘后的实际字节数」，不是服务器声明的总大小，
+        // 照常校验 written != total 会恒成立（见 PR 审核 B4）
+        finishDownload(id, chunkDir, listOf(partFile), task.fileName, actualSize, verifySize = false)
     }
 
     /** HLS（m3u8 转码流，如 UC play）下载：拉取分片合并 → 保存 → 完成回调 */
@@ -2094,7 +2100,9 @@ class DownloadManager(
             DownloadSaver.save(context, task.fileName, hlsFile, saveDirProvider())
         }
             ?: throw IllegalStateException(AppStrings.get(R.string.ed_save_to_download_dir_failed))
-        val hlsTotal = dao.get(id)?.totalSize ?: 0L
+        // HLS 同样拿不到总大小：用落盘文件长度回写，否则完成态一直显示 0 B（与流式下载同一口径）
+        val hlsTotal = hlsFile.length()
+        dao.updateProgress(id, DownloadTaskEntity.STATUS_DOWNLOADING, hlsTotal, hlsTotal)
         completeWithAvg(id, savedPath, hlsTotal)
         Log.d(TAG, "hlsDownload: id=$id 下载完成 savedPath=$savedPath size=${hlsFile.length()}")
         // 终态通知：完成后流体云先显示「下载完成」胶囊，随后转为可划掉的普通通知
@@ -2451,7 +2459,15 @@ class DownloadManager(
         chunkDir: File,
         chunkFiles: List<File>,
         fileName: String,
-        total: Long
+        total: Long,
+        /**
+         * 是否用 [total] 做「合并后字节数」一致性校验。
+         *
+         * ★ 必须为 false 的场景：总大小**未知**的流式下载 —— 那里传进来的 total 是「落盘后的实际字节数」，
+         *   而合并写出的字节数必然等于它，`written != total` 恒不成立，等于把这道防损坏检查废掉。
+         *   分片下载 / 单流回退这类「服务器给过大小」的路径保持默认 true。
+         */
+        verifySize: Boolean = true
     ) {
         if (!isTaskActive()) return
         // 分片级校验：下载时记录的分片摘要（合并时逐片重算比对；流式/单流/HLS 路径没有记录，跳过校验）
@@ -2548,7 +2564,7 @@ class DownloadManager(
                         "SHA-256=${fullDigest.digest().toHexDigest()} 共 $written 字节"
                     )
                 }
-                if (total > 0 && written != total) {
+                if (verifySize && total > 0 && written != total) {
                     DownloadDebugLog.record(
                         id, "校验失败",
                         "期望 $total 字节，实际 $written 字节（拒绝保存损坏文件）"
