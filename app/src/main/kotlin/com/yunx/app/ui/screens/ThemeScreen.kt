@@ -76,6 +76,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -189,6 +190,7 @@ fun ThemeScreen(
     // ---------- 桌面图标动态切换 ----------
     val settingsRepo = remember { SettingsRepository(context) }
     var appIconVariant by remember { mutableStateOf(settingsRepo.appIconVariant) }
+    var imageScroll by remember { mutableStateOf(settingsRepo.videoImageInfiniteScroll) }
     var iconExpanded by rememberSaveable { mutableStateOf(true) }
     val switchAppIcon: (Int) -> Unit = { variant ->
         val pm = context.packageManager
@@ -298,6 +300,45 @@ fun ThemeScreen(
                             )
                         }
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ---------- 图片展示：图集连续滚动 ----------
+            ThemeSectionLabel(stringResource(R.string.section_image_display))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.image_scroll_title),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.image_scroll_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = imageScroll,
+                        onCheckedChange = {
+                            imageScroll = it
+                            settingsRepo.videoImageInfiniteScroll = it
+                        }
+                    )
                 }
             }
 
