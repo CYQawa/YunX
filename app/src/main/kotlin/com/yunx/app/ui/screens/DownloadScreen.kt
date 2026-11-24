@@ -128,6 +128,36 @@ import java.io.File
  * 下载页：任务列表（分片多线程下载 / 断点续传）、进度展示、暂停/继续/删除/打开。
  */
 @OptIn(ExperimentalMaterial3Api::class)
+/** 下载页混排条目：单文件（folder = null）或一个「文件夹组」 */
+private data class DownloadListEntry(
+    val key: String,
+    val sortTime: Long,
+    val folder: String?,
+    val tasks: List<DownloadTaskEntity>
+)
+
+/**
+ * 把任务摊成「单文件 + 文件夹组」并**统一按创建时间倒序**。
+ *
+ * 组的时间取组内最新一条；时间相同用 key 兜底，保证顺序稳定（同一批入队的任务 createTime 常相同）。
+ */
+private fun buildDownloadEntries(tasks: List<DownloadTaskEntity>): List<DownloadListEntry> {
+    val singles = tasks.filter { !it.fileName.contains('/') }
+        .map { DownloadListEntry("task_${it.id}", it.createTime, null, listOf(it)) }
+    val groups = tasks.filter { it.fileName.contains('/') }
+        .groupBy { it.fileName.substringBefore('/') }
+        .map { (folder, list) ->
+            DownloadListEntry(
+                key = "folder_$folder",
+                sortTime = list.maxOf { it.createTime },
+                folder = folder,
+                tasks = list
+            )
+        }
+    return (singles + groups)
+        .sortedWith(compareByDescending<DownloadListEntry> { it.sortTime }.thenBy { it.key })
+}
+
 @Composable
 fun DownloadScreen(
     scrollBehavior: TopAppBarScrollBehavior,
@@ -214,6 +244,8 @@ fun DownloadScreen(
                     onResumeAll = { viewModel.resumeAll() },
                     onDeleteAll = { showDeleteAllConfirm = true }
                 )
+                // 单文件任务与「文件夹组」混排，统一按创建时间倒序（Composable 上下文里算，LazyColumn 的 item 块不是 @Composable）。
+                val entries = remember(tasks) { buildDownloadEntries(tasks) }
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -222,30 +254,26 @@ fun DownloadScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // 根目录任务（无相对路径）单独显示
-                    val rootTasks = tasks.filter { !it.fileName.contains('/') }
-                    // 文件夹下载任务：按「顶级目录」分组（整个文件夹归为一组，内部子文件夹不拆开）
-                    val folderGroups = tasks.filter { it.fileName.contains('/') }
-                        .groupBy { it.fileName.substringBefore('/') }
-
-                    items(rootTasks, key = { it.id }) { task ->
-                        DownloadTaskCard(
-                            task = task,
-                            stats = stats[task.id],
-                            onPause = { viewModel.pause(task.id) },
-                            onResume = { viewModel.resume(task.id) },
-                            onRemove = { pendingDelete = task },
-                            onRedownload = { viewModel.redownload(task) },
-                            downloadDebug = downloadDebug,
-                            onOpenDebug = { debugTaskId = it }
-                        )
-                    }
-
-                    folderGroups.forEach { (folder, groupTasks) ->
-                        item(key = "folder_$folder") {
+                    // 单文件任务与「文件夹组」混排，统一按创建时间倒序。
+                    // 以前组永远排在所有单文件之后 —— 批量下载（如公众号多图）刚建完就沉到底部，像没加进来。
+                    items(entries, key = { it.key }) { entry ->
+                        val folder = entry.folder
+                        if (folder == null) {
+                            val task = entry.tasks.first()
+                            DownloadTaskCard(
+                                task = task,
+                                stats = stats[task.id],
+                                onPause = { viewModel.pause(task.id) },
+                                onResume = { viewModel.resume(task.id) },
+                                onRemove = { pendingDelete = task },
+                                onRedownload = { viewModel.redownload(task) },
+                                downloadDebug = downloadDebug,
+                                onOpenDebug = { debugTaskId = it }
+                            )
+                        } else {
                             FolderDownloadGroup(
                                 folder = folder,
-                                tasks = groupTasks,
+                                tasks = entry.tasks,
                                 stats = stats,
                                 onPause = { viewModel.pause(it) },
                                 onResume = { viewModel.resume(it) },

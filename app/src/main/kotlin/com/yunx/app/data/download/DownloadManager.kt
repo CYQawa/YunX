@@ -2520,7 +2520,14 @@ class DownloadManager(
         // ★ 只在「下载调试」开着时才算：摘要只写进调试日志，调试关着算它没有任何去处（设置页也把该开关藏了）
         val fullShaEnabled = settings.downloadDebug && settings.fullFileSha256
         val savedPath = withContext(Dispatchers.IO) {
-            val dest = DownloadSaver.openDestination(context, fileName, saveDirProvider())
+            // ★ 扩展名以真实文件头为准：微信等平台的格式参数常与真实字节不符（.jpg 实际是 PNG/WebP），
+            //   保存前按魔数纠正，并把纠正后的名字回写数据库，界面上看到的才是能打开的文件名。
+            val finalName = MediaTypeSniffer.correctImageName(chunkFiles.firstOrNull(), fileName)
+            if (finalName != fileName) {
+                runCatching { dao.updateFileName(id, finalName) }
+                DownloadDebugLog.record(id, "扩展名纠正", "原名=$fileName → $finalName（按文件头）")
+            }
+            val dest = DownloadSaver.openDestination(context, finalName, saveDirProvider())
                 ?: throw IllegalStateException(AppStrings.get(R.string.ed_create_target_failed))
             try {
                 val out = dest.open() ?: throw IllegalStateException(AppStrings.get(R.string.ed_open_target_failed))
