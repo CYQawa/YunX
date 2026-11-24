@@ -2477,3 +2477,25 @@ private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
 3. 首次启动会出现一个「官方开源版」安全提示弹窗（确认一次后不再出现），属于同一防御机制的正常产品行为，不是 bug。
 4. 常规业务开发（解析、下载、UI、Room 等）不会触及这些代码；若你的改动意外导致其编译报错，请优先调整自己的改动方式，而不是修改自检代码。
 5. 确因架构调整需要动这部分代码时，**必须先与作者沟通确认**，且改动不得降低其对抗静态分析的能力（不得引入明文特征、不得集中到单一易定位位置）。
+
+---
+
+### 3.50 下载：扩展名按文件头纠正 + 下载列表混排排序
+
+**① 扩展名纠正**（`data/download/MediaTypeSniffer.kt`）
+- 微信图片的 `wx_fmt` 参数不可信（写 `wx_fmt=jpeg` 实际给 PNG/WebP），解析器只能照参数写扩展名。
+- `DownloadManager.finishDownload` 在写盘前读合并首片的前 16 字节，按魔数判断**图片**真实格式，
+  不一致就改扩展名并 `dao.updateFileName(id, finalName)` 回写，界面显示与文件系统保持一致。
+- ★ **只处理图片**（jpg/png/webp/gif/bmp）：音视频容器（mp4/m4a/ts）的魔数区分不可靠，
+  误判（m4a→mp4）会破坏播放，收益小于风险，故不碰；HLS 路径不走 `finishDownload`，同样不受影响。
+- ★★ **`DownloadSaver.mimeOf` 必须按真实扩展名给图片 MIME**：以前把 jpg/png/gif/webp 全归成
+  `image/jpeg`，SAF 的 `createDocument` 发现「MIME 与扩展名不符」会自动补扩展名 → 下载出 `.png.jpg`
+  这种双扩展名文件（2026-11 用户实测）。改后 png→image/png、gif→image/gif、webp→image/webp。
+
+**② 下载列表排序**（`ui/screens/DownloadScreen.kt` → `buildDownloadEntries`）
+- 以前「文件夹组」整体排在所有单文件之后（批量下载刚建完就沉底，像没加进来）。
+- 现在单文件与文件夹组**混排**，统一按 `createTime` 倒序；组取组内最新一条时间，
+  同一时间用 key 兜底保证顺序稳定。DAO 查询本来就是 `ORDER BY createTime DESC`，无需改库。
+
+**回退**：删 `MediaTypeSniffer.kt` 与其单测、`finishDownload` 里的纠正块、`DownloadTaskDao.updateFileName`、
+`DownloadScreen` 的 `buildDownloadEntries` 与 `DownloadListEntry`（恢复原 rootTasks/folderGroups 两段渲染）。
