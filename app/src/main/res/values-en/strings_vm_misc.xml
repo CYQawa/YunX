@@ -226,6 +226,7 @@
     <string name="vm_video_platform_xhs">Xiaohongshu</string>
     <string name="vm_video_platform_kuaishou">Kuaishou</string>
     <string name="vm_video_platform_weibo">Weibo</string>
+    <string name="vm_video_platform_wechat_mp">WeChat article</string>
     <string name="vm_video_platform_acfun">AcFun</string>
     <string name="vm_video_platform_bilibili">Bilibili</string>
     <string name="vm_video_platform_pixiv">Pixiv</string>

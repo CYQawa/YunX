@@ -28,6 +28,11 @@
     <string name="appearance_light">Light</string>
     <string name="appearance_dark">Dark</string>
     <string name="section_file_name">File names</string>
+
+    <!-- Image display -->
+    <string name="section_image_display">Image display</string>
+    <string name="image_scroll_title">Continuous scrolling for image sets</string>
+    <string name="image_scroll_desc">Off: 10 images per page with pager controls. On: one continuous scroll.</string>
     <string name="file_name_hint">How overly long file names are displayed</string>
     <string name="file_name_marquee">Marquee scroll</string>
     <string name="file_name_multiline">Multiple lines</string>

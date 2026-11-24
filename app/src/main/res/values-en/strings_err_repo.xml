@@ -94,4 +94,7 @@
     <string name="er_quark_default_nickname">Quark user</string>
     <string name="er_uc_default_nickname">UC user</string>
     <string name="er_xunlei_default_nickname">Xunlei user</string>
+    <!-- WeChat -->
+    <string name="er_wechat_sph_unsupported">Due to WeChat restrictions, videos cannot be retrieved from a share link</string>
+    <string name="er_wechat_no_media">No downloadable images or videos in this article</string>
 </resources>

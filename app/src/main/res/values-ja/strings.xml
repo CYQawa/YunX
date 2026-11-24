@@ -28,6 +28,11 @@
     <string name="appearance_light">ライト</string>
     <string name="appearance_dark">ダーク</string>
     <string name="section_file_name">ファイル名の表示</string>
+
+    <!-- 画像表示 -->
+    <string name="section_image_display">画像表示</string>
+    <string name="image_scroll_title">画像一覧の連続スクロール</string>
+    <string name="image_scroll_desc">オフ：10 枚ごとのページ送り。オン：連続スクロールで表示。</string>
     <string name="file_name_hint">長いファイル名の表示方法</string>
     <string name="file_name_marquee">マーキーでスクロール</string>
     <string name="file_name_multiline">複数行で表示</string>

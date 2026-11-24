@@ -94,4 +94,7 @@
     <string name="er_quark_default_nickname">夸克用戶</string>
     <string name="er_uc_default_nickname">UC用戶</string>
     <string name="er_xunlei_default_nickname">迅雷用戶</string>
+    <!-- 微信 -->
+    <string name="er_wechat_sph_unsupported">由於微信限制，無法使用影片分享連結取得內容</string>
+    <string name="er_wechat_no_media">該文章沒有可下載的圖片或影片</string>
 </resources>

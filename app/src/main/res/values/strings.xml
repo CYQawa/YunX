@@ -57,6 +57,11 @@
     <string name="appearance_light">浅色</string>
     <string name="appearance_dark">深色</string>
     <string name="section_file_name">文件名显示</string>
+
+    <!-- 图片展示 -->
+    <string name="section_image_display">图片展示</string>
+    <string name="image_scroll_title">图集连续滚动</string>
+    <string name="image_scroll_desc">关闭时每 10 张一页、用分页条翻页；开启后一屏到底滚动</string>
     <string name="file_name_hint">文件名过长时的展示方式</string>
     <string name="file_name_marquee">跑马灯滚动</string>
     <string name="file_name_multiline">多行显示</string>

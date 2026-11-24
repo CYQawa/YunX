@@ -246,6 +246,16 @@ class SettingsRepository(context: Context) {
             prefs.edit().putBoolean("baidu_limit_hint_dismissed", value).apply()
         }
 
+    /**
+     * 图集（多图结果）的展示方式：**true = 连续滚动（默认）**，false = 每 10 张一页 + 分页条。
+     * 开关在「设置 → 主题与外观 → 图片展示」；只影响解析结果页的网格，不影响下载与文件命名。
+     */
+    var videoImageInfiniteScroll: Boolean
+        get() = prefs.getBoolean("video_image_infinite_scroll", true)
+        set(value) {
+            prefs.edit().putBoolean("video_image_infinite_scroll", value).apply()
+        }
+
     /** 深色模式：0=跟随系统，1=浅色，2=深色 */
     var darkMode: Int
         get() = prefs.getInt("dark_mode", 0)
