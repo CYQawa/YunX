@@ -138,6 +138,37 @@ object VideoLinkParser {
         Rule(
             VideoPlatform.PIXIV, "artwork",
             Regex("""pixiv\.net/member_illust\.php\?[^\s]*illust_id=(\d+)""", RegexOption.IGNORE_CASE)
+        ),
+        // ---------- 微信：视频号分享链接（拿不到视频，解析器会如实报错） ----------
+        Rule(
+            VideoPlatform.WECHAT_MP, "sph",
+            Regex("""weixin\.qq\.com/sph/([A-Za-z0-9_\-]+)""", RegexOption.IGNORE_CASE)
+        ),
+        Rule(
+            VideoPlatform.WECHAT_MP, "sph",
+            Regex("""channels\.weixin\.qq\.com/finder-preview/pages/sph\?[^\s]*\bid=([A-Za-z0-9_\-]+)""", RegexOption.IGNORE_CASE)
+        ),
+        // ---------- 微信：公众号文章 ----------
+        Rule(
+            VideoPlatform.WECHAT_MP, "article",
+            Regex("""mp\.weixin\.qq\.com/s/([A-Za-z0-9_\-]{6,})""", RegexOption.IGNORE_CASE)
+        ),
+        Rule(
+            VideoPlatform.WECHAT_MP, "article",
+            Regex("""mp\.weixin\.qq\.com/s\?[^\s]*\b__biz=([^&\s#]+)""", RegexOption.IGNORE_CASE)
+        ),
+        // ---------- 微信：媒体直链（视频号签名直链 / 公众号图床） ----------
+        Rule(
+            VideoPlatform.WECHAT_MP, "direct",
+            Regex("""finder\.video\.qq\.com/[^\s]*stodownload[^\s]*""", RegexOption.IGNORE_CASE)
+        ),
+        Rule(
+            VideoPlatform.WECHAT_MP, "direct",
+            Regex("""mpvideo\.qpic\.cn/[^\s"'<>]+""", RegexOption.IGNORE_CASE)
+        ),
+        Rule(
+            VideoPlatform.WECHAT_MP, "direct",
+            Regex("""mmbiz\.qpic\.cn/[^\s"'<>]+""", RegexOption.IGNORE_CASE)
         )
     )
 
