@@ -114,7 +114,15 @@ enum class VideoPlatform(
         // ★ 不给网页登录页（见 manualCookieOnly 的说明）：它的风控不允许在 App 内置网页里登录，
         //   登录入口改成「手动填写 Cookie」页。解析仍然照常：匿名能拿到一部分公开作品。
         manualCookieOnly = true
-    );
+    ),
+
+    /**
+     * 微信：公众号文章 + 媒体直链。
+     *
+     * 纯解析平台，**不需要登录**：公众号正文/图床对匿名开放，视频号签名直链也不需要 Cookie。
+     * 视频号分享链接（`weixin.qq.com/sph/...`）归到本平台，但只做「如实报错」，见 `WechatMpParser`。
+     */
+    WECHAT_MP(R.string.vm_video_platform_wechat_mp);
 
     /** 展示名 */
     val displayName: String
