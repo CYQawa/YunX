@@ -456,7 +456,7 @@ object DownloadSaver {
         }.getOrDefault(false)
     }
 
-    private fun mimeOf(fileName: String): String {
+    internal fun mimeOf(fileName: String): String {
         val ext = fileName.substringAfterLast('.', "").lowercase()
         return when (ext) {
             "pdf" -> "application/pdf"
@@ -466,7 +466,14 @@ object DownloadSaver {
             // 「仅下载音频」的产物（AAC in MP4）与 B站 DASH 音轨：少了这个分支会落成
             // application/octet-stream，相册/音乐播放器按类型筛选时就看不到它们
             "m4a", "m4s" -> "audio/mp4"
-            "jpg", "jpeg", "png", "gif", "webp" -> "image/jpeg"
+            // ★ 图片必须**按真实扩展名**给 MIME：SAF 的 createDocument 会在「MIME 与扩展名不符」时
+            //   自动补一个扩展名（image/jpeg + xxx.png → xxx.png.jpg）。以前这里把 jpg/png/gif/webp
+            //   全归成 image/jpeg，用户就下到了 `.png.jpg` 这种双扩展名文件。
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "bmp" -> "image/bmp"
             "txt", "md", "log" -> "text/plain"
             else -> "application/octet-stream"
         }
