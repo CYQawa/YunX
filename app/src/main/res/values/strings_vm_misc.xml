@@ -226,6 +226,7 @@
     <string name="vm_video_platform_xhs">小红书</string>
     <string name="vm_video_platform_kuaishou">快手</string>
     <string name="vm_video_platform_weibo">微博</string>
+    <string name="vm_video_platform_wechat_mp">微信公众号</string>
     <string name="vm_video_platform_acfun">AcFun</string>
     <string name="vm_video_platform_bilibili">哔哩哔哩</string>
     <string name="vm_video_platform_pixiv">Pixiv</string>
