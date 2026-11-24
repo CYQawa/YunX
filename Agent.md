@@ -2477,3 +2477,47 @@ private const val PREEMPT_ENDGAME_MIN_AGE_MS = 3_000L
 3. 首次启动会出现一个「官方开源版」安全提示弹窗（确认一次后不再出现），属于同一防御机制的正常产品行为，不是 bug。
 4. 常规业务开发（解析、下载、UI、Room 等）不会触及这些代码；若你的改动意外导致其编译报错，请优先调整自己的改动方式，而不是修改自检代码。
 5. 确因架构调整需要动这部分代码时，**必须先与作者沟通确认**，且改动不得降低其对抗静态分析的能力（不得引入明文特征、不得集中到单一易定位位置）。
+
+---
+
+### 3.49 微信：公众号文章 + 媒体直链（视频号分享链接如实报错）
+
+新增平台 `VideoPlatform.WECHAT_MP`（展示名「微信公众号」），解析器 `WechatMpParser`，**不需要登录**。
+`VideoLinkParser` 按三种 `kind` 分流：
+
+| kind | 链接形态 | 行为 |
+|---|---|---|
+| `article` | `mp.weixin.qq.com/s/<hash>`、`mp.weixin.qq.com/s?__biz=…` | 抓 HTML：正文图取 `#js_content` 里的 `data-src`（**图片消息/图集**没有 `#js_content`，改从 `picture_page_info_list` 的 `cdn_url:` 取；两者都空才兜底整页 `mmbiz` 地址），全部升级成 `/0` 原图并去重；**封面**（`msg_cdn_url` / `og:image`）作为第一张图片一起进媒体列表（`VideoParseResult.cover` 目前没有 UI 消费方，界面看不到，必须进列表才"显示"且可下载）；标题 `msg_title` / `.js_title_inner` / `og:title`，作者 `nickname` / `#js_name`，时间 `var ct`；文章内嵌视频取 `<video src>` 与 `mpvideo.qpic.cn` |
+| `direct` | `finder.video.qq.com/.../stodownload?...&sign=...`、`mpvideo.qpic.cn`、`mmbiz.qpic.cn` | 直接入队下载（视频按 mp4，图片按 `wx_fmt` 定扩展名），**不需要任何 Cookie**（实测 200 / `video/mp4`） |
+| `sph` | `weixin.qq.com/sph/<id>`、`channels.weixin.qq.com/finder-preview/pages/sph?id=<id>` | 抛 `UNSUPPORTED`：`er_wechat_sph_unsupported`「由于微信限制，无法使用视频分享链接获取内容」 |
+
+**原图规则（与微博那套不同）**：公众号图片的规格段在路径里，`.../640?wx_fmt=png` → `.../0?wx_fmt=png`；
+`wx_fmt` 必须保留（缺了 404）。**公众号图片本身没有平台水印**，`/640` 只是缩略规格。
+
+**为什么视频号分享链接不做「假解析」**：`finder-preview` 只对外给封面（`251/20304`），
+视频直链是 `251/20302` + `sign`；实测「扫码登录视频号助手」后再调该接口，响应里仍然没有
+`20302` / `sign` / `decodeKey`，只有 9 个字段（`picInfo`/`description`/四个计数/`createtime`/`isHardAd`/`coverUrl`）。
+所以这里宁可如实报错并引导用户改用直链，也不返回一个「解析成功但没有视频」的空结果。
+
+**图标**：`res/drawable/logo_wechat_mp.xml` 为自绘占位（绿底双气泡），未引入官方素材；后续可替换。
+
+**水印陷阱（2026-11 实测）**：图片消息页里同时存在**无水印原图**（`picture_page_info_list[].cdn_url`）和
+**已烧水印的整图**（`watermark_info.cdn_url`，同尺寸、右下角带「贴图号·昵称」）。全页抓 `cdn_url:` 会把两者
+一起收进来 → 表现是「明明一张图，结果出现四张、其中一张带水印/加载失败」。所以：
+① 只在 `picture_page_info_list` 块内取图；② 兜底前先把 `watermark_info` 块整段删掉；③ 封面只取两种尺寸
+（长条 `cdn_url_235_1`/`msg_cdn_url`/`og:image`，方图 `cdn_url_1_1`），不碰 `cdn_url_3_4`/`16_9` 等其它变体。
+
+**图集展示方式**：结果页多图默认**连续滚动**；开关在「设置 → 主题与外观 → 图片展示」
+（`SettingsRepository.videoImageInfiniteScroll`，默认 true）。关掉即回到原来的「每 10 张一页 + 分页条」。
+
+**单测**：`app/src/test/kotlin/com/yunx/app/data/network/VideoLinkParserWechatTest.kt`（5 种链接形态 + 不误伤微博/B站）、
+`app/src/test/kotlin/com/yunx/app/data/network/video/WechatMpParserTest.kt`（三种页面形态 + 内联 JS 模板串不误收 + 规格去重）。
+
+**错误文案**：`NOT_FOUND` 的 `userMessage()` 是**固定**文案「内容不存在、已删除或不可见」（不看自定义 message），
+所以「文章在但没媒体」「视频号分享链」这两种情况都用 `UNSUPPORTED` 抛出，才能显示各自的准确提示。
+
+**回退**：删掉 `WechatMpParser.kt`、`VideoPlatform.WECHAT_MP` 枚举项、`VideoParsers.all` 里的注册、
+`VideoLinkParser` 里 7 条微信规则、`MediaNaming.platformTag` 的 `wx` 分支、`PlatformLogos` 映射与 drawable，
+以及 5 个语言文件的 `vm_video_platform_wechat_mp` / `er_wechat_*` 三条字符串。
+
+---
