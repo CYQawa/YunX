@@ -29,6 +29,11 @@
     <string name="appearance_light">Clair</string>
     <string name="appearance_dark">Sombre</string>
     <string name="section_file_name">Noms de fichiers</string>
+
+    <!-- Affichage des images -->
+    <string name="section_image_display">Affichage des images</string>
+    <string name="image_scroll_title">Défilement continu des séries d\'images</string>
+    <string name="image_scroll_desc">Désactivé : 10 images par page avec pagination. Activé : un défilement continu.</string>
     <string name="file_name_hint">Mode d\'affichage des noms de fichiers trop longs</string>
     <string name="file_name_marquee">Défilement continu</string>
     <string name="file_name_multiline">Sur plusieurs lignes</string>
