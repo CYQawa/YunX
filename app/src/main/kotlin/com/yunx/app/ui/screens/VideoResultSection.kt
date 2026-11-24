@@ -90,6 +90,7 @@ import coil3.request.ImageRequest
 import com.yunx.app.data.network.video.VideoMedia
 import com.yunx.app.data.network.video.VideoMediaKind
 import com.yunx.app.data.network.video.VideoParseResult
+import com.yunx.app.data.prefs.SettingsRepository
 import com.yunx.app.ui.SnackbarController
 import com.yunx.app.ui.items.MultiSelectAction
 import com.yunx.app.ui.items.MultiSelectBar
@@ -141,6 +142,11 @@ fun VideoResultSection(
     // 全是图片 = 图片笔记，走网格；只要含视频/音频就仍按行展示（清晰度/大小得用文字说明）
     val isImageNote = images.isNotEmpty() && result.medias.none { it.kind != VideoMediaKind.IMAGE }
 
+    // 图集展示方式：主题与外观里的开关（默认连续滚动）。直接读本地设置，从设置页返回后重新组合即生效。
+    val appContext = LocalContext.current
+    val prefs = remember { SettingsRepository(appContext) }
+    val infiniteScroll = prefs.videoImageInfiniteScroll
+
     // 图集多选（长按缩略图进入）。用 **url 当键**而不是下标：切页、以及同 url 的重复项都不会串选
     var selectionMode by remember(result) { mutableStateOf(false) }
     var selectedUrls by remember(result) { mutableStateOf(emptySet<String>()) }
@@ -182,6 +188,7 @@ fun VideoResultSection(
                     ImageNoteContent(
                         result = result,
                         images = images,
+                        infiniteScroll = infiniteScroll,
                         selectionMode = selectionMode,
                         selectedUrls = selectedUrls,
                         onOpenImage = { clicked -> openMediaPreview(result, images, clicked, onDownloadMedia) },
@@ -349,6 +356,7 @@ private fun ImageSelectionTopBar(
 private fun ImageNoteContent(
     result: VideoParseResult,
     images: List<VideoMedia>,
+    infiniteScroll: Boolean,
     selectionMode: Boolean,
     selectedUrls: Set<String>,
     onOpenImage: (VideoMedia) -> Unit,
@@ -357,12 +365,13 @@ private fun ImageNoteContent(
     onDownloadImage: (VideoMedia) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pageCount = (images.size + IMAGE_PAGE_SIZE - 1) / IMAGE_PAGE_SIZE
+    val pageSize = if (infiniteScroll) images.size.coerceAtLeast(1) else IMAGE_PAGE_SIZE
+    val pageCount = (images.size + pageSize - 1) / pageSize
     // 以 images 为 key：换了笔记（新解析结果）就回到第一页，不留在上一个笔记的页码上。
     // ★ 用 rememberSaveable：从全屏看图返回时本页会随预览页一起离开组合，普通 remember 会把页码丢掉
-    var page by rememberSaveable(images) { mutableStateOf(0) }
-    val pageImages = remember(page, images) {
-        images.drop(page * IMAGE_PAGE_SIZE).take(IMAGE_PAGE_SIZE)
+    var page by rememberSaveable(images, infiniteScroll) { mutableStateOf(0) }
+    val pageImages = remember(page, images, infiniteScroll) {
+        if (infiniteScroll) images else images.drop(page * pageSize).take(pageSize)
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -398,7 +407,7 @@ private fun ImageNoteContent(
                 ImageGridCell(
                     media = media,
                     // 角标用**全局序号**（不是页内序号），否则第二页又从 1/9 开始数
-                    index = page * IMAGE_PAGE_SIZE + i,
+                    index = page * pageSize + i,
                     total = images.size,
                     selectionMode = selectionMode,
                     selected = media.url in selectedUrls,
