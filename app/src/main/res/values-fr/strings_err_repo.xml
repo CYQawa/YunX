@@ -94,4 +94,7 @@
     <string name="er_quark_default_nickname">Utilisateur Quark</string>
     <string name="er_uc_default_nickname">Utilisateur UC</string>
     <string name="er_xunlei_default_nickname">Utilisateur Xunlei</string>
+    <!-- WeChat -->
+    <string name="er_wechat_sph_unsupported">En raison des restrictions de WeChat, les vidéos ne peuvent pas être récupérées via un lien de partage</string>
+    <string name="er_wechat_no_media">Aucune image ou vidéo téléchargeable dans cet article</string>
 </resources>
