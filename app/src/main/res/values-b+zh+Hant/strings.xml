@@ -29,6 +29,11 @@
     <string name="appearance_light">淺色</string>
     <string name="appearance_dark">深色</string>
     <string name="section_file_name">檔案名稱顯示</string>
+
+    <!-- 圖片展示 -->
+    <string name="section_image_display">圖片展示</string>
+    <string name="image_scroll_title">圖集連續捲動</string>
+    <string name="image_scroll_desc">關閉時每 10 張一頁、用分頁條翻頁；開啟後一屏到底捲動</string>
     <string name="file_name_hint">檔案名稱過長時的呈現方式</string>
     <string name="file_name_marquee">跑馬燈捲動</string>
     <string name="file_name_multiline">多行顯示</string>
